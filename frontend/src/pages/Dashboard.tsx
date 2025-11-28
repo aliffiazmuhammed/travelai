@@ -41,7 +41,9 @@ const Dashboard = () => {
 
   const fetchTrips = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/itinery`);
+      const response = await fetch(`${API_BASE_URL}/api/itinery`, {
+        credentials: 'include',
+      });
       if (response.ok) {
         const data = await response.json();
         setTrips(data);

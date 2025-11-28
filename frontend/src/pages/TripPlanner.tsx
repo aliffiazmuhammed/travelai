@@ -59,6 +59,7 @@ const TripPlanner = () => {
           interests: interests.join(", "),
           groupType: "Couple" // Defaulting for now, could be added to form
         }),
+        credentials: 'include',
       });
 
       if (!response.ok) {
