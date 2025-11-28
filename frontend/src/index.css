@@ -1,0 +1,146 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    /* Travel-inspired color palette */
+    --background: 40 30% 98%;
+    --foreground: 220 20% 20%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 20% 20%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 20% 20%;
+
+    /* Sky blue - primary travel color */
+    --primary: 200 85% 60%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 200 85% 75%;
+
+    /* Warm cream/sand - secondary */
+    --secondary: 40 60% 92%;
+    --secondary-foreground: 220 20% 30%;
+
+    /* Muted backgrounds */
+    --muted: 40 40% 95%;
+    --muted-foreground: 220 15% 50%;
+
+    /* Fresh green - accent */
+    --accent: 150 50% 55%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 70% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 40 30% 88%;
+    --input: 40 30% 88%;
+    --ring: 200 85% 60%;
+
+    --radius: 0.75rem;
+
+    /* Travel-specific design tokens */
+    --gradient-sky: linear-gradient(135deg, hsl(200 85% 70%), hsl(210 80% 85%));
+    --gradient-sunrise: linear-gradient(135deg, hsl(40 90% 85%), hsl(30 85% 75%));
+    --gradient-hero: linear-gradient(180deg, hsl(200 90% 95%), hsl(40 60% 95%));
+    
+    --shadow-soft: 0 4px 20px -4px hsl(200 50% 60% / 0.15);
+    --shadow-card: 0 8px 30px -6px hsl(200 40% 50% / 0.2);
+    --shadow-hover: 0 12px 40px -8px hsl(200 50% 60% / 0.3);
+    
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .dark {
+    --background: 220 30% 8%;
+    --foreground: 40 30% 95%;
+
+    --card: 220 25% 12%;
+    --card-foreground: 40 30% 95%;
+
+    --popover: 220 25% 12%;
+    --popover-foreground: 40 30% 95%;
+
+    --primary: 200 85% 65%;
+    --primary-foreground: 220 30% 8%;
+    --primary-glow: 200 85% 80%;
+
+    --secondary: 220 20% 18%;
+    --secondary-foreground: 40 30% 95%;
+
+    --muted: 220 20% 15%;
+    --muted-foreground: 40 20% 65%;
+
+    --accent: 150 50% 60%;
+    --accent-foreground: 220 30% 8%;
+
+    --destructive: 0 70% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 20% 22%;
+    --input: 220 20% 22%;
+    --ring: 200 85% 65%;
+    
+    --shadow-soft: 0 4px 20px -4px hsl(0 0% 0% / 0.4);
+    --shadow-card: 0 8px 30px -6px hsl(0 0% 0% / 0.5);
+    --shadow-hover: 0 12px 40px -8px hsl(200 50% 40% / 0.4);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold tracking-tight;
+  }
+}
+
+@layer utilities {
+  .gradient-sky {
+    background: var(--gradient-sky);
+  }
+  
+  .gradient-sunrise {
+    background: var(--gradient-sunrise);
+  }
+  
+  .gradient-hero {
+    background: var(--gradient-hero);
+  }
+  
+  .shadow-soft {
+    box-shadow: var(--shadow-soft);
+  }
+  
+  .shadow-card {
+    box-shadow: var(--shadow-card);
+  }
+  
+  .shadow-hover {
+    box-shadow: var(--shadow-hover);
+  }
+  
+  .transition-smooth {
+    transition: var(--transition-smooth);
+  }
+  
+  .hover-lift {
+    @apply transition-smooth;
+  }
+  
+  .hover-lift:hover {
+    @apply -translate-y-1 shadow-hover;
+  }
+}
