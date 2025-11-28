@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { API_BASE_URL } from "@/config";
 import { useLocation, useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
@@ -34,9 +35,13 @@ const Dashboard = () => {
     }
   }, [location.state, trips]);
 
+
+
+  // ... existing imports
+
   const fetchTrips = async () => {
     try {
-      const response = await fetch('/api/itinery');
+      const response = await fetch(`${API_BASE_URL}/api/itinery`);
       if (response.ok) {
         const data = await response.json();
         setTrips(data);

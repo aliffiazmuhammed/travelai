@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { API_BASE_URL } from "@/config";
 import { useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
@@ -44,7 +45,7 @@ const TripPlanner = () => {
     try {
       const days = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
 
-      const response = await fetch('/api/itinery/generate', {
+      const response = await fetch(`${API_BASE_URL}/api/itinery/generate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
