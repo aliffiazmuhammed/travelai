@@ -29,7 +29,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const checkAuth = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/me`);
+      const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+        credentials: 'include',
+      });
       if (response.ok) {
         const data = await response.json();
         setUser(data.user);
@@ -49,6 +51,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
+        credentials: 'include',
       });
       const data = await response.json();
       if (!response.ok) {
@@ -70,6 +73,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
+        credentials: 'include',
       });
       const data = await response.json();
       if (!response.ok) {
@@ -87,7 +91,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setLoading(true);
     setError(null);
     try {
-      await fetch(`${API_BASE_URL}/api/auth/logout`, { method: 'POST' });
+      await fetch(`${API_BASE_URL}/api/auth/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      });
       setUser(null);
     } catch (err) {
       setError(err.message);

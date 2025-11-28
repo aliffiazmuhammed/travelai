@@ -6,7 +6,8 @@ export const signup = async (req, res) => {
     const { user, token } = await authService.signup(email, password);
     res.cookie('token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: true, // Always true for cross-site cookies
+      sameSite: 'none', // Required for cross-site cookies
       maxAge: 3600000, // 1 hour
     });
     res.status(201).json({ user });
@@ -21,7 +22,8 @@ export const signin = async (req, res) => {
     const { user, token } = await authService.signin(email, password);
     res.cookie('token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: true, // Always true for cross-site cookies
+      sameSite: 'none', // Required for cross-site cookies
       maxAge: 3600000, // 1 hour
     });
     res.status(200).json({ user });
