@@ -1,9 +1,9 @@
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Menu } from "lucide-react";
-
-// ... existing imports
+import { Menu, Plane } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/context/UserContext";
 
 const Navbar = () => {
   const { isAuthenticated, user, logout } = useAuth();
