@@ -12,7 +12,23 @@ const app = express();
 connectDB();
 
 // Middleware
-app.use(cors());
+// Middleware
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://travelai-eta.vercel.app",
+  process.env.FRONTEND_URL
+].filter(Boolean);
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
 app.use(express.json());
 app.use(cookieParser());
 
