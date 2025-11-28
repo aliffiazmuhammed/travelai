@@ -1,3 +1,4 @@
+import { useAuth } from "@/context/UserContext";
 import Navbar from "@/components/Navbar";
 import Hero from "@/components/Hero";
 import FeatureCard from "@/components/FeatureCard";
@@ -6,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 
 const Landing = () => {
+  const { isAuthenticated } = useAuth();
   const features = [
     {
       icon: Brain,
@@ -43,7 +45,7 @@ const Landing = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
       <Hero />
-      
+
       {/* Features Section */}
       <section className="py-24 px-4">
         <div className="container mx-auto">
@@ -58,7 +60,7 @@ const Landing = () => {
               Powerful features designed to make travel planning effortless and enjoyable
             </p>
           </div>
-          
+
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             {features.map((feature, index) => (
               <div key={index} className="animate-fade-in" style={{ animationDelay: `${index * 0.1}s` }}>
@@ -68,26 +70,26 @@ const Landing = () => {
           </div>
         </div>
       </section>
-      
+
       {/* CTA Section */}
-      {/* <section className="py-24 px-4">
+      <section className="py-24 px-4">
         <div className="container mx-auto">
           <div className="bg-gradient-sky rounded-3xl p-12 md:p-16 text-center shadow-card">
-            <h2 className="text-3xl md:text-5xl font-bold  mb-6">
+            <h2 className="text-3xl md:text-5xl font-bold text-white mb-6">
               Ready to Start Your Adventure?
             </h2>
-            <p className="text-xl mb-8 max-w-2xl mx-auto">
+            <p className="text-xl text-white/90 mb-8 max-w-2xl mx-auto">
               Join thousands of travelers who've discovered smarter trip planning with AI
             </p>
-            <Link to="/plan">
+            <Link to={isAuthenticated ? "/dashboard" : "/auth"}>
               <Button variant="secondary" size="xl" className="shadow-hover">
-                Start Planning Now
+                {isAuthenticated ? "Go to Dashboard" : "Start Planning Now"}
               </Button>
             </Link>
           </div>
         </div>
-      </section> */}
-      
+      </section>
+
       {/* Footer */}
       <footer className="border-t border-border py-12 px-4">
         <div className="container mx-auto">
