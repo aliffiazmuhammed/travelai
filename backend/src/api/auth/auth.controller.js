@@ -34,3 +34,12 @@ export const logout = (req, res) => {
   res.clearCookie('token');
   res.status(200).json({ message: 'Logged out successfully' });
 };
+
+export const getMe = async (req, res) => {
+  try {
+    const user = await authService.getUserById(req.userId);
+    res.status(200).json({ user });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
