@@ -4,9 +4,9 @@
   "description": "",
   "main": "src/index.ts",
   "scripts": {
-    "start": "tsx src/index.ts",
+    "start": "node ensure-frontend.js && tsx src/index.ts",
     "dev": "tsx watch src/index.ts",
-    "build": "tsc && node -e \"const fs=require('fs'); if(fs.existsSync('../frontend/package.json') && !fs.existsSync('../frontend/dist/index.html')) { require('child_process').execSync('npm run build --prefix ../frontend', {stdio:'inherit'}) }\"",
+    "build": "tsc && node ensure-frontend.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
