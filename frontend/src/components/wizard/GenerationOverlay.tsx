@@ -90,10 +90,12 @@ export const GenerationOverlay: React.FC<GenerationOverlayProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-background/80 backdrop-blur-md animate-fade-in">
-      <div className="relative w-full max-w-lg max-h-[92vh] overflow-y-auto p-4 sm:p-8 rounded-3xl bg-card border border-border/80 shadow-2xl text-center space-y-4 sm:space-y-6">
-        {/* Subtle Background Glow */}
-        <div className="absolute -top-24 -left-24 w-48 h-48 bg-primary/20 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-accent/20 rounded-full blur-3xl pointer-events-none" />
+      <div className="relative w-full max-w-lg max-h-[92vh] overflow-y-auto overflow-x-hidden p-5 sm:p-7 rounded-3xl bg-card border border-border/80 shadow-2xl text-center space-y-3.5 sm:space-y-4">
+        {/* Subtle Background Glow - clipped inside container so it never triggers scrollbars */}
+        <div className="absolute inset-0 overflow-hidden rounded-3xl pointer-events-none">
+          <div className="absolute -top-24 -left-24 w-48 h-48 bg-primary/20 rounded-full blur-3xl" />
+          <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-accent/20 rounded-full blur-3xl" />
+        </div>
 
         {/* Close / Cancel Button if error */}
         {error && (

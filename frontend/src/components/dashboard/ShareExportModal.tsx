@@ -135,7 +135,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="rounded-3xl max-w-lg max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full p-4 sm:p-8 space-y-4 sm:space-y-6">
+      <DialogContent className="rounded-3xl max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden w-[95vw] sm:w-full p-4 sm:p-8 space-y-4 sm:space-y-6">
         <DialogHeader className="text-left space-y-1.5">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs font-bold text-primary w-fit">
             <Share2 className="w-3.5 h-3.5" />
