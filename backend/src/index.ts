@@ -14,32 +14,46 @@ import { errorHandler } from './middleware/error.middleware.js';
 
 const app = express();
 
+// Trust reverse proxy (Essential on Render, Heroku, Railway for HTTPS & rate limiting)
+app.set('trust proxy', 1);
+
 // Connect to MongoDB
 await connectDB();
 
 // Security middleware
 app.use(helmet());
 
-// CORS configuration
+// CORS configuration (handles custom domain, Render URLs, and local development)
+const configuredOrigins = (env.FRONTEND_URL || '')
+  .split(',')
+  .map((u) => u.trim().replace(/\/+$/, ''))
+  .filter(Boolean);
+
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:8080',
+  'http://localhost:3000',
   'https://travelai-eta.vercel.app',
   'https://travelai-8cm4.vercel.app',
-  env.FRONTEND_URL,
-].filter(Boolean) as string[];
+  ...configuredOrigins,
+];
 
 app.use(
   cors({
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
-      if (allowedOrigins.indexOf(origin) === -1) {
-        return callback(
-          new Error('The CORS policy for this site does not allow access from the specified Origin.'),
-          false
-        );
+      const cleanOrigin = origin.replace(/\/+$/, '');
+      if (
+        allowedOrigins.includes(cleanOrigin) ||
+        cleanOrigin.endsWith('.onrender.com') ||
+        cleanOrigin.endsWith('.vercel.app')
+      ) {
+        return callback(null, true);
       }
-      return callback(null, true);
+      return callback(
+        new Error(`The CORS policy for this site does not allow access from Origin: ${origin}`),
+        false
+      );
     },
     credentials: true,
   })
