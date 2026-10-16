@@ -69,7 +69,27 @@ app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 
-// Health check with DB status and memory diagnostics
+// Static Frontend Discovery (Unified Monorepo Single-Service Deployment)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Comprehensive candidate locations for frontend/dist across dev, root cwd, workspace cwd, and Render platform path
+const candidatePaths = [
+  path.resolve(process.cwd(), '../frontend/dist'),
+  path.resolve(process.cwd(), 'frontend/dist'),
+  path.resolve(process.cwd(), '../../frontend/dist'),
+  path.resolve(__dirname, '../../frontend/dist'),
+  path.resolve(__dirname, '../../../frontend/dist'),
+  path.resolve(__dirname, '../frontend/dist'),
+  '/opt/render/project/src/frontend/dist',
+];
+const frontendDist = candidatePaths.find((p) => fs.existsSync(path.join(p, 'index.html')));
+
+const shouldServeStatic =
+  env.SERVE_STATIC === 'true' ||
+  (env.SERVE_STATIC !== 'false' && Boolean(frontendDist));
+
+// Health check with DB status, memory diagnostics, and static serving status
 app.get('/api/health', (_req, res) => {
   const dbState = mongoose.connection.readyState;
   const dbStatusMap: Record<number, string> = {
@@ -85,6 +105,17 @@ app.get('/api/health', (_req, res) => {
     database: dbStatusMap[dbState] || 'unknown',
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
+    staticServing: {
+      enabled: Boolean(shouldServeStatic && frontendDist),
+      resolvedPath: frontendDist || 'NOT_FOUND',
+      envServeStatic: env.SERVE_STATIC ?? 'unset',
+      cwd: process.cwd(),
+      dirname: __dirname,
+      candidatePaths: candidatePaths.map((p) => ({
+        path: p,
+        hasIndexHtml: fs.existsSync(path.join(p, 'index.html')),
+      })),
+    },
     memory: process.memoryUsage(),
   });
 });
@@ -92,22 +123,6 @@ app.get('/api/health', (_req, res) => {
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/itinerary', itineraryRoutes);
-
-// Static Frontend Serving (Unified Monorepo Single-Service Deployment)
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Check candidate locations for frontend/dist across dev, root cwd, and compiled dist
-const candidatePaths = [
-  path.resolve(process.cwd(), 'frontend/dist'),
-  path.resolve(__dirname, '../../frontend/dist'),
-  path.resolve(__dirname, '../frontend/dist'),
-];
-const frontendDist = candidatePaths.find((p) => fs.existsSync(path.join(p, 'index.html')));
-
-const shouldServeStatic =
-  env.SERVE_STATIC === 'true' ||
-  (env.SERVE_STATIC !== 'false' && Boolean(frontendDist));
 
 if (shouldServeStatic && frontendDist) {
   console.log(`📦 Serving static frontend files from: ${frontendDist}`);
@@ -121,7 +136,12 @@ if (shouldServeStatic && frontendDist) {
 } else {
   // Default API root message when not serving static frontend
   app.get('/', (_req, res) => {
-    res.json({ success: true, message: 'TravelAI API is running' });
+    res.json({
+      success: true,
+      message: 'TravelAI API is running',
+      note: 'Frontend dist not found at any candidate path',
+      checkedPaths: candidatePaths,
+    });
   });
 }
 
