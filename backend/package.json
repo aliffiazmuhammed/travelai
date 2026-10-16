@@ -38,5 +38,8 @@
   },
   "devDependencies": {
     "nodemon": "^3.1.10"
+  },
+  "optionalDependencies": {
+    "@esbuild/linux-x64": "0.28.2"
   }
 }
