@@ -230,6 +230,29 @@ export const TripMap: React.FC<TripMapProps> = ({ destination, itinerary }) => {
 
   const [baseCoord, setBaseCoord] = useState<[number, number]>(initialCoord);
   const [detectedLocation, setDetectedLocation] = useState<string>("");
+  const [isDark, setIsDark] = useState<boolean>(() => {
+    if (typeof document !== "undefined") {
+      return (
+        document.documentElement.classList.contains("dark") ||
+        localStorage.getItem("travelai_theme") === "dark"
+      );
+    }
+    return false;
+  });
+
+  // Track light/dark mode changes to switch map tiles seamlessly
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const updateTheme = () => {
+      setIsDark(
+        document.documentElement.classList.contains("dark") ||
+        localStorage.getItem("travelai_theme") === "dark"
+      );
+    };
+    const observer = new MutationObserver(updateTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, []);
 
   // Sync initialCoord changes
   useEffect(() => {
@@ -457,8 +480,15 @@ export const TripMap: React.FC<TripMapProps> = ({ destination, itinerary }) => {
           className="w-full h-full"
         >
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            key={isDark ? "carto-dark" : "carto-voyager"}
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener noreferrer">CARTO</a>'
+            url={
+              isDark
+                ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+            }
+            subdomains="abcd"
+            maxZoom={20}
           />
 
           <MapViewUpdater center={baseCoord} zoom={selectedDay === "all" ? 11 : 12} />
