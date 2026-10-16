@@ -348,7 +348,7 @@ Deploy both the Express API and the Vite React frontend on a **single Render Web
    - **Branch**: `main`
    - **Root Directory**: *(Leave blank / empty)*
    - **Runtime**: `Node`
-   - **Build Command**: `npm install && npm run build`
+   - **Build Command**: `npm install --include=dev && npm run build`
    - **Start Command**: `npm start`
    - **Instance Type**: `Free`
 4. Add the following **Environment Variables**:
