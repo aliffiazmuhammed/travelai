@@ -21,7 +21,12 @@ app.set('trust proxy', 1);
 await connectDB();
 
 // Security middleware
-app.use(helmet());
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+  })
+);
 
 // CORS configuration (handles custom domain, Render URLs, and local development)
 const configuredOrigins = (env.FRONTEND_URL || '')
@@ -88,17 +93,28 @@ app.get('/api/health', (_req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/itinerary', itineraryRoutes);
 
-// Optional Static Frontend Serving (Unified Monorepo Deployment)
+// Static Frontend Serving (Unified Monorepo Single-Service Deployment)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const frontendDist = path.resolve(__dirname, '../../frontend/dist');
 
-if (env.SERVE_STATIC === 'true' && fs.existsSync(frontendDist)) {
-  console.log(`📦 Serving static frontend files from ${frontendDist}`);
+// Check candidate locations for frontend/dist across dev, root cwd, and compiled dist
+const candidatePaths = [
+  path.resolve(process.cwd(), 'frontend/dist'),
+  path.resolve(__dirname, '../../frontend/dist'),
+  path.resolve(__dirname, '../frontend/dist'),
+];
+const frontendDist = candidatePaths.find((p) => fs.existsSync(path.join(p, 'index.html')));
+
+const shouldServeStatic =
+  env.SERVE_STATIC === 'true' ||
+  (env.SERVE_STATIC !== 'false' && Boolean(frontendDist));
+
+if (shouldServeStatic && frontendDist) {
+  console.log(`📦 Serving static frontend files from: ${frontendDist}`);
   app.use(express.static(frontendDist));
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api')) {
-      return next();
+      return res.status(404).json({ success: false, error: `Route ${req.originalUrl} not found` });
     }
     res.sendFile(path.join(frontendDist, 'index.html'));
   });

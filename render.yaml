@@ -1,13 +1,16 @@
 services:
   # ==========================================================
-  # BACKEND WEB SERVICE (Express API)
+  # OPTION 1 (RECOMMENDED): UNIFIED SINGLE WEB SERVICE
+  # Serves both Express API & React Frontend on 1 Render Instance
+  # - 100% Free Tier Friendly (Uses 1 instance slot)
+  # - Zero CORS issues (same origin / domain)
+  # - First-party secure auth cookies across all browsers
   # ==========================================================
   - type: web
-    name: travelai-backend
+    name: travelai-app
     runtime: node
     plan: free
-    rootDir: backend
-    buildCommand: npm install
+    buildCommand: npm install && npm run build
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
@@ -16,40 +19,17 @@ services:
       - key: PORT
         value: 10000
       - key: MONGODB_URI
-        sync: false # Set this in Render dashboard
+        sync: false # Set in Render Dashboard
       - key: JWT_SECRET
-        generateValue: true # Render automatically generates a cryptographically secure key
+        generateValue: true # Render automatically generates a secure random secret
       - key: GEMINI_API_KEY
-        sync: false # Set this in Render dashboard
+        sync: false # Set in Render Dashboard
       - key: GEMINI_MODEL
         value: gemini-2.5-flash
       - key: GROQ_API_KEY
-        sync: false # Optional: Set in Render dashboard
+        sync: false # Optional: Set in Render Dashboard
       - key: GROQ_MODEL
         value: openai/gpt-oss-120b
-      - key: FRONTEND_URL
-        fromService:
-          type: web
-          name: travelai-frontend
-          property: host
+      - key: SERVE_STATIC
+        value: "true"
 
-  # ==========================================================
-  # FRONTEND STATIC SITE (Vite + React)
-  # ==========================================================
-  - type: web
-    name: travelai-frontend
-    runtime: static
-    rootDir: frontend
-    buildCommand: npm install && npm run build
-    staticPublishPath: dist
-    routes:
-      # Single-Page Application (SPA) client-side routing
-      - type: rewrite
-        source: /*
-        destination: /index.html
-    envVars:
-      - key: VITE_API_URL
-        fromService:
-          type: web
-          name: travelai-backend
-          property: host

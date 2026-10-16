@@ -337,21 +337,57 @@ TravelAI has been designed and tested across multiple device categories:
 
 ## 🚢 Deployment
 
-### Monorepo Vercel Deployment
+### Option 1: Render Single Web Service (Recommended ⭐)
+Deploy both the Express API and the Vite React frontend on a **single Render Web Service**. This uses only **1 free tier slot**, completely eliminates CORS cross-origin complexities, and ensures 100% reliable same-origin cookie authentication across all web browsers.
+
+1. Go to your [Render Dashboard](https://dashboard.render.com/) and click **New +** → **Web Service**.
+2. Connect your GitHub repository (`travelai`).
+3. Set the following fields in the Render dashboard:
+   - **Name**: `travelai` (or any name you prefer)
+   - **Region**: Nearest to your users (e.g., *Singapore*, *Frankfurt*, *Oregon*)
+   - **Branch**: `main`
+   - **Root Directory**: *(Leave blank / empty)*
+   - **Runtime**: `Node`
+   - **Build Command**: `npm install && npm run build`
+   - **Start Command**: `npm start`
+   - **Instance Type**: `Free`
+4. Add the following **Environment Variables**:
+   | Variable | Value | Notes |
+   |---|---|---|
+   | `NODE_ENV` | `production` | Enables production optimizations |
+   | `PORT` | `10000` | Default Render port |
+   | `MONGODB_URI` | `mongodb+srv://...` | Your MongoDB Atlas connection string |
+   | `JWT_SECRET` | *(Generate a 32+ character random string)* | Secret for auth tokens |
+   | `GEMINI_API_KEY` | *(Your Gemini API Key)* | From Google AI Studio |
+   | `GEMINI_MODEL` | `gemini-2.5-flash` | Fast, cost-efficient model |
+   | `GROQ_API_KEY` | *(Optional)* | For automatic failover |
+   | `SERVE_STATIC` | `true` | *(Optional, auto-detected when built)* |
+5. Click **Create Web Service**. Render will automatically build the backend with `tsc`, compile the frontend with `vite build`, and serve both seamlessly from your single Render URL (`https://your-service.onrender.com`)!
+
+> **Why Single Service?**
+> - **Zero CORS Issues**: Because the frontend and backend share the exact same domain and port, there are no CORS headers or preflight requests needed.
+> - **Bulletproof Auth Cookies**: Authentication cookies are treated as first-party (same-site), avoiding third-party cookie restrictions in Safari, Chrome, and Firefox.
+> - **100% Free Tier Friendly**: Uses only 1 Render free service instance.
+
+---
+
+### Option 2: Split Render Services (Blueprint / render.yaml)
+If you prefer decoupling the frontend as a Render Static Site and the backend as an Express Web Service, use Render's Blueprint feature with the provided [`render.yaml`](file:///d:/Projects/travelai/render.yaml).
+
+---
+
+### Option 3: Monorepo Vercel Deployment
 The repository includes pre-configured [`backend/vercel.json`](file:///d:/Projects/travelai/backend/vercel.json) settings for deploying the API to Vercel Serverless Functions:
 1. Connect the GitHub repository to [Vercel](https://vercel.com).
 2. Configure Environment Variables in the Vercel dashboard (`MONGODB_URI`, `JWT_SECRET`, `GEMINI_API_KEY`, `GROQ_API_KEY`, `NODE_ENV=production`).
 3. Deploy!
 
 ### Production Build Verification
-To verify the full production build locally:
+To verify the full production build locally from the monorepo root:
 
 ```bash
-# Frontend production build
-cd frontend && npm run build
-
-# Backend compilation check
-cd ../backend && npm run build
+# Builds both backend (tsc) and frontend (vite build)
+npm run build
 ```
 
 ---

@@ -25,7 +25,7 @@ export const signin = catchAsync(async (req: AuthenticatedRequest, res: Response
 });
 
 export const logout = catchAsync(async (_req: AuthenticatedRequest, res: Response) => {
-  res.clearCookie('token');
+  res.clearCookie('token', COOKIE_OPTIONS);
   res.status(200).json({ success: true, message: 'Logged out successfully' });
 });
 
