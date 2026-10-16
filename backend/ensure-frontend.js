@@ -7,17 +7,21 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const candidatePaths = [
+  path.resolve(process.cwd(), 'public/index.html'),
+  path.resolve(__dirname, '../public/index.html'),
+  path.resolve(__dirname, 'public/index.html'),
   path.resolve(process.cwd(), '../frontend/dist/index.html'),
   path.resolve(process.cwd(), 'frontend/dist/index.html'),
   path.resolve(__dirname, '../../frontend/dist/index.html'),
   path.resolve(__dirname, '../frontend/dist/index.html'),
+  '/opt/render/project/src/backend/public/index.html',
   '/opt/render/project/src/frontend/dist/index.html',
 ];
 
 const found = candidatePaths.some((p) => fs.existsSync(p));
 
 if (!found) {
-  console.log('⚡ [TravelAI Deploy] frontend/dist/index.html not found! Triggering automated frontend build...');
+  console.log('⚡ [TravelAI Deploy] Static frontend not found! Triggering automated frontend build...');
 
   const frontendDirCandidates = [
     path.resolve(process.cwd(), '../frontend'),
@@ -33,6 +37,14 @@ if (!found) {
       execSync('npm install --include=dev', { cwd: frontendDir, stdio: 'inherit' });
       execSync('npm run build', { cwd: frontendDir, stdio: 'inherit' });
       console.log('✅ [TravelAI Deploy] Frontend built successfully!');
+
+      // Copy built bundle to backend/public if dist exists
+      const distPath = path.join(frontendDir, 'dist');
+      const publicPath = path.resolve(__dirname, 'public');
+      if (fs.existsSync(distPath)) {
+        fs.cpSync(distPath, publicPath, { recursive: true });
+        console.log(`✅ [TravelAI Deploy] Synced ${distPath} -> ${publicPath}`);
+      }
     } catch (err) {
       console.error('❌ [TravelAI Deploy] Failed to build frontend:', err);
     }
@@ -40,5 +52,5 @@ if (!found) {
     console.error('❌ [TravelAI Deploy] Could not locate frontend directory to build!');
   }
 } else {
-  console.log('✅ [TravelAI Deploy] frontend/dist/index.html already built and ready.');
+  console.log('✅ [TravelAI Deploy] Static frontend bundle is already present and ready.');
 }

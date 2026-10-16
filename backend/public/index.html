@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TravelAI - AI-Powered Travel Companion & Itinerary Generator</title>
+    <meta name="description" content="Plan unforgettable trips in seconds. AI-powered day-by-day itineraries, interactive Leaflet maps, Recharts budget analytics, and curated stays." />
+    <meta name="author" content="TravelAI" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2338bdf8'><path d='M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z'/></svg>" />
+
+    <!-- OpenGraph / Social Sharing -->
+    <meta property="og:title" content="TravelAI - Smart AI Trip Planner" />
+    <meta property="og:description" content="Generate customized travel itineraries, budget breakdowns, and interactive maps in seconds." />
+    <meta property="og:type" content="website" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="TravelAI - Smart AI Trip Planner" />
+    <meta name="twitter:description" content="Generate customized travel itineraries, budget breakdowns, and interactive maps in seconds." />
+
+    <!-- Prevent Theme Flash -->
+    <script>
+      (function() {
+        try {
+          const theme = localStorage.getItem('travelai_theme');
+          const isDark = theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (isDark) {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <script type="module" crossorigin src="/assets/index-CkPWZaWG.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/vendor-react-Cil1Qq3A.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-query-AxuAU1bv.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-ui-DmPs_cE3.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-C6L0s1qS.css">
+  </head>
+
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

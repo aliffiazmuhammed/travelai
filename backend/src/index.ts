@@ -75,19 +75,29 @@ const __dirname = path.dirname(__filename);
 
 // Comprehensive candidate locations for frontend/dist across dev, root cwd, workspace cwd, and Render platform path
 const candidatePaths = [
+  path.resolve(process.cwd(), 'public'),
+  path.resolve(__dirname, '../public'),
+  path.resolve(__dirname, '../../public'),
+  path.resolve(process.cwd(), 'backend/public'),
+  path.resolve(process.cwd(), '../backend/public'),
   path.resolve(process.cwd(), '../frontend/dist'),
   path.resolve(process.cwd(), 'frontend/dist'),
   path.resolve(process.cwd(), '../../frontend/dist'),
   path.resolve(__dirname, '../../frontend/dist'),
   path.resolve(__dirname, '../../../frontend/dist'),
   path.resolve(__dirname, '../frontend/dist'),
+  '/opt/render/project/src/backend/public',
   '/opt/render/project/src/frontend/dist',
 ];
 const frontendDist = candidatePaths.find((p) => fs.existsSync(path.join(p, 'index.html')));
 
-const shouldServeStatic =
-  env.SERVE_STATIC === 'true' ||
-  (env.SERVE_STATIC !== 'false' && Boolean(frontendDist));
+const isRender = Boolean(process.env.RENDER);
+const isDev = env.NODE_ENV === 'development' && !isRender;
+
+// Always serve static frontend bundle on Render and production if frontendDist exists
+const shouldServeStatic = Boolean(
+  frontendDist && (isRender || !isDev || env.SERVE_STATIC === 'true' || env.SERVE_STATIC !== 'false')
+);
 
 // Health check with DB status, memory diagnostics, and static serving status
 app.get('/api/health', (_req, res) => {
@@ -127,7 +137,11 @@ app.use('/api/itinerary', itineraryRoutes);
 if (shouldServeStatic && frontendDist) {
   console.log(`📦 Serving static frontend files from: ${frontendDist}`);
   app.use(express.static(frontendDist));
-  app.get('*', (req, res, next) => {
+  // Express 5 compatible SPA fallback (app.use prevents path-to-regexp v8 wildcard syntax error)
+  app.use((req, res, next) => {
+    if (req.method !== 'GET') {
+      return next();
+    }
     if (req.path.startsWith('/api')) {
       return res.status(404).json({ success: false, error: `Route ${req.originalUrl} not found` });
     }
