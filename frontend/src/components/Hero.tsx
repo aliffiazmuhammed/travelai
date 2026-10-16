@@ -1,9 +1,12 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight, Sparkles, MapPin } from "lucide-react";
 import heroImage from "@/assets/hero-travel.jpg";
+import { useAuth } from "@/context/UserContext";
 
 const Hero = () => {
+  const { isAuthenticated } = useAuth();
+
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-20">
       {/* Background Image with Overlay */}
@@ -19,12 +22,12 @@ const Hero = () => {
       {/* Content */}
       <div className="container mx-auto px-4 z-10">
         <div className="max-w-4xl mx-auto text-center space-y-8 animate-fade-in">
-          <div className="inline-flex items-center gap-2 bg-primary/10 backdrop-blur-sm border border-primary/20 rounded-full px-6 py-2 shadow-soft">
-            <Sparkles className="h-4 w-4 text-primary" />
-            <span className="text-sm font-medium text-primary">AI-Powered Trip Planning</span>
+          <div className="inline-flex items-center gap-2 bg-primary/10 backdrop-blur-sm border border-primary/20 rounded-full px-4 sm:px-6 py-2 shadow-soft">
+            <Sparkles className="h-4 w-4 text-primary shrink-0" />
+            <span className="text-xs sm:text-sm font-medium text-primary">AI-Powered Trip Planning</span>
           </div>
           
-          <h1 className="text-5xl md:text-7xl font-bold leading-tight">
+          <h1 className="text-3xl sm:text-5xl md:text-7xl font-bold leading-tight tracking-tight">
             Your Perfect Trip,
             <br />
             <span className="bg-gradient-to-r from-primary via-primary to-accent bg-clip-text text-transparent">
@@ -32,31 +35,40 @@ const Hero = () => {
             </span>
           </h1>
           
-          <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
+          <p className="text-base sm:text-xl md:text-2xl text-muted-foreground max-w-2xl mx-auto leading-relaxed px-2">
             Let AI craft personalized itineraries that match your style, budget, and interests. Travel smarter, not harder.
           </p>
           
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
-            <Link to="/plan">
-              <Button variant="hero" size="xl" className="group">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3.5 pt-4 w-full max-w-xs sm:max-w-none mx-auto">
+            <Link to="/plan" className="w-full sm:w-auto">
+              <Button variant="hero" size="xl" className="group shadow-md w-full sm:w-auto justify-center">
                 Plan Your Trip
-                <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
+                <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform ml-1.5" />
               </Button>
             </Link>
-            <Link to="/auth">
-              <Button variant="outline" size="xl">
-                Sign Up Free
-              </Button>
-            </Link>
+            {isAuthenticated ? (
+              <Link to="/dashboard" className="w-full sm:w-auto">
+                <Button variant="outline" size="xl" className="gap-2 shadow-xs w-full sm:w-auto justify-center">
+                  <MapPin className="h-4 w-4 text-primary shrink-0" />
+                  <span>My Trips / Dashboard</span>
+                </Button>
+              </Link>
+            ) : (
+              <Link to="/auth" className="w-full sm:w-auto">
+                <Button variant="outline" size="xl" className="shadow-xs w-full sm:w-auto justify-center">
+                  Sign Up Free
+                </Button>
+              </Link>
+            )}
           </div>
           
-          <div className="flex items-center justify-center gap-8 pt-8 text-sm text-muted-foreground">
+          <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-8 pt-6 sm:pt-8 text-xs sm:text-sm text-muted-foreground px-2">
             <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-accent" />
+              <div className="w-2 h-2 rounded-full bg-accent shrink-0" />
               <span>No credit card required</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-accent" />
+              <div className="w-2 h-2 rounded-full bg-accent shrink-0" />
               <span>Free forever plan</span>
             </div>
           </div>

@@ -1,0 +1,33 @@
+{
+  "name": "travelai-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "TravelAI — Intelligent Travel Planning Monorepo",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "concurrently -n \"backend,frontend\" -c \"blue,cyan\" \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:frontend": "npm run dev --workspace=frontend",
+    "dev:backend": "npm run dev --workspace=backend",
+    "build:frontend": "npm run build --workspace=frontend",
+    "build:backend": "npm run build --workspace=backend",
+    "build": "npm run build:backend && npm run build:frontend",
+    "start": "npm run start --workspace=backend",
+    "lint:frontend": "npm run lint --workspace=frontend"
+  },
+  "keywords": [
+    "travel",
+    "ai",
+    "itinerary",
+    "react",
+    "express",
+    "monorepo"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "^10.0.6"
+  }
+}

@@ -1,218 +1,454 @@
-import { useState } from "react";
-import { API_BASE_URL } from "@/config";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { format, differenceInCalendarDays, isBefore, addDays } from "date-fns";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Badge } from "@/components/ui/badge";
-import { CalendarIcon, MapPin, Sparkles } from "lucide-react";
-import { format } from "date-fns";
+import { Card, CardContent } from "@/components/ui/card";
+import { ArrowLeft, ArrowRight, RotateCcw, Sparkles } from "lucide-react";
+import { API_BASE_URL } from "@/config";
+import { WizardProgress, WizardStep } from "@/components/wizard/WizardProgress";
+import { StepWhere } from "@/components/wizard/StepWhere";
+import { StepWhen } from "@/components/wizard/StepWhen";
+import { StepWho } from "@/components/wizard/StepWho";
+import { StepBudget } from "@/components/wizard/StepBudget";
+import { StepStyle } from "@/components/wizard/StepStyle";
+import { StepReview } from "@/components/wizard/StepReview";
+import { GenerationOverlay } from "@/components/wizard/GenerationOverlay";
+import { api } from "@/services/api";
+
+const WIZARD_STEPS: WizardStep[] = [
+  { id: 1, title: "Destination", shortTitle: "Where" },
+  { id: 2, title: "Dates & Time", shortTitle: "When" },
+  { id: 3, title: "Travelers", shortTitle: "Who" },
+  { id: 4, title: "Budget", shortTitle: "Budget" },
+  { id: 5, title: "Travel Style", shortTitle: "Style" },
+  { id: 6, title: "Review", shortTitle: "Review" },
+];
+
+const LOCAL_STORAGE_KEY = "travelai_trip_wizard_draft_v1";
+
+const ALL_STYLES = [
+  "Adventure",
+  "Culture",
+  "Relaxation",
+  "Food",
+  "Nature",
+  "Photography",
+  "Nightlife",
+  "Shopping",
+];
 
 const TripPlanner = () => {
   const navigate = useNavigate();
-  const [destination, setDestination] = useState("");
-  const [startDate, setStartDate] = useState<Date>();
-  const [endDate, setEndDate] = useState<Date>();
-  const [budget, setBudget] = useState("");
-  const [interests, setInterests] = useState<string[]>([]);
 
-  const interestOptions = [
-    "Adventure", "Nature", "Food", "Shopping",
-    "Culture", "Luxury", "Budget", "Photography"
-  ];
+  // Wizard Navigation
+  const [currentStep, setCurrentStep] = useState<number>(1);
 
-  const toggleInterest = (interest: string) => {
-    setInterests(prev =>
+  // Form State
+  const [destination, setDestination] = useState<string>("");
+  const [startDate, setStartDate] = useState<Date | undefined>(() => addDays(new Date(), 7));
+  const [endDate, setEndDate] = useState<Date | undefined>(() => addDays(new Date(), 12));
+  const [groupType, setGroupType] = useState<string>("Couple");
+  const [adultsCount, setAdultsCount] = useState<number>(2);
+  const [childrenCount, setChildrenCount] = useState<number>(0);
+  const [budgetPerPerson, setBudgetPerPerson] = useState<number>(20000);
+  const [selectedInterests, setSelectedInterests] = useState<string[]>([
+    "Culture",
+    "Food",
+    "Nature",
+  ]);
+
+  // Loading & Submission State
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isOverlayOpen, setIsOverlayOpen] = useState<boolean>(false);
+  const [streamStage, setStreamStage] = useState<number>(1);
+  const [streamProgress, setStreamProgress] = useState<number>(10);
+  const [streamMessage, setStreamMessage] = useState<string>("Initializing trip planner AI...");
+
+  // Restore Draft from LocalStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.destination) setDestination(parsed.destination);
+        if (parsed.startDate) setStartDate(new Date(parsed.startDate));
+        if (parsed.endDate) setEndDate(new Date(parsed.endDate));
+        if (parsed.groupType) setGroupType(parsed.groupType);
+        if (typeof parsed.adultsCount === "number") setAdultsCount(parsed.adultsCount);
+        if (typeof parsed.childrenCount === "number") setChildrenCount(parsed.childrenCount);
+        if (typeof parsed.budgetPerPerson === "number") setBudgetPerPerson(parsed.budgetPerPerson);
+        if (Array.isArray(parsed.selectedInterests)) setSelectedInterests(parsed.selectedInterests);
+      }
+    } catch (e) {
+      console.warn("Could not load draft from localStorage", e);
+    }
+  }, []);
+
+  // Save Draft to LocalStorage whenever values change
+  useEffect(() => {
+    try {
+      const draft = {
+        destination,
+        startDate: startDate ? startDate.toISOString() : undefined,
+        endDate: endDate ? endDate.toISOString() : undefined,
+        groupType,
+        adultsCount,
+        childrenCount,
+        budgetPerPerson,
+        selectedInterests,
+      };
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(draft));
+    } catch (e) {
+      console.warn("Could not save draft to localStorage", e);
+    }
+  }, [
+    destination,
+    startDate,
+    endDate,
+    groupType,
+    adultsCount,
+    childrenCount,
+    budgetPerPerson,
+    selectedInterests,
+  ]);
+
+  // Validation Logic per step
+  const isStepValid = (stepId: number): boolean => {
+    switch (stepId) {
+      case 1:
+        return destination.trim().length > 0;
+      case 2:
+        return (
+          !!startDate &&
+          !!endDate &&
+          !isBefore(endDate, startDate) &&
+          differenceInCalendarDays(endDate, startDate) >= 0
+        );
+      case 3:
+        return adultsCount >= 1;
+      case 4:
+        return budgetPerPerson >= 1000;
+      case 5:
+        return selectedInterests.length > 0;
+      case 6:
+        return (
+          destination.trim().length > 0 &&
+          !!startDate &&
+          !!endDate &&
+          adultsCount >= 1 &&
+          budgetPerPerson >= 1000 &&
+          selectedInterests.length > 0
+        );
+      default:
+        return false;
+    }
+  };
+
+  const canNavigateToStep = (targetStep: number): boolean => {
+    if (targetStep <= currentStep) return true;
+    for (let i = 1; i < targetStep; i++) {
+      if (!isStepValid(i)) return false;
+    }
+    return true;
+  };
+
+  const handleNext = () => {
+    if (!isStepValid(currentStep)) return;
+    if (currentStep < WIZARD_STEPS.length) {
+      setCurrentStep((prev) => prev + 1);
+      window.scrollTo({ top: 120, behavior: "smooth" });
+    }
+  };
+
+  const handleBack = () => {
+    if (currentStep > 1) {
+      setCurrentStep((prev) => prev - 1);
+      window.scrollTo({ top: 120, behavior: "smooth" });
+    }
+  };
+
+  const handleStepClick = (stepId: number) => {
+    if (canNavigateToStep(stepId)) {
+      setCurrentStep(stepId);
+      window.scrollTo({ top: 120, behavior: "smooth" });
+    }
+  };
+
+  const handleReset = () => {
+    if (confirm("Reset the form and start over?")) {
+      localStorage.removeItem(LOCAL_STORAGE_KEY);
+      setDestination("");
+      setStartDate(addDays(new Date(), 7));
+      setEndDate(addDays(new Date(), 12));
+      setGroupType("Couple");
+      setAdultsCount(2);
+      setChildrenCount(0);
+      setBudgetPerPerson(20000);
+      setSelectedInterests(["Culture", "Food", "Nature"]);
+      setCurrentStep(1);
+    }
+  };
+
+  // Interests Handlers
+  const handleToggleInterest = (interest: string) => {
+    setSelectedInterests((prev) =>
       prev.includes(interest)
-        ? prev.filter(i => i !== interest)
+        ? prev.filter((item) => item !== interest)
         : [...prev, interest]
     );
   };
 
-  const [loading, setLoading] = useState(false);
+  const handleSelectAllInterests = () => {
+    setSelectedInterests(ALL_STYLES);
+  };
 
-  const handlePlanTrip = async () => {
-    if (!destination || !startDate || !endDate || !budget) {
-      alert("Please fill in all fields");
+  const handleClearAllInterests = () => {
+    setSelectedInterests([]);
+  };
+
+  const handleCancelOverlay = () => {
+    setIsOverlayOpen(false);
+    setLoading(false);
+  };
+
+  const handleRetryOverlay = () => {
+    handleSubmitItinerary();
+  };
+
+  // Final Itinerary Generation Submission with Real-time AI Streaming
+  const handleSubmitItinerary = async () => {
+    if (!isStepValid(6)) {
+      setError("Please complete all required fields before generating.");
       return;
     }
 
     setLoading(true);
+    setError(null);
+    setStreamStage(1);
+    setStreamProgress(15);
+    setStreamMessage(`Analyzing destination climate and seasonal advisory for ${destination.trim()}...`);
+    setIsOverlayOpen(true);
+
     try {
-      const days = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+      const days = differenceInCalendarDays(endDate!, startDate!) + 1;
 
-      const response = await fetch(`${API_BASE_URL}/api/itinery/generate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      const payload = {
+        destination: destination.trim(),
+        days,
+        startdate: format(startDate!, "yyyy-MM-dd"),
+        enddate: format(endDate!, "yyyy-MM-dd"),
+        budget: budgetPerPerson,
+        interests: selectedInterests,
+        groupType,
+      };
+
+      await api.generateItineraryStream(payload, {
+        onProgress: (evt) => {
+          setStreamStage(evt.stage);
+          setStreamProgress(evt.progress);
+          setStreamMessage(evt.message);
         },
-        body: JSON.stringify({
-          destination,
-          days,
-          startdate: format(startDate, "yyyy-MM-dd"),
-          enddate: format(endDate, "yyyy-MM-dd"),
-          budget,
-          interests: interests.join(", "),
-          groupType: "Couple" // Defaulting for now, could be added to form
-        }),
-        credentials: 'include',
+        onComplete: (trip) => {
+          setStreamProgress(100);
+          setStreamMessage("Your personalized itinerary is ready!");
+          localStorage.removeItem(LOCAL_STORAGE_KEY);
+          setTimeout(() => {
+            setIsOverlayOpen(false);
+            setLoading(false);
+            navigate("/dashboard", { state: { itinerary: trip.tripDetails } });
+          }, 800);
+        },
+        onError: (errMessage) => {
+          setError(errMessage);
+          setLoading(false);
+        },
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to generate itinerary');
-      }
-
-      const data = await response.json();
-      // The backend now returns the full trip object, so we pass data.tripDetails
-      navigate("/dashboard", { state: { itinerary: data.tripDetails } });
-    } catch (error) {
-      console.error("Error generating trip:", error);
-      alert("Failed to generate trip. Please try again.");
-    } finally {
+    } catch (err: any) {
+      console.error("Error generating trip itinerary:", err);
+      setError(err.message || "Failed to generate itinerary. Please check your connection.");
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-hero">
+    <div className="min-h-screen bg-gradient-hero flex flex-col">
       <Navbar />
-      <div className="container mx-auto px-4 pt-32 pb-16">
-        <div className="max-w-3xl mx-auto">
-          <div className="text-center mb-12 space-y-4">
-            <div className="inline-flex items-center gap-2 bg-primary/10 backdrop-blur-sm border border-primary/20 rounded-full px-6 py-2 shadow-soft">
-              <Sparkles className="h-4 w-4 text-primary" />
-              <span className="text-sm font-medium text-primary">AI Trip Planning</span>
-            </div>
-            <h1 className="text-4xl md:text-5xl font-bold">
-              Plan Your Perfect
-              <span className="block bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                Travel Adventure
-              </span>
-            </h1>
-            <p className="text-lg text-muted-foreground">
-              Tell us about your dream trip and let AI create a personalized itinerary
-            </p>
+
+      <main className="flex-1 container mx-auto px-4 pt-24 pb-20 max-w-4xl">
+        {/* Header Title */}
+        <div className="text-center space-y-3 mb-6 sm:mb-8">
+          <div className="inline-flex items-center gap-2 bg-primary/10 backdrop-blur-sm border border-primary/20 rounded-full px-4 sm:px-5 py-1.5 shadow-2xs">
+            <Sparkles className="w-4 h-4 text-primary shrink-0" />
+            <span className="text-xs font-semibold text-primary uppercase tracking-wider">
+              Smart Trip Planner
+            </span>
           </div>
-
-          <Card className="shadow-card border-border/50">
-            <CardHeader>
-              <CardTitle>Trip Details</CardTitle>
-              <CardDescription>
-                Fill in the details below to generate your custom itinerary
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="destination">Where do you want to go?</Label>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
-                  <Input
-                    id="destination"
-                    value={destination}
-                    onChange={(e) => setDestination(e.target.value)}
-                    placeholder="e.g., Paris, Tokyo, New York"
-                    className="h-12 pl-10"
-                  />
-                </div>
-              </div>
-
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Start Date</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" className="w-full h-12 justify-start text-left font-normal">
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {startDate ? format(startDate, "PPP") : "Pick a date"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0 bg-card" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={startDate}
-                        onSelect={setStartDate}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>End Date</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" className="w-full h-12 justify-start text-left font-normal">
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {endDate ? format(endDate, "PPP") : "Pick a date"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0 bg-card" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={endDate}
-                        onSelect={setEndDate}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="budget">Budget (INR)</Label>
-                <Input
-                  id="budget"
-                  type="number"
-                  placeholder="e.g., 20000"
-                  value={budget}
-                  onChange={(e) => setBudget(e.target.value)}
-                  className="h-12"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Interests & Preferences</Label>
-                <div className="flex flex-wrap gap-2">
-                  {interestOptions.map((interest) => (
-                    <Badge
-                      key={interest}
-                      variant={interests.includes(interest) ? "default" : "outline"}
-                      className="cursor-pointer px-4 py-2 text-sm hover-lift"
-                      onClick={() => toggleInterest(interest)}
-                    >
-                      {interest}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-
-              <Button
-                variant="hero"
-                size="lg"
-                className="w-full"
-                onClick={handlePlanTrip}
-                disabled={loading}
-              >
-                {loading ? (
-                  <>
-                    <Sparkles className="h-5 w-5 mr-2 animate-spin" />
-                    Generating Itinerary...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="h-5 w-5 mr-2" />
-                    Generate My Itinerary
-                  </>
-                )}
-              </Button>
-            </CardContent>
-          </Card>
+          <h1 className="text-2xl sm:text-4xl md:text-5xl font-extrabold text-foreground tracking-tight px-1">
+            Design Your Next Adventure
+          </h1>
+          <p className="text-xs sm:text-base text-muted-foreground max-w-xl mx-auto px-2">
+            Answer a few quick questions and let our AI craft an unforgettable, optimized itinerary.
+          </p>
         </div>
-      </div>
+
+        {/* Wizard Card Container */}
+        <Card className="border border-border/70 shadow-card bg-card/80 backdrop-blur-md rounded-3xl overflow-hidden">
+          <CardContent className="p-4 sm:p-8 md:p-10">
+            {/* Top Step Progress Bar */}
+            <WizardProgress
+              steps={WIZARD_STEPS}
+              currentStep={currentStep}
+              onStepClick={handleStepClick}
+              canNavigateToStep={canNavigateToStep}
+            />
+
+            {/* Step Body with Smooth CSS Transition */}
+            <div className="relative min-h-[380px] overflow-hidden py-2">
+              <div
+                key={currentStep}
+                className="animate-fade-in transition-all duration-300"
+              >
+                {currentStep === 1 && (
+                  <StepWhere
+                    destination={destination}
+                    onChange={setDestination}
+                    onEnterNext={handleNext}
+                  />
+                )}
+
+                {currentStep === 2 && (
+                  <StepWhen
+                    startDate={startDate}
+                    endDate={endDate}
+                    onStartDateChange={setStartDate}
+                    onEndDateChange={setEndDate}
+                  />
+                )}
+
+                {currentStep === 3 && (
+                  <StepWho
+                    groupType={groupType}
+                    adultsCount={adultsCount}
+                    childrenCount={childrenCount}
+                    onGroupTypeChange={setGroupType}
+                    onAdultsChange={setAdultsCount}
+                    onChildrenChange={setChildrenCount}
+                  />
+                )}
+
+                {currentStep === 4 && (
+                  <StepBudget
+                    budgetPerPerson={budgetPerPerson}
+                    totalTravelers={adultsCount + childrenCount}
+                    onChange={setBudgetPerPerson}
+                  />
+                )}
+
+                {currentStep === 5 && (
+                  <StepStyle
+                    selectedInterests={selectedInterests}
+                    onToggleInterest={handleToggleInterest}
+                    onSelectAll={handleSelectAllInterests}
+                    onClearAll={handleClearAllInterests}
+                  />
+                )}
+
+                {currentStep === 6 && (
+                  <StepReview
+                    destination={destination}
+                    startDate={startDate}
+                    endDate={endDate}
+                    groupType={groupType}
+                    adultsCount={adultsCount}
+                    childrenCount={childrenCount}
+                    budgetPerPerson={budgetPerPerson}
+                    interests={selectedInterests}
+                    loading={loading}
+                    error={error}
+                    onEditStep={handleStepClick}
+                    onSubmit={handleSubmitItinerary}
+                  />
+                )}
+              </div>
+            </div>
+
+            {/* Wizard Navigation Footer */}
+            <div className="flex items-center justify-between pt-8 mt-6 border-t border-border/60">
+              <div className="flex items-center gap-2">
+                {currentStep > 1 ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleBack}
+                    className="rounded-xl px-4 h-11 text-xs font-semibold gap-1.5"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    <span>Back</span>
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={handleReset}
+                    className="rounded-xl text-xs text-muted-foreground hover:text-foreground gap-1.5 h-11 px-3"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Reset</span>
+                  </Button>
+                )}
+              </div>
+
+              <div className="text-xs font-semibold text-muted-foreground">
+                Step {currentStep} of {WIZARD_STEPS.length}
+              </div>
+
+              <div>
+                {currentStep < WIZARD_STEPS.length ? (
+                  <Button
+                    type="button"
+                    variant="hero"
+                    disabled={!isStepValid(currentStep)}
+                    onClick={handleNext}
+                    className="rounded-xl px-5 h-11 text-xs font-bold gap-1.5 shadow-sm"
+                  >
+                    <span>Continue</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={handleReset}
+                    className="rounded-xl text-xs text-muted-foreground hover:text-foreground gap-1.5 h-11 px-3"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Start Over</span>
+                  </Button>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Live AI Generation Streaming Overlay */}
+        <GenerationOverlay
+          isOpen={isOverlayOpen}
+          destination={destination || "your destination"}
+          days={
+            startDate && endDate
+              ? differenceInCalendarDays(endDate, startDate) + 1
+              : 5
+          }
+          stage={streamStage}
+          progress={streamProgress}
+          statusMessage={streamMessage}
+          error={error}
+          onRetry={handleRetryOverlay}
+          onCancel={handleCancelOverlay}
+        />
+      </main>
     </div>
   );
 };

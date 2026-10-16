@@ -1,0 +1,514 @@
+import React, { useState, useMemo } from "react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  MapPin,
+  Calendar,
+  Users,
+  IndianRupee,
+  Search,
+  LayoutGrid,
+  List,
+  Copy,
+  Trash2,
+  PlusCircle,
+  ExternalLink,
+  Sparkles,
+  Compass,
+  CheckCircle2,
+  Clock,
+  Archive,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import type { Trip } from "@/types/trip";
+
+interface MyTripsViewProps {
+  trips: Trip[];
+  onSelectTrip: (trip: Trip) => void;
+  onDuplicateTrip: (tripId: string) => Promise<void>;
+  onDeleteTrip: (tripId: string) => Promise<void>;
+  onNewPlan: () => void;
+}
+
+const DESTINATION_IMAGES: Record<string, string> = {
+  // Hill stations & mountains
+  wayanad: "https://images.unsplash.com/photo-1630938819488-ba7d1440d48b?auto=format&fit=crop&w=600&q=80",
+  munnar: "https://images.unsplash.com/photo-1596176530529-78163a4f7af2?auto=format&fit=crop&w=600&q=80",
+  coorg: "https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=600&q=80",
+  ooty: "https://images.unsplash.com/photo-1582510003544-4d00b7f74220?auto=format&fit=crop&w=600&q=80",
+  manali: "https://images.unsplash.com/photo-1626621341517-bbf3d9990a23?auto=format&fit=crop&w=600&q=80",
+  shimla: "https://images.unsplash.com/photo-1600683796695-103347b7fe70?auto=format&fit=crop&w=600&q=80",
+  kashmir: "https://images.unsplash.com/photo-1595815771614-ade9d652a65d?auto=format&fit=crop&w=600&q=80",
+  ladakh: "https://images.unsplash.com/photo-1581793745862-99fde7fa73d2?auto=format&fit=crop&w=600&q=80",
+  rishikesh: "https://images.unsplash.com/photo-1609137144822-263a238fb065?auto=format&fit=crop&w=600&q=80",
+  // Backwaters, coasts & heritage
+  alleppey: "https://images.unsplash.com/photo-1602216056096-3b40cc0c9944?auto=format&fit=crop&w=600&q=80",
+  alappuzha: "https://images.unsplash.com/photo-1602216056096-3b40cc0c9944?auto=format&fit=crop&w=600&q=80",
+  goa: "https://images.unsplash.com/photo-1512343879784-a960bf40e7f2?auto=format&fit=crop&w=600&q=80",
+  andaman: "https://images.unsplash.com/photo-1589182373726-e4f658ab50f0?auto=format&fit=crop&w=600&q=80",
+  jaipur: "https://images.unsplash.com/photo-1603262110263-fb010d6e75dc?auto=format&fit=crop&w=600&q=80",
+  udaipur: "https://images.unsplash.com/photo-1615836245337-f5b9b2303f10?auto=format&fit=crop&w=600&q=80",
+  varanasi: "https://images.unsplash.com/photo-1561359313-0639aad49ca6?auto=format&fit=crop&w=600&q=80",
+  // Regional fallbacks
+  kerala: "https://images.unsplash.com/photo-1602216056096-3b40cc0c9944?auto=format&fit=crop&w=600&q=80",
+};
+
+const DEFAULT_THUMB =
+  "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=600&q=80";
+
+const STATUS_CONFIG = {
+  planned: {
+    label: "Planned",
+    badgeClass: "bg-blue-500/10 text-blue-600 border-blue-200 dark:border-blue-800",
+    icon: <Calendar className="w-3 h-3" />,
+  },
+  ongoing: {
+    label: "Ongoing",
+    badgeClass: "bg-emerald-500/10 text-emerald-600 border-emerald-200 dark:border-emerald-800",
+    icon: <Compass className="w-3 h-3" />,
+  },
+  completed: {
+    label: "Completed",
+    badgeClass: "bg-purple-500/10 text-purple-600 border-purple-200 dark:border-purple-800",
+    icon: <CheckCircle2 className="w-3 h-3" />,
+  },
+  draft: {
+    label: "Draft",
+    badgeClass: "bg-muted text-muted-foreground border-border",
+    icon: <Archive className="w-3 h-3" />,
+  },
+};
+
+export const MyTripsView: React.FC<MyTripsViewProps> = ({
+  trips,
+  onSelectTrip,
+  onDuplicateTrip,
+  onDeleteTrip,
+  onNewPlan,
+}) => {
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [tripToDelete, setTripToDelete] = useState<Trip | null>(null);
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+
+  const getTripCover = (title: string): string => {
+    const lower = title.toLowerCase();
+    const priorityDestinations = [
+      "wayanad", "munnar", "coorg", "ooty", "manali", "shimla",
+      "kashmir", "ladakh", "rishikesh", "alleppey", "alappuzha",
+      "goa", "andaman", "jaipur", "udaipur", "varanasi"
+    ];
+    for (const key of priorityDestinations) {
+      if (lower.includes(key)) return DESTINATION_IMAGES[key];
+    }
+    for (const [key, url] of Object.entries(DESTINATION_IMAGES)) {
+      if (lower.includes(key)) return url;
+    }
+    return DEFAULT_THUMB;
+  };
+
+  const filteredTrips = useMemo(() => {
+    return trips.filter((trip) => {
+      const title = trip.title || trip.tripDetails?.trip_title || "";
+      const matchesSearch =
+        !search.trim() || title.toLowerCase().includes(search.toLowerCase());
+      const tripStatus = trip.status || "planned";
+      const matchesStatus =
+        statusFilter === "all" || tripStatus === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [trips, search, statusFilter]);
+
+  const handleDuplicate = async (e: React.MouseEvent, tripId: string) => {
+    e.stopPropagation();
+    try {
+      setActionLoadingId(tripId);
+      await onDuplicateTrip(tripId);
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!tripToDelete) return;
+    try {
+      setActionLoadingId(tripToDelete._id);
+      await onDeleteTrip(tripToDelete._id);
+    } finally {
+      setActionLoadingId(null);
+      setTripToDelete(null);
+    }
+  };
+
+  return (
+    <div className="space-y-6 animate-fade-in max-w-6xl mx-auto">
+      {/* Top Controls Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-3xl bg-card border border-border/70 shadow-xs">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-primary">
+              Trip Library
+            </span>
+            <Badge variant="outline" className="text-[10px]">
+              {trips.length} Total Trips
+            </Badge>
+          </div>
+          <h2 className="text-2xl font-black text-foreground">My Adventures</h2>
+        </div>
+
+        <Button
+          type="button"
+          variant="hero"
+          onClick={onNewPlan}
+          className="rounded-2xl h-11 px-5 text-xs font-bold gap-2 shadow-sm self-start md:self-auto"
+        >
+          <PlusCircle className="w-4 h-4" />
+          <span>Plan New Trip</span>
+        </Button>
+      </div>
+
+      {/* Filter & Search Bar */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        {/* Search Input */}
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Search by destination or title..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-10 h-11 rounded-2xl bg-card border-border/70 text-xs shadow-2xs"
+          />
+        </div>
+
+        {/* View Switcher & Status Pills */}
+        <div className="flex items-center gap-2 justify-between sm:justify-end overflow-x-auto pb-1 scrollbar-none">
+          <div className="inline-flex p-1 bg-muted/60 rounded-2xl border border-border/60">
+            {["all", "planned", "ongoing", "completed", "draft"].map((status) => (
+              <Button
+                key={status}
+                type="button"
+                size="sm"
+                variant={statusFilter === status ? "hero" : "ghost"}
+                onClick={() => setStatusFilter(status)}
+                className="rounded-xl text-xs font-bold h-8 px-3 capitalize"
+              >
+                {status}
+              </Button>
+            ))}
+          </div>
+
+          <div className="inline-flex p-1 bg-muted/60 rounded-2xl border border-border/60">
+            <Button
+              type="button"
+              size="icon"
+              variant={viewMode === "grid" ? "default" : "ghost"}
+              onClick={() => setViewMode("grid")}
+              className="h-8 w-8 rounded-xl"
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </Button>
+            <Button
+              type="button"
+              size="icon"
+              variant={viewMode === "list" ? "default" : "ghost"}
+              onClick={() => setViewMode("list")}
+              className="h-8 w-8 rounded-xl"
+            >
+              <List className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Trips Content */}
+      {filteredTrips.length === 0 ? (
+        <div className="p-12 text-center rounded-3xl bg-card/60 backdrop-blur-sm border border-dashed border-border/80 space-y-4">
+          <div className="w-16 h-16 rounded-3xl bg-primary/10 text-primary flex items-center justify-center mx-auto shadow-inner">
+            <Compass className="w-8 h-8 animate-pulse" />
+          </div>
+          <div className="space-y-1 max-w-sm mx-auto">
+            <h3 className="text-lg font-bold text-foreground">
+              {search || statusFilter !== "all"
+                ? "No matching trips found"
+                : "No saved trips yet"}
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              {search || statusFilter !== "all"
+                ? "Try adjusting your search keywords or status filter."
+                : "Start planning your first unforgettable journey with our AI assistant!"}
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="hero"
+            onClick={onNewPlan}
+            className="rounded-2xl px-5 text-xs font-bold gap-2"
+          >
+            <PlusCircle className="w-4 h-4" />
+            <span>Create Itinerary</span>
+          </Button>
+        </div>
+      ) : viewMode === "grid" ? (
+        /* GRID VIEW */
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredTrips.map((trip) => {
+            const title =
+              trip.title || trip.tripDetails?.trip_title || "Custom Trip";
+            const cover = getTripCover(title);
+            const statusKey =
+              (trip.status as keyof typeof STATUS_CONFIG) || "planned";
+            const statusInfo = STATUS_CONFIG[statusKey] || STATUS_CONFIG.planned;
+            const days = trip.tripDetails?.duration_days || 5;
+            const budget = trip.tripDetails?.budget_per_person || 15000;
+            const isActing = actionLoadingId === trip._id;
+
+            return (
+              <Card
+                key={trip._id}
+                onClick={() => onSelectTrip(trip)}
+                className="group rounded-3xl border border-border/70 hover:border-primary/50 bg-card overflow-hidden shadow-card hover:shadow-hover transition-all duration-300 cursor-pointer flex flex-col justify-between"
+              >
+                <div>
+                  {/* Card Thumbnail */}
+                  <div className="relative h-44 w-full overflow-hidden">
+                    <img
+                      src={cover}
+                      alt={title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+
+                    {/* Status Badge */}
+                    <div className="absolute top-3 left-3">
+                      <Badge
+                        className={cn(
+                          "backdrop-blur-md px-2.5 py-1 text-[11px] font-bold gap-1 shadow-sm",
+                          statusInfo.badgeClass
+                        )}
+                      >
+                        {statusInfo.icon}
+                        <span>{statusInfo.label}</span>
+                      </Badge>
+                    </div>
+
+                    {/* Days Count Overlay */}
+                    <div className="absolute bottom-3 left-3 text-white text-xs font-bold flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5 text-primary" />
+                      <span>{days} Days</span>
+                      <span>•</span>
+                      <span className="text-white/80">
+                        ₹{budget.toLocaleString("en-IN")}/person
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Card Body */}
+                  <CardContent className="p-5 space-y-3">
+                    <h3 className="font-extrabold text-base text-foreground line-clamp-2 group-hover:text-primary transition-colors">
+                      {title}
+                    </h3>
+                    <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border/60">
+                      <span>Created {new Date(trip.createdAt).toLocaleDateString()}</span>
+                      <span className="font-semibold text-foreground">
+                        {trip.tripDetails?.group_type || "Traveler"}
+                      </span>
+                    </div>
+                  </CardContent>
+                </div>
+
+                {/* Card Actions Footer */}
+                <div className="px-5 pb-5 pt-0 flex items-center justify-between gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="flex-1 rounded-xl text-xs font-bold gap-1.5 h-9"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectTrip(trip);
+                    }}
+                  >
+                    <span>View Itinerary</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </Button>
+
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    title="Duplicate as draft"
+                    disabled={isActing}
+                    onClick={(e) => handleDuplicate(e, trip._id)}
+                    className="h-9 w-9 text-muted-foreground hover:text-primary rounded-xl"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </Button>
+
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    title="Delete trip"
+                    disabled={isActing}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setTripToDelete(trip);
+                    }}
+                    className="h-9 w-9 text-muted-foreground hover:text-destructive rounded-xl"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      ) : (
+        /* LIST VIEW */
+        <div className="space-y-3">
+          {filteredTrips.map((trip) => {
+            const title =
+              trip.title || trip.tripDetails?.trip_title || "Custom Trip";
+            const cover = getTripCover(title);
+            const statusKey =
+              (trip.status as keyof typeof STATUS_CONFIG) || "planned";
+            const statusInfo = STATUS_CONFIG[statusKey] || STATUS_CONFIG.planned;
+            const days = trip.tripDetails?.duration_days || 5;
+            const budget = trip.tripDetails?.budget_per_person || 15000;
+            const isActing = actionLoadingId === trip._id;
+
+            return (
+              <div
+                key={trip._id}
+                onClick={() => onSelectTrip(trip)}
+                className="p-4 rounded-3xl bg-card border border-border/70 hover:border-primary/50 shadow-xs hover:shadow-card transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer group"
+              >
+                <div className="flex items-center gap-4">
+                  <img
+                    src={cover}
+                    alt={title}
+                    className="w-16 h-16 rounded-2xl object-cover shrink-0 shadow-xs"
+                  />
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Badge
+                        className={cn(
+                          "px-2 py-0.5 text-[10px] font-bold gap-1",
+                          statusInfo.badgeClass
+                        )}
+                      >
+                        {statusInfo.icon}
+                        <span>{statusInfo.label}</span>
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(trip.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <h4 className="font-extrabold text-sm sm:text-base text-foreground group-hover:text-primary transition-colors line-clamp-1">
+                      {title}
+                    </h4>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      <span>{days} Days</span>
+                      <span>•</span>
+                      <span>₹{budget.toLocaleString("en-IN")}/person</span>
+                      <span>•</span>
+                      <span>{trip.tripDetails?.group_type || "Couple"}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-end sm:self-center">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="rounded-xl text-xs font-bold h-9 px-3 gap-1"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectTrip(trip);
+                    }}
+                  >
+                    <span>Open</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    title="Duplicate as draft"
+                    disabled={isActing}
+                    onClick={(e) => handleDuplicate(e, trip._id)}
+                    className="h-9 w-9 text-muted-foreground hover:text-primary rounded-xl"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    title="Delete trip"
+                    disabled={isActing}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setTripToDelete(trip);
+                    }}
+                    className="h-9 w-9 text-muted-foreground hover:text-destructive rounded-xl"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Delete Confirmation Alert Dialog */}
+      <AlertDialog
+        open={!!tripToDelete}
+        onOpenChange={(open) => {
+          if (!open) setTripToDelete(null);
+        }}
+      >
+        <AlertDialogContent className="rounded-3xl max-w-md w-[92vw] sm:w-full p-5 sm:p-6">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-lg font-bold">
+              Delete Itinerary?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs leading-relaxed">
+              Are you sure you want to remove{" "}
+              <strong className="text-foreground">
+                "{tripToDelete?.title || tripToDelete?.tripDetails?.trip_title}"
+              </strong>
+              ? This action will archive the trip from your library.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-0">
+            <AlertDialogCancel className="rounded-xl text-xs font-semibold h-10">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="rounded-xl text-xs font-bold h-10 bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete Trip
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+};

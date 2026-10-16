@@ -1,0 +1,532 @@
+import React, { useState, useMemo, useEffect } from "react";
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from "react-leaflet";
+import L from "leaflet";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { MapPin, Navigation, Bed, Eye, Calendar, Sparkles } from "lucide-react";
+import type { ItineraryData } from "@/types/trip";
+
+interface TripMapProps {
+  destination: string;
+  itinerary: ItineraryData["day_by_day_itinerary"];
+}
+
+// Comprehensive coordinates database for Indian & world travel hubs
+const DESTINATION_COORDS: Record<string, [number, number]> = {
+  // Kerala & South India
+  wayanad: [11.6854, 76.1320],
+  kerala: [10.8505, 76.2711],
+  munnar: [10.0889, 77.0595],
+  alleppey: [9.4981, 76.3388],
+  alappuzha: [9.4981, 76.3388],
+  kochi: [9.9312, 76.2673],
+  cochin: [9.9312, 76.2673],
+  varkala: [8.7379, 76.7163],
+  kovalam: [8.4004, 76.9787],
+  trivandrum: [8.5241, 76.9366],
+  thiruvananthapuram: [8.5241, 76.9366],
+  thekkady: [9.6031, 77.1615],
+  kumarakom: [9.6175, 76.4301],
+  vagamon: [9.6877, 76.9056],
+  athirappilly: [10.2979, 76.5414],
+  bekal: [12.3929, 75.0322],
+  calicut: [11.2588, 75.7804],
+  kozhikode: [11.2588, 75.7804],
+  kannur: [11.8745, 75.3704],
+
+  // Karnataka & Tamil Nadu
+  coorg: [12.4244, 75.7382],
+  kodagu: [12.4244, 75.7382],
+  madikeri: [12.4244, 75.7382],
+  chikmagalur: [13.3161, 75.7720],
+  chikkamagaluru: [13.3161, 75.7720],
+  hampi: [15.3350, 76.4600],
+  gokarna: [14.5479, 74.3188],
+  mysore: [12.2958, 76.6394],
+  mysuru: [12.2958, 76.6394],
+  bangalore: [12.9716, 77.5946],
+  bengaluru: [12.9716, 77.5946],
+  dandeli: [15.2361, 74.6173],
+  kabini: [11.9333, 76.3500],
+  ooty: [11.4102, 76.6950],
+  udhagamandalam: [11.4102, 76.6950],
+  kodaikanal: [10.2381, 77.4892],
+  coonoor: [11.3530, 76.7959],
+  pondicherry: [11.9416, 79.8083],
+  puducherry: [11.9416, 79.8083],
+  chennai: [13.0827, 80.2707],
+  madurai: [9.9252, 78.1198],
+  rameshwaram: [9.2876, 79.3129],
+  kanyakumari: [8.0883, 77.5385],
+  mahabalipuram: [12.6269, 80.1927],
+  hyderabad: [17.3850, 78.4867],
+  visakhapatnam: [17.6868, 83.2185],
+  vizag: [17.6868, 83.2185],
+
+  // Goa & Maharashtra
+  goa: [15.2993, 74.1240],
+  mumbai: [19.0760, 72.8777],
+  pune: [18.5204, 73.8567],
+  lonavala: [18.7557, 73.4091],
+  mahabaleshwar: [17.9307, 73.6477],
+  alibaug: [18.6414, 72.8722],
+  matheran: [18.9866, 73.2680],
+  nashik: [19.9975, 73.7898],
+  shirdi: [19.7667, 74.4764],
+  panchgani: [17.9237, 73.8018],
+  aurangabad: [19.8762, 75.3433],
+
+  // North India & Himalayas
+  manali: [32.2432, 77.1892],
+  shimla: [31.1048, 77.1734],
+  rishikesh: [30.0869, 78.2676],
+  haridwar: [29.9457, 78.1642],
+  dehradun: [30.3165, 78.0322],
+  mussoorie: [30.4598, 78.0644],
+  nainital: [29.3919, 79.4542],
+  corbett: [29.5300, 78.7747],
+  leh: [34.1526, 77.5771],
+  ladakh: [34.1526, 77.5771],
+  srinagar: [34.0837, 74.7973],
+  kashmir: [34.0837, 74.7973],
+  gulmarg: [34.0484, 74.3805],
+  pahalgam: [34.0161, 75.3150],
+  dharamshala: [32.2190, 76.3234],
+  mcleodganj: [32.2426, 76.3213],
+  kasol: [32.0100, 77.3150],
+  spiti: [32.2461, 78.0349],
+  dalhousie: [32.5387, 75.9710],
+  kullu: [31.9579, 77.1095],
+  auli: [30.5292, 79.5694],
+  amritsar: [31.6340, 74.8723],
+  delhi: [28.6139, 77.2090],
+
+  // Rajasthan & Golden Triangle
+  jaipur: [26.9124, 75.7873],
+  udaipur: [24.5854, 73.7125],
+  jodhpur: [26.2389, 73.0243],
+  jaisalmer: [26.9157, 70.9083],
+  pushkar: [26.4899, 74.5511],
+  "mount abu": [24.5925, 72.7156],
+  ranthambore: [26.0173, 76.5026],
+  bikaner: [28.0229, 73.3119],
+  agra: [27.1767, 78.0081],
+  varanasi: [25.3176, 82.9739],
+  khajuraho: [24.8318, 79.9199],
+
+  // East & North East
+  darjeeling: [27.0410, 88.2663],
+  gangtok: [27.3389, 88.6065],
+  sikkim: [27.3389, 88.6065],
+  shillong: [25.5788, 91.8933],
+  meghalaya: [25.4670, 91.3662],
+  cherrapunji: [25.2702, 91.7323],
+  kaziranga: [26.5775, 93.1711],
+  tawang: [27.5861, 91.8656],
+  andaman: [11.6234, 92.7265],
+  havelock: [11.9761, 92.9876],
+  kolkata: [22.5726, 88.3639],
+  puri: [19.8135, 85.8312],
+
+  // Global Hubs
+  bali: [-8.4095, 115.1889],
+  dubai: [25.2048, 55.2708],
+  singapore: [1.3521, 103.8198],
+  bangkok: [13.7563, 100.5018],
+  phuket: [7.8804, 98.3923],
+  maldives: [3.2028, 73.2207],
+  tokyo: [35.6762, 139.6503],
+  paris: [48.8566, 2.3522],
+  london: [51.5074, -0.1278],
+  rome: [41.9028, 12.4964],
+  amsterdam: [52.3676, 4.9041],
+  switzerland: [46.8182, 8.2275],
+  zurich: [47.3769, 8.5417],
+  kathmandu: [27.7172, 85.3240],
+  nepal: [27.7172, 85.3240],
+  bhutan: [27.5142, 90.4336],
+  colombo: [6.9271, 79.8612],
+};
+
+const DAY_COLORS = [
+  "#38bdf8", // Sky blue
+  "#10b981", // Emerald
+  "#f97316", // Orange
+  "#8b5cf6", // Purple
+  "#ec4899", // Pink
+  "#f59e0b", // Amber
+];
+
+// Helper to look up coordinates from any text (destination, title, or activities)
+const findCoordsFromText = (text: string): [number, number] | null => {
+  if (!text) return null;
+  const lower = text.toLowerCase();
+  for (const [key, coords] of Object.entries(DESTINATION_COORDS)) {
+    if (lower.includes(key)) {
+      return coords;
+    }
+  }
+  return null;
+};
+
+// Helper to create modern styled HTML divIcon pins
+const createCustomPin = (text: string, color: string, isHotel: boolean = false) => {
+  return L.divIcon({
+    className: "custom-leaflet-marker",
+    html: `
+      <div style="
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        background-color: ${color};
+        color: white;
+        border-radius: 50%;
+        border: 2px solid white;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        font-weight: 800;
+        font-size: ${isHotel ? "14px" : "11px"};
+      ">
+        ${isHotel ? "🏨" : text}
+      </div>
+    `,
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
+    popupAnchor: [0, -18],
+  });
+};
+
+// Map Recenter Helper component
+const MapViewUpdater: React.FC<{ center: [number, number]; zoom: number }> = ({
+  center,
+  zoom,
+}) => {
+  const map = useMap();
+  useEffect(() => {
+    map.flyTo(center, zoom, { duration: 1.2 });
+  }, [center, zoom, map]);
+  return null;
+};
+
+export const TripMap: React.FC<TripMapProps> = ({ destination, itinerary }) => {
+  const [selectedDay, setSelectedDay] = useState<number | "all">("all");
+
+  // Determine initial coordinates from dictionary or itinerary scan
+  const initialCoord = useMemo<[number, number]>(() => {
+    const directMatch = findCoordsFromText(destination);
+    if (directMatch) return directMatch;
+
+    if (itinerary && itinerary.length > 0) {
+      const allText = itinerary
+        .map((d) => `${d.title} ${d.activities.join(" ")} ${d.stay_recommendations?.join(" ") || ""}`)
+        .join(" ");
+      const itineraryMatch = findCoordsFromText(allText);
+      if (itineraryMatch) return itineraryMatch;
+    }
+
+    return [11.6854, 76.1320]; // Default to scenic Wayanad / South India instead of Delhi
+  }, [destination, itinerary]);
+
+  const [baseCoord, setBaseCoord] = useState<[number, number]>(initialCoord);
+  const [detectedLocation, setDetectedLocation] = useState<string>("");
+
+  // Sync initialCoord changes
+  useEffect(() => {
+    setBaseCoord(initialCoord);
+  }, [initialCoord]);
+
+  // Dynamic OpenStreetMap Nominatim Geocoding Fallback
+  useEffect(() => {
+    let isMounted = true;
+
+    // Check if we already matched locally
+    const localMatch = findCoordsFromText(destination);
+    if (localMatch) {
+      setBaseCoord(localMatch);
+      setDetectedLocation(destination);
+      return;
+    }
+
+    // Clean destination string for geocoding
+    const cleanQuery = destination
+      .replace(/(\d+[\s-]?day|\bday\b|\btrip\b|\bitinerary\b|\bto\b|\bin\b|\bfor\b|\bgetaway\b|\badventure\b|\btour\b|\bvacation\b)/gi, "")
+      .trim();
+
+    if (!cleanQuery) return;
+
+    const cacheKey = `geo_${cleanQuery.toLowerCase()}`;
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      try {
+        const coords = JSON.parse(cached) as [number, number];
+        setBaseCoord(coords);
+        setDetectedLocation(cleanQuery);
+        return;
+      } catch (e) {}
+    }
+
+    // Query OpenStreetMap Nominatim
+    fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(cleanQuery)}&limit=1`,
+      { headers: { "Accept-Language": "en" } }
+    )
+      .then((res) => res.json())
+      .then((data) => {
+        if (!isMounted) return;
+        if (data && data.length > 0) {
+          const coords: [number, number] = [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+          setBaseCoord(coords);
+          setDetectedLocation(data[0].display_name.split(",").slice(0, 2).join(","));
+          localStorage.setItem(cacheKey, JSON.stringify(coords));
+        }
+      })
+      .catch((err) => {
+        console.warn("Geocoding fetch failed, retained coordinates:", err);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [destination]);
+
+  // Generate geographically distributed pins for activities and stays around destination
+  const mapPins = useMemo(() => {
+    const pins: Array<{
+      id: string;
+      title: string;
+      day: number;
+      coords: [number, number];
+      type: "activity" | "stay";
+      color: string;
+      category: string;
+    }> = [];
+
+    itinerary.forEach((dayData, dayIdx) => {
+      const dayColor = DAY_COLORS[dayIdx % DAY_COLORS.length];
+
+      // Add activities with real GPS coordinates or calculated offsets
+      dayData.activities.forEach((act, actIdx) => {
+        let title = "";
+        let coords: [number, number];
+
+        if (typeof act === "object" && act !== null) {
+          title = act.title || act.name || `Activity ${actIdx + 1}`;
+          if (
+            act.coordinates &&
+            Array.isArray(act.coordinates) &&
+            act.coordinates.length === 2 &&
+            !isNaN(act.coordinates[0])
+          ) {
+            coords = [Number(act.coordinates[0]), Number(act.coordinates[1])];
+          } else {
+            const angle = (dayIdx * 2.2 + actIdx * 1.3) % (2 * Math.PI);
+            const radius = 0.015 + ((actIdx + 1) * 0.012) + (dayIdx * 0.005);
+            coords = [baseCoord[0] + radius * Math.sin(angle), baseCoord[1] + radius * Math.cos(angle)];
+          }
+        } else {
+          title = String(act);
+          const angle = (dayIdx * 2.2 + actIdx * 1.3) % (2 * Math.PI);
+          const radius = 0.015 + ((actIdx + 1) * 0.012) + (dayIdx * 0.005);
+          coords = [baseCoord[0] + radius * Math.sin(angle), baseCoord[1] + radius * Math.cos(angle)];
+        }
+
+        pins.push({
+          id: `act-${dayData.day}-${actIdx}`,
+          title,
+          day: dayData.day,
+          coords,
+          type: "activity",
+          color: dayColor,
+          category: `Day ${dayData.day} Activity`,
+        });
+      });
+
+      // Add primary stay marker with real GPS coordinates or calculated offset
+      if (dayData.stay_recommendations && dayData.stay_recommendations.length > 0) {
+        const stay = dayData.stay_recommendations[0];
+        let stayTitle = "";
+        let stayCoords: [number, number];
+
+        if (typeof stay === "object" && stay !== null) {
+          stayTitle = stay.name || "Stay";
+          if (
+            stay.coordinates &&
+            Array.isArray(stay.coordinates) &&
+            stay.coordinates.length === 2 &&
+            !isNaN(stay.coordinates[0])
+          ) {
+            stayCoords = [Number(stay.coordinates[0]), Number(stay.coordinates[1])];
+          } else {
+            const stayAngle = (dayIdx * 1.8) % (2 * Math.PI);
+            const stayRadius = 0.008 + (dayIdx * 0.003);
+            stayCoords = [baseCoord[0] + stayRadius * Math.sin(stayAngle), baseCoord[1] + stayRadius * Math.cos(stayAngle)];
+          }
+        } else {
+          stayTitle = String(stay).split("(")[0].split(":")[0].trim();
+          const stayAngle = (dayIdx * 1.8) % (2 * Math.PI);
+          const stayRadius = 0.008 + (dayIdx * 0.003);
+          stayCoords = [baseCoord[0] + stayRadius * Math.sin(stayAngle), baseCoord[1] + stayRadius * Math.cos(stayAngle)];
+        }
+
+        pins.push({
+          id: `stay-${dayData.day}`,
+          title: stayTitle,
+          day: dayData.day,
+          coords: stayCoords,
+          type: "stay",
+          color: "#eab308", // Gold for stay
+          category: `Night ${dayData.day} Stay`,
+        });
+      }
+    });
+
+    return pins;
+  }, [itinerary, baseCoord]);
+
+  // Filter pins based on selected day
+  const filteredPins = useMemo(() => {
+    if (selectedDay === "all") return mapPins;
+    return mapPins.filter((p) => p.day === selectedDay);
+  }, [mapPins, selectedDay]);
+
+  // Path polyline for the selected day
+  const routePolyline = useMemo(() => {
+    if (selectedDay === "all") return [];
+    return filteredPins
+      .filter((p) => p.type === "activity")
+      .map((p) => p.coords);
+  }, [filteredPins, selectedDay]);
+
+  return (
+    <div className="space-y-4">
+      {/* Map Filter & Controls Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-3xl bg-card border border-border/70 shadow-xs">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">
+            <Navigation className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h4 className="text-sm font-bold text-foreground">Interactive Itinerary Map</h4>
+              {detectedLocation && (
+                <Badge variant="outline" className="text-[10px] text-primary border-primary/30">
+                  <MapPin className="w-3 h-3 mr-1" />
+                  {detectedLocation}
+                </Badge>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Explore day routes, stay locations, and scenic spots around your destination
+            </p>
+          </div>
+        </div>
+
+        {/* Day Filter Pills */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+          <Button
+            type="button"
+            size="sm"
+            variant={selectedDay === "all" ? "hero" : "outline"}
+            onClick={() => setSelectedDay("all")}
+            className="rounded-xl text-xs h-8 px-3 font-semibold"
+          >
+            All Pins ({mapPins.length})
+          </Button>
+          {itinerary.map((d) => (
+            <Button
+              key={d.day}
+              type="button"
+              size="sm"
+              variant={selectedDay === d.day ? "hero" : "outline"}
+              onClick={() => setSelectedDay(d.day)}
+              className="rounded-xl text-xs h-8 px-2.5 font-semibold"
+            >
+              Day {d.day}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {/* Map Viewport Container */}
+      <div className="relative w-full h-[450px] sm:h-[520px] rounded-3xl overflow-hidden border border-border/70 shadow-card z-0">
+        <MapContainer
+          center={baseCoord}
+          zoom={12}
+          scrollWheelZoom={false}
+          className="w-full h-full"
+        >
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+
+          <MapViewUpdater center={baseCoord} zoom={selectedDay === "all" ? 11 : 12} />
+
+          {/* Render Activity Connecting Route */}
+          {routePolyline.length > 1 && (
+            <Polyline
+              positions={routePolyline}
+              pathOptions={{
+                color:
+                  selectedDay !== "all"
+                    ? DAY_COLORS[(selectedDay - 1) % DAY_COLORS.length]
+                    : "#38bdf8",
+                weight: 4,
+                dashArray: "6, 6",
+                opacity: 0.85,
+              }}
+            />
+          )}
+
+          {/* Render Markers */}
+          {filteredPins.map((pin) => {
+            const isStay = pin.type === "stay";
+            const icon = createCustomPin(
+              isStay ? "H" : `D${pin.day}`,
+              pin.color,
+              isStay
+            );
+
+            return (
+              <Marker key={pin.id} position={pin.coords} icon={icon}>
+                <Popup className="custom-popup">
+                  <div className="p-1 space-y-1 text-left min-w-[180px]">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-primary">
+                        {pin.category}
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted font-bold">
+                        Day {pin.day}
+                      </span>
+                    </div>
+                    <p className="text-xs font-bold text-foreground leading-snug">
+                      {pin.title}
+                    </p>
+                  </div>
+                </Popup>
+              </Marker>
+            );
+          })}
+        </MapContainer>
+
+        {/* Floating Legend */}
+        <div className="absolute bottom-4 left-4 z-[400] p-3 rounded-2xl bg-card/90 backdrop-blur-md border border-border/70 shadow-md text-[11px] space-y-1.5 hidden sm:block">
+          <div className="font-bold text-foreground flex items-center gap-1.5">
+            <Sparkles className="w-3 h-3 text-primary" />
+            <span>Map Legend</span>
+          </div>
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <span className="w-2.5 h-2.5 rounded-full bg-primary" />
+            <span>Activities (Numbered by Day)</span>
+          </div>
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <span className="w-2.5 h-2.5 rounded-full bg-yellow-400" />
+            <span>Recommended Night Stays</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+export default TripMap;

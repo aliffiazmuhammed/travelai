@@ -97,7 +97,10 @@ All colors MUST be HSL.
     @apply border-border;
   }
 
+  html,
   body {
+    overflow-x: hidden;
+    max-width: 100vw;
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
@@ -142,5 +145,40 @@ All colors MUST be HSL.
   
   .hover-lift:hover {
     @apply -translate-y-1 shadow-hover;
+  }
+}
+
+/* Print optimization styles for clean PDF export and paper printing */
+@media print {
+  nav,
+  button,
+  .no-print,
+  [role="tablist"] {
+    display: none !important;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 11pt !important;
+  }
+
+  .container {
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .card,
+  [class*="Card"] {
+    box-shadow: none !important;
+    border: 1px solid #cbd5e1 !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    margin-bottom: 1rem !important;
+  }
+
+  img {
+    max-height: 240px !important;
   }
 }
