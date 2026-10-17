@@ -148,15 +148,18 @@ All colors MUST be HSL.
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
-  .gradient-sky {
+  .gradient-sky,
+  .bg-gradient-sky {
     background: var(--gradient-sky);
   }
   
-  .gradient-sunrise {
+  .gradient-sunrise,
+  .bg-gradient-sunrise {
     background: var(--gradient-sunrise);
   }
   
-  .gradient-hero {
+  .gradient-hero,
+  .bg-gradient-hero {
     background: var(--gradient-hero);
   }
   

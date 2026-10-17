@@ -13,6 +13,11 @@ export default {
       },
     },
     extend: {
+      backgroundImage: {
+        "gradient-sky": "var(--gradient-sky)",
+        "gradient-sunrise": "var(--gradient-sunrise)",
+        "gradient-hero": "var(--gradient-hero)",
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",

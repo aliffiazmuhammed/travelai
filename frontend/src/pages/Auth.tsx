@@ -41,11 +41,11 @@ const Auth = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-hero px-4">
       <div className="w-full max-w-md">
-        <Link to="/" className="flex items-center justify-center gap-2 mb-8 group">
-          <div className="bg-gradient-sky p-2 rounded-lg shadow-soft group-hover:shadow-card transition-smooth">
-            <Plane className="h-6 w-6 text-white" />
+        <Link to="/" className="flex items-center justify-center gap-2.5 mb-8 group">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-sky-500 to-primary text-white flex items-center justify-center shadow-md shadow-sky-500/25 group-hover:scale-105 transition-all">
+            <Plane className="h-5 w-5" />
           </div>
-          <span className="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+          <span className="text-xl font-extrabold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
             TravelAI
           </span>
         </Link>

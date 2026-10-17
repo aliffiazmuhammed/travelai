@@ -168,7 +168,7 @@ const Navbar = () => {
                 </SheetTrigger>
                 <SheetContent side="right" className="w-[300px] p-6 space-y-6">
                   <div className="flex items-center gap-2.5 pt-2">
-                    <div className="bg-gradient-sky p-2 rounded-xl text-white">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-sky-500 to-primary text-white flex items-center justify-center shadow-md shadow-sky-500/25">
                       <Plane className="h-5 w-5" />
                     </div>
                     <span className="text-lg font-black text-foreground">

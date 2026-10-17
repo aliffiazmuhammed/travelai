@@ -80,18 +80,29 @@ const Landing = () => {
       {/* CTA Section */}
       <section className="py-12 sm:py-24 px-4">
         <div className="container mx-auto">
-          <div className="bg-gradient-sky rounded-3xl p-6 sm:p-12 md:p-16 text-center shadow-card">
-            <h2 className="text-2xl sm:text-4xl md:text-5xl font-bold text-white mb-4 sm:mb-6">
-              Ready to Start Your Adventure?
-            </h2>
-            <p className="text-sm sm:text-lg md:text-xl text-white/90 mb-6 sm:mb-8 max-w-2xl mx-auto px-2">
-              Join thousands of travelers who've discovered smarter trip planning with AI
-            </p>
-            <Link to={isAuthenticated ? "/dashboard" : "/auth"}>
-              <Button variant="secondary" size="xl" className="shadow-hover w-full sm:w-auto">
-                {isAuthenticated ? "Go to Dashboard" : "Start Planning Now"}
-              </Button>
-            </Link>
+          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-sky-600 via-primary to-sky-700 p-8 sm:p-14 md:p-16 text-center shadow-2xl text-white">
+            {/* Ambient decorative lighting */}
+            <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-white/10 blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-24 -left-24 w-72 h-72 rounded-full bg-sky-300/20 blur-3xl pointer-events-none" />
+
+            <div className="relative z-10 max-w-3xl mx-auto space-y-4 sm:space-y-6">
+              <h2 className="text-2xl sm:text-4xl md:text-5xl font-black tracking-tight text-white drop-shadow-sm">
+                Ready to Start Your Adventure?
+              </h2>
+              <p className="text-sm sm:text-lg md:text-xl text-sky-100 font-medium max-w-2xl mx-auto px-2">
+                Join thousands of travelers who've discovered smarter trip planning with AI
+              </p>
+              <div className="pt-2 sm:pt-4">
+                <Link to={isAuthenticated ? "/dashboard" : "/auth"}>
+                  <Button
+                    size="xl"
+                    className="bg-white text-sky-950 hover:bg-white/90 shadow-xl font-bold text-base sm:text-lg rounded-2xl px-8 sm:px-10 h-12 sm:h-14 hover:scale-[1.02] transition-transform w-full sm:w-auto"
+                  >
+                    {isAuthenticated ? "Go to Dashboard" : "Start Planning Now"}
+                  </Button>
+                </Link>
+              </div>
+            </div>
           </div>
         </div>
       </section>
