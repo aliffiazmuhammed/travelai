@@ -356,6 +356,45 @@ export const TripMap: React.FC<TripMapProps> = ({
   }, []);
 
   // Sync initialCoord changes
+  const cartoApiKey = import.meta.env.VITE_CARTO_API_KEY;
+
+  const tileConfig = useMemo(() => {
+    // If a CARTO API key is provided, use high-resolution CARTO Voyager / Dark Matter
+    if (cartoApiKey) {
+      return {
+        key: isDark ? "carto-dark" : "carto-voyager",
+        url: isDark
+          ? `https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?key=${cartoApiKey}`
+          : `https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=${cartoApiKey}`,
+        attribution:
+          '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener noreferrer">CARTO</a>',
+        subdomains: "abcd",
+        maxZoom: 20,
+      };
+    }
+
+    // Default keyless high-reliability tiles (100% free, zero watermark, no API key needed)
+    if (isDark) {
+      return {
+        key: "esri-dark",
+        url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+        attribution:
+          '&copy; <a href="https://www.esri.com/" target="_blank" rel="noopener noreferrer">Esri</a> &copy; OpenStreetMap contributors',
+        subdomains: "abc",
+        maxZoom: 16,
+      };
+    }
+
+    return {
+      key: "osm-standard",
+      url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors',
+      subdomains: "abc",
+      maxZoom: 19,
+    };
+  }, [isDark, cartoApiKey]);
+
   useEffect(() => {
     setBaseCoord(initialCoord);
   }, [initialCoord]);
@@ -765,15 +804,11 @@ export const TripMap: React.FC<TripMapProps> = ({
           className="w-full h-full"
         >
           <TileLayer
-            key={isDark ? "carto-dark" : "carto-voyager"}
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener noreferrer">CARTO</a>'
-            url={
-              isDark
-                ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-                : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-            }
-            subdomains="abcd"
-            maxZoom={20}
+            key={tileConfig.key}
+            attribution={tileConfig.attribution}
+            url={tileConfig.url}
+            subdomains={tileConfig.subdomains}
+            maxZoom={tileConfig.maxZoom}
           />
 
           <MapViewUpdater center={baseCoord} zoom={selectedDay === "all" ? 11 : 12} />
