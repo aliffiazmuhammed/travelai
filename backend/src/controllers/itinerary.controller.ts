@@ -24,7 +24,7 @@ function parseItineraryJson(rawResponse: string): Record<string, any> {
       const extracted = cleaned.substring(startIdx, endIdx + 1);
       return JSON.parse(extracted);
     }
-    throw new AppError('Failed to parse AI response into JSON', 500);
+    throw new AppError('We were unable to format your travel itinerary. Please try generating again.', 500);
   }
 }
 
@@ -150,9 +150,14 @@ export const generateItineraryStream = async (req: AuthenticatedRequest, res: Re
     res.end();
   } catch (error: any) {
     console.error('Streaming generation error:', error);
+    const isProd = process.env.NODE_ENV === 'production';
+    const friendlyMsg = isProd
+      ? 'Unable to complete your travel plan at this moment. Please try generating again.'
+      : error.message || 'Failed to generate itinerary. Please try again.';
+
     sendEvent({
       type: 'error',
-      message: error.message || 'Failed to generate itinerary. Please try again.',
+      message: friendlyMsg,
     });
     res.end();
   }

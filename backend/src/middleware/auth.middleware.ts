@@ -12,13 +12,15 @@ export const protect = async (
     const token = req.cookies.token;
 
     if (!token) {
-      return res.status(401).json({ success: false, error: 'Not authorized, no token' });
+      const message = 'Please sign in to access this feature.';
+      return res.status(401).json({ success: false, error: message, message });
     }
 
     const decoded = jwt.verify(token, env.JWT_SECRET) as { userId: string };
     req.userId = decoded.userId;
     next();
   } catch (error) {
-    return res.status(401).json({ success: false, error: 'Not authorized, token failed' });
+    const message = 'Your session has expired or is invalid. Please sign in again.';
+    return res.status(401).json({ success: false, error: message, message });
   }
 };

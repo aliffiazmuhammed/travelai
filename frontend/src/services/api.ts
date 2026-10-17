@@ -25,11 +25,41 @@ class ApiClient {
       ...options,
     };
 
-    const response = await fetch(url, config);
-    const data = await response.json();
+    let response: Response;
+    try {
+      response = await fetch(url, config);
+    } catch {
+      throw new Error(
+        'Unable to connect to the server. Please check your internet connection or try again shortly.'
+      );
+    }
+
+    let data: any = {};
+    try {
+      data = await response.json();
+    } catch {
+      if (!response.ok) {
+        if (response.status === 429) {
+          throw new Error('Too many requests. Please wait a moment and try again.');
+        }
+        if (response.status >= 500) {
+          throw new Error('Our servers are temporarily unavailable. Please try again shortly.');
+        }
+        throw new Error('The server returned an unexpected response. Please try again.');
+      }
+      return {} as T;
+    }
 
     if (!response.ok) {
-      throw new Error(data.message || data.error || `Request failed with status ${response.status}`);
+      const detailMsg = Array.isArray(data.details) && data.details.length > 0 ? data.details[0] : '';
+      const message =
+        detailMsg ||
+        data.error ||
+        data.message ||
+        (response.status >= 500
+          ? 'Something went wrong on our end. Please try again in a few moments.'
+          : 'Request could not be completed. Please try again.');
+      throw new Error(message);
     }
 
     return data;
@@ -89,14 +119,22 @@ class ApiClient {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          errorData.message || errorData.error || `Generation failed with status ${response.status}`
-        );
+        let errMessage = 'Unable to begin itinerary generation. Please try again.';
+        try {
+          const errorData = await response.json();
+          errMessage = errorData.error || errorData.message || errMessage;
+        } catch {
+          if (response.status === 429) {
+            errMessage = 'Generation limit reached. Please wait a few minutes before trying again.';
+          } else if (response.status >= 500) {
+            errMessage = 'Our AI service is experiencing high traffic. Please try again shortly.';
+          }
+        }
+        throw new Error(errMessage);
       }
 
       if (!response.body) {
-        throw new Error('Streaming response body is not readable');
+        throw new Error('Unable to read streaming response from server.');
       }
 
       const reader = response.body.getReader();
@@ -129,7 +167,17 @@ class ApiClient {
                 callbacks.onComplete(event.trip);
                 return;
               } else if (event.type === 'error') {
-                callbacks.onError(event.message || 'Generation encountered an error');
+                const isTechnical =
+                  event.message &&
+                  (event.message.includes('GoogleGenerativeAI') ||
+                    event.message.includes('API key') ||
+                    event.message.includes('JSON') ||
+                    event.message.includes('at position'));
+                callbacks.onError(
+                  isTechnical
+                    ? 'We encountered an issue preparing your travel plan. Please try generating again.'
+                    : event.message || 'Generation encountered an error. Please try again.'
+                );
                 return;
               }
             } catch (err) {
@@ -139,7 +187,16 @@ class ApiClient {
         }
       }
     } catch (err: any) {
-      callbacks.onError(err.message || 'Connection lost during itinerary generation');
+      const isNetwork =
+        err.message &&
+        (err.message.includes('fetch') ||
+          err.message.includes('Network') ||
+          err.message.includes('connection'));
+      callbacks.onError(
+        isNetwork
+          ? 'Connection interrupted while generating your itinerary. Please check your internet connection and try again.'
+          : err.message || 'Unable to complete itinerary generation. Please try again.'
+      );
     }
   }
 

@@ -40,22 +40,36 @@ class ErrorBoundary extends Component<Props, State> {
             </div>
             <h2 className="text-2xl font-bold text-foreground">Something went wrong</h2>
             <p className="text-muted-foreground">
-              An unexpected error occurred. Please try refreshing the page.
+              An unexpected error occurred. Please try refreshing the page or returning home.
             </p>
-            {this.state.error && (
-              <p className="text-sm text-muted-foreground bg-muted p-3 rounded-lg font-mono">
+            {import.meta.env.DEV && this.state.error && (
+              <p className="text-sm text-muted-foreground bg-muted p-3 rounded-lg font-mono text-left max-h-36 overflow-auto">
                 {this.state.error.message}
               </p>
             )}
-            <Button
-              onClick={() => {
-                this.setState({ hasError: false, error: undefined });
-                window.location.reload();
-              }}
-              size="lg"
-            >
-              Refresh Page
-            </Button>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+              <Button
+                onClick={() => {
+                  this.setState({ hasError: false, error: undefined });
+                  window.location.reload();
+                }}
+                size="lg"
+                className="w-full sm:w-auto"
+              >
+                Refresh Page
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  this.setState({ hasError: false, error: undefined });
+                  window.location.href = '/';
+                }}
+                size="lg"
+                className="w-full sm:w-auto"
+              >
+                Return to Home
+              </Button>
+            </div>
           </div>
         </div>
       );

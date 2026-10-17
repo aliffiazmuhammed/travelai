@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plane } from "lucide-react";
+import { Plane, AlertCircle } from "lucide-react";
 import { useAuth } from "@/context/UserContext";
 
 const Auth = () => {
@@ -12,7 +12,8 @@ const Auth = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const { signup, signin, loading, error, isAuthenticated } = useAuth();
+  const [formError, setFormError] = useState<string | null>(null);
+  const { signup, signin, loading, error, clearError, isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
   const location = useLocation();
@@ -25,18 +26,58 @@ const Auth = () => {
     }
   }, [isAuthenticated, navigate, from, fromState]);
 
+  const handleToggleMode = () => {
+    setIsLogin(!isLogin);
+    clearError();
+    setFormError(null);
+    setConfirmPassword('');
+  };
+
+  const handleInputChange = (setter: (val: string) => void) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    setter(e.target.value);
+    if (formError) setFormError(null);
+    if (error) clearError();
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isLogin) {
-      await signin(email, password);
-    } else {
-      if (password !== confirmPassword) {
-        alert("Passwords don't match");
+    setFormError(null);
+    clearError();
+
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      setFormError("Please enter your email address.");
+      return;
+    }
+
+    if (!password) {
+      setFormError("Please enter your password.");
+      return;
+    }
+
+    if (!isLogin) {
+      if (password.length < 6) {
+        setFormError("Password must be at least 6 characters long.");
         return;
       }
-      await signup(email, password);
+      if (password !== confirmPassword) {
+        setFormError("Passwords do not match. Please verify and try again.");
+        return;
+      }
+    }
+
+    try {
+      if (isLogin) {
+        await signin(trimmedEmail, password);
+      } else {
+        await signup(trimmedEmail, password);
+      }
+    } catch {
+      // Error is set in context
     }
   };
+
+  const activeError = formError || error;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-hero px-4">
@@ -64,7 +105,28 @@ const Auth = () => {
           </CardHeader>
           <CardContent>
             <form className="space-y-4" onSubmit={handleSubmit}>
-              {error && <p className="text-red-500">{error}</p>}
+              {activeError && (
+                <div className="p-3.5 rounded-xl bg-destructive/10 border border-destructive/25 text-destructive text-sm font-medium flex items-start gap-2.5 animate-fade-in">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-destructive" />
+                  <div className="flex-1 space-y-1">
+                    <p>{activeError}</p>
+                    {activeError.toLowerCase().includes("already exists") && !isLogin && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsLogin(true);
+                          clearError();
+                          setFormError(null);
+                        }}
+                        className="text-xs font-bold underline hover:opacity-80 block text-primary mt-1"
+                      >
+                        Sign in with this email instead →
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
@@ -73,7 +135,7 @@ const Auth = () => {
                   placeholder="you@example.com"
                   className="h-11"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={handleInputChange(setEmail)}
                 />
               </div>
 
@@ -85,7 +147,7 @@ const Auth = () => {
                   placeholder="••••••••"
                   className="h-11"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={handleInputChange(setPassword)}
                 />
               </div>
 
@@ -98,21 +160,21 @@ const Auth = () => {
                     placeholder="••••••••"
                     className="h-11"
                     value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    onChange={handleInputChange(setConfirmPassword)}
                   />
                 </div>
               )}
 
-              <Button variant="hero" size="lg" className="w-full" disabled={loading}>
-                {loading ? 'Loading...' : (isLogin ? "Sign In" : "Create Account")}
+              <Button variant="hero" size="lg" className="w-full font-bold" disabled={loading}>
+                {loading ? 'Please wait...' : (isLogin ? "Sign In" : "Create Account")}
               </Button>
 
               <div className="text-center text-sm text-muted-foreground">
                 {isLogin ? "Don't have an account? " : "Already have an account? "}
                 <button
                   type="button"
-                  onClick={() => setIsLogin(!isLogin)}
-                  className="text-primary hover:underline font-medium"
+                  onClick={handleToggleMode}
+                  className="text-primary hover:underline font-semibold"
                 >
                   {isLogin ? "Sign up" : "Sign in"}
                 </button>
