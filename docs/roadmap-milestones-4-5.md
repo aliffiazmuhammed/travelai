@@ -413,24 +413,44 @@ Sprint D closed out both milestones: the last geo feature (4.6 weather-aware rou
 
 **Symptom.** The Nearby panel reported *"Nearby search is unavailable right now"* with an empty list. The cause was **not** in our code: the primary public Overpass instance was answering the interpreter with `502 Gateway Timeout` / never responding (>25 s). A single hard-coded `OVERPASS_ENDPOINT` therefore turned an upstream outage into a user-visible dead feature.
 
-**Investigation (all verified against the live services).**
+**Alternatives evaluated (all verified against the live services).**
 
 | Instance | Observed behaviour | Verdict |
 |---|---|---|
-| `overpass-api.de` (+ `lz4`/`z`) | website 200, `/api/interpreter` times out (>25 s) / `502` | primary, but currently degraded |
-| `overpass.private.coffee` (== `overpass.kumi.systems`) | landing page 200, interpreter `500` for every request shape (form POST, GET, raw POST) | usable as a fallback when healthy |
+| `overpass-api.de` (+ `lz4`/`z`) | website 200, `/api/interpreter` times out (>25 s) / `502 at capacity` | the historical default, degraded |
+| `overpass.private.coffee` (== `overpass.kumi.systems`) | landing page 200, interpreter `500` for every request shape (form POST, GET, raw POST) | kept as a fallback for when it recovers |
 | `overpass.openstreetmap.fr` | `403 This service is only available to white-listed usages` | unusable for third parties |
-| `overpass.osm.ch` | 200 — `0` elements for Kochi, `10` for Zurich | **Switzerland-only extract**: would silently answer "nothing here" worldwide |
+| `overpass.osm.ch` | 200 — `0` elements for Kochi, `10` for Zurich | **rejected**: Switzerland-only extract, silently answers "nothing here" worldwide |
 | `overpass.osm.jp`, `overpass.openstreetmap.ru`, `maps.mail.ru` | connection/timeout from this network | unreliable |
-| Photon (`photon.komoot.io`) | 200 in ~0.4 s, but the lat/lon bias is far too weak (results 30–4500 km away) | **rejected**: it is a geocoder, not a proximity search |
+| Photon (`photon.komoot.io`) | 200 in ~0.4 s, but the lat/lon bias is far too weak (results 30–4500 km away) | **rejected**: a geocoder, not a proximity search |
+| Nominatim `q=restaurant` (free text) + bounded viewbox | 20 items, **0** within 2 km — free text ranks by importance, not distance | **rejected in that form** |
+| Nominatim `q=restaurant` (structured `amenity=`) | 20 items, 0 within 2 km | rejected |
+| Nominatim **`q=[restaurant]`** (special phrase) + `bounded=1` + tight viewbox | 19 named, **14 within 2 km**, 0.6–1.9 km | ✅ **adopted** |
+| Wikipedia geosearch | 8 articles near Kochi | rejected: returns the city/district article itself, not POIs |
 
-**Shipped changes.**
-- **Multi-endpoint failover.** `overpassEndpoints()` resolves a preference-ordered list: `OVERPASS_ENDPOINTS` (comma-separated) *replaces* it, the deprecated singular `OVERPASS_ENDPOINT` is tried first with the built-in mirrors kept as fallbacks, and with nothing configured the built-in pair is used. Non-`http(s)` entries and duplicates are dropped. The two mirrors that *cannot* work as defaults (the French whitelist and the Swiss extract) are deliberately excluded, with the reason recorded in the code.
-- **Bounded latency.** Each attempt is capped by `OVERPASS_TIMEOUT_MS` (6 s) inside a shared `OVERPASS_BUDGET_MS` (10 s) deadline, so a hanging instance can never stall a click indefinitely; once the budget is gone the remaining endpoints are recorded as *skipped* instead of being tried.
-- **Honest availability.** A new `available: boolean` on the response is `false` only when *every* endpoint failed. The UI now shows an amber "temporarily unavailable" banner with a **Try again** button, distinct from the neutral "No places found nearby. Try a wider radius." — an empty list is no longer ambiguous between "nothing here" and "we couldn't ask".
-- **Circuit breaker.** A failed coordinate/category/radius is remembered for `NEARBY_RETRY_AFTER_MS` (60 s), so hammering a dead provider is instant instead of paying the full budget each time; a different radius is a different lookup and does hit the network. Success clears the breaker.
-- **Robust response handling.** The provider's status is never trusted on its own — Overpass also returns HTML error pages with a `200` status, so the body must parse as JSON; every attempt logs its endpoint and failure reason, so an outage is diagnosable from the server log.
-- **Tests** (`nearby.test.ts`, 9 cases total): endpoint resolution (defaults, plural replacement, dedupe/filtering, legacy fallback, blank values), the env knobs with nonsense/negative fallbacks, and an end-to-end **outage** test pointing at `http://127.0.0.1:1` (connection refused, so no mocking and no public network) asserting `available: false`, `provider: 'none'`, a `note`, and that an immediate retry returns instantly from the breaker.
+**Shipped architecture — three chained providers, first success wins.**
 
-**Not changed.** Response caching (24 h), normalization/dedupe/radius rules, the category set and the `GET /api/geo/nearby` contract apart from the additive `available` field.
+| # | Provider | Key | Strengths / limits |
+|---|---|---|---|
+| 1 | **Geoapify** (`/v2/places`) | `GEOAPIFY_API_KEY` | Commercial SLA, all six categories uniform, `filter=circle` + `bias=proximity`, 3,000 free requests/day with no credit card. **Skipped entirely when no key is set** |
+| 2 | **Overpass** | none | Richest tags (opening hours, cuisine, website, phone) but volunteer-run, so endpoints are tried in preference order within a shared budget |
+| 3 | **Nominatim** | none | Keyless last resort. Special-phrase coverage is uneven — restaurant/cafe/atm/fuel are good, pharmacy only resolves as `[chemist]`, attraction is thin |
+
+- **Ordering rationale.** Overpass stays the default when no key is configured because it needs no signup and returns the richest data. Geoapify is *promoted to first* when a key exists, because over the two separate live checks the public Overpass instances were degraded or down on both occasions.
+- **Honest availability.** `available: boolean` is `false` only when *every* provider failed, and `attribution` reports who served the results (required by Geoapify's free plan and OSM's ODbL — surfaced under the results list in the UI). The UI shows an amber "temporarily unavailable" banner with **Try again**, distinct from the neutral "No places found nearby. Try a wider radius.", so an empty list is no longer ambiguous between "nothing here" and "we couldn't ask".
+- **Bounded latency.** `GEOAPIFY_TIMEOUT_MS` (8 s), `OVERPASS_BUDGET_MS` (10 s) and `NOMINATIM_TIMEOUT_MS` (10 s) are each capped by whatever remains of a chain-wide `NEARBY_BUDGET_MS` deadline (15 s), so no combination of degraded providers can stall a click indefinitely. Overpass additionally keeps its own per-endpoint cap (`OVERPASS_TIMEOUT_MS`, 6 s).
+- **Multi-endpoint Overpass failover.** `overpassEndpoints()` resolves a preference-ordered list: `OVERPASS_ENDPOINTS` (comma-separated) *replaces* it, the deprecated singular `OVERPASS_ENDPOINT` is tried first with the built-in mirrors kept as fallbacks, and with nothing configured the built-in pair is used. Non-`http(s)` entries and duplicates are dropped; endpoints that cannot work as defaults are excluded with the reason in the code.
+- **Provider policy compliance.** Nominatim permits at most 1 request/second, so its lookups are serialised in-process (`NOMINATIM_MIN_INTERVAL_MS`, 1.1 s) and results are cached for 24 h — both required by its usage policy.
+- **Circuit breaker.** A failed coordinate/category/radius is remembered for `NEARBY_RETRY_AFTER_MS` (60 s), so hammering dead providers is instant instead of paying the budget each time; a different radius is a different lookup and does hit the network. Success clears the breaker.
+- **Response-shape safety.** Each provider has its own pure normalizer — `normalizeGeoapifyFeatures` (GeoJSON `[lng, lat]` → `[lat, lng]`, plus `address_line*`/part composition and cuisine extraction from `catering.restaurant.*`) and `normalizeNominatimResults` (string `lat`/`lon` coercion, `extratags`, `address` object). The HTTP status is never trusted on its own: Overpass also returns HTML error pages under a `200`, so a successful parse is what decides success.
+- **Empty-is-an-answer.** The first provider that *responds* wins even when it found nothing. Falling through on every empty result would multiply latency for genuinely quiet areas, and a healthy provider's empty list is a real answer.
+- **No secret leakage.** A Geoapify request URL embeds the key, so failures are logged by provider name only — never by URL.
+- **Tests** (`nearby.test.ts`, 17 cases): endpoint resolution (defaults, plural replacement, dedupe/filtering, legacy fallback, blank values), the env knobs with nonsense/negative fallbacks, chain ordering with and without a key, the Geoapify category taxonomy and URL shape (including "the `:`/`,` separators must not be escaped"), Geoapify and Nominatim normalization (coordinate order, radius filter, dedupe, cuisine/address/extratags), the Nominatim viewbox and phrase syntax, and an end-to-end **outage** test pointing every provider at `http://127.0.0.1:1` (connection refused, so no mocking and no public network) asserting `available: false`, `provider: 'none'`, a `note`, and that an immediate retry returns instantly from the breaker.
+
+**Verified live (2026-10-17).** With Overpass down and **no** Geoapify key, `findNearbyPlaces(9.9312, 76.2673, 'restaurant', 2000)` returned in **3.8 s** with `available: true`, `provider: 'nominatim'` and **14 restaurants** from 0.6 km outwards, complete with street addresses — i.e. the feature now works during an Overpass outage instead of reporting a dead end.
+
+**Not changed.** Response caching (24 h), the dedupe/radius rules, the category set, and the `GET /api/geo/nearby` contract apart from the additive `available` and `attribution` fields.
+
+**Deferred.** A self-hosted Overpass instance or a Mapbox/Google Places driver would drop in behind the same provider chain; nothing in the controllers needs to change.
+
 

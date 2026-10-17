@@ -291,6 +291,8 @@ export interface NearbyResponse {
   /** False when no provider could be reached — `places` is then not authoritative. */
   available?: boolean;
   note?: string;
+  /** Attribution required by the provider that served the results. */
+  attribution?: string;
   categories?: NearbyCategory[];
 }
 

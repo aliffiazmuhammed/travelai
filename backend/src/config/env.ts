@@ -50,8 +50,16 @@ const envSchema = z.object({
   OVERPASS_ENDPOINT: z.string().optional(),
   OVERPASS_TIMEOUT_MS: z.coerce.number().positive().optional(),
   OVERPASS_BUDGET_MS: z.coerce.number().positive().optional(),
+  // Geoapify Places (optional key): promoted to the first provider when set.
+  GEOAPIFY_API_KEY: z.string().optional(),
+  GEOAPIFY_TIMEOUT_MS: z.coerce.number().positive().optional(),
+  // Nominatim (keyless fallback provider).
+  NOMINATIM_BASE: z.string().optional(),
+  NOMINATIM_TIMEOUT_MS: z.coerce.number().positive().optional(),
+  NOMINATIM_MIN_INTERVAL_MS: z.coerce.number().positive().optional(),
   NEARBY_CACHE_TTL_MS: z.coerce.number().positive().optional(),
   NEARBY_RETRY_AFTER_MS: z.coerce.number().positive().optional(),
+  NEARBY_BUDGET_MS: z.coerce.number().positive().optional(),
   // Receipt uploads (Milestone 5). Consumed directly by services/finance/receipt.ts
   UPLOAD_DIR: z.string().optional(),
   MAX_UPLOAD_MB: z.coerce.number().positive().optional(),

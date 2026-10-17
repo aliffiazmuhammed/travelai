@@ -71,6 +71,7 @@ export const NearbyExplorer: React.FC<NearbyExplorerProps> = ({
   const [note, setNote] = useState<string | null>(null);
   /** True when the lookup failed upstream (vs. genuinely finding nothing). */
   const [unavailable, setUnavailable] = useState(false);
+  const [attribution, setAttribution] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
 
   const selectedDayData = useMemo(
@@ -88,6 +89,7 @@ export const NearbyExplorer: React.FC<NearbyExplorerProps> = ({
       setPlaces([]);
       setNote(null);
       setUnavailable(false);
+      setAttribution(null);
       onResults?.([]);
       return;
     }
@@ -95,6 +97,7 @@ export const NearbyExplorer: React.FC<NearbyExplorerProps> = ({
       setPlaces([]);
       setNote(null);
       setUnavailable(false);
+      setAttribution(null);
       onResults?.([]);
       setError("This itinerary has no located activities to search around.");
       return;
@@ -115,6 +118,7 @@ export const NearbyExplorer: React.FC<NearbyExplorerProps> = ({
         setPlaces(results);
         setUnavailable(failed);
         setNote(failed ? response.note || null : null);
+        setAttribution(response.attribution || null);
         onResults?.(results);
       })
       .catch((err: unknown) => {
@@ -122,6 +126,7 @@ export const NearbyExplorer: React.FC<NearbyExplorerProps> = ({
         setPlaces([]);
         setNote(null);
         setUnavailable(false);
+        setAttribution(null);
         onResults?.([]);
         setError(
           err instanceof Error && err.message
@@ -337,6 +342,13 @@ export const NearbyExplorer: React.FC<NearbyExplorerProps> = ({
               </li>
             ))}
           </ul>
+        )}
+
+        {/* Required by Geoapify's free plan and OpenStreetMap's ODbL */}
+        {!loading && places.length > 0 && attribution && (
+          <p className="text-[10px] text-muted-foreground/80 font-medium pt-0.5">
+            {attribution}
+          </p>
         )}
       </CardContent>
     </Card>
