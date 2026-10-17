@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -18,8 +18,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Receipt, Coins, Tag, CalendarDays, User, Users, Save } from "lucide-react";
+import { Receipt, Coins, Tag, CalendarDays, User, Users, Save, Upload, FileText, Eye, X } from "lucide-react";
 import { EXPENSE_CATEGORIES } from "@/lib/budget";
+import {
+  RECEIPT_ACCEPT_ATTR,
+  RECEIPT_HINT,
+  formatFileSize,
+  isPdfReceipt,
+  maxUploadMb,
+  receiptUrl,
+  validateReceiptFile,
+} from "@/lib/receipt";
 import {
   DEFAULT_BASE_CURRENCY,
   SUPPORTED_CURRENCIES,
@@ -46,7 +55,16 @@ interface ExpenseEditorProps {
   exchangeRates?: Record<string, number>;
   /** Total number of days in the trip (for the day selector). */
   days: number;
-  onSave: (payload: ExpenseInput) => Promise<void> | void;
+  /**
+   * Persists the expense. The optional `receipt` argument carries a pending
+   * attachment (Milestone 5.5): a file to upload, and/or a request to remove the
+   * stored one. Receipt work happens after the expense itself is saved, so a
+   * failed upload never loses the expense.
+   */
+  onSave: (
+    payload: ExpenseInput,
+    receipt?: { file?: File | null; remove?: boolean }
+  ) => Promise<void> | void;
 }
 
 const UNASSIGNED = "__unassigned__";
@@ -94,10 +112,15 @@ export const ExpenseEditor: React.FC<ExpenseEditorProps> = ({
   onSave,
 }) => {
   const base = (baseCurrency || DEFAULT_BASE_CURRENCY).toUpperCase();
+  const existingReceipt = expense?.receiptUrl;
   const [form, setForm] = useState<FormState>(emptyForm(base));
   const [customShares, setCustomShares] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [removeReceipt, setRemoveReceipt] = useState(false);
+  const [receiptError, setReceiptError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -125,7 +148,22 @@ export const ExpenseEditor: React.FC<ExpenseEditorProps> = ({
     }
     setError(null);
     setSaving(false);
+    setReceiptFile(null);
+    setRemoveReceipt(false);
+    setReceiptError(null);
   }, [open, expense, base]);
+
+  /** Object URL for the pending file so images preview before upload. */
+  const [pendingPreview, setPendingPreview] = useState<string | null>(null);
+  useEffect(() => {
+    if (!receiptFile) {
+      setPendingPreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(receiptFile);
+    setPendingPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [receiptFile]);
 
   const update = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -141,6 +179,48 @@ export const ExpenseEditor: React.FC<ExpenseEditorProps> = ({
         next === base ? "1" : Number.isFinite(cached) && cached > 0 ? String(cached) : "",
     }));
   };
+
+  const handleReceiptPick = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    // Reset so picking the same file again still fires a change event
+    event.target.value = "";
+    if (!file) return;
+
+    const message = validateReceiptFile(file);
+    if (message) {
+      setReceiptError(message);
+      return;
+    }
+
+    setReceiptError(null);
+    setRemoveReceipt(false);
+    setReceiptFile(file);
+  };
+
+  const clearReceipt = () => {
+    setReceiptError(null);
+    if (receiptFile) {
+      setReceiptFile(null);
+      return;
+    }
+    // Nothing pending — mark the stored receipt for removal on save
+    if (existingReceipt) setRemoveReceipt(true);
+  };
+
+  /** What the receipt slot should show right now. */
+  const receiptPreview = receiptFile
+    ? pendingPreview
+    : !removeReceipt && existingReceipt
+      ? receiptUrl(existingReceipt)
+      : null;
+  const receiptIsPdf = receiptFile
+    ? receiptFile.type === "application/pdf"
+    : isPdfReceipt(existingReceipt);
+  const receiptLabel = receiptFile
+    ? receiptFile.name
+    : existingReceipt
+      ? "Attached receipt"
+      : "";
 
   const amountNumber = Number(form.amount);
   const rateNumber = Number(form.exchangeRate);
@@ -219,7 +299,11 @@ export const ExpenseEditor: React.FC<ExpenseEditorProps> = ({
 
     try {
       setSaving(true);
-      await onSave(payload);
+      if (receiptFile || removeReceipt) {
+        await onSave(payload, { file: receiptFile, remove: removeReceipt });
+      } else {
+        await onSave(payload);
+      }
       onOpenChange(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save this expense.");
@@ -478,6 +562,111 @@ export const ExpenseEditor: React.FC<ExpenseEditorProps> = ({
               placeholder="Anything worth remembering about this spend..."
               className="text-sm rounded-xl min-h-[70px]"
             />
+          </div>
+
+          {/* Receipt attachment (Milestone 5.5) */}
+          <div className="space-y-2 rounded-2xl border border-border/70 p-3">
+            <Label className="text-xs font-bold flex items-center gap-1">
+              <Receipt className="w-3 h-3 text-primary" /> Receipt (optional)
+            </Label>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={RECEIPT_ACCEPT_ATTR}
+              className="hidden"
+              onChange={handleReceiptPick}
+            />
+
+            {receiptPreview ? (
+              <div className="flex items-center gap-3">
+                {receiptIsPdf ? (
+                  <span className="h-14 w-14 shrink-0 rounded-xl border border-border/70 bg-muted/40 grid place-items-center">
+                    <FileText className="w-6 h-6 text-primary" />
+                  </span>
+                ) : (
+                  <img
+                    src={receiptPreview}
+                    alt="Receipt preview"
+                    className="h-14 w-14 shrink-0 rounded-xl border border-border/70 object-cover"
+                  />
+                )}
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-foreground truncate">{receiptLabel}</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {receiptFile
+                      ? `${formatFileSize(receiptFile.size)} · uploads when you save`
+                      : "Stored with this expense"}
+                  </p>
+                </div>
+                <div className="ml-auto flex items-center gap-1.5 shrink-0">
+                  {!receiptFile && existingReceipt && (
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      title="View receipt"
+                      className="h-8 w-8 rounded-lg text-muted-foreground hover:text-primary"
+                      onClick={() => window.open(receiptUrl(existingReceipt), "_blank", "noreferrer")}
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="rounded-xl text-[11px] font-bold h-8"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    {receiptFile ? "Replace" : "Change"}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    title={receiptFile ? "Discard this file" : "Remove receipt"}
+                    className="h-8 w-8 rounded-lg text-muted-foreground hover:text-destructive"
+                    onClick={clearReceipt}
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="rounded-xl text-xs font-bold h-9 gap-1.5"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Attach receipt</span>
+                </Button>
+                <span className="text-[11px] text-muted-foreground">
+                  {RECEIPT_HINT} · up to {maxUploadMb()} MB
+                </span>
+              </div>
+            )}
+
+            {removeReceipt && !receiptFile && existingReceipt && (
+              <p className="text-[11px] text-muted-foreground">
+                The stored receipt will be deleted when you save.{" "}
+                <button
+                  type="button"
+                  className="font-bold text-primary hover:underline"
+                  onClick={() => setRemoveReceipt(false)}
+                >
+                  Undo
+                </button>
+              </p>
+            )}
+
+            {receiptError && (
+              <p className="text-[11px] font-semibold text-destructive">{receiptError}</p>
+            )}
           </div>
 
           {error && (

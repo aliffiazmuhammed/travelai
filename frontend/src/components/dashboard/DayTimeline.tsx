@@ -25,12 +25,15 @@ import {
   ChevronDown,
   SlidersHorizontal,
   Loader2,
+  Wand2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ActivityEditor } from "./ActivityEditor";
+import { WeatherAdvisoryPanel, WeatherBadge } from "./WeatherAdvisory";
 import { buildLegs, formatDistance, formatDuration, isValidCoord, totalRoute } from "@/lib/geo";
+import { hasSignificantRisk } from "@/lib/weather";
 import type { GeoLeg, LatLng } from "@/lib/geo";
-import type { ActivityItem, ItineraryData } from "@/types/trip";
+import type { ActivityItem, DailyWeather, ItineraryData } from "@/types/trip";
 
 interface DayTimelineProps {
   itinerary: ItineraryData["day_by_day_itinerary"];
@@ -47,6 +50,16 @@ interface DayTimelineProps {
   onMoveDay?: (fromIndex: number, toIndex: number) => void;
   /** Shows a subtle busy state while a change is persisting to the server. */
   isPersisting?: boolean;
+  /** Per-day weather forecasts keyed by day number (Milestone 4.4). */
+  weatherByDay?: Record<number, DailyWeather>;
+  /**
+   * Opens the weather-aware alternative dialog for a day. When omitted the
+   * "Suggest indoor alternative" action is hidden. The dialog itself lives in
+   * `ItineraryDisplay` so the map's weather-routing card can trigger it too.
+   */
+  onSuggestAlternative?: (dayNumber: number) => void;
+  /** Day whose alternative is currently being generated (shows a spinner). */
+  alternativeLoadingDay?: number | null;
 }
 
 const TIME_OF_DAY = [
@@ -77,6 +90,9 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
   onReorderActivities,
   onMoveDay,
   isPersisting,
+  weatherByDay,
+  onSuggestAlternative,
+  alternativeLoadingDay,
 }) => {
   const [selectedDay, setSelectedDay] = useState<number | "all">("all");
   const [editingDayIndex, setEditingDayIndex] = useState<number | null>(null);
@@ -175,6 +191,10 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
     onMoveDay(dayIndex, to);
   };
 
+  // --- Weather-aware day alternative (Milestone 4.4) ---
+  // Requesting/applying an alternative is owned by `ItineraryDisplay`, which
+  // renders the dialog; here we only surface the trigger and its busy state.
+
   const editorActivity =
     editorTarget != null
       ? itinerary[editorTarget.dayIndex]?.activities?.[editorTarget.actIndex] ?? null
@@ -235,6 +255,7 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
         {daysToShow.map((dayData) => {
           const actualDayIndex = itinerary.findIndex((d) => d.day === dayData.day);
           const cleanTitle = dayData.title.replace(/^day\s*\d+\s*[:\-–]\s*/i, "");
+          const dayWeather = weatherByDay?.[dayData.day];
 
           // Straight-line distance / travel-time hints between located activities
           const coordsList = dayData.activities.map(activityCoords);
@@ -325,6 +346,42 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
                   )}
                 </div>
               </div>
+
+              {/* Weather advisory + AI alternative (Milestone 4.4) */}
+              {(dayWeather || (onSuggestAlternative && canEdit)) && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {dayWeather && <WeatherBadge day={dayWeather} />}
+                    {onSuggestAlternative && canEdit && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={alternativeLoadingDay === dayData.day}
+                        onClick={() => onSuggestAlternative(dayData.day)}
+                        className={cn(
+                          "rounded-xl text-[11px] font-bold h-7 gap-1.5",
+                          hasSignificantRisk(dayWeather)
+                            ? "border-amber-400/60 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10"
+                            : "border-primary/40 text-primary hover:bg-primary/10"
+                        )}
+                      >
+                        {alternativeLoadingDay === dayData.day ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <Wand2 className="w-3 h-3" />
+                        )}
+                        <span>
+                          {hasSignificantRisk(dayWeather)
+                            ? "Suggest indoor alternative"
+                            : "Suggest an alternative day"}
+                        </span>
+                      </Button>
+                    )}
+                  </div>
+                  <WeatherAdvisoryPanel day={dayWeather} />
+                </div>
+              )}
 
               {/* Activities Flow */}
               <div className="space-y-3">

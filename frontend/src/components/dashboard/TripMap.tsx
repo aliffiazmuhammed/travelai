@@ -32,8 +32,16 @@ import { toast } from "sonner";
 import { api } from "@/services/api";
 import { formatDistance, formatDuration, pathLengthKm, totalRoute } from "@/lib/geo";
 import { routeModeMeta } from "@/lib/routeStyle";
+import { riskMeta } from "@/lib/weather";
 import { RouteEditor } from "./RouteEditor";
-import type { CustomRoute, ItineraryData, RouteInput, Trip } from "@/types/trip";
+import type {
+  CustomRoute,
+  DailyWeather,
+  ItineraryData,
+  NearbyPlace,
+  RouteInput,
+  Trip,
+} from "@/types/trip";
 
 interface TripMapProps {
   destination: string;
@@ -46,6 +54,10 @@ interface TripMapProps {
   canEdit?: boolean;
   /** Called with the updated trip after a route is saved or removed. */
   onUpdated?: (trip: Trip) => void;
+  /** Nearby search results to surface as map markers (Milestone 4.5). */
+  nearbyPlaces?: NearbyPlace[];
+  /** Per-day weather risk shown on the day filter pills (Milestone 4.4). */
+  weatherByDay?: Record<number, DailyWeather>;
 }
 
 // Comprehensive coordinates database for Indian & world travel hubs
@@ -276,6 +288,8 @@ export const TripMap: React.FC<TripMapProps> = ({
   customRoutes,
   canEdit = false,
   onUpdated,
+  nearbyPlaces,
+  weatherByDay,
 }) => {
   const [selectedDay, setSelectedDay] = useState<number | "all">("all");
 
@@ -644,18 +658,27 @@ export const TripMap: React.FC<TripMapProps> = ({
           >
             All Pins ({mapPins.length})
           </Button>
-          {itinerary.map((d) => (
-            <Button
-              key={d.day}
-              type="button"
-              size="sm"
-              variant={selectedDay === d.day ? "hero" : "outline"}
-              onClick={() => setSelectedDay(d.day)}
-              className="rounded-xl text-xs h-8 px-2.5 font-semibold"
-            >
-              Day {d.day}
-            </Button>
-          ))}
+          {itinerary.map((d) => {
+            const weather = weatherByDay?.[d.day];
+            return (
+              <Button
+                key={d.day}
+                type="button"
+                size="sm"
+                variant={selectedDay === d.day ? "hero" : "outline"}
+                onClick={() => setSelectedDay(d.day)}
+                className="rounded-xl text-xs h-8 px-2.5 font-semibold"
+              >
+                <span>Day {d.day}</span>
+                {weather && weather.riskLevel !== "none" && (
+                  <span
+                    title={`Weather risk: ${riskMeta(weather.riskLevel).label}\n${weather.advisories.join("\n")}`}
+                    className={`w-1.5 h-1.5 rounded-full ${riskMeta(weather.riskLevel).dotClass}`}
+                  />
+                )}
+              </Button>
+            );
+          })}
         </div>
       </div>
 
@@ -839,6 +862,38 @@ export const TripMap: React.FC<TripMapProps> = ({
               </Marker>
             );
           })}
+
+          {/* Nearby search results (Milestone 4.5) */}
+          {(nearbyPlaces || []).map((place) => (
+            <CircleMarker
+              key={place.id}
+              center={place.coordinates}
+              radius={6}
+              pathOptions={{
+                color: "#b45309",
+                weight: 2,
+                fillColor: "#f59e0b",
+                fillOpacity: 0.85,
+              }}
+            >
+              <Popup className="custom-popup">
+                <div className="p-1 space-y-1 text-left min-w-[180px]">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600">
+                      {place.category}
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted font-bold">
+                      {formatDistance(place.distanceKm)}
+                    </span>
+                  </div>
+                  <p className="text-xs font-bold text-foreground leading-snug">{place.name}</p>
+                  {place.tags?.address && (
+                    <p className="text-[11px] text-muted-foreground">{place.tags.address}</p>
+                  )}
+                </div>
+              </Popup>
+            </CircleMarker>
+          ))}
         </MapContainer>
 
         {/* Floating Legend */}
@@ -859,6 +914,12 @@ export const TripMap: React.FC<TripMapProps> = ({
             <div className="flex items-center gap-2 text-muted-foreground">
               <span className="w-4 h-0.5 rounded-full bg-sky-500" />
               <span>Your Custom Routes</span>
+            </div>
+          )}
+          {(nearbyPlaces || []).length > 0 && (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+              <span>Nearby Places ({nearbyPlaces!.length})</span>
             </div>
           )}
         </div>

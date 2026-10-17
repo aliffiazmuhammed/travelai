@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { EXPENSE_CATEGORIES, getCategoryMeta, plannedByCategory } from "@/lib/budget";
 import { DEFAULT_BASE_CURRENCY, SUPPORTED_CURRENCIES, formatMoney } from "@/lib/currency";
+import { isPdfReceipt, receiptDisplayName, receiptUrl } from "@/lib/receipt";
 import { settleUp } from "@/lib/settlement";
 import { api } from "@/services/api";
 import { toast } from "sonner";
@@ -40,6 +41,8 @@ import {
   RefreshCw,
   ArrowRight,
   HandCoins,
+  FileText,
+  Image as ImageIcon,
 } from "lucide-react";
 import { ExpenseEditor } from "./ExpenseEditor";
 import type {
@@ -73,6 +76,18 @@ const SHORT_LABEL: Record<string, string> = {
   miscellaneous_buffer: "Buffer",
   other: "Other",
 };
+
+/** Id of the most recently created expense on a freshly saved trip. */
+function newestExpenseId(trip: Trip): string | null {
+  const list = trip.expenses || [];
+  if (list.length === 0) return null;
+
+  return list.reduce((latest, expense) =>
+    new Date(expense.createdAt || 0).getTime() >= new Date(latest.createdAt || 0).getTime()
+      ? expense
+      : latest
+  )._id;
+}
 
 export const ExpenseTracker: React.FC<ExpenseTrackerProps> = ({
   tripId,
@@ -158,14 +173,38 @@ export const ExpenseTracker: React.FC<ExpenseTrackerProps> = ({
   const personName = (id?: string) =>
     id ? people.find((p) => p._id === id)?.name || "Traveller" : null;
 
-  const handleSaveExpense = async (payload: ExpenseInput) => {
+  const handleSaveExpense = async (
+    payload: ExpenseInput,
+    receipt?: { file?: File | null; remove?: boolean }
+  ) => {
     if (!tripId) return;
-    const trip =
-      editingExpense != null
-        ? await api.updateExpense(tripId, editingExpense._id, payload)
-        : await api.addExpense(tripId, payload);
+
+    const isUpdate = editingExpense != null;
+    const trip = isUpdate
+      ? await api.updateExpense(tripId, editingExpense._id, payload)
+      : await api.addExpense(tripId, payload);
+
     applyTrip(trip);
-    toast.success(editingExpense != null ? "Expense updated" : "Expense logged");
+    toast.success(isUpdate ? "Expense updated" : "Expense logged");
+
+    if (!receipt?.file && !receipt?.remove) return;
+
+    // The expense is already saved; a receipt problem must not lose it, so the
+    // failure is reported rather than rethrown (which would re-save on retry).
+    const expenseId = isUpdate ? editingExpense._id : newestExpenseId(trip);
+    if (!expenseId) return;
+
+    try {
+      if (receipt.file) {
+        applyTrip(await api.uploadExpenseReceipt(tripId, expenseId, receipt.file));
+        toast.success("Receipt attached");
+      } else if (receipt.remove) {
+        applyTrip(await api.deleteExpenseReceipt(tripId, expenseId));
+        toast.success("Receipt removed");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "The receipt could not be saved.");
+    }
   };
 
   const handleDeleteExpense = async (expense: TripExpense) => {
@@ -623,6 +662,22 @@ export const ExpenseTracker: React.FC<ExpenseTrackerProps> = ({
                           <span className="text-[10px] text-muted-foreground font-semibold">
                             {formatMoney(expense.amount, expense.currency)}
                           </span>
+                        )}
+                        {expense.receiptUrl && (
+                          <a
+                            href={receiptUrl(expense.receiptUrl)}
+                            target="_blank"
+                            rel="noreferrer"
+                            title={receiptDisplayName(expense.receiptUrl)}
+                            className="inline-flex items-center gap-0.5 text-[10px] font-bold text-primary hover:underline"
+                          >
+                            {isPdfReceipt(expense.receiptUrl) ? (
+                              <FileText className="w-3 h-3" />
+                            ) : (
+                              <ImageIcon className="w-3 h-3" />
+                            )}
+                            Receipt
+                          </a>
                         )}
                       </div>
                     </div>

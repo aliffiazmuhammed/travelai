@@ -1,4 +1,5 @@
 import { Response } from 'express';
+import crypto from 'crypto';
 import Trip from '../models/Trip.js';
 import { catchAsync } from '../utils/catchAsync.js';
 import { sanitizeTrip } from '../utils/sanitizeTrip.js';
@@ -14,6 +15,12 @@ import {
   DEFAULT_BASE_CURRENCY,
   fetchBasePerUnitRates,
 } from '../services/finance/currency.js';
+import {
+  buildReceiptFilename,
+  contentMatchesMime,
+  deleteReceiptFile,
+  saveReceiptFile,
+} from '../services/finance/receipt.js';
 
 const round2 = (n: number): number => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -235,8 +242,81 @@ export const deleteTripExpense = catchAsync(
       throw new AppError('Expense not found', 404);
     }
 
+    const receiptUrl = expense.receiptUrl;
     expense.deleteOne();
     await trip.save();
+
+    // Keep the uploads directory free of orphaned files
+    await deleteReceiptFile(receiptUrl);
+
+    res.status(200).json(sanitizeTrip(trip));
+  }
+);
+
+/**
+ * Attaches (or replaces) a receipt file on an expense (Milestone 5.5).
+ * POST /api/itinerary/:id/expenses/:expenseId/receipt
+ */
+export const uploadExpenseReceipt = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const file = req.file;
+
+    if (!file) {
+      throw new AppError('Please choose a receipt file to upload.', 400);
+    }
+
+    const trip = await findOwnedTrip(req.params.id, req.userId);
+    const expense: any = (trip.expenses as any).id(req.params.expenseId);
+
+    if (!expense) {
+      throw new AppError('Expense not found', 404);
+    }
+
+    // Never trust the declared MIME type alone — verify the actual bytes
+    if (!contentMatchesMime(file.mimetype, file.buffer)) {
+      throw new AppError('That file does not look like a valid image or PDF receipt.', 400);
+    }
+
+    const filename = buildReceiptFilename(
+      trip._id,
+      expense._id,
+      file.mimetype,
+      `${Date.now()}-${crypto.randomBytes(4).toString('hex')}`
+    );
+    const { url: nextUrl } = await saveReceiptFile(filename, file.buffer, file.mimetype);
+
+    // Replacing a receipt should not leave the old file behind
+    const previousUrl = expense.receiptUrl;
+    if (previousUrl && previousUrl !== nextUrl) {
+      await deleteReceiptFile(previousUrl);
+    }
+
+    expense.receiptUrl = nextUrl;
+    await trip.save();
+
+    res.status(200).json(sanitizeTrip(trip));
+  }
+);
+
+/**
+ * Removes an expense's receipt file.
+ * DELETE /api/itinerary/:id/expenses/:expenseId/receipt
+ */
+export const deleteExpenseReceipt = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const trip = await findOwnedTrip(req.params.id, req.userId);
+    const expense: any = (trip.expenses as any).id(req.params.expenseId);
+
+    if (!expense) {
+      throw new AppError('Expense not found', 404);
+    }
+
+    const previousUrl = expense.receiptUrl;
+    expense.receiptUrl = undefined;
+    await trip.save();
+
+    await deleteReceiptFile(previousUrl);
+
     res.status(200).json(sanitizeTrip(trip));
   }
 );

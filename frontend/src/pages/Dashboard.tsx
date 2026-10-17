@@ -170,6 +170,7 @@ const Dashboard: React.FC = () => {
               participants={selectedTrip.participants}
               finance={selectedTrip.finance}
               customRoutes={selectedTrip.customRoutes}
+              startDate={selectedTrip.startDate}
               onFeedbackSubmitted={handleFeedbackSubmitted}
               onStatusChange={handleStatusChange}
               onSave={handleSaveTrip}

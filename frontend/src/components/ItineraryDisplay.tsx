@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Calendar,
@@ -25,16 +25,25 @@ import { TravelGuideSafety } from "./dashboard/TravelGuideSafety";
 import { TripVersions } from "./dashboard/TripVersions";
 import { TripFeedback } from "./dashboard/TripFeedback";
 import { ExpenseTracker } from "./dashboard/ExpenseTracker";
+import { NearbyExplorer } from "./dashboard/NearbyExplorer";
+import { WeatherRoutingCard } from "./dashboard/WeatherRoutingCard";
+import { DayAlternativeDialog } from "./dashboard/DayAlternativeDialog";
+import { endDateFromStart, itineraryAnchor, zipWeatherToDays } from "@/lib/weather";
+import { swapDayPlans } from "@/lib/weatherRouting";
 import type {
   ActivityItem,
   CustomRoute,
+  DailyWeather,
+  DayAlternative,
   ItineraryData,
+  NearbyPlace,
   Trip,
   TripExpense,
   TripFeedback as TripFeedbackType,
   TripFinance,
   TripGenerationMeta,
   TripParticipant,
+  WeatherRoutingAnalysis,
 } from "@/types/trip";
 export type { ItineraryData } from "@/types/trip";
 
@@ -63,6 +72,8 @@ interface ItineraryDisplayProps {
   finance?: TripFinance;
   /** User-drawn custom routes shown on the map (Milestone 4). */
   customRoutes?: CustomRoute[];
+  /** Planned trip start date — drives per-day weather advisories (Milestone 4.4). */
+  startDate?: string;
   /** Called after the user rates the itinerary. */
   onFeedbackSubmitted?: (feedback: TripFeedbackType) => void;
   onBackToList?: () => void;
@@ -103,6 +114,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
   participants,
   finance,
   customRoutes,
+  startDate,
   onFeedbackSubmitted,
   onBackToList,
   onNewPlan,
@@ -116,6 +128,175 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
 
   const isRealTrip = Boolean(tripId && !tripId.startsWith("temp-"));
   const autoSaveEnabled = Boolean(onSave && isRealTrip);
+
+  // --- Weather advisories (Milestone 4.4) ---
+  const [weatherByDay, setWeatherByDay] = useState<Record<number, DailyWeather>>({});
+  // Near-constant keys: the forecast is only re-fetched when the window or the
+  // anchor coordinate actually changes, not on every activity edit.
+  const dayNumbersKey = itinerary.map((d) => d.day).join(",");
+  const weatherAnchorKey = useMemo(() => {
+    const anchor = itineraryAnchor(itinerary);
+    return anchor ? `${anchor[0].toFixed(4)},${anchor[1].toFixed(4)}` : "";
+  }, [itinerary]);
+  const weatherStart = startDate ? String(startDate).slice(0, 10) : null;
+  const weatherEnd = weatherStart ? endDateFromStart(weatherStart, itinerary.length) : null;
+
+  // Always points at the latest itinerary so the forecast effect below does not
+  // need to re-run (and re-fetch) on every activity edit.
+  const itineraryRef = useRef(itinerary);
+  useEffect(() => {
+    itineraryRef.current = itinerary;
+  }, [itinerary]);
+
+  useEffect(() => {
+    if (!isRealTrip || !weatherStart || !weatherEnd || !weatherAnchorKey) {
+      setWeatherByDay({});
+      return;
+    }
+
+    const [lat, lng] = weatherAnchorKey.split(",").map(Number);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      setWeatherByDay({});
+      return;
+    }
+
+    let cancelled = false;
+    api
+      .getWeather(lat, lng, weatherStart, weatherEnd)
+      .then((response) => {
+        if (cancelled) return;
+        setWeatherByDay(zipWeatherToDays(response.days, itineraryRef.current));
+      })
+      .catch(() => {
+        if (!cancelled) setWeatherByDay({});
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isRealTrip, weatherStart, weatherEnd, weatherAnchorKey, dayNumbersKey]);
+
+  // Nearby search results are owned here so the map can render them as markers
+  const [nearbyPlaces, setNearbyPlaces] = useState<NearbyPlace[]>([]);
+
+  // --- Weather-aware routing (Milestone 4.6) ---
+  const [routing, setRouting] = useState<WeatherRoutingAnalysis | null>(null);
+  const [routingWeatherAvailable, setRoutingWeatherAvailable] = useState(false);
+  const [routingLoading, setRoutingLoading] = useState(false);
+  // Bumped whenever a suggestion is applied so the analysis is recomputed
+  const [routingRefreshKey, setRoutingRefreshKey] = useState(0);
+
+  useEffect(() => {
+    if (!isRealTrip || !tripId || !weatherStart) {
+      setRouting(null);
+      return;
+    }
+
+    let cancelled = false;
+    setRoutingLoading(true);
+    api
+      .getWeatherRouting(tripId)
+      .then((response) => {
+        if (cancelled) return;
+        setRouting(response.analysis);
+        setRoutingWeatherAvailable((response.weather?.days?.length ?? 0) > 0);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setRouting(null);
+          setRoutingWeatherAvailable(false);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setRoutingLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isRealTrip, tripId, weatherStart, weatherAnchorKey, dayNumbersKey, routingRefreshKey]);
+
+  // --- Weather-safe day alternative (Milestone 4.4) ---
+  // The dialog is owned here (rather than inside DayTimeline) so both the
+  // timeline and the routing card can open it.
+  const [alternativeDay, setAlternativeDay] = useState<number | null>(null);
+  const [alternative, setAlternative] = useState<DayAlternative | null>(null);
+  const [alternativeLoading, setAlternativeLoading] = useState(false);
+  const [alternativeError, setAlternativeError] = useState<string | null>(null);
+
+  const openDayAlternative = async (dayNumber: number) => {
+    if (!tripId || !isRealTrip) return;
+    setAlternativeDay(dayNumber);
+    setAlternative(null);
+    setAlternativeError(null);
+    setAlternativeLoading(true);
+    try {
+      const suggestion = await api.suggestIndoorAlternative(tripId, dayNumber);
+      setAlternative(suggestion ?? null);
+      if (!suggestion) {
+        setAlternativeError("We couldn't build an alternative right now. Please try again.");
+      }
+    } catch (error) {
+      setAlternativeError(
+        error instanceof Error && error.message
+          ? error.message
+          : "We couldn't build an alternative right now. Please try again."
+      );
+    } finally {
+      setAlternativeLoading(false);
+    }
+  };
+
+  const closeDayAlternative = (open: boolean) => {
+    if (open) return;
+    setAlternativeDay(null);
+    setAlternative(null);
+    setAlternativeError(null);
+  };
+
+  /** Replaces a day's activities with the accepted suggestion (autosaves). */
+  const applyDayAlternative = (dayNumber: number, activities: ActivityItem[]) => {
+    const dayIndex = itinerary.findIndex((d) => d.day === dayNumber);
+    if (dayIndex === -1) return;
+
+    const next = [...itinerary];
+    next[dayIndex] = { ...next[dayIndex], activities: activities.filter(Boolean) };
+    handleUpdateItinerary(next);
+    setRoutingRefreshKey((key) => key + 1);
+    toast.success(`Day ${dayNumber} reworked for the weather`);
+  };
+
+  /** Moves one day's plan onto another day's date (Milestone 4.6 suggestion). */
+  const handleSwapDays = (fromDay: number, toDay: number) => {
+    const swapped = swapDayPlans(itinerary, fromDay, toDay);
+    if (swapped === itinerary) return;
+
+    handleUpdateItinerary(swapped);
+    setRoutingRefreshKey((key) => key + 1);
+    toast.success(`Swapped Day ${fromDay} with Day ${toDay}`);
+  };
+
+  /** Appends a nearby place to a day as a new activity (autosaved). */
+  const handleAddNearbyToDay = (dayNumber: number, place: NearbyPlace) => {
+    const activity: ActivityItem = {
+      title: place.name,
+      time: "Flexible",
+      description: `Nearby ${place.category} just ${place.distanceKm} km away${
+        place.tags?.cuisine ? ` (${place.tags.cuisine})` : ""
+      }.`,
+      location_name: place.name,
+      coordinates: place.coordinates,
+    };
+
+    handleUpdateItinerary(
+      itinerary.map((day) =>
+        Number(day.day) === Number(dayNumber)
+          ? { ...day, activities: [...day.activities, activity] }
+          : day
+      )
+    );
+    toast.success(`Added ${place.name} to Day ${dayNumber}`);
+  };
 
   useEffect(() => {
     setItinerary(data.day_by_day_itinerary);
@@ -376,11 +557,32 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
             onReorderActivities={handleReorderActivities}
             onMoveDay={handleMoveDay}
             isPersisting={isPersisting}
+            weatherByDay={weatherByDay}
+            onSuggestAlternative={isRealTrip && Boolean(onSave) ? openDayAlternative : undefined}
+            alternativeLoadingDay={alternativeLoading ? alternativeDay : null}
           />
         </TabsContent>
 
         {/* TAB 2: Interactive Map View */}
-        <TabsContent value="map" className="outline-hidden animate-fade-in">
+        <TabsContent value="map" className="outline-hidden animate-fade-in space-y-4">
+          {isRealTrip && routing && (
+            <WeatherRoutingCard
+              analysis={routing}
+              loading={routingLoading}
+              weatherAvailable={routingWeatherAvailable}
+              canEdit={isRealTrip && Boolean(onSave)}
+              onSwapDays={handleSwapDays}
+              onSuggestIndoor={openDayAlternative}
+            />
+          )}
+          {isRealTrip && (
+            <NearbyExplorer
+              itinerary={itinerary}
+              canEdit={Boolean(onSave)}
+              onResults={setNearbyPlaces}
+              onAddToDay={onSave ? handleAddNearbyToDay : undefined}
+            />
+          )}
           <TripMap
             destination={data.trip_title}
             itinerary={itinerary}
@@ -388,6 +590,8 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
             customRoutes={customRoutes}
             canEdit={isRealTrip && Boolean(onSave)}
             onUpdated={onTripUpdated}
+            nearbyPlaces={nearbyPlaces}
+            weatherByDay={weatherByDay}
           />
         </TabsContent>
 
@@ -442,6 +646,22 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
           />
         </TabsContent>
       </Tabs>
+
+      {/* Weather-aware day alternative (Milestone 4.4) */}
+      <DayAlternativeDialog
+        open={alternativeDay != null}
+        onOpenChange={closeDayAlternative}
+        dayNumber={alternativeDay ?? 1}
+        suggestion={alternative}
+        loading={alternativeLoading}
+        error={alternativeError}
+        onApply={(activities) => {
+          if (alternativeDay != null) applyDayAlternative(alternativeDay, activities);
+        }}
+        onRetry={() => {
+          if (alternativeDay != null) void openDayAlternative(alternativeDay);
+        }}
+      />
     </div>
   );
 };

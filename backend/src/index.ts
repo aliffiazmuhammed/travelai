@@ -12,6 +12,7 @@ import authRoutes from './routes/auth.routes.js';
 import itineraryRoutes from './routes/itinerary.routes.js';
 import geoRoutes from './routes/geo.routes.js';
 import { errorHandler } from './middleware/error.middleware.js';
+import { isCloudinaryConfigured, uploadDir } from './services/finance/receipt.js';
 
 const app = express();
 
@@ -127,6 +128,10 @@ app.get('/api/health', (_req, res) => {
         hasIndexHtml: fs.existsSync(path.join(p, 'index.html')),
       })),
     },
+    receiptStorage: {
+      provider: isCloudinaryConfigured() ? 'cloudinary' : 'local',
+      localUploadsDir: uploadsDir,
+    },
     memory: process.memoryUsage(),
   });
 });
@@ -135,6 +140,32 @@ app.get('/api/health', (_req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/itinerary', itineraryRoutes);
 app.use('/api/geo', geoRoutes);
+
+// Uploaded receipt files (Milestone 5.5). Registered before the SPA fallback so
+// `/uploads/<file>` is never rewritten to index.html. Filenames are generated
+// server-side and include random bytes, so they are unlisted rather than secret.
+const uploadsDir = uploadDir();
+try {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+  app.use(
+    '/uploads',
+    express.static(uploadsDir, {
+      index: false,
+      dotfiles: 'deny',
+      fallthrough: false,
+      setHeaders: (res) => {
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+      },
+    })
+  );
+  if (isCloudinaryConfigured()) {
+    console.log('☁️  Cloudinary storage active: Receipts will be uploaded directly to Cloudinary CDN');
+  } else {
+    console.log(`🧾 Serving local receipt uploads from: ${uploadsDir}`);
+  }
+} catch (error) {
+  console.warn(`Receipt uploads are disabled (could not prepare ${uploadsDir}):`, error);
+}
 
 if (shouldServeStatic && frontendDist) {
   console.log(`📦 Serving static frontend files from: ${frontendDist}`);

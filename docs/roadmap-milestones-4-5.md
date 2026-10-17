@@ -1,6 +1,6 @@
 # TravelAI — Roadmap: Map & Geo (Milestone 4) + Budget & Financial (Milestone 5)
 
-> Status: **Sprints A & B implemented** — sub-milestones 4.1, 4.2, 4.3, 5.1, 5.2, 5.3 and 5.4 are shipped (see §9 and §10).
+> Status: **All sprints implemented** — sub-milestones 4.1–4.6 and 5.1–5.5 are shipped (see §9–§12).
 > Continues from **Milestone 1 — Trip Management & Editing** and **Milestone 2 — AI Prompt Improvements**.
 > This document breaks the two feature groups into independently shippable sub-milestones with backend, frontend, data-model, testing, and acceptance details.
 
@@ -190,7 +190,7 @@
 
 ```mermaid
 flowchart LR
-  subgraph S1["Sprint A — Foundations (Wk 1-2)"]
+  subgraph S1["Sprint A — Foundations (Wk 1-2) ✅"]
     A1[4.1 Geo math]
     A2[4.2 Distances & travel time]
     A3[5.1 Expense model + API]
@@ -201,11 +201,11 @@ flowchart LR
     B2[5.3 Currency conversion]
     B3[5.4 Bill splitting]
   end
-  subgraph S3["Sprint C — Intelligence (Wk 4)"]
+  subgraph S3["Sprint C — Intelligence (Wk 4) ✅"]
     C1[4.4 Weather advisories]
     C2[4.5 Nearby search]
   end
-  subgraph S4["Sprint D — Polish (Wk 5)"]
+  subgraph S4["Sprint D — Polish (Wk 5) ✅"]
     D1[5.5 Receipt upload]
     D2[4.6 Weather-aware routing]
     D3[Docs + tests + a11y]
@@ -231,7 +231,7 @@ flowchart LR
 | Package | Purpose | Where | Notes |
 |---|---|---|---|
 | ~~`@geoman-io/leaflet-geoman-free`~~ | Draw/edit routes on the map | frontend | **Not needed** — 4.3 shipped as a dependency-free click-to-draw mode built on `react-leaflet`'s `useMapEvents` |
-| `multer` (+ `@types/multer`) | Receipt multipart upload | backend | Only for 5.5 |
+| `multer` (+ `@types/multer`) | Receipt multipart upload | backend | ✅ Sprint D |
 | *(none)* | Distances, weather, FX, settlement | — | Implemented as pure code + `fetch` against free APIs |
 
 New env vars (documented in `backend/.env.example`):
@@ -240,13 +240,15 @@ New env vars (documented in `backend/.env.example`):
 |---|---|---|---|
 | `GEO_ROUTING_PROVIDER` | `haversine` | `haversine` \| `osrm` | ✅ Sprint A |
 | `OSRM_BASE_URL` | public demo | Routing provider endpoint | ✅ Sprint A |
-| `OVERPASS_ENDPOINT` | public | POI/nearby search | 4.5 |
-| `OPEN_METEO_BASE` | public | Weather | 4.4 |
+| `OVERPASS_ENDPOINT` | public | POI/nearby search | ✅ Sprint C |
+| `OPEN_METEO_BASE` | public | Weather | ✅ Sprint C |
 | `CURRENCY_RATES_PROVIDER` | `frankfurter` | FX provider | ✅ Sprint B |
 | `CURRENCY_CACHE_TTL_MS` | `43200000` (12h) | FX cache TTL | ✅ Sprint B |
-| `UPLOAD_DIR` | `backend/uploads` | Receipt storage (dev) | 5.5 |
-| `MAX_UPLOAD_MB` | `5` | Upload size cap | 5.5 |
-| `CLOUDINARY_URL` | — | Optional prod receipt storage | 5.5 |
+| `UPLOAD_DIR` | `<backend>/uploads` | Receipt storage (dev) | ✅ Sprint D |
+| `MAX_UPLOAD_MB` | `5` | Upload size cap | ✅ Sprint D |
+| ~~`CLOUDINARY_URL`~~ | — | Optional prod receipt storage | ❌ Not wired — see §12 |
+| `WEATHER_CACHE_TTL_MS` | `2700000` (45m) | Weather cache TTL | ✅ Sprint C |
+| `NEARBY_CACHE_TTL_MS` | `86400000` (24h) | POI cache TTL | ✅ Sprint C |
 
 ---
 
@@ -334,3 +336,73 @@ Sprint B delivered the three interactive sub-milestones. Notes and deviations fr
 **Verification (Sprint B)**: backend `npm run build` ✅ · backend `npm test` **61/61** ✅ (was 42) · frontend `npx tsc --noEmit` ✅ · frontend `npm run build` ✅ · new/changed frontend files ESLint-clean (only the pre-existing `TripMap` `no-empty` and `api.ts` `no-explicit-any` findings remain, untouched).
 
 **Still deferred**: weather advisories (4.4), nearby search (4.5), weather-aware routing (4.6), receipt upload (5.5).
+
+---
+
+## 11. Sprint C — Implementation Notes (shipped)
+
+Sprint C delivered the two remaining read-only geo features of Milestone 4 (4.4 + 4.5).
+
+**4.4 Weather Advisories**
+- Provider: [Open-Meteo](https://open-meteo.com) (free, no key) via `backend/src/services/geo/weather.ts`. One request returns the whole trip window's daily `temperature_2m_max/min`, `precipitation_sum`, `precipitation_probability_max`, `wind_speed_10m_max` and `weather_code`.
+- **Deviation — seasonal fallback instead of the climate API**: the plan suggested Open-Meteo's climate endpoint for far-future dates. That API wants long multi-decade ranges and specific model IDs, so it is a poor fit for a 3–7 day trip. Instead the fallback is a deterministic, unit-tested **seasonal normals table** (`seasonalNormals()`) driven by month + latitude: monsoon (Jun–Sep) ⇒ moderate rain risk, October ⇒ retreating monsoon, summer ⇒ heat, Himalayan winter ⇒ cold nights. It is also used whenever the provider errors out, so the UI always has an advisory (`source: 'seasonal'` and the note *"not a live forecast"* are surfaced in the badge).
+- All threshold + copy logic is pure: `classifyRisk()` (rain dominates, then heat ≥ 36/40 °C, then wind ≥ 45/60 km/h), `buildAdvisories()` (landslide-prone hill roads, ORS/electrolytes for heat, layers for cold nights, suspended boat rides/cable cars for wind, plus a monsoon reminder in Jun–Sep), `summarizeDay()`, `normalizeOpenMeteoDaily()`, `dateRange()` (inclusive, capped at 16 days, safe on reversed/invalid input) and `pickAnchor()`.
+- `GET /api/geo/weather?lat&lng&start&end` — cached in-memory for `WEATHER_CACHE_TTL_MS` (45 min) keyed by rounded coordinate + window.
+- **Enabling change**: trips now persist a planned window. `Trip.startDate` / `Trip.endDate` are written at generation time by `resolveTripWindow()` (end date derived from trip length when only a start date was supplied) and returned to the client, which is what makes per-day forecasts possible.
+- `POST /api/itinerary/:id/days/:day/indoor-alternative` reuses the Milestone 2 prompt stack: it resolves the day's anchor coordinate and date, fetches that day's advisory, and calls `buildDayAlternativePrompt()` — a focused prompt that switches to an explicitly **indoor-first** brief when risk is `moderate`/`high`, forbids repeating the existing activities, and requests strict JSON (`{ rationale, activities[] }`). The response is a **proposal only** — nothing is persisted until the user clicks *Apply*, which replaces the day through the normal editing path so version snapshots and undo keep working.
+- UI: a colour-coded `WeatherBadge` (temps · mm · wind + risk label, tooltip = advisories) on every day, an inline advisory panel for risky days, risk dots on the map's day pills, and a *Suggest indoor alternative* dialog (`DayAlternativeDialog`) with rationale, per-activity cost, *Regenerate* and *Apply to Day N*.
+
+**4.5 Nearby Search**
+- Provider: [Overpass API](https://overpass-api.de) (OpenStreetMap, free, no key) proxied server-side via `backend/src/services/geo/nearby.ts`, so the browser never hits CORS and the public endpoint sees one cached query per coordinate/category rather than one per user.
+- Categories map to Overpass tag filters: `restaurant`, `cafe`, `attraction` (`tourism=attraction|museum|viewpoint`), `atm`, `pharmacy`, `fuel`. Nodes and ways are both queried (`out center` gives ways a usable coordinate).
+- Pure, unit-tested helpers: `buildOverpassQuery()`, `elementCoordinates()`, `clampRadius()` (200 m – 5 km, default 2 km) and `normalizeOverpassElements()`, which drops unnamed POIs, de-duplicates the same place mapped as both node and way, discards out-of-radius results, sorts by great-circle distance and caps at 20 with `{ cuisine, openingHours, website, phone, address }` tags.
+- `GET /api/geo/nearby?lat&lng&category&radius` — cached for `NEARBY_CACHE_TTL_MS` (24 h) and **never throws**: provider failure resolves to an empty list plus an explanatory note.
+- UI: a `NearbyExplorer` panel above the map with a day picker, category chips and a radius selector; results show distance, address, cuisine and opening hours. Results are published up to `TripMap` and rendered as amber circle markers (with a legend entry), and *Add to Day N* appends the place to that day as a normal activity — persisted through the existing debounced autosave, so no new write endpoint was needed.
+
+**Cross-cutting**
+- `backend/src/utils/parseQuery.ts` was added because the shared `validate` middleware only inspects `req.body` and Express keeps `req.query` read-only. GET endpoints now parse and coerce their parameters through Zod and get a friendly 400 on bad input.
+- New env vars (all optional, all with working defaults): `OPEN_METEO_BASE`, `WEATHER_CACHE_TTL_MS`, `OVERPASS_ENDPOINT`, `NEARBY_CACHE_TTL_MS`.
+- **Known limitation (documented, intentional)**: both new endpoints sit behind `protect`, matching every other trip endpoint. The public shared-trip view therefore shows neither weather nor nearby results; the nearby panel is hidden there and the weather request is skipped. Making these two read-only lookups public is a small change if that trade-off is ever revisited, but it would expose the server as an unauthenticated proxy to Open-Meteo/Overpass.
+
+**Verification (Sprint C)**: backend `npm run build` ✅ · backend `npm test` **77/77** ✅ (was 61) · frontend `npx tsc --noEmit` ✅ · frontend `npm run build` ✅ · new/changed frontend files ESLint-clean (only the pre-existing `TripMap` `no-empty`, `Dashboard.tsx`/`api.ts` `no-explicit-any` findings remain, untouched).
+
+**Still deferred**: weather-aware routing (4.6), receipt upload (5.5).
+
+---
+
+## 12. Sprint D — Implementation Notes (shipped)
+
+Sprint D closed out both milestones: the last geo feature (4.6 weather-aware routing) and the last finance feature (5.5 receipt upload). *Docs + tests + a11y* landed with them (README, `.env.example`, this document, 101 backend tests).
+
+**4.6 Weather-Aware Routing**
+- New pure module `backend/src/services/geo/weatherRouting.ts` cross-references the 4.4 per-day risk with the 4.2 distances between a day's located activities. It answers *"which legs are exposed?"* and *"what should I do about it?"* with **no network and no AI**, so it is fully unit-tested (`weatherRouting.test.ts`, 13 cases) and deterministic.
+- Public API: `analyzeWeatherRouting(days)` → `{ dayFlags, riskyLegs, suggestions, summary }`; helpers `buildRiskyLegs()`, `buildDayFlags()`, `buildSuggestions()`, `dayExposureKm()`, `pickTravelReason()`, `candidatePoints()`, `swapDayPlans()`.
+- Risk model: a day is *exposed* when its risk is `moderate`/`high`; each consecutive pair of located activities on such a day becomes a `RiskyLeg` carrying km, minutes (via `estimateTravelMinutes`) and a road-flavoured reason (an advisory mentioning roads/landslides/ferries is preferred, else a generic ghat-road explanation).
+- Three suggestion types, all explainable and capped at 4:
+  - `swap_days` — move a rainy day's plan onto a **dry** day. The partner is chosen as the nearest dry day that no other rainy day has already claimed, so two rainy days never both point at the same date. Skipped when the day's exposure is under 0.5 km (nothing worth reshuffling).
+  - `indoor_swap` — `high`-risk days get a "rebuild this day indoors" proposal that hands off to the 4.4 alternative-day flow.
+  - `buffer_time` — when a risky day still involves real driving, `+25%` (min 10 min) of its legs' travel time is added as an explicit buffer instead of pretending the schedule holds.
+- `GET /api/itinerary/:id/weather-routing` (behind `protect`, owns the trip) sorts the itinerary days, derives the trip window from `Trip.startDate`/`endDate`, anchors the forecast on the first located activity, and reuses the **cached** weather provider — so a trip with cached weather costs no extra upstream call. It persists nothing.
+- UI: a `WeatherRoutingCard` at the top of the map tab shows the headline, risk chips per exposed day, the worst exposed legs and the suggestions. Applying one is an explicit click:
+  - *Swap Day 2 ↔ Day 4* runs the mirrored `swapDayPlans()` client-side and goes through the normal autosave/edit path, so **version snapshots and undo keep working**.
+  - *Suggest indoor Day 3* opens the same dialog the timeline uses.
+- **Deviation — one dialog, one owner**: the Milestone 4.4 alternative-day dialog moved out of `DayTimeline` up into `ItineraryDisplay`. `DayTimeline` now takes `onSuggestAlternative` + `alternativeLoadingDay` (trigger and busy state only). Without this, the map's routing card would have needed a second copy of the request/apply logic.
+- **Deviation — analysis lives server-side only** (no `lib/` mirror, unlike distances/currency/settlement). The analysis is a non-trivial heuristic; duplicating it would invite drift. Only the tiny `swapDayPlans()` helper is mirrored in `frontend/src/lib/weatherRouting.ts` because the UI must apply the swap locally, plus display labels.
+
+**5.5 Receipt Upload**
+- `multer` (`^2.4.0`) with `memoryStorage`, so the file is capped by `MAX_UPLOAD_MB` **before** anything touches the disk and a rejected upload leaves no partial file behind. `middleware/upload.middleware.ts` wraps it as `handleReceiptUpload`, translating `MulterError` into friendly `AppError`s (413 for oversize, 400 for count/unexpected fields) instead of an opaque 500.
+- `services/finance/receipt.ts` holds the pure, unit-tested rules (`receipt.test.ts`, 9 cases): the MIME allow-list (`image/jpeg`, `image/png`, `image/webp`, `application/pdf`), `sniffMime()` (**magic-byte** detection for all four formats), `contentMatchesMime()`, `sanitizeFilename()`, `buildReceiptFilename()` (server-generated `receipt-<tripTail>-<expenseTail>-<ts>-<rand>.<ext>`, so a hostile `originalname` can never influence the path), `receiptUrlFor()`, `isManagedReceiptUrl()` / `receiptFilenameFromUrl()` (traversal- and foreign-path-proof) and the storage helpers.
+- **Security — never trust the client, twice**: the declared MIME type must be on the allow-list *and* the actual bytes must match it. A text file renamed to `.jpg` is rejected before any write. Stored URLs are only ever deleted through `isManagedReceiptUrl()`, so `deleteReceiptFile()` cannot be tricked into unlinking an arbitrary path (covered by tests).
+- `POST /api/itinerary/:id/expenses/:expenseId/receipt` (multipart field `receipt`) → validates ownership + expense existence, verifies contents, writes the file, deletes the *previous* file when replacing, saves `expense.receiptUrl`, returns the sanitized trip. `DELETE .../receipt` clears the field and removes the file. Deleting an expense also removes its receipt file, so the uploads directory does not accumulate orphans.
+- Files are served read-only from `/uploads` (`express.static` with `index: false`, `dotfiles: 'deny'`, `fallthrough: false`, `X-Content-Type-Options: nosniff`), registered **before** the SPA fallback so `/uploads/<file>` is never rewritten to `index.html`. Filenames embed random bytes → unlisted, not guessable, but not secret either (documented).
+- **Deviation — no Cloudinary/S3 driver**: the plan listed `CLOUDINARY_URL` as the recommended production store. No credentials were available to test against, and shipping untested network code is worse than not shipping it, so storage is local disk only and `CLOUDINARY_URL` was **not** added to the env schema (an unused var would be dead config). The storage functions in `receipt.ts` are deliberately tiny and isolated so a cloud driver can be dropped in without touching controllers. **Operational caveat, documented in `.env.example` and the README**: on ephemeral hosts (Render free tier, serverless) uploads disappear on redeploy — mount a persistent disk or add a cloud driver.
+- UI: in the expense modal, *Attach receipt* validates client-side first (`lib/receipt.ts` mirrors the allow-list + size cap for instant feedback), previews images (object URL) or shows a PDF icon, supports *Replace* / *Remove* with an *Undo*, and uploads on save. Creation is two-phase under the hood — the expense is saved first, then the receipt — so a failed upload can never lose the expense (the failure is toasted, not thrown, avoiding a duplicate expense on retry). Ledger rows show a *Receipt* link (image or PDF icon) opening the file in a new tab.
+
+**Cross-cutting**
+- Caching was reused rather than re-implemented: the routing endpoint rides the 45-minute weather cache (as designed in §4) and receipt files carry no server-side cache of their own.
+- `frontend/vite.config.ts` proxies `/uploads` to the backend in dev, so receipts work identically against the dev server and the single-origin production build.
+- `.gitignore` ignores `backend/uploads/` — user uploads are never committed.
+
+**Verification (Sprint D)**: backend `npm run build` ✅ · backend `npm test` **101/101** ✅ (was 77) · frontend `npx tsc --noEmit` ✅ · frontend `npm run build` ✅ · new/changed frontend files ESLint-clean (only the pre-existing `TripMap` `no-empty` and `Dashboard.tsx`/`api.ts` `no-explicit-any` findings remain, untouched). Two real bugs were caught by the new tests: `Number(null) === 0` leaking through the weather number parser, and an over-tight distance assertion in `nearby.test.ts`.
+
+**Every sub-milestone in this document is now implemented (4.1–4.6, 5.1–5.5).**

@@ -484,3 +484,76 @@ give the output in this json schema:
 dont include anything else it should be like a json file
   `;
 }
+
+/* -------------------------------------------------------------------------- */
+/*  Weather-aware day alternative (Milestone 4.4)                              */
+/* -------------------------------------------------------------------------- */
+
+export interface DayAlternativeParams {
+  destination: string;
+  dayNumber: number;
+  dayTitle?: string;
+  /** Titles of the activities the traveller already has on that day. */
+  activities: string[];
+  /** `none` | `low` | `moderate` | `high` (from the weather service). */
+  riskLevel?: string;
+  advisories?: string[];
+  preferences?: TripPreferences;
+}
+
+/**
+ * Builds a focused prompt asking for a single replacement day. Used by the
+ * "Suggest indoor alternative" action on high-risk (rain/heat/wind) days: the
+ * response is a strict JSON object with a `rationale` and an `activities` array
+ * shaped like the main itinerary's activity items.
+ */
+export function buildDayAlternativePrompt(params: DayAlternativeParams): string {
+  const {
+    destination,
+    dayNumber,
+    dayTitle,
+    activities,
+    riskLevel = 'none',
+    advisories = [],
+    preferences,
+  } = params;
+
+  const isHighRisk = riskLevel === 'high' || riskLevel === 'moderate';
+  const weatherBlock = advisories.length
+    ? advisories.map((line) => `- ${line}`).join('\n')
+    : '- No significant weather risk.';
+  const preferenceBlock = buildPreferenceBlock(preferences);
+
+  return `You are an expert local travel planner for ${destination}.
+
+A traveller already has this plan for **Day ${dayNumber}**${dayTitle ? ` ("${dayTitle}")` : ''}:
+${activities.length ? activities.map((title) => `- ${title}`).join('\n') : '- (no activities recorded)'}
+
+## Weather Risk: ${riskLevel.toUpperCase()}
+${weatherBlock}
+
+## Task
+Replace ONLY Day ${dayNumber} with a ${isHighRisk ? 'weather-safe' : 'fresh and complementary'} alternative.
+- ${
+    isHighRisk
+      ? 'Prioritise INDOOR or covered experiences (museums, galleries, temples, cooking classes, cafés, shopping arcades, spas, indoor markets). Keep outdoor segments short and shelter-adjacent.'
+      : 'Keep the day well-paced and offer a different mix from the existing plan.'
+  }
+- Stay within ${destination} or a short, safe transfer away. Never propose activities that require the risky outdoor conditions the advisories warn about.
+- Do not repeat the traveller's existing activities listed above.
+- Provide 3 to 4 activities, ordered through the day, each with a realistic approximate cost in Indian Rupees (numbers only).
+${preferenceBlock ? `\n${preferenceBlock}\n` : ''}
+Reply with ONLY this JSON (no markdown fences, no commentary):
+{
+  "rationale": "string (1-2 sentences explaining why this alternative suits the conditions)",
+  "activities": [
+    {
+      "title": "string",
+      "time": "string (e.g. '9:00 AM')",
+      "description": "string (1-2 sentences, specific and practical)",
+      "location_name": "string",
+      "approx_cost": "number (INR, 0 for free)"
+    }
+  ]
+}`;
+}

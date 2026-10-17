@@ -7,7 +7,7 @@
     "start": "node ensure-frontend.js && tsx src/index.ts",
     "dev": "tsx watch src/index.ts",
     "build": "tsc && node ensure-frontend.js",
-    "test": "tsx --test src/services/itinerary/editing.test.ts src/services/ai/prompt.test.ts src/services/ai/quality.test.ts src/services/ai/cache.test.ts src/services/geo/distance.test.ts src/services/geo/route.test.ts src/services/geo/customRoute.test.ts src/services/finance/expenses.test.ts src/services/finance/currency.test.ts src/services/finance/settlement.test.ts"
+    "test": "tsx --test src/services/itinerary/editing.test.ts src/services/ai/prompt.test.ts src/services/ai/quality.test.ts src/services/ai/cache.test.ts src/services/geo/distance.test.ts src/services/geo/route.test.ts src/services/geo/customRoute.test.ts src/services/geo/weather.test.ts src/services/geo/nearby.test.ts src/services/finance/expenses.test.ts src/services/finance/currency.test.ts src/services/finance/settlement.test.ts src/services/finance/receipt.test.ts src/services/geo/weatherRouting.test.ts"
   },
   "keywords": [],
   "author": "",
@@ -21,8 +21,10 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
+    "@types/multer": "^2.3.0",
     "@types/node": "^26.6.5",
     "bcryptjs": "^3.0.3",
+    "cloudinary": "^2.11.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
@@ -32,6 +34,7 @@
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.19.2",
+    "multer": "^2.4.0",
     "tsx": "^4.23.15",
     "typescript": "^5.8.3",
     "zod": "^4.6.7"

@@ -215,6 +215,147 @@ export interface SettlementTransfer {
   amount: number;
 }
 
+/* -------------------------------------------------------------------------- */
+/* Weather advisories (Milestone 4.4)                                          */
+/* -------------------------------------------------------------------------- */
+
+export type WeatherRiskLevel = "none" | "low" | "moderate" | "high";
+
+export interface DailyWeather {
+  /** ISO date (`YYYY-MM-DD`). */
+  date: string;
+  tempMin: number | null;
+  tempMax: number | null;
+  precipitationMm: number | null;
+  precipitationProbability: number | null;
+  windKph: number | null;
+  weatherCode: number | null;
+  riskLevel: WeatherRiskLevel;
+  advisories: string[];
+  source: "forecast" | "seasonal";
+}
+
+export interface WeatherResponse {
+  success?: boolean;
+  days: DailyWeather[];
+  provider: string;
+  cached?: boolean;
+  note?: string;
+}
+
+export interface DayAlternative {
+  success?: boolean;
+  day: number;
+  activities: ActivityItem[];
+  rationale: string;
+  weather?: DailyWeather | null;
+  provider?: string;
+  cached?: boolean;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Nearby search (Milestone 4.5)                                               */
+/* -------------------------------------------------------------------------- */
+
+export type NearbyCategory =
+  | "restaurant"
+  | "cafe"
+  | "atm"
+  | "pharmacy"
+  | "fuel"
+  | "attraction";
+
+export interface NearbyPlaceTags {
+  cuisine?: string;
+  openingHours?: string;
+  website?: string;
+  phone?: string;
+  address?: string;
+}
+
+export interface NearbyPlace {
+  id: string;
+  name: string;
+  category: NearbyCategory;
+  coordinates: [number, number];
+  distanceKm: number;
+  tags: NearbyPlaceTags;
+}
+
+export interface NearbyResponse {
+  success?: boolean;
+  places: NearbyPlace[];
+  provider: string;
+  radius: number;
+  cached?: boolean;
+  note?: string;
+  categories?: NearbyCategory[];
+}
+
+/* -------------------------------------------------------------------------- */
+/* Weather-aware routing (Milestone 4.6)                                       */
+/* -------------------------------------------------------------------------- */
+
+export interface WeatherDayFlag {
+  day: number;
+  riskLevel: WeatherRiskLevel;
+  weatherSafe: boolean;
+  travelExposureKm: number;
+  riskyLegCount: number;
+}
+
+export interface RiskyLeg {
+  day: number;
+  fromIndex: number;
+  toIndex: number;
+  riskLevel: WeatherRiskLevel;
+  km: number;
+  minutes: number;
+  reason: string;
+}
+
+export type WeatherRoutingAction =
+  | { kind: "swap_days"; fromDay: number; toDay: number }
+  | { kind: "indoor_swap"; day: number };
+
+export interface WeatherRoutingSuggestion {
+  type: "swap_days" | "indoor_swap" | "buffer_time";
+  day: number;
+  withDay?: number;
+  severity: WeatherRiskLevel;
+  title: string;
+  detail: string;
+  action?: WeatherRoutingAction;
+}
+
+export type WeatherRoutingSuggestionType = WeatherRoutingSuggestion["type"];
+
+export interface WeatherRoutingAnalysis {
+  dayFlags: WeatherDayFlag[];
+  riskyLegs: RiskyLeg[];
+  suggestions: WeatherRoutingSuggestion[];
+  summary: {
+    riskyDayCount: number;
+    totalRiskyLegs: number;
+    exposureKm: number;
+    worstDay: number | null;
+    worstRiskLevel: WeatherRiskLevel;
+    headline: string;
+  };
+}
+
+export interface WeatherRoutingResponse {
+  success?: boolean;
+  startDate: string | null;
+  endDate: string | null;
+  weather: {
+    provider: string;
+    days: DailyWeather[];
+    note?: string;
+  };
+  analysis: WeatherRoutingAnalysis;
+}
+
 /** Distance/travel-time result for a sequence of coordinates. */
 export interface RouteLeg {
   fromIndex: number;
@@ -234,6 +375,9 @@ export interface RouteResult {
 export interface Trip {
   _id: string;
   title?: string;
+  /** Planned trip window (drives per-day weather). */
+  startDate?: string;
+  endDate?: string;
   status?: 'draft' | 'planned' | 'ongoing' | 'completed';
   isDeleted?: boolean;
   version?: number;

@@ -12,6 +12,11 @@ export default defineConfig(() => ({
         target: 'http://localhost:5000',
         changeOrigin: true,
       },
+      // Uploaded receipt files (Milestone 5.5) are served by the backend
+      '/uploads': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+      },
     },
   },
   plugins: [react()],

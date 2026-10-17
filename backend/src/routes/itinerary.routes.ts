@@ -13,6 +13,8 @@ import {
   restoreTripVersion,
   submitTripFeedback,
   getTripInsights,
+  suggestDayAlternative,
+  getWeatherRouting,
   deleteTrip,
   duplicateTrip,
   shareTrip,
@@ -25,6 +27,8 @@ import {
   deleteTripExpense,
   updateTripParticipants,
   updateTripFinance,
+  uploadExpenseReceipt,
+  deleteExpenseReceipt,
 } from '../controllers/expense.controller.js';
 import {
   addTripRoute,
@@ -50,6 +54,7 @@ import {
 } from '../schemas/expense.schema.js';
 import { createRouteSchema, updateRouteSchema } from '../schemas/route.schema.js';
 import { generateLimiter } from '../middleware/rateLimiter.middleware.js';
+import { handleReceiptUpload } from '../middleware/upload.middleware.js';
 
 const router = Router();
 
@@ -128,6 +133,16 @@ router.put(
   updateTripExpense
 );
 router.delete('/:id/expenses/:expenseId', protect, deleteTripExpense);
+
+// Receipt upload / removal (Milestone 5: Budget & Financial)
+router.post(
+  '/:id/expenses/:expenseId/receipt',
+  protect,
+  handleReceiptUpload,
+  uploadExpenseReceipt
+);
+router.delete('/:id/expenses/:expenseId/receipt', protect, deleteExpenseReceipt);
+
 router.put(
   '/:id/participants',
   protect,
@@ -137,6 +152,12 @@ router.put(
 
 // Currency & rates (Milestone 5: Budget & Financial)
 router.put('/:id/finance', protect, validate(financeUpdateSchema), updateTripFinance);
+
+// Weather-aware day alternative (Milestone 4: Map & Geo)
+router.post('/:id/days/:day/indoor-alternative', protect, suggestDayAlternative);
+
+// Weather-aware routing analysis (Milestone 4: Map & Geo)
+router.get('/:id/weather-routing', protect, getWeatherRouting);
 
 // User-drawn custom routes (Milestone 4: Map & Geo)
 router.post('/:id/routes', protect, validate(createRouteSchema), addTripRoute);

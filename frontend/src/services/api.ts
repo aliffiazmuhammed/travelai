@@ -15,6 +15,11 @@ import type {
   TripExpense,
   TripParticipant,
   TripFinance,
+  WeatherResponse,
+  NearbyCategory,
+  NearbyResponse,
+  DayAlternative,
+  WeatherRoutingResponse,
 } from '@/types';
 
 export interface StreamProgressEvent {
@@ -79,6 +84,52 @@ class ApiClient {
     }
 
     return data;
+  }
+
+  /**
+   * Like `request`, but for `FormData` bodies. The browser must set the
+   * multipart boundary itself, so no `Content-Type` header is added here.
+   */
+  private async requestForm<T>(endpoint: string, body: FormData): Promise<T> {
+    const url = `${this.baseUrl}${endpoint}`;
+
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        credentials: 'include',
+        body,
+      });
+    } catch {
+      throw new Error(
+        'Unable to connect to the server. Please check your internet connection or try again shortly.'
+      );
+    }
+
+    let data: unknown = {};
+    try {
+      data = await response.json();
+    } catch {
+      if (!response.ok) {
+        if (response.status === 413) {
+          throw new Error('That file is too large to upload.');
+        }
+        if (response.status >= 500) {
+          throw new Error('Our servers are temporarily unavailable. Please try again shortly.');
+        }
+        throw new Error('The server returned an unexpected response. Please try again.');
+      }
+      return {} as T;
+    }
+
+    if (!response.ok) {
+      const payload = (data ?? {}) as { error?: string; message?: string };
+      throw new Error(
+        payload.error || payload.message || 'We could not upload that receipt. Please try again.'
+      );
+    }
+
+    return data as T;
   }
 
   // Auth endpoints
@@ -371,6 +422,20 @@ class ApiClient {
     });
   }
 
+  /** Uploads (or replaces) a receipt image/PDF for an expense (Milestone 5.5). */
+  async uploadExpenseReceipt(id: string, expenseId: string, file: File): Promise<Trip> {
+    const form = new FormData();
+    form.append('receipt', file);
+    return this.requestForm(`/api/itinerary/${id}/expenses/${expenseId}/receipt`, form);
+  }
+
+  /** Removes an expense's receipt (Milestone 5.5). */
+  async deleteExpenseReceipt(id: string, expenseId: string): Promise<Trip> {
+    return this.request(`/api/itinerary/${id}/expenses/${expenseId}/receipt`, {
+      method: 'DELETE',
+    });
+  }
+
   async updateParticipants(
     id: string,
     participants: { name: string; isMe?: boolean }[]
@@ -396,6 +461,51 @@ class ApiClient {
     const query = new URLSearchParams({ base });
     if (symbols?.length) query.append('symbols', symbols.join(','));
     return this.request(`/api/geo/currency/rates?${query.toString()}`);
+  }
+
+  // Weather advisories (Milestone 4: Map & Geo)
+  async getWeather(
+    lat: number,
+    lng: number,
+    start: string,
+    end: string
+  ): Promise<WeatherResponse> {
+    const query = new URLSearchParams({
+      lat: String(lat),
+      lng: String(lng),
+      start,
+      end,
+    });
+    return this.request(`/api/geo/weather?${query.toString()}`);
+  }
+
+  // Nearby search (Milestone 4: Map & Geo)
+  async getNearby(
+    lat: number,
+    lng: number,
+    category: NearbyCategory,
+    radius?: number
+  ): Promise<NearbyResponse> {
+    const query = new URLSearchParams({
+      lat: String(lat),
+      lng: String(lng),
+      category,
+    });
+    if (radius) query.append('radius', String(radius));
+    return this.request(`/api/geo/nearby?${query.toString()}`);
+  }
+
+  /** Asks the AI for a weather-aware replacement for a single day. */
+  async suggestIndoorAlternative(id: string, day: number): Promise<DayAlternative> {
+    return this.request(`/api/itinerary/${id}/days/${day}/indoor-alternative`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  }
+
+  /** Weather-aware routing analysis for a trip (Milestone 4.6). */
+  async getWeatherRouting(id: string): Promise<WeatherRoutingResponse> {
+    return this.request(`/api/itinerary/${id}/weather-routing`);
   }
 
   // User-drawn custom routes (Milestone 4: Map & Geo)

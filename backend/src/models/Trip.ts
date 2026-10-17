@@ -75,6 +75,9 @@ export interface ICustomRoute {
 export interface ITrip extends Document {
   userId: Types.ObjectId;
   title?: string;
+  /** Planned trip window — drives per-day weather forecasts (Milestone 4). */
+  startDate?: Date;
+  endDate?: Date;
   status: 'draft' | 'planned' | 'ongoing' | 'completed';
   isDeleted: boolean;
   shareId?: string;
@@ -193,6 +196,8 @@ const tripSchema = new Schema<ITrip>(
       type: String,
       trim: true,
     },
+    startDate: { type: Date },
+    endDate: { type: Date },
     status: {
       type: String,
       enum: ['draft', 'planned', 'ongoing', 'completed'],

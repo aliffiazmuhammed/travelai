@@ -7,6 +7,7 @@ import {
   adaptPromptForSeason,
   assignVariant,
   buildPromptText,
+  buildDayAlternativePrompt,
 } from './prompt.js';
 
 test('resolveLanguage maps known codes and defaults to English', () => {
@@ -129,4 +130,44 @@ test('buildPromptText injects personalization from trip history', () => {
 test('PROMPT_VERSION is exported for storage on trips', () => {
   assert.equal(typeof PROMPT_VERSION, 'string');
   assert.ok(PROMPT_VERSION.length > 0);
+});
+
+test('buildDayAlternativePrompt asks for a weather-safe single day', () => {
+  const prompt = buildDayAlternativePrompt({
+    destination: 'Munnar',
+    dayNumber: 3,
+    dayTitle: 'Tea estate trails',
+    activities: ['Sunrise trek to Top Station', 'Tea museum visit'],
+    riskLevel: 'high',
+    advisories: ['Heavy rain expected (~26 mm) — hill roads turn slippery.'],
+    preferences: { pace: 'relaxed', dietary: ['vegetarian'] },
+  });
+
+  assert.ok(prompt.includes('Munnar'));
+  assert.ok(prompt.includes('Day 3'));
+  assert.ok(prompt.includes('Tea estate trails'));
+  assert.ok(prompt.includes('Sunrise trek to Top Station'));
+  assert.ok(prompt.includes('HIGH'));
+  assert.ok(prompt.includes('Heavy rain expected'));
+  assert.ok(/INDOOR/.test(prompt));
+  // Preference blocks are carried through from Milestone 2
+  assert.ok(prompt.includes('Traveller Preferences'));
+  assert.ok(prompt.includes('vegetarian'));
+  // Strict JSON contract for the parser
+  assert.ok(prompt.includes('"activities"'));
+  assert.ok(prompt.includes('"rationale"'));
+});
+
+test('buildDayAlternativePrompt relaxes guidance when weather is fine', () => {
+  const prompt = buildDayAlternativePrompt({
+    destination: 'Hampi',
+    dayNumber: 1,
+    activities: [],
+    riskLevel: 'none',
+  });
+
+  assert.ok(prompt.includes('NONE'));
+  assert.ok(prompt.includes('No significant weather risk'));
+  assert.ok(!/INDOOR/.test(prompt));
+  assert.ok(prompt.includes('(no activities recorded)'));
 });

@@ -4,6 +4,7 @@ import { generateWithFallback, generateStreamWithFallback } from '../services/ai
 import {
   PROMPT_VERSION,
   buildPromptText,
+  buildDayAlternativePrompt,
   computeInterestWeights,
   adaptPromptForSeason,
   assignVariant,
@@ -11,6 +12,9 @@ import {
 } from '../services/ai/prompt.js';
 import { scoreItinerary } from '../services/ai/quality.js';
 import { buildTripHistorySummary } from '../services/itinerary/context.js';
+import { isValidCoord } from '../services/geo/distance.js';
+import { DailyWeather, getWeatherForecast } from '../services/geo/weather.js';
+import { RoutingDayInput, analyzeWeatherRouting } from '../services/geo/weatherRouting.js';
 import {
   isValidPermutation,
   applyOrder,
@@ -106,6 +110,27 @@ function normalizeInterests(interests: string[] | string): string[] {
     .filter(Boolean);
 }
 
+/** Parses an optional `YYYY-MM-DD`-style value into a Date (or undefined). */
+function parseTripDate(value?: string): Date | undefined {
+  if (!value) return undefined;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+}
+
+/**
+ * Resolves the planned trip window persisted on the trip. When the user only
+ * supplied a start date, the end date is derived from the trip length. The
+ * window drives per-day weather forecasts (Milestone 4).
+ */
+function resolveTripWindow(startdate?: string, enddate?: string, days?: number) {
+  const startDate = parseTripDate(startdate);
+  let endDate = parseTripDate(enddate);
+  if (!endDate && startDate && Number(days) > 0) {
+    endDate = new Date(startDate.getTime() + (Number(days) - 1) * 24 * 60 * 60 * 1000);
+  }
+  return { startDate, endDate };
+}
+
 /**
  * Assembles the rich generation metadata persisted on every trip (Milestone 2).
  * Captures the prompt version, A/B variant, language, season, interest weights,
@@ -199,6 +224,7 @@ export const generateItinerary = catchAsync(
       tripDetails: parsedItinerary,
       promptVersion: PROMPT_VERSION,
       generationMeta,
+      ...resolveTripWindow(startdate, enddate, days),
     });
     await trip.save();
 
@@ -305,6 +331,7 @@ export const generateItineraryStream = async (req: AuthenticatedRequest, res: Re
       tripDetails: parsedItinerary,
       promptVersion: PROMPT_VERSION,
       generationMeta,
+      ...resolveTripWindow(startdate, enddate, days),
     });
     await trip.save();
 
@@ -857,6 +884,193 @@ export const getSharedTrip = catchAsync(
       status: trip.status,
       tripDetails: trip.tripDetails,
       createdAt: trip.createdAt,
+    });
+  }
+);
+
+/* -------------------------------------------------------------------------- */
+/*  Weather-aware day alternative (Milestone 4.4)                              */
+/* -------------------------------------------------------------------------- */
+
+/** Formats a Date as `YYYY-MM-DD` (UTC). */
+function toIsoDate(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+/** Returns a copy of `date` advanced by `offsetDays`. */
+function addDays(date: Date, offsetDays: number): Date {
+  return new Date(date.getTime() + offsetDays * 24 * 60 * 60 * 1000);
+}
+
+/** Collects every valid activity coordinate in an itinerary, in day order. */
+function collectItineraryCoordinates(days: any[]): [number, number][] {
+  const coordinates: [number, number][] = [];
+  for (const day of days || []) {
+    for (const activity of day?.activities || []) {
+      if (activity && typeof activity === 'object' && isValidCoord(activity.coordinates)) {
+        coordinates.push([
+          Number((activity.coordinates as any)[0]),
+          Number((activity.coordinates as any)[1]),
+        ]);
+      }
+    }
+  }
+  return coordinates;
+}
+
+/**
+ * Suggests a weather-aware replacement for a single day (Milestone 4.4).
+ *
+ * Only returns the proposal — the client applies it through the normal
+ * granular edit endpoints, so version history and undo keep working.
+ * POST /api/itinerary/:id/days/:day/indoor-alternative
+ */
+export const suggestDayAlternative = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const dayNumber = Number(req.params.day);
+    if (!Number.isInteger(dayNumber) || dayNumber < 1) {
+      throw new AppError('Please provide a valid day number.', 400);
+    }
+
+    const trip = await Trip.findOne({
+      _id: String(req.params.id),
+      userId: req.userId,
+      isDeleted: { $ne: true },
+    });
+
+    if (!trip) {
+      throw new AppError('Trip not found', 404);
+    }
+
+    const days = getItineraryDays(trip);
+    const dayIndex = findDayIndex(days, dayNumber);
+    if (dayIndex === -1) {
+      throw new AppError(`Day ${dayNumber} was not found in this itinerary.`, 404);
+    }
+    const dayData = days[dayIndex];
+
+    const activities = (dayData.activities || [])
+      .map((activity: any) =>
+        activity && typeof activity === 'object' ? activity.title || activity.name : activity
+      )
+      .map((title: any) => String(title || '').trim())
+      .filter(Boolean);
+
+    // Advisory context: prefer the trip's own coordinates + planned dates
+    let weatherDay: any = null;
+    const anchor = collectItineraryCoordinates(days)[0];
+    if (anchor && trip.startDate) {
+      const date = toIsoDate(addDays(new Date(trip.startDate), dayNumber - 1));
+      const forecast = await getWeatherForecast(anchor[0], anchor[1], date, date);
+      weatherDay = forecast.days[0] ?? null;
+    }
+
+    const prompt = buildDayAlternativePrompt({
+      destination: trip.title || (trip.tripDetails as any)?.trip_title || 'the destination',
+      dayNumber,
+      dayTitle: dayData.title,
+      activities,
+      riskLevel: weatherDay?.riskLevel || 'none',
+      advisories: weatherDay?.advisories || [],
+      preferences: (trip.generationMeta as any)?.request?.preferences,
+    });
+
+    const result = await generateWithFallback(prompt);
+    const parsed = parseItineraryJson(result.text);
+    const suggested = Array.isArray(parsed?.activities) ? parsed.activities : [];
+
+    res.status(200).json({
+      success: true,
+      day: dayNumber,
+      activities: suggested,
+      rationale: typeof parsed?.rationale === 'string' ? parsed.rationale : '',
+      weather: weatherDay,
+      provider: result.provider,
+      cached: result.cached,
+    });
+  }
+);
+
+/* -------------------------------------------------------------------------- */
+/*  Weather-aware routing (Milestone 4.6)                                      */
+/* -------------------------------------------------------------------------- */
+
+/** Collects a single day's located activity coordinates, in visit order. */
+function dayActivityCoordinates(day: any): [number, number][] {
+  const coordinates: [number, number][] = [];
+  for (const activity of day?.activities || []) {
+    if (activity && typeof activity === 'object' && isValidCoord(activity.coordinates)) {
+      coordinates.push([
+        Number((activity.coordinates as any)[0]),
+        Number((activity.coordinates as any)[1]),
+      ]);
+    }
+  }
+  return coordinates;
+}
+
+/**
+ * Cross-references the trip's per-day weather risk with the distances between
+ * its activities, flagging exposed travel legs and proposing concrete fixes
+ * (day swaps, indoor rebuilds, travel buffers).
+ *
+ * The response is advisory only — nothing is persisted; the client applies a
+ * suggestion through the normal itinerary edit endpoints.
+ * GET /api/itinerary/:id/weather-routing
+ */
+export const getWeatherRouting = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const trip = await Trip.findOne({
+      _id: String(req.params.id),
+      userId: req.userId,
+      isDeleted: { $ne: true },
+    });
+
+    if (!trip) {
+      throw new AppError('Trip not found', 404);
+    }
+
+    const days = [...getItineraryDays(trip)].sort(
+      (a, b) => (Number(a?.day) || 0) - (Number(b?.day) || 0)
+    );
+
+    // Always compute weather from the server so the client cannot fabricate it
+    const start = trip.startDate ? toIsoDate(new Date(trip.startDate)) : null;
+    const end = trip.endDate
+      ? toIsoDate(new Date(trip.endDate))
+      : start
+        ? toIsoDate(addDays(new Date(start), Math.max(0, days.length - 1)))
+        : null;
+    const anchor = collectItineraryCoordinates(days)[0];
+
+    let forecastDays: DailyWeather[] = [];
+    let weatherProvider = 'unavailable';
+    let weatherNote: string | undefined;
+
+    if (anchor && start && end) {
+      const forecast = await getWeatherForecast(anchor[0], anchor[1], start, end);
+      forecastDays = forecast.days;
+      weatherProvider = forecast.provider;
+      weatherNote = forecast.note;
+    }
+
+    const dayInputs: RoutingDayInput[] = days.map((day, index) => ({
+      day: Number(day?.day) || index + 1,
+      riskLevel: forecastDays[index]?.riskLevel ?? 'none',
+      advisories: forecastDays[index]?.advisories ?? [],
+      points: dayActivityCoordinates(day),
+      activityCount: (day?.activities || []).length,
+      mode: 'drive',
+    }));
+
+    const analysis = analyzeWeatherRouting(dayInputs);
+
+    res.status(200).json({
+      success: true,
+      startDate: start,
+      endDate: end,
+      weather: { provider: weatherProvider, days: forecastDays, note: weatherNote },
+      analysis,
     });
   }
 );

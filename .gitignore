@@ -44,3 +44,6 @@ Thumbs.db
 # Cache & Temporary
 .cache/
 .turbo/
+
+# Uploaded receipt files (Milestone 5.5) — never commit user uploads
+backend/uploads/

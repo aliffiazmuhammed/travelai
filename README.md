@@ -64,6 +64,10 @@ Traditional trip planning involves juggling dozen of browser tabs: reading confl
 - **Day-by-Day Route Polylines**: Connects scheduled daily activities with color-coded travel routes.
 - **Distance & Travel-Time Insights**: Per-leg distances and estimated drive times are shown between consecutive activities, with a per-day total on both the timeline and the map — computed instantly on the client and refined by the backend routing endpoint when available.
 - **User-Drawn Custom Routes**: Click-to-draw your own paths on the map (detours, treks, alternate drives), name them, tag a trip day, pick a colour and travel mode, and see the length instantly. Saved per trip with edit/delete, and recomputed server-side on save.
+- **Per-Day Weather Advisories**: Each day shows a live forecast chip (temperatures, rainfall, wind) colour-coded by travel risk — `clear` → `light rain` → `showers` → `rough weather` — with concrete advisories for hill-road landslides, extreme heat, cold nights and high winds. Forecasts come from Open-Meteo and degrade to a seasonal outlook for dates beyond the ~16-day window.
+- **Suggest an Indoor Alternative**: On a risky day, ask the AI to rework just that day around the conditions (museums, cafés, covered markets…). The proposal is shown for review and only replaces the day when you accept it — through the normal edit path, so version history still works.
+- **Nearby Places Search**: Find real restaurants, cafés, attractions, ATMs, pharmacies and fuel stops around any day from OpenStreetMap, sorted by distance with addresses and opening hours. Results appear as amber map markers and can be added to the day as an activity in one click.
+- **Weather-Aware Plan Check**: A map-tab panel cross-references the forecast with your actual travel legs — it flags every leg running through rough weather, then proposes concrete fixes: swap a rainy day's plan onto a dry day, rebuild a high-risk day indoors, or pad the travel time. Every suggestion is an explicit action; nothing is applied silently.
 - **Interactive Pins**: Custom numbered activity markers and distinctive hotel icons with detailed popups.
 
 ### 🏨 Smart Multi-Day Stay Deduplication
@@ -96,6 +100,7 @@ Traditional trip planning involves juggling dozen of browser tabs: reading confl
 - **Group Travellers**: Add companions so each expense can record who paid and be split equally (foundation for settlement).
 - **Multi-Currency Logging & Conversion**: Log expenses in any of 30 ECB-quoted currencies; rates come from Frankfurter (12-hour cache), are snapshotted onto the trip, and every amount is stored converted into the trip's base currency. Switch the base currency at any time and the whole ledger re-converts.
 - **Bill Splitting & Settle Up**: Choose not-split, equal, or custom per-person shares, then see each traveller's paid/share/net balance plus the fewest transfers needed to settle up.
+- **Receipt Attachments**: Attach a photo or PDF receipt to any expense (JPEG/PNG/WebP/PDF, ≤ `MAX_UPLOAD_MB`, default 5 MB), preview it before saving, open it from the ledger, and remove it again. Nothing is stored unless the file's actual bytes match its declared type.
 - **Emergency Reserve & Payment Guide**: Dedicated ~10% contingency calculation with regional UPI vs Cash acceptance guidance.
 
 ### 📤 Seamless Sharing, Export & Print
@@ -211,14 +216,22 @@ travelai/
 │       │   │   ├── route.ts             # Route provider (haversine + optional OSRM)
 │       │   │   ├── route.test.ts        # Route assembly unit tests
 │       │   │   ├── customRoute.ts       # Drawn-route point validation & distance
-│       │   │   └── customRoute.test.ts  # Drawn-route unit tests
+│       │   │   ├── customRoute.test.ts  # Drawn-route unit tests
+│       │   │   ├── weather.ts           # Per-day advisories (Open-Meteo + seasonal fallback)
+│       │   │   ├── weather.test.ts      # Risk mapping & advisory unit tests
+│       │   │   ├── nearby.ts            # Nearby POI search (Overpass proxy + normalization)
+│       │   │   ├── nearby.test.ts       # Overpass parsing & radius guard-rail tests
+│       │   │   ├── weatherRouting.ts    # Weather-aware routing analysis (exposed legs + fixes)
+│       │   │   └── weatherRouting.test.ts # Routing-analysis unit tests
 │       │   ├── finance/
 │       │   │   ├── expenses.ts          # Amount conversion, equal splits, planned vs actual
 │       │   │   ├── expenses.test.ts     # Budget maths unit tests
 │       │   │   ├── currency.ts          # FX rates (Frankfurter) + conversion helpers
 │       │   │   ├── currency.test.ts     # Conversion & cache unit tests
 │       │   │   ├── settlement.ts        # Balances + minimal-transfer settlement
-│       │   │   └── settlement.test.ts   # Bill-splitting unit tests
+│       │   │   ├── settlement.test.ts   # Bill-splitting unit tests
+│       │   │   ├── receipt.ts           # Receipt storage helpers (validation, sniffing, files)
+│       │   │   └── receipt.test.ts      # Upload validation & MIME-sniffing unit tests
 │       │   └── ai/
 │       │       ├── ai.interface.ts      # AIService abstraction
 │       │       ├── gemini.service.ts    # Google Gemini 2.5 Flash implementation
@@ -253,7 +266,11 @@ travelai/
         │   │   ├── TripVersions.tsx     # Version history list with one-click restore
         │   │   ├── TripFeedback.tsx     # Thumbs up/down rating & AI confidence hint
         │   │   ├── ExpenseTracker.tsx   # Ledger, planned-vs-actual, currency settings, settle-up
-        │   │   ├── ExpenseEditor.tsx    # Modal to log / edit an expense (currency + custom splits)
+        │   │   ├── ExpenseEditor.tsx    # Modal to log / edit an expense (currency, splits, receipt)
+        │   │   ├── WeatherAdvisory.tsx  # Per-day risk badges & advisory panels
+        │   │   ├── WeatherRoutingCard.tsx# Weather-aware plan check with one-click fixes
+        │   │   ├── DayAlternativeDialog.tsx # Review an AI-proposed weather-safe day
+        │   │   ├── NearbyExplorer.tsx   # Nearby POI search with add-to-day actions
         │   │   ├── RouteEditor.tsx      # Modal to name / colour / tag a drawn route
         │   │   ├── TripMap.tsx          # Leaflet map with 80+ destinations, drawn routes & distances
         │   │   ├── StayAndCuisine.tsx   # Consolidated stay cards & dining hotspots
@@ -284,6 +301,9 @@ travelai/
         │   ├── routeStyle.ts  # Colours & travel-mode metadata for drawn routes
         │   ├── currency.ts    # Supported currencies, FX conversion & money formatting
         │   ├── settlement.ts  # Mirror of the bill-splitting / settle-up maths
+        │   ├── weather.ts     # Weather risk metadata, day/date + forecast zipping
+        │   ├── weatherRouting.ts # Client helpers for applying weather-routing fixes
+        │   ├── receipt.ts     # Receipt validation, preview & URL helpers
         │   └── budget.ts      # Expense categories & planned-vs-actual helpers
         └── types/
             └── trip.ts        # Comprehensive itinerary data contract
@@ -297,6 +317,8 @@ travelai/
 |---|---|
 | **Frontend** | React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui, Lucide Icons |
 | **Mapping & Visuals** | Leaflet, React-Leaflet, OpenStreetMap, Recharts |
+| **Travel Data APIs** | Open-Meteo (weather advisories), Overpass/OSM (nearby search), OSRM (optional routing), Frankfurter/ECB (FX rates) |
+| **File Uploads** | Multer (in-memory, magic-byte verified) + Cloudinary CDN (or local disk fallback) |
 | **Backend** | Node.js (v20+), Express 5, TypeScript, tsx |
 | **Database** | MongoDB, Mongoose ODM |
 | **Artificial Intelligence** | Google Generative AI SDK (`gemini-2.5-flash`), Groq SDK |
@@ -352,6 +374,26 @@ OSRM_BASE_URL=https://router.project-osrm.org
 # Currency Rates (optional) — Frankfurter by default (no API key required)
 CURRENCY_RATES_PROVIDER=frankfurter
 CURRENCY_CACHE_TTL_MS=43200000   # 12 hours
+
+# Weather Advisories (optional) — Open-Meteo by default (no API key required)
+# Forecasts cover ~16 days; further-out dates fall back to seasonal normals.
+OPEN_METEO_BASE=https://api.open-meteo.com/v1/forecast
+WEATHER_CACHE_TTL_MS=2700000     # 45 minutes
+
+# Nearby Search (optional) — Overpass/OpenStreetMap by default (no API key required)
+OVERPASS_ENDPOINT=https://overpass-api.de/api/interpreter
+NEARBY_CACHE_TTL_MS=86400000     # 24 hours
+
+# Receipt Uploads (Milestone 5)
+# Option A: Cloudinary CDN (Recommended for production: Render / Vercel / Railway)
+CLOUDINARY_URL=                     # e.g. cloudinary://<api_key>:<api_secret>@<cloud_name>
+CLOUDINARY_CLOUD_NAME=              # or individual keys
+CLOUDINARY_API_KEY=
+CLOUDINARY_API_SECRET=
+
+# Option B: Local disk storage (automatic fallback when Cloudinary is unset)
+UPLOAD_DIR=backend/uploads       # defaults to <backend>/uploads when unset
+MAX_UPLOAD_MB=5                  # per-file cap; JPEG/PNG/WebP/PDF only
 ```
 
 > **Note**: Both the root and subfolder `.gitignore` files strictly ignore `.env` files. Secrets are never tracked or committed to version control.
@@ -438,6 +480,10 @@ npm test
 | `POST` | `/api/itinerary/:id/routes` | Save a user-drawn route (distance recomputed server-side) | Yes |
 | `PUT` | `/api/itinerary/:id/routes/:routeId` | Update a saved route (name, day, colour, mode, points) | Yes |
 | `DELETE`| `/api/itinerary/:id/routes/:routeId` | Delete a saved route | Yes |
+| `POST` | `/api/itinerary/:id/days/:day/indoor-alternative` | AI-proposed weather-safe replacement for one day (proposal only, not persisted) | Yes |
+| `GET` | `/api/itinerary/:id/weather-routing` | Weather-aware routing analysis: exposed legs, risky days & suggested fixes (advisory only) | Yes |
+| `POST` | `/api/itinerary/:id/expenses/:expenseId/receipt` | Upload/replace an expense receipt (multipart `receipt`; JPEG/PNG/WebP/PDF, ≤ `MAX_UPLOAD_MB`) | Yes |
+| `DELETE`| `/api/itinerary/:id/expenses/:expenseId/receipt` | Remove an expense receipt (and its stored file) | Yes |
 
 ### Geo Endpoints (`/api/geo`)
 
@@ -445,6 +491,8 @@ npm test
 |---|---|---|---|
 | `POST` | `/api/geo/route` | Compute per-leg distance & travel time for 2–50 coordinates (haversine or OSRM) | Yes |
 | `GET` | `/api/geo/currency/rates?base=INR&symbols=USD,EUR` | Base-per-unit FX rates (12-hour cache) for currency conversion | Yes |
+| `GET` | `/api/geo/weather?lat&lng&start&end` | Per-day forecast with risk level (`none`/`low`/`moderate`/`high`) + travel advisories (45-minute cache) | Yes |
+| `GET` | `/api/geo/nearby?lat&lng&category&radius` | Named POIs sorted by distance — categories `restaurant`, `cafe`, `attraction`, `atm`, `pharmacy`, `fuel` (24-hour cache) | Yes |
 
 ---
 
@@ -519,6 +567,7 @@ npm run build
 - **HTTP-Only Cookies**: Authentication tokens are stored in `httpOnly`, `secure`, `sameSite: none` cookies to mitigate XSS attacks.
 - **Input Validation**: All incoming API payloads are parsed and validated with strict [Zod](https://zod.dev/) schemas before processing.
 - **Security Headers & Rate Limiting**: Enabled via `helmet` and `express-rate-limit` to prevent brute-force abuse on auth and AI endpoints.
+- **Untrusted Uploads**: Receipt uploads are size-capped (`MAX_UPLOAD_MB`), MIME-allow-listed, **magic-byte verified** (a renamed executable is rejected), stored under server-generated filenames, and served with `X-Content-Type-Options: nosniff`. Deleting an expense or its receipt removes the stored file.
 
 ---
 
