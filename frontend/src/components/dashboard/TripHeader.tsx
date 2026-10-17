@@ -16,6 +16,7 @@ import {
   ArrowLeft,
   Save,
   Loader2,
+  GitBranch,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ShareExportModal } from "./ShareExportModal";
@@ -25,6 +26,8 @@ interface TripHeaderProps {
   data: ItineraryData;
   tripId?: string;
   status?: "draft" | "planned" | "ongoing" | "completed";
+  version?: number;
+  hasEdited?: boolean;
   onStatusChange?: (newStatus: "draft" | "planned" | "ongoing" | "completed") => void;
   onSave?: () => void;
   isSaving?: boolean;
@@ -68,6 +71,8 @@ export const TripHeader: React.FC<TripHeaderProps> = ({
   data,
   tripId,
   status = "planned",
+  version,
+  hasEdited,
   onStatusChange,
   onSave,
   isSaving,
@@ -148,6 +153,16 @@ export const TripHeader: React.FC<TripHeaderProps> = ({
               <Sparkles className="w-3.5 h-3.5 text-yellow-400" />
               <span>AI Optimized</span>
             </Badge>
+
+            {version != null && (
+              <Badge className="bg-black/60 backdrop-blur-md text-white border-white/20 px-2.5 py-1 text-[11px] sm:text-xs font-semibold gap-1 sm:gap-1.5 shadow-md">
+                <GitBranch className="w-3 h-3 text-sky-300" />
+                <span>
+                  v{version}
+                  {hasEdited ? " · edited" : ""}
+                </span>
+              </Badge>
+            )}
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">

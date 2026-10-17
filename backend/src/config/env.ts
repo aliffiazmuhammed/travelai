@@ -32,6 +32,15 @@ const envSchema = z.object({
   GROQ_MODEL: z.string().default('openai/gpt-oss-120b'),
   FRONTEND_URL: z.string().optional(),
   SERVE_STATIC: z.string().optional(),
+  // AI generation cache (Milestone 2). Consumed directly by services/ai/cache.ts
+  AI_CACHE_TTL_MS: z.coerce.number().positive().optional(),
+  AI_CACHE_MAX: z.coerce.number().positive().optional(),
+  // Geo routing (Milestone 4). Consumed directly by services/geo/route.ts
+  GEO_ROUTING_PROVIDER: z.enum(['haversine', 'osrm']).optional(),
+  OSRM_BASE_URL: z.string().optional(),
+  // Currency rates (Milestone 5). Consumed directly by services/finance/currency.ts
+  CURRENCY_RATES_PROVIDER: z.string().optional(),
+  CURRENCY_CACHE_TTL_MS: z.coerce.number().positive().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

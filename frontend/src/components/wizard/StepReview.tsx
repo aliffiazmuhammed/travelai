@@ -12,8 +12,30 @@ import {
   ShieldCheck,
   Loader2,
   AlertCircle,
+  Gauge,
+  Languages,
+  UtensilsCrossed,
 } from "lucide-react";
 import { format, differenceInCalendarDays } from "date-fns";
+import type { TripLanguage, TravelPace } from "@/types/trip";
+
+const LANGUAGE_LABELS: Record<TripLanguage, string> = {
+  en: "English",
+  hi: "हिन्दी (Hindi)",
+  ta: "தமிழ் (Tamil)",
+  bn: "বাংলা (Bengali)",
+  te: "తెలుగు (Telugu)",
+  mr: "मराठी (Marathi)",
+  kn: "ಕನ್ನಡ (Kannada)",
+  ml: "മലയാളം (Malayalam)",
+  gu: "ગુજરાતી (Gujarati)",
+};
+
+const PACE_LABELS: Record<TravelPace, string> = {
+  relaxed: "Relaxed",
+  balanced: "Balanced",
+  packed: "Action-packed",
+};
 
 interface StepReviewProps {
   destination: string;
@@ -24,6 +46,9 @@ interface StepReviewProps {
   childrenCount: number;
   budgetPerPerson: number;
   interests: string[];
+  language: TripLanguage;
+  pace: TravelPace;
+  dietary: string[];
   loading: boolean;
   error: string | null;
   onEditStep: (stepId: number) => void;
@@ -39,6 +64,9 @@ export const StepReview: React.FC<StepReviewProps> = ({
   childrenCount,
   budgetPerPerson,
   interests,
+  language,
+  pace,
+  dietary,
   loading,
   error,
   onEditStep,
@@ -226,6 +254,27 @@ export const StepReview: React.FC<StepReviewProps> = ({
               {interest}
             </Badge>
           ))}
+        </div>
+
+        {/* Pace, dietary & language summary */}
+        <div className="flex flex-wrap gap-x-6 gap-y-2 pt-2 border-t border-border/50 text-xs">
+          <div className="flex items-center gap-1.5">
+            <Gauge className="w-3.5 h-3.5 text-primary" />
+            <span className="text-muted-foreground font-semibold">Pace:</span>
+            <span className="font-bold text-foreground">{PACE_LABELS[pace]}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Languages className="w-3.5 h-3.5 text-primary" />
+            <span className="text-muted-foreground font-semibold">Language:</span>
+            <span className="font-bold text-foreground">{LANGUAGE_LABELS[language]}</span>
+          </div>
+          {dietary.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <UtensilsCrossed className="w-3.5 h-3.5 text-primary" />
+              <span className="text-muted-foreground font-semibold">Diet:</span>
+              <span className="font-bold text-foreground">{dietary.join(", ")}</span>
+            </div>
+          )}
         </div>
       </div>
 

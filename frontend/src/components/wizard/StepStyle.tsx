@@ -1,7 +1,8 @@
 import React from "react";
 import { Badge } from "@/components/ui/badge";
-import { Check, Sparkles } from "lucide-react";
+import { Check, Sparkles, Languages, Gauge, UtensilsCrossed } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { TripLanguage, TravelPace } from "@/types/trip";
 
 interface TravelStyleOption {
   id: string;
@@ -70,11 +71,42 @@ const STYLE_OPTIONS: TravelStyleOption[] = [
   },
 ];
 
+const LANGUAGE_OPTIONS: { id: TripLanguage; label: string; native: string }[] = [
+  { id: "en", label: "English", native: "English" },
+  { id: "hi", label: "Hindi", native: "हिन्दी" },
+  { id: "ta", label: "Tamil", native: "தமிழ்" },
+  { id: "bn", label: "Bengali", native: "বাংলা" },
+  { id: "te", label: "Telugu", native: "తెలుగు" },
+  { id: "mr", label: "Marathi", native: "मराठी" },
+  { id: "kn", label: "Kannada", native: "ಕನ್ನಡ" },
+  { id: "ml", label: "Malayalam", native: "മലയാളം" },
+  { id: "gu", label: "Gujarati", native: "ગુજરાતી" },
+];
+
+const PACE_OPTIONS: {
+  id: TravelPace;
+  label: string;
+  emoji: string;
+  description: string;
+}[] = [
+  { id: "relaxed", label: "Relaxed", emoji: "🐢", description: "Fewer activities, long breaks" },
+  { id: "balanced", label: "Balanced", emoji: "🚶", description: "Highlights plus downtime" },
+  { id: "packed", label: "Action-packed", emoji: "🏃", description: "See as much as possible" },
+];
+
+const DIETARY_OPTIONS = ["Vegetarian", "Vegan", "Jain", "Halal", "Gluten-free"];
+
 interface StepStyleProps {
   selectedInterests: string[];
   onToggleInterest: (interest: string) => void;
   onSelectAll: () => void;
   onClearAll: () => void;
+  language: TripLanguage;
+  onLanguageChange: (language: TripLanguage) => void;
+  pace: TravelPace;
+  onPaceChange: (pace: TravelPace) => void;
+  dietary: string[];
+  onToggleDietary: (item: string) => void;
 }
 
 export const StepStyle: React.FC<StepStyleProps> = ({
@@ -82,6 +114,12 @@ export const StepStyle: React.FC<StepStyleProps> = ({
   onToggleInterest,
   onSelectAll,
   onClearAll,
+  language,
+  onLanguageChange,
+  pace,
+  onPaceChange,
+  dietary,
+  onToggleDietary,
 }) => {
   return (
     <div className="space-y-6">
@@ -180,6 +218,101 @@ export const StepStyle: React.FC<StepStyleProps> = ({
             </div>
           );
         })}
+      </div>
+
+      {/* Travel Pace */}
+      <div className="space-y-3 pt-2">
+        <div className="flex items-center gap-2">
+          <Gauge className="w-4 h-4 text-primary" />
+          <h3 className="text-sm font-bold text-foreground">Travel pace</h3>
+          <span className="text-xs text-muted-foreground">— how packed should each day be?</span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {PACE_OPTIONS.map((option) => {
+            const isActive = pace === option.id;
+            return (
+              <button
+                type="button"
+                key={option.id}
+                onClick={() => onPaceChange(option.id)}
+                className={cn(
+                  "p-3 rounded-2xl border text-left transition-all duration-200 bg-card",
+                  isActive
+                    ? "border-primary bg-primary/10 ring-2 ring-primary/20"
+                    : "border-border/70 hover:border-primary/40 hover:bg-muted/30"
+                )}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-lg">{option.emoji}</span>
+                  {isActive && <Check className="w-4 h-4 text-primary stroke-[3]" />}
+                </div>
+                <p className="mt-1 text-sm font-bold text-foreground">{option.label}</p>
+                <p className="text-[11px] text-muted-foreground leading-snug">{option.description}</p>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Dietary Preferences */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <UtensilsCrossed className="w-4 h-4 text-primary" />
+          <h3 className="text-sm font-bold text-foreground">Dietary preferences</h3>
+          <span className="text-xs text-muted-foreground">— optional</span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {DIETARY_OPTIONS.map((item) => {
+            const isActive = dietary.includes(item);
+            return (
+              <button
+                type="button"
+                key={item}
+                onClick={() => onToggleDietary(item)}
+                className={cn(
+                  "px-3 py-1.5 rounded-full border text-xs font-semibold transition-all",
+                  isActive
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border/70 bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                )}
+              >
+                {item}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Output Language */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Languages className="w-4 h-4 text-primary" />
+          <h3 className="text-sm font-bold text-foreground">Itinerary language</h3>
+          <span className="text-xs text-muted-foreground">— the language of your plan</span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {LANGUAGE_OPTIONS.map((option) => {
+            const isActive = language === option.id;
+            return (
+              <button
+                type="button"
+                key={option.id}
+                onClick={() => onLanguageChange(option.id)}
+                className={cn(
+                  "px-3 py-1.5 rounded-full border text-xs font-semibold transition-all flex items-center gap-1.5",
+                  isActive
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border/70 bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                )}
+              >
+                <span>{option.native}</span>
+                {option.native !== option.label && (
+                  <span className="text-[10px] opacity-70">{option.label}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

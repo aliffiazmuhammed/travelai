@@ -1,5 +1,21 @@
 import { API_BASE_URL } from '@/config';
-import type { Trip, TripInput, User } from '@/types';
+import type {
+  Trip,
+  TripInput,
+  User,
+  TripVersionsResponse,
+  TripVersionDetails,
+  TripFeedback,
+  TripInsights,
+  ActivityItem,
+  RouteResult,
+  RouteInput,
+  CurrencyRateSnapshot,
+  ExpenseInput,
+  TripExpense,
+  TripParticipant,
+  TripFinance,
+} from '@/types';
 
 export interface StreamProgressEvent {
   stage: number;
@@ -242,6 +258,169 @@ class ApiClient {
 
   async getSharedTrip(shareId: string): Promise<Trip> {
     return this.request(`/api/itinerary/shared/${shareId}`);
+  }
+
+  // Granular itinerary editing endpoints (Milestone 1)
+  async updateActivity(
+    id: string,
+    payload: { day: number; activityIndex: number; activity: ActivityItem }
+  ): Promise<Trip> {
+    return this.request(`/api/itinerary/${id}/activities`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async reorderActivities(
+    id: string,
+    payload: { day: number; order: number[] }
+  ): Promise<Trip> {
+    return this.request(`/api/itinerary/${id}/activities/reorder`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async moveTripDay(
+    id: string,
+    payload: { fromIndex: number; toIndex: number }
+  ): Promise<Trip> {
+    return this.request(`/api/itinerary/${id}/days/reorder`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  // Version history endpoints (Milestone 1)
+  async getTripVersions(id: string): Promise<TripVersionsResponse> {
+    return this.request(`/api/itinerary/${id}/versions`);
+  }
+
+  async getTripVersion(id: string, version: number): Promise<TripVersionDetails> {
+    return this.request(`/api/itinerary/${id}/versions/${version}`);
+  }
+
+  async restoreTripVersion(
+    id: string,
+    version: number,
+    note?: string
+  ): Promise<Trip> {
+    return this.request(`/api/itinerary/${id}/versions/${version}/restore`, {
+      method: 'POST',
+      body: JSON.stringify({ note }),
+    });
+  }
+
+  // Feedback & insights endpoints (Milestone 2: AI prompt improvements)
+  async submitFeedback(
+    id: string,
+    payload: { rating: 'up' | 'down'; comment?: string }
+  ): Promise<{ success: boolean; feedback: TripFeedback }> {
+    return this.request(`/api/itinerary/${id}/feedback`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getTripInsights(): Promise<TripInsights> {
+    return this.request('/api/itinerary/insights');
+  }
+
+  // Geo / distance endpoints (Milestone 4: Map & Geo)
+  async getRoute(
+    points: [number, number][],
+    mode: 'walk' | 'bike' | 'drive' = 'drive'
+  ): Promise<RouteResult> {
+    return this.request('/api/geo/route', {
+      method: 'POST',
+      body: JSON.stringify({ points, mode }),
+    });
+  }
+
+  // Expense ledger & travellers (Milestone 5: Budget & Financial)
+  async getTripExpenses(id: string): Promise<{
+    success: boolean;
+    expenses: TripExpense[];
+    participants: TripParticipant[];
+    finance: TripFinance;
+  }> {
+    return this.request(`/api/itinerary/${id}/expenses`);
+  }
+
+  async addExpense(id: string, payload: ExpenseInput): Promise<Trip> {
+    return this.request(`/api/itinerary/${id}/expenses`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async updateExpense(
+    id: string,
+    expenseId: string,
+    payload: Partial<ExpenseInput>
+  ): Promise<Trip> {
+    return this.request(`/api/itinerary/${id}/expenses/${expenseId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async deleteExpense(id: string, expenseId: string): Promise<Trip> {
+    return this.request(`/api/itinerary/${id}/expenses/${expenseId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async updateParticipants(
+    id: string,
+    participants: { name: string; isMe?: boolean }[]
+  ): Promise<Trip> {
+    return this.request(`/api/itinerary/${id}/participants`, {
+      method: 'PUT',
+      body: JSON.stringify({ participants }),
+    });
+  }
+
+  // Currency & rates (Milestone 5: Budget & Financial)
+  async updateFinance(
+    id: string,
+    payload: { baseCurrency?: string; refresh?: boolean }
+  ): Promise<Trip> {
+    return this.request(`/api/itinerary/${id}/finance`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getCurrencyRates(base: string, symbols?: string[]): Promise<CurrencyRateSnapshot> {
+    const query = new URLSearchParams({ base });
+    if (symbols?.length) query.append('symbols', symbols.join(','));
+    return this.request(`/api/geo/currency/rates?${query.toString()}`);
+  }
+
+  // User-drawn custom routes (Milestone 4: Map & Geo)
+  async addRoute(id: string, payload: RouteInput): Promise<Trip> {
+    return this.request(`/api/itinerary/${id}/routes`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async updateRoute(
+    id: string,
+    routeId: string,
+    payload: Partial<RouteInput>
+  ): Promise<Trip> {
+    return this.request(`/api/itinerary/${id}/routes/${routeId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async deleteRoute(id: string, routeId: string): Promise<Trip> {
+    return this.request(`/api/itinerary/${id}/routes/${routeId}`, {
+      method: 'DELETE',
+    });
   }
 }
 

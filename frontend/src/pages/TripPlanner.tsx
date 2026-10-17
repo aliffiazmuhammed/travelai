@@ -15,6 +15,7 @@ import { StepStyle } from "@/components/wizard/StepStyle";
 import { StepReview } from "@/components/wizard/StepReview";
 import { GenerationOverlay } from "@/components/wizard/GenerationOverlay";
 import { api } from "@/services/api";
+import type { TripLanguage, TravelPace } from "@/types/trip";
 
 const WIZARD_STEPS: WizardStep[] = [
   { id: 1, title: "Destination", shortTitle: "Where" },
@@ -57,6 +58,9 @@ const TripPlanner = () => {
     "Food",
     "Nature",
   ]);
+  const [language, setLanguage] = useState<TripLanguage>("en");
+  const [pace, setPace] = useState<TravelPace>("balanced");
+  const [dietary, setDietary] = useState<string[]>([]);
 
   // Loading & Submission State
   const [loading, setLoading] = useState<boolean>(false);
@@ -80,6 +84,9 @@ const TripPlanner = () => {
         if (typeof parsed.childrenCount === "number") setChildrenCount(parsed.childrenCount);
         if (typeof parsed.budgetPerPerson === "number") setBudgetPerPerson(parsed.budgetPerPerson);
         if (Array.isArray(parsed.selectedInterests)) setSelectedInterests(parsed.selectedInterests);
+        if (parsed.language) setLanguage(parsed.language);
+        if (parsed.pace) setPace(parsed.pace);
+        if (Array.isArray(parsed.dietary)) setDietary(parsed.dietary);
       }
     } catch (e) {
       console.warn("Could not load draft from localStorage", e);
@@ -98,6 +105,9 @@ const TripPlanner = () => {
         childrenCount,
         budgetPerPerson,
         selectedInterests,
+        language,
+        pace,
+        dietary,
       };
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(draft));
     } catch (e) {
@@ -112,6 +122,9 @@ const TripPlanner = () => {
     childrenCount,
     budgetPerPerson,
     selectedInterests,
+    language,
+    pace,
+    dietary,
   ]);
 
   // Validation Logic per step
@@ -187,6 +200,9 @@ const TripPlanner = () => {
       setChildrenCount(0);
       setBudgetPerPerson(20000);
       setSelectedInterests(["Culture", "Food", "Nature"]);
+      setLanguage("en");
+      setPace("balanced");
+      setDietary([]);
       setCurrentStep(1);
     }
   };
@@ -206,6 +222,12 @@ const TripPlanner = () => {
 
   const handleClearAllInterests = () => {
     setSelectedInterests([]);
+  };
+
+  const handleToggleDietary = (item: string) => {
+    setDietary((prev) =>
+      prev.includes(item) ? prev.filter((d) => d !== item) : [...prev, item]
+    );
   };
 
   const handleCancelOverlay = () => {
@@ -242,6 +264,11 @@ const TripPlanner = () => {
         budget: budgetPerPerson,
         interests: selectedInterests,
         groupType,
+        language,
+        preferences: {
+          pace,
+          ...(dietary.length ? { dietary } : {}),
+        },
       };
 
       await api.generateItineraryStream(payload, {
@@ -352,6 +379,12 @@ const TripPlanner = () => {
                     onToggleInterest={handleToggleInterest}
                     onSelectAll={handleSelectAllInterests}
                     onClearAll={handleClearAllInterests}
+                    language={language}
+                    onLanguageChange={setLanguage}
+                    pace={pace}
+                    onPaceChange={setPace}
+                    dietary={dietary}
+                    onToggleDietary={handleToggleDietary}
                   />
                 )}
 
@@ -365,6 +398,9 @@ const TripPlanner = () => {
                     childrenCount={childrenCount}
                     budgetPerPerson={budgetPerPerson}
                     interests={selectedInterests}
+                    language={language}
+                    pace={pace}
+                    dietary={dietary}
                     loading={loading}
                     error={error}
                     onEditStep={handleStepClick}

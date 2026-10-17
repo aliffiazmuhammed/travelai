@@ -1,14 +1,51 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from "react-leaflet";
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  Popup,
+  Polyline,
+  CircleMarker,
+  useMap,
+  useMapEvents,
+} from "react-leaflet";
 import L from "leaflet";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Navigation, Bed, Eye, Calendar, Sparkles } from "lucide-react";
-import type { ItineraryData } from "@/types/trip";
+import {
+  MapPin,
+  Navigation,
+  Bed,
+  Eye,
+  Calendar,
+  Sparkles,
+  Car,
+  Route as RouteIcon,
+  Pencil,
+  Trash2,
+  Undo2,
+  Check,
+  X,
+  Loader2,
+} from "lucide-react";
+import { toast } from "sonner";
+import { api } from "@/services/api";
+import { formatDistance, formatDuration, pathLengthKm, totalRoute } from "@/lib/geo";
+import { routeModeMeta } from "@/lib/routeStyle";
+import { RouteEditor } from "./RouteEditor";
+import type { CustomRoute, ItineraryData, RouteInput, Trip } from "@/types/trip";
 
 interface TripMapProps {
   destination: string;
   itinerary: ItineraryData["day_by_day_itinerary"];
+  /** Persisted trip id (required to save drawn routes). */
+  tripId?: string;
+  /** Saved custom routes for this trip. */
+  customRoutes?: CustomRoute[];
+  /** Whether the trip is persisted and the user may edit it. */
+  canEdit?: boolean;
+  /** Called with the updated trip after a route is saved or removed. */
+  onUpdated?: (trip: Trip) => void;
 }
 
 // Comprehensive coordinates database for Indian & world travel hubs
@@ -209,8 +246,53 @@ const MapViewUpdater: React.FC<{ center: [number, number]; zoom: number }> = ({
   return null;
 };
 
-export const TripMap: React.FC<TripMapProps> = ({ destination, itinerary }) => {
+// Captures map clicks while the user is drawing a custom route
+const DrawClickHandler: React.FC<{
+  active: boolean;
+  onAddPoint: (point: [number, number]) => void;
+}> = ({ active, onAddPoint }) => {
+  useMapEvents({
+    click(event) {
+      if (!active) return;
+      onAddPoint([event.latlng.lat, event.latlng.lng]);
+    },
+  });
+  return null;
+};
+
+// Small travel-mode glyph used in the saved-routes list
+const RouteModeIcon: React.FC<{ mode: CustomRoute["mode"]; className?: string }> = ({
+  mode,
+  className,
+}) => {
+  const { Icon } = routeModeMeta(mode);
+  return <Icon className={className} />;
+};
+
+export const TripMap: React.FC<TripMapProps> = ({
+  destination,
+  itinerary,
+  tripId,
+  customRoutes,
+  canEdit = false,
+  onUpdated,
+}) => {
   const [selectedDay, setSelectedDay] = useState<number | "all">("all");
+
+  // --- User-drawn custom routes (Milestone 4) ---
+  const [routes, setRoutes] = useState<CustomRoute[]>(customRoutes || []);
+  const [drawing, setDrawing] = useState(false);
+  const [draftPoints, setDraftPoints] = useState<[number, number][]>([]);
+  const [routeEditorOpen, setRouteEditorOpen] = useState(false);
+  const [editingRoute, setEditingRoute] = useState<CustomRoute | null>(null);
+  const [busyRouteId, setBusyRouteId] = useState<string | null>(null);
+
+  useEffect(() => setRoutes(customRoutes || []), [customRoutes]);
+
+  const draftDistanceKm = useMemo(
+    () => (draftPoints.length >= 2 ? pathLengthKm(draftPoints) : 0),
+    [draftPoints]
+  );
 
   // Determine initial coordinates from dictionary or itinerary scan
   const initialCoord = useMemo<[number, number]>(() => {
@@ -230,6 +312,11 @@ export const TripMap: React.FC<TripMapProps> = ({ destination, itinerary }) => {
 
   const [baseCoord, setBaseCoord] = useState<[number, number]>(initialCoord);
   const [detectedLocation, setDetectedLocation] = useState<string>("");
+  const [routeInfo, setRouteInfo] = useState<{
+    km: number;
+    minutes: number;
+    provider: string;
+  } | null>(null);
   const [isDark, setIsDark] = useState<boolean>(() => {
     if (typeof document !== "undefined") {
       return (
@@ -421,6 +508,96 @@ export const TripMap: React.FC<TripMapProps> = ({ destination, itinerary }) => {
       .map((p) => p.coords);
   }, [filteredPins, selectedDay]);
 
+  // Accurate day route (backend OSRM when configured) with an instant local fallback
+  useEffect(() => {
+    const activityPoints = filteredPins
+      .filter((p) => p.type === "activity")
+      .map((p) => p.coords as [number, number]);
+
+    if (selectedDay === "all" || activityPoints.length < 2) {
+      setRouteInfo(null);
+      return;
+    }
+
+    const local = totalRoute(activityPoints, "drive");
+    setRouteInfo({ km: local.km, minutes: local.minutes, provider: "estimate" });
+
+    let cancelled = false;
+    api
+      .getRoute(activityPoints, "drive")
+      .then((result) => {
+        if (!cancelled && result?.legs?.length) {
+          setRouteInfo({
+            km: result.totalKm,
+            minutes: result.totalMinutes,
+            provider: result.provider,
+          });
+        }
+      })
+      .catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [filteredPins, selectedDay]);
+
+  // --- Custom route actions ---
+  const handleStartDrawing = () => {
+    setEditingRoute(null);
+    setDraftPoints([]);
+    setDrawing(true);
+  };
+
+  const handleCancelDrawing = () => {
+    setDrawing(false);
+    setDraftPoints([]);
+  };
+
+  const handleUndoPoint = () => setDraftPoints((prev) => prev.slice(0, -1));
+
+  const handleFinishDrawing = () => {
+    if (draftPoints.length < 2) {
+      toast.error("Add at least two points before saving this route.");
+      return;
+    }
+    setEditingRoute(null);
+    setRouteEditorOpen(true);
+  };
+
+  const handleSaveRoute = async (payload: RouteInput) => {
+    if (!tripId) return;
+
+    if (editingRoute) {
+      const trip = await api.updateRoute(tripId, editingRoute._id, payload);
+      setRoutes(trip.customRoutes || []);
+      onUpdated?.(trip);
+      toast.success("Route updated");
+      return;
+    }
+
+    const trip = await api.addRoute(tripId, payload);
+    setRoutes(trip.customRoutes || []);
+    onUpdated?.(trip);
+    toast.success("Route saved");
+    setDrawing(false);
+    setDraftPoints([]);
+  };
+
+  const handleDeleteRoute = async (route: CustomRoute) => {
+    if (!tripId) return;
+    try {
+      setBusyRouteId(route._id);
+      const trip = await api.deleteRoute(tripId, route._id);
+      setRoutes(trip.customRoutes || []);
+      onUpdated?.(trip);
+      toast.success("Route removed");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not remove the route.");
+    } finally {
+      setBusyRouteId(null);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Map Filter & Controls Bar */}
@@ -442,6 +619,17 @@ export const TripMap: React.FC<TripMapProps> = ({ destination, itinerary }) => {
             <p className="text-xs text-muted-foreground">
               Explore day routes, stay locations, and scenic spots around your destination
             </p>
+            {routeInfo && (
+              <div className="flex items-center gap-1.5 mt-1 text-[11px] font-bold text-primary">
+                <Car className="w-3.5 h-3.5" />
+                <span>
+                  {formatDistance(routeInfo.km)} · ~{formatDuration(routeInfo.minutes)} drive
+                </span>
+                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                  ({routeInfo.provider})
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -471,8 +659,82 @@ export const TripMap: React.FC<TripMapProps> = ({ destination, itinerary }) => {
         </div>
       </div>
 
+      {/* Custom Route Drawing Controls (Milestone 4) */}
+      {canEdit && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-2xl bg-primary/5 border border-primary/20">
+          <div className="flex items-center gap-2 text-xs">
+            <RouteIcon className="w-4 h-4 text-primary shrink-0" />
+            {drawing ? (
+              <span className="font-semibold text-foreground">
+                Click the map to add points · {draftPoints.length} placed
+                {draftDistanceKm > 0 && (
+                  <span className="text-muted-foreground"> · {formatDistance(draftDistanceKm)}</span>
+                )}
+              </span>
+            ) : (
+              <span className="font-semibold text-foreground">
+                Draw your own routes — detours, treks or alternate drives
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {drawing ? (
+              <>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={handleUndoPoint}
+                  disabled={draftPoints.length === 0}
+                  className="rounded-xl text-xs h-8 px-2.5 font-semibold gap-1.5"
+                >
+                  <Undo2 className="w-3.5 h-3.5" />
+                  <span>Undo</span>
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="hero"
+                  onClick={handleFinishDrawing}
+                  disabled={draftPoints.length < 2}
+                  className="rounded-xl text-xs h-8 px-2.5 font-semibold gap-1.5"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Finish</span>
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleCancelDrawing}
+                  className="rounded-xl text-xs h-8 px-2.5 font-semibold gap-1.5"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  <span>Cancel</span>
+                </Button>
+              </>
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                variant="hero"
+                onClick={handleStartDrawing}
+                className="rounded-xl text-xs h-8 px-3 font-semibold gap-1.5"
+              >
+                <RouteIcon className="w-3.5 h-3.5" />
+                <span>Draw Route</span>
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Map Viewport Container */}
-      <div className="relative w-full h-[450px] sm:h-[520px] rounded-3xl overflow-hidden border border-border/70 shadow-card z-0">
+      <div
+        className={`relative w-full h-[450px] sm:h-[520px] rounded-3xl overflow-hidden border border-border/70 shadow-card z-0 ${
+          drawing ? "[&_.leaflet-container]:!cursor-crosshair" : ""
+        }`}
+      >
         <MapContainer
           center={baseCoord}
           zoom={12}
@@ -492,6 +754,45 @@ export const TripMap: React.FC<TripMapProps> = ({ destination, itinerary }) => {
           />
 
           <MapViewUpdater center={baseCoord} zoom={selectedDay === "all" ? 11 : 12} />
+
+          <DrawClickHandler
+            active={drawing}
+            onAddPoint={(point) => setDraftPoints((prev) => [...prev, point])}
+          />
+
+          {/* Saved user-drawn routes */}
+          {routes.map((route) => (
+            <Polyline
+              key={route._id}
+              positions={route.points}
+              pathOptions={{ color: route.color, weight: 4, opacity: 0.9 }}
+            />
+          ))}
+
+          {/* In-progress draft route */}
+          {draftPoints.length > 0 && (
+            <>
+              {draftPoints.length >= 2 && (
+                <Polyline
+                  positions={draftPoints}
+                  pathOptions={{ color: "#f97316", weight: 3, dashArray: "4, 6", opacity: 0.95 }}
+                />
+              )}
+              {draftPoints.map((point, index) => (
+                <CircleMarker
+                  key={`draft-${index}`}
+                  center={point}
+                  radius={index === 0 ? 7 : 5}
+                  pathOptions={{
+                    color: "#ffffff",
+                    weight: 2,
+                    fillColor: "#f97316",
+                    fillOpacity: 1,
+                  }}
+                />
+              ))}
+            </>
+          )}
 
           {/* Render Activity Connecting Route */}
           {routePolyline.length > 1 && (
@@ -554,8 +855,96 @@ export const TripMap: React.FC<TripMapProps> = ({ destination, itinerary }) => {
             <span className="w-2.5 h-2.5 rounded-full bg-yellow-400" />
             <span>Recommended Night Stays</span>
           </div>
+          {routes.length > 0 && (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <span className="w-4 h-0.5 rounded-full bg-sky-500" />
+              <span>Your Custom Routes</span>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Saved Custom Routes List */}
+      {routes.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-xs font-bold text-foreground">
+            <RouteIcon className="w-4 h-4 text-primary" />
+            <span>Your Routes ({routes.length})</span>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {routes.map((route) => (
+              <div
+                key={route._id}
+                className="flex items-center justify-between gap-3 p-3 rounded-2xl border border-border/60 bg-card/60"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span
+                    className="w-3 h-3 rounded-full shrink-0"
+                    style={{ backgroundColor: route.color }}
+                  />
+                  <RouteModeIcon mode={route.mode} className="text-muted-foreground shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-foreground truncate">{route.name}</p>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[11px] text-muted-foreground font-semibold">
+                        {formatDistance(route.distanceKm)}
+                      </span>
+                      {route.day != null && (
+                        <Badge variant="secondary" className="text-[10px] px-2 py-0">
+                          Day {route.day}
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                {canEdit && (
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      title="Edit route"
+                      className="h-7 w-7 text-muted-foreground hover:text-primary rounded-lg"
+                      onClick={() => {
+                        setEditingRoute(route);
+                        setRouteEditorOpen(true);
+                      }}
+                    >
+                      <Pencil className="w-3 h-3" />
+                    </Button>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      title="Delete route"
+                      disabled={busyRouteId === route._id}
+                      className="h-7 w-7 text-muted-foreground hover:text-destructive rounded-lg"
+                      onClick={() => handleDeleteRoute(route)}
+                    >
+                      {busyRouteId === route._id ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-3 h-3" />
+                      )}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {canEdit && (
+        <RouteEditor
+          open={routeEditorOpen}
+          onOpenChange={setRouteEditorOpen}
+          route={editingRoute}
+          draftPoints={editingRoute ? null : draftPoints}
+          days={itinerary.length}
+          onSave={handleSaveRoute}
+        />
+      )}
     </div>
   );
 };

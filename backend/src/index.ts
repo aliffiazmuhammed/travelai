@@ -10,6 +10,7 @@ import connectDB from './db.js';
 import { env } from './config/env.js';
 import authRoutes from './routes/auth.routes.js';
 import itineraryRoutes from './routes/itinerary.routes.js';
+import geoRoutes from './routes/geo.routes.js';
 import { errorHandler } from './middleware/error.middleware.js';
 
 const app = express();
@@ -133,6 +134,7 @@ app.get('/api/health', (_req, res) => {
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/itinerary', itineraryRoutes);
+app.use('/api/geo', geoRoutes);
 
 if (shouldServeStatic && frontendDist) {
   console.log(`📦 Serving static frontend files from: ${frontendDist}`);

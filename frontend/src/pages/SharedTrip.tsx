@@ -124,6 +124,7 @@ const SharedTrip: React.FC = () => {
             {/* Read-Only Itinerary View */}
             <ItineraryDisplay
               data={trip.tripDetails}
+              customRoutes={trip.customRoutes}
               onNewPlan={() => navigate("/plan")}
             />
           </div>

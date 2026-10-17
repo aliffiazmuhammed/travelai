@@ -5,6 +5,13 @@ export interface AuthenticatedRequest extends Request {
   userId?: string;
 }
 
+export interface TripPreferencesInput {
+  pace?: 'relaxed' | 'balanced' | 'packed';
+  dietary?: string[];
+  avoid?: string[];
+  accessibility?: string[];
+}
+
 export interface TripInput {
   destination: string;
   days: number;
@@ -13,6 +20,8 @@ export interface TripInput {
   enddate: string;
   interests: string[] | string;
   groupType: string;
+  language?: string;
+  preferences?: TripPreferencesInput;
 }
 
 export interface SignupInput {

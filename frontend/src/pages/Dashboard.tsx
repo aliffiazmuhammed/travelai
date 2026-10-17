@@ -7,7 +7,7 @@ import { Loader2 } from "lucide-react";
 import ItineraryDisplay from "@/components/ItineraryDisplay";
 import { MyTripsView } from "@/components/dashboard/MyTripsView";
 import { TripsGridSkeleton } from "@/components/dashboard/TripSkeletons";
-import type { Trip, ItineraryData } from "@/types/trip";
+import type { Trip, ItineraryData, TripFeedback } from "@/types/trip";
 
 const Dashboard: React.FC = () => {
   const location = useLocation();
@@ -120,9 +120,24 @@ const Dashboard: React.FC = () => {
     } catch (err: any) {
       console.error("Failed to save trip:", err);
       toast.error("Could not save changes. Please try again.");
+      throw err;
     } finally {
       setIsSaving(false);
     }
+  };
+
+  // Sync a server-updated trip (granular edit or version restore) into local state
+  const handleTripUpdated = (updated: Trip) => {
+    setSelectedTrip(updated);
+    setTrips((prev) => prev.map((t) => (t._id === updated._id ? updated : t)));
+  };
+
+  // Merge a submitted rating into local state (feedback endpoint returns just the rating)
+  const handleFeedbackSubmitted = (feedback: TripFeedback) => {
+    setSelectedTrip((prev) => (prev ? { ...prev, feedback } : prev));
+    setTrips((prev) =>
+      prev.map((t) => (t._id === selectedTrip?._id ? { ...t, feedback } : t))
+    );
   };
 
   return (
@@ -147,9 +162,19 @@ const Dashboard: React.FC = () => {
               data={selectedTrip.tripDetails}
               tripId={selectedTrip._id}
               status={selectedTrip.status || "planned"}
+              version={selectedTrip.version}
+              hasEdited={selectedTrip.hasEdited}
+              feedback={selectedTrip.feedback}
+              generationMeta={selectedTrip.generationMeta}
+              expenses={selectedTrip.expenses}
+              participants={selectedTrip.participants}
+              finance={selectedTrip.finance}
+              customRoutes={selectedTrip.customRoutes}
+              onFeedbackSubmitted={handleFeedbackSubmitted}
               onStatusChange={handleStatusChange}
               onSave={handleSaveTrip}
               isSaving={isSaving}
+              onTripUpdated={handleTripUpdated}
               onBackToList={() => setSelectedTrip(null)}
               onNewPlan={() => navigate("/plan")}
             />

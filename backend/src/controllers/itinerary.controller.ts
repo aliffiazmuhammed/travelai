@@ -1,9 +1,26 @@
 import { Request, Response } from 'express';
 import crypto from 'crypto';
 import { generateWithFallback, generateStreamWithFallback } from '../services/ai/index.js';
-import { buildPromptText } from '../services/ai/prompt.js';
+import {
+  PROMPT_VERSION,
+  buildPromptText,
+  computeInterestWeights,
+  adaptPromptForSeason,
+  assignVariant,
+  resolveLanguage,
+} from '../services/ai/prompt.js';
+import { scoreItinerary } from '../services/ai/quality.js';
+import { buildTripHistorySummary } from '../services/itinerary/context.js';
+import {
+  isValidPermutation,
+  applyOrder,
+  moveItem,
+  renumberDays,
+  updateActivityInDays,
+} from '../services/itinerary/editing.js';
 import Trip from '../models/Trip.js';
 import { catchAsync } from '../utils/catchAsync.js';
+import { sanitizeTrip } from '../utils/sanitizeTrip.js';
 import { AuthenticatedRequest } from '../types/index.js';
 import { AppError } from '../utils/AppError.js';
 
@@ -28,9 +45,125 @@ function parseItineraryJson(rawResponse: string): Record<string, any> {
   }
 }
 
+// Maximum number of historical version snapshots retained per trip
+const MAX_VERSIONS = 20;
+
+/**
+ * Pushes a snapshot of the trip's *current* state into its version history.
+ * Must be called BEFORE mutating tripDetails so the snapshot captures the
+ * pre-change state. Trims history to the most recent MAX_VERSIONS entries.
+ */
+function snapshotCurrent(trip: any, note?: string): void {
+  if (!Array.isArray(trip.versions)) {
+    trip.versions = [];
+  }
+  trip.versions.push({
+    version: trip.version ?? 1,
+    title: trip.title,
+    tripDetails: JSON.parse(JSON.stringify(trip.tripDetails || {})),
+    savedAt: new Date(),
+    note,
+  });
+  if (trip.versions.length > MAX_VERSIONS) {
+    trip.versions = trip.versions.slice(trip.versions.length - MAX_VERSIONS);
+  }
+}
+
+/** Extracts the editable day-by-day array from a trip, or throws a friendly error. */
+function getItineraryDays(trip: any): any[] {
+  const itinerary = trip?.tripDetails?.day_by_day_itinerary;
+  if (!Array.isArray(itinerary)) {
+    throw new AppError('This trip does not contain a day-by-day itinerary to edit.', 400);
+  }
+  return itinerary;
+}
+
+/** Finds the array index of a day by its (1-based) day number. */
+function findDayIndex(itinerary: any[], day: number): number {
+  const index = itinerary.findIndex((d) => Number(d?.day) === Number(day));
+  if (index === -1) {
+    throw new AppError(`Day ${day} was not found in this itinerary.`, 404);
+  }
+  return index;
+}
+
+interface GenerateBody {
+  destination: string;
+  days: number;
+  budget: number;
+  startdate: string;
+  enddate: string;
+  interests: string[] | string;
+  groupType: string;
+  language?: string;
+  preferences?: Record<string, any>;
+}
+
+/** Normalizes the `interests` field (array or comma-separated string) to a clean array. */
+function normalizeInterests(interests: string[] | string): string[] {
+  return (Array.isArray(interests) ? interests : String(interests || '').split(','))
+    .map((i) => String(i).trim())
+    .filter(Boolean);
+}
+
+/**
+ * Assembles the rich generation metadata persisted on every trip (Milestone 2).
+ * Captures the prompt version, A/B variant, language, season, interest weights,
+ * provider/cache status, quality score and an echo of the request so future
+ * generations can be personalized and analysed.
+ */
+function buildGenerationMeta(opts: {
+  body: GenerateBody;
+  variant: 'A' | 'B';
+  parsedItinerary: Record<string, any>;
+  historyUsed: boolean;
+  provider: string;
+  cached: boolean;
+}): Record<string, any> {
+  const { body, variant, parsedItinerary, historyUsed, provider, cached } = opts;
+  const interests = normalizeInterests(body.interests);
+  const season = adaptPromptForSeason(body.startdate, body.destination);
+  const language = resolveLanguage(body.language).code;
+  const quality = scoreItinerary(parsedItinerary, {
+    expectedDays: Number(body.days),
+    interests,
+  });
+
+  return {
+    promptVersion: PROMPT_VERSION,
+    variant,
+    language,
+    season: season.name,
+    interestWeights: computeInterestWeights(interests),
+    historyUsed,
+    provider,
+    cached,
+    qualityScore: quality.score,
+    qualityGrade: quality.grade,
+    qualityIssues: quality.issues.map((issue) => issue.code),
+    request: {
+      destination: body.destination,
+      days: Number(body.days),
+      budget: Number(body.budget),
+      startdate: body.startdate,
+      enddate: body.enddate,
+      interests,
+      groupType: body.groupType,
+      language,
+      preferences: body.preferences || {},
+    },
+    generatedAt: new Date(),
+  };
+}
+
 export const generateItinerary = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const { destination, days, budget, startdate, enddate, interests, groupType } = req.body;
+    const body = req.body as GenerateBody;
+    const { destination, days, budget, startdate, enddate, interests, groupType, language, preferences } =
+      body;
+
+    const variant = assignVariant(req.userId);
+    const history = await buildTripHistorySummary(req.userId);
 
     const promptText = buildPromptText({
       destination,
@@ -40,10 +173,23 @@ export const generateItinerary = catchAsync(
       enddate,
       interests,
       groupType,
+      language,
+      preferences,
+      history,
+      variant,
     });
 
-    const rawResponse = await generateWithFallback(promptText);
-    const parsedItinerary = parseItineraryJson(rawResponse);
+    const result = await generateWithFallback(promptText);
+    const parsedItinerary = parseItineraryJson(result.text);
+
+    const generationMeta = buildGenerationMeta({
+      body,
+      variant,
+      parsedItinerary,
+      historyUsed: Boolean(history),
+      provider: result.provider,
+      cached: result.cached,
+    });
 
     const trip = new Trip({
       userId: req.userId,
@@ -51,15 +197,19 @@ export const generateItinerary = catchAsync(
       status: 'planned',
       isDeleted: false,
       tripDetails: parsedItinerary,
+      promptVersion: PROMPT_VERSION,
+      generationMeta,
     });
     await trip.save();
 
-    res.status(200).json(trip);
+    res.status(200).json(sanitizeTrip(trip));
   }
 );
 
 export const generateItineraryStream = async (req: AuthenticatedRequest, res: Response) => {
-  const { destination, days, budget, startdate, enddate, interests, groupType } = req.body;
+  const body = req.body as GenerateBody;
+  const { destination, days, budget, startdate, enddate, interests, groupType, language, preferences } =
+    body;
 
   // Set SSE Headers
   res.setHeader('Content-Type', 'text/event-stream');
@@ -79,6 +229,9 @@ export const generateItineraryStream = async (req: AuthenticatedRequest, res: Re
       message: `Analyzing ${destination} weather, seasonal highlights & travel advisory...`,
     });
 
+    const variant = assignVariant(req.userId);
+    const history = await buildTripHistorySummary(req.userId);
+
     const promptText = buildPromptText({
       destination,
       days,
@@ -87,12 +240,16 @@ export const generateItineraryStream = async (req: AuthenticatedRequest, res: Re
       enddate,
       interests,
       groupType,
+      language,
+      preferences,
+      history,
+      variant,
     });
 
     let totalCharsReceived = 0;
     let currentStage = 1;
 
-    const fullResponse = await generateStreamWithFallback(promptText, (chunk) => {
+    const result = await generateStreamWithFallback(promptText, (chunk) => {
       totalCharsReceived += chunk.length;
 
       if (totalCharsReceived > 600 && currentStage < 2) {
@@ -129,7 +286,16 @@ export const generateItineraryStream = async (req: AuthenticatedRequest, res: Re
       message: 'Validating itinerary structure and formatting...',
     });
 
-    const parsedItinerary = parseItineraryJson(fullResponse);
+    const parsedItinerary = parseItineraryJson(result.text);
+
+    const generationMeta = buildGenerationMeta({
+      body,
+      variant,
+      parsedItinerary,
+      historyUsed: Boolean(history),
+      provider: result.provider,
+      cached: result.cached,
+    });
 
     const trip = new Trip({
       userId: req.userId,
@@ -137,6 +303,8 @@ export const generateItineraryStream = async (req: AuthenticatedRequest, res: Re
       status: 'planned',
       isDeleted: false,
       tripDetails: parsedItinerary,
+      promptVersion: PROMPT_VERSION,
+      generationMeta,
     });
     await trip.save();
 
@@ -203,7 +371,7 @@ export const getTripById = catchAsync(
       throw new AppError('Trip not found', 404);
     }
 
-    res.status(200).json(trip);
+    res.status(200).json(sanitizeTrip(trip));
   }
 );
 
@@ -216,19 +384,365 @@ export const updateTrip = catchAsync(
       _id: id,
       userId: req.userId,
       isDeleted: { $ne: true },
+    }).select('+versions');
+
+    if (!trip) {
+      throw new AppError('Trip not found', 404);
+    }
+
+    const detailsChanged =
+      tripDetails !== undefined &&
+      JSON.stringify(tripDetails) !== JSON.stringify(trip.tripDetails || {});
+
+    // Only snapshot when the actual itinerary content changed (metadata edits
+    // like title/status should not flood the version history).
+    if (detailsChanged) {
+      snapshotCurrent(trip, 'Edited itinerary details');
+      trip.version = (trip.version ?? 1) + 1;
+      trip.hasEdited = true;
+    }
+
+    if (title !== undefined) trip.title = title;
+    if (status !== undefined) trip.status = status;
+    if (tripDetails !== undefined) {
+      trip.tripDetails = tripDetails;
+      trip.markModified('tripDetails');
+    }
+
+    await trip.save();
+
+    res.status(200).json(sanitizeTrip(trip));
+  }
+);
+
+/**
+ * Updates a single activity inside a specific day of the itinerary.
+ * PUT /api/itinerary/:id/activities
+ */
+export const updateTripActivity = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { id } = req.params;
+    const { day, activityIndex, activity } = req.body;
+
+    const trip = await Trip.findOne({
+      _id: id,
+      userId: req.userId,
+      isDeleted: { $ne: true },
+    }).select('+versions');
+
+    if (!trip) {
+      throw new AppError('Trip not found', 404);
+    }
+
+    const itinerary = getItineraryDays(trip);
+
+    let nextDays: any[];
+    try {
+      nextDays = updateActivityInDays(itinerary, day, activityIndex, activity);
+    } catch (err) {
+      throw new AppError(
+        err instanceof Error ? err.message : 'Unable to update the activity.',
+        400
+      );
+    }
+
+    snapshotCurrent(trip, `Edited an activity on Day ${day}`);
+    trip.tripDetails.day_by_day_itinerary = nextDays;
+    trip.markModified('tripDetails');
+    trip.version = (trip.version ?? 1) + 1;
+    trip.hasEdited = true;
+    await trip.save();
+
+    res.status(200).json(sanitizeTrip(trip));
+  }
+);
+
+/**
+ * Reorders the activities within a single day.
+ * PUT /api/itinerary/:id/activities/reorder
+ * `order` must be a permutation of the existing activity indices.
+ */
+export const reorderActivities = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { id } = req.params;
+    const { day, order } = req.body;
+
+    const trip = await Trip.findOne({
+      _id: id,
+      userId: req.userId,
+      isDeleted: { $ne: true },
+    }).select('+versions');
+
+    if (!trip) {
+      throw new AppError('Trip not found', 404);
+    }
+
+    const itinerary = getItineraryDays(trip);
+    const dayIndex = findDayIndex(itinerary, day);
+    const activities = itinerary[dayIndex].activities;
+
+    if (!Array.isArray(activities)) {
+      throw new AppError('This day does not contain any activities to reorder.', 400);
+    }
+
+    const isPermutation = isValidPermutation(order, activities.length);
+
+    if (!isPermutation) {
+      throw new AppError('The requested activity order is invalid. Please refresh and try again.', 400);
+    }
+
+    snapshotCurrent(trip, `Reordered activities on Day ${day}`);
+    trip.tripDetails.day_by_day_itinerary[dayIndex].activities = applyOrder(
+      activities,
+      order
+    );
+    trip.markModified('tripDetails');
+    trip.version = (trip.version ?? 1) + 1;
+    trip.hasEdited = true;
+    await trip.save();
+
+    res.status(200).json(sanitizeTrip(trip));
+  }
+);
+
+/**
+ * Moves an entire day to a new position and renumbers the days sequentially.
+ * PUT /api/itinerary/:id/days/reorder
+ */
+export const moveTripDay = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { id } = req.params;
+    const { fromIndex, toIndex } = req.body;
+
+    const trip = await Trip.findOne({
+      _id: id,
+      userId: req.userId,
+      isDeleted: { $ne: true },
+    }).select('+versions');
+
+    if (!trip) {
+      throw new AppError('Trip not found', 404);
+    }
+
+    const itinerary = getItineraryDays(trip);
+    if (itinerary.length < 2) {
+      throw new AppError('There is only one day in this itinerary, so it cannot be reordered.', 400);
+    }
+    if (fromIndex >= itinerary.length || toIndex >= itinerary.length) {
+      throw new AppError('The requested day position is out of range.', 400);
+    }
+    if (fromIndex === toIndex) {
+      return res.status(200).json(sanitizeTrip(trip));
+    }
+
+    snapshotCurrent(trip, 'Reordered trip days');
+    trip.tripDetails.day_by_day_itinerary = renumberDays(
+      moveItem(itinerary, fromIndex, toIndex)
+    );
+    trip.markModified('tripDetails');
+    trip.version = (trip.version ?? 1) + 1;
+    trip.hasEdited = true;
+    await trip.save();
+
+    res.status(200).json(sanitizeTrip(trip));
+  }
+);
+
+/**
+ * Lists lightweight summaries of a trip's version history (newest first).
+ * GET /api/itinerary/:id/versions
+ */
+export const getTripVersions = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { id } = req.params;
+
+    const trip = await Trip.findOne({
+      _id: id,
+      userId: req.userId,
+      isDeleted: { $ne: true },
+    }).select('+versions');
+
+    if (!trip) {
+      throw new AppError('Trip not found', 404);
+    }
+
+    const versions = (trip.versions || [])
+      .map((v) => ({
+        version: v.version,
+        title: v.title,
+        note: v.note,
+        savedAt: v.savedAt,
+        days: Array.isArray(v.tripDetails?.day_by_day_itinerary)
+          ? v.tripDetails.day_by_day_itinerary.length
+          : 0,
+        budget: v.tripDetails?.budget_breakdown?.total ?? null,
+      }))
+      .sort((a, b) => b.version - a.version);
+
+    res.status(200).json({
+      success: true,
+      currentVersion: trip.version ?? 1,
+      hasEdited: Boolean(trip.hasEdited),
+      versions,
+    });
+  }
+);
+
+/**
+ * Returns the full details of one historical version (for previewing before restore).
+ * GET /api/itinerary/:id/versions/:version
+ */
+export const getTripVersionDetails = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { id, version } = req.params;
+
+    const trip = await Trip.findOne({
+      _id: id,
+      userId: req.userId,
+      isDeleted: { $ne: true },
+    }).select('+versions');
+
+    if (!trip) {
+      throw new AppError('Trip not found', 404);
+    }
+
+    const target = (trip.versions || []).find((v) => v.version === Number(version));
+    if (!target) {
+      throw new AppError('That version could not be found.', 404);
+    }
+
+    res.status(200).json({
+      success: true,
+      version: target.version,
+      title: target.title,
+      note: target.note,
+      savedAt: target.savedAt,
+      tripDetails: target.tripDetails,
+    });
+  }
+);
+
+/**
+ * Restores the trip to a previous version. The current state is first snapshotted
+ * so a restore can itself be undone.
+ * POST /api/itinerary/:id/versions/:version/restore
+ */
+export const restoreTripVersion = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { id, version } = req.params;
+    const { note } = req.body || {};
+
+    const trip = await Trip.findOne({
+      _id: id,
+      userId: req.userId,
+      isDeleted: { $ne: true },
+    }).select('+versions');
+
+    if (!trip) {
+      throw new AppError('Trip not found', 404);
+    }
+
+    const target = (trip.versions || []).find((v) => v.version === Number(version));
+    if (!target) {
+      throw new AppError('That version could not be found.', 404);
+    }
+
+    snapshotCurrent(trip, note || `Auto-backup before restoring version ${version}`);
+    trip.tripDetails = JSON.parse(JSON.stringify(target.tripDetails));
+    if (target.title) trip.title = target.title;
+    trip.markModified('tripDetails');
+    trip.version = (trip.version ?? 1) + 1;
+    trip.hasEdited = true;
+    await trip.save();
+
+    res.status(200).json(sanitizeTrip(trip));
+  }
+);
+
+/**
+ * Records a thumbs up/down rating for a generated itinerary. Feedback both
+ * drives future personalization (see context.ts) and powers A/B insights.
+ * POST /api/itinerary/:id/feedback
+ */
+export const submitTripFeedback = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { id } = req.params;
+    const { rating, comment } = req.body;
+
+    const trip = await Trip.findOne({
+      _id: id,
+      userId: req.userId,
+      isDeleted: { $ne: true },
     });
 
     if (!trip) {
       throw new AppError('Trip not found', 404);
     }
 
-    if (title !== undefined) trip.title = title;
-    if (status !== undefined) trip.status = status;
-    if (tripDetails !== undefined) trip.tripDetails = tripDetails;
-
+    trip.feedback = {
+      rating,
+      comment,
+      submittedAt: new Date(),
+    };
     await trip.save();
 
-    res.status(200).json(trip);
+    res.status(200).json({ success: true, feedback: trip.feedback });
+  }
+);
+
+/**
+ * Aggregated generation/feedback analytics for the signed-in user.
+ * GET /api/itinerary/insights
+ */
+export const getTripInsights = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const trips = await Trip.find({ userId: req.userId, isDeleted: { $ne: true } })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .select('title generationMeta feedback createdAt')
+      .lean<Record<string, any>[]>();
+
+    let up = 0;
+    let down = 0;
+    let qualitySum = 0;
+    let qualityCount = 0;
+    const variantStats: Record<string, { up: number; down: number; count: number }> = {};
+    const destinations: Record<string, number> = {};
+
+    for (const trip of trips || []) {
+      const meta = trip.generationMeta || {};
+      const variant = meta.variant || 'A';
+      variantStats[variant] = variantStats[variant] || { up: 0, down: 0, count: 0 };
+      variantStats[variant].count += 1;
+
+      if (Number.isFinite(meta.qualityScore)) {
+        qualitySum += Number(meta.qualityScore);
+        qualityCount += 1;
+      }
+
+      const destination = meta.request?.destination || trip.title;
+      if (destination) destinations[destination] = (destinations[destination] || 0) + 1;
+
+      if (trip.feedback?.rating === 'up') {
+        up += 1;
+        variantStats[variant].up += 1;
+      } else if (trip.feedback?.rating === 'down') {
+        down += 1;
+        variantStats[variant].down += 1;
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      totalTrips: (trips || []).length,
+      feedback: { up, down, total: up + down },
+      avgQualityScore: qualityCount ? Math.round(qualitySum / qualityCount) : null,
+      variantStats,
+      topDestinations: Object.entries(destinations)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([name, count]) => ({ name, count })),
+    });
   }
 );
 
@@ -278,6 +792,15 @@ export const duplicateTrip = catchAsync(
       status: 'draft',
       isDeleted: false,
       tripDetails: clonedDetails,
+      // Drawn routes are part of the plan, so they carry over to the copy
+      customRoutes: (trip.customRoutes || []).map((route) => ({
+        name: route.name,
+        day: route.day,
+        color: route.color,
+        mode: route.mode,
+        points: route.points,
+        distanceKm: route.distanceKm,
+      })),
     });
 
     await newTrip.save();

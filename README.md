@@ -56,19 +56,46 @@ Traditional trip planning involves juggling dozen of browser tabs: reading confl
 - **Group Presets & Custom Pacing**: Solo, Couple, Family, and Friends modes with independent adult and child count adjusters.
 - **Dynamic Budget Allocator**: Per-person and total group budget sliders with automatic category allocation.
 - **Vibe & Style Filters**: Adventure, Culture, Relaxation, Culinary, Nature, Photography, Nightlife, and Shopping.
+- **Pace, Diet & Language**: Set a travel pace, dietary preferences and the itinerary's output language right in the wizard.
 
 ### 🗺️ Interactive OpenStreetMap & Leaflet Visualization
 - **80+ Curated Travel Hub Coordinates**: Pre-mapped coordinates covering hill stations, beaches, and cultural centers across India.
 - **Dynamic Nominatim Geocoding**: Automatically geocodes custom or unlisted destinations if not found in the local coordinate cache.
 - **Day-by-Day Route Polylines**: Connects scheduled daily activities with color-coded travel routes.
+- **Distance & Travel-Time Insights**: Per-leg distances and estimated drive times are shown between consecutive activities, with a per-day total on both the timeline and the map — computed instantly on the client and refined by the backend routing endpoint when available.
+- **User-Drawn Custom Routes**: Click-to-draw your own paths on the map (detours, treks, alternate drives), name them, tag a trip day, pick a colour and travel mode, and see the length instantly. Saved per trip with edit/delete, and recomputed server-side on save.
 - **Interactive Pins**: Custom numbered activity markers and distinctive hotel icons with detailed popups.
 
 ### 🏨 Smart Multi-Day Stay Deduplication
 - Automatically detects and merges multi-night reservations at the same property across consecutive days into consolidated cards (e.g. `Stay Duration: Days 1 – 4 (4 Nights)`), eliminating repetitive cards.
 
+### ✏️ Inline Trip Editing & Version History
+- **Activity Editor Modal**: Edit any activity's title, time slot, approximate cost, location, description, and GPS coordinates.
+- **Drag-and-Drop Reordering**: Reorder activities within a day (drag handle or accessible up/down controls) and move entire days with automatic day renumbering.
+- **Background Autosave**: Local edits autosave automatically, while fine-grained activity edits and reorders persist instantly via dedicated endpoints.
+- **Version Snapshots & Restore**: Every itinerary save creates a restorable snapshot (last 20 per trip kept). Roll back to any version from the **History** tab — the pre-restore state is auto-backed up, so you can move forward again.
+
+### 🌏 Personalized AI Prompt Engine
+- **Multi-Language Output**: Generate the full itinerary in English, Hindi, Tamil, Bengali, Telugu, Marathi, Kannada, Malayalam, or Gujarati (JSON keys stay stable so the UI always renders correctly).
+- **Interest Weighting**: Selected travel styles are converted into activity weights, so focused selections concentrate the itinerary around what you actually love.
+- **Seasonal Adaptation**: Weather advisories, packing hints and activity picks automatically adapt to the travel month (Winter, Summer/Pre-Monsoon, Monsoon, Post-Monsoon).
+- **Traveller Preferences**: Choose a travel pace (relaxed / balanced / action-packed) and dietary preferences that flow directly into every food and activity recommendation.
+- **Returning-Traveller Personalization**: Past trips, preferred budgets, group types and positively-rated highlights are summarized into the prompt so repeat plans keep improving.
+- **Quality Scoring**: Every generated itinerary is heuristically scored (completeness, consistency, richness, map accuracy) and the score is shown to the user as an "AI confidence" hint.
+- **Prompt Caching & A/B Variants**: Identical prompts are served from a TTL cache to cut latency and cost, and prompts are deterministically A/B split per user for ongoing experimentation.
+
+### 👍 Feedback Loop & Insights
+- **Thumbs Up/Down Rating**: Rate any generated itinerary; ratings feed straight back into future personalization.
+- **Analytics Endpoint**: Aggregated quality scores, feedback counts, variant performance and top destinations are exposed via `/api/itinerary/insights`.
+
 ### 📊 Financial & Budget Analytics (Recharts)
-- **Interactive Donut Breakdown**: Visualizes expenses across Accommodation, Food & Drinks, Activities, Local Transit, and Buffer.
+- **Interactive Donut Breakdown**: Visualizes planned expenses across Accommodation, Food & Drinks, Activities, Local Transit, and Buffer.
 - **Daily Spending Rhythm**: Projected daily cashflow bar charts.
+- **Real Expense Tracking**: Log actual spend during the trip (description, category, amount, date, day) into a per-trip ledger.
+- **Planned vs Actual**: A grouped bar chart plus planned / spent / remaining / variance cards compare your logged expenses against the AI's planned budget per category.
+- **Group Travellers**: Add companions so each expense can record who paid and be split equally (foundation for settlement).
+- **Multi-Currency Logging & Conversion**: Log expenses in any of 30 ECB-quoted currencies; rates come from Frankfurter (12-hour cache), are snapshotted onto the trip, and every amount is stored converted into the trip's base currency. Switch the base currency at any time and the whole ledger re-converts.
+- **Bill Splitting & Settle Up**: Choose not-split, equal, or custom per-person shares, then see each traveller's paid/share/net balance plus the fewest transfers needed to settle up.
 - **Emergency Reserve & Payment Guide**: Dedicated ~10% contingency calculation with regional UPI vs Cash acceptance guidance.
 
 ### 📤 Seamless Sharing, Export & Print
@@ -99,10 +126,14 @@ flowchart TD
     end
 
     subgraph Backend ["Backend API (Express 5 + TypeScript)"]
-        Router["Express Router (/api/auth, /api/itinerary)"]
+        Router["Express Router (/api/auth, /api/itinerary, /api/geo)"]
         Security["Helmet + Rate Limiting + CORS"]
         Zod["Zod Input Validation"]
         AIService["AI Orchestrator with Fallback"]
+        Cache["TTL Generation Cache"]
+        Quality["Quality Scorer"]
+        Geo["Geo Service (distance / routing)"]
+        Finance["Finance Service (FX rates / settlement)"]
         Gemini["Primary: Gemini 2.5 Flash"]
         Groq["Fallback: Groq SDK"]
         Mongo["MongoDB / Mongoose"]
@@ -119,9 +150,15 @@ flowchart TD
     AuthContext <-->|REST & SSE Streaming| Router
     Router --> Security --> Zod
     Zod --> AIService
+    Router --> Geo
+    Router --> Finance
+    Geo -.->|Optional OSRM| Router
+    Finance -.->|Frankfurter FX (12h cache)| Router
     AIService -->|1st Attempt| Gemini
     AIService -.->|On 429 / Error| Groq
-    Router <-->|Trips & Users| Mongo
+    AIService <-->|Cache hit / store| Cache
+    AIService -->|Score generated plan| Quality
+    Router <-->|Trips, users, expenses, routes & FX cache| Mongo
 ```
 
 ---
@@ -146,27 +183,53 @@ travelai/
 │       │   └── env.ts         # Zod-validated environment config
 │       ├── controllers/
 │       │   ├── auth.controller.ts       # Signup, Signin, Logout, Me
-│       │   └── itinerary.controller.ts  # Generation, CRUD, Sharing, Streaming
+│       │   ├── itinerary.controller.ts  # Generation, CRUD, Sharing, Streaming
+│       │   ├── expense.controller.ts    # Expense ledger, travellers, split derivation
+│       │   └── geo.controller.ts        # Distance / travel-time routing
 │       ├── middleware/
 │       │   ├── auth.middleware.ts       # JWT cookie authorization
 │       │   ├── error.middleware.ts      # Global centralized error handler
 │       │   ├── rateLimiter.middleware.ts# Rate limiting (auth & AI generation)
 │       │   └── validate.middleware.ts   # Zod schema request validator
 │       ├── models/
-│       │   ├── Trip.ts        # Itinerary schema with sharing tokens
+│       │   ├── Trip.ts        # Itinerary schema with sharing tokens, versions & expenses
 │       │   └── User.ts        # User credentials schema
 │       ├── routes/
 │       │   ├── auth.routes.ts
-│       │   └── itinerary.routes.ts
+│       │   ├── itinerary.routes.ts
+│       │   └── geo.routes.ts
 │       ├── schemas/           # Zod validation schemas
 │       ├── services/
 │       │   ├── auth.service.ts
+│       │   ├── itinerary/
+│       │   │   ├── editing.ts           # Pure day/activity reorder & edit helpers
+│       │   │   ├── editing.test.ts      # Unit tests (node:test) for editing helpers
+│       │   │   └── context.ts           # Trip-history summarizer for personalization
+│       │   ├── geo/
+│       │   │   ├── distance.ts          # Pure haversine / travel-time helpers
+│       │   │   ├── distance.test.ts     # Geo math unit tests
+│       │   │   ├── route.ts             # Route provider (haversine + optional OSRM)
+│       │   │   ├── route.test.ts        # Route assembly unit tests
+│       │   │   ├── customRoute.ts       # Drawn-route point validation & distance
+│       │   │   └── customRoute.test.ts  # Drawn-route unit tests
+│       │   ├── finance/
+│       │   │   ├── expenses.ts          # Amount conversion, equal splits, planned vs actual
+│       │   │   ├── expenses.test.ts     # Budget maths unit tests
+│       │   │   ├── currency.ts          # FX rates (Frankfurter) + conversion helpers
+│       │   │   ├── currency.test.ts     # Conversion & cache unit tests
+│       │   │   ├── settlement.ts        # Balances + minimal-transfer settlement
+│       │   │   └── settlement.test.ts   # Bill-splitting unit tests
 │       │   └── ai/
 │       │       ├── ai.interface.ts      # AIService abstraction
 │       │       ├── gemini.service.ts    # Google Gemini 2.5 Flash implementation
 │       │       ├── groq.service.ts      # Groq high-speed fallback implementation
-│       │       ├── prompt.ts            # Detailed travel intelligence prompt
-│       │       └── index.ts             # Orchestrator with fallback
+│       │       ├── prompt.ts            # Multi-language, weighted & seasonal prompt builder
+│       │       ├── prompt.test.ts       # Prompt builder unit tests
+│       │       ├── quality.ts           # Heuristic itinerary quality scorer
+│       │       ├── quality.test.ts      # Quality scorer unit tests
+│       │       ├── cache.ts             # TTL cache for identical generations
+│       │       ├── cache.test.ts        # Cache unit tests
+│       │       └── index.ts             # Orchestrator with fallback + caching
 │       └── types/             # Shared backend TypeScript types
 │
 └── frontend/                  # React 18 + Vite + TypeScript Client
@@ -185,8 +248,14 @@ travelai/
         │   ├── ItineraryDisplay.tsx # Multi-tab coordinator
         │   ├── dashboard/
         │   │   ├── TripHeader.tsx       # Visual cover, quick stats & export triggers
-        │   │   ├── DayTimeline.tsx      # Vertical timeline with editable activities
-        │   │   ├── TripMap.tsx          # Leaflet map with 80+ destinations & routes
+        │   │   ├── DayTimeline.tsx      # Vertical timeline with editable, reorderable activities & leg distances
+        │   │   ├── ActivityEditor.tsx   # Modal to edit an activity's full details
+        │   │   ├── TripVersions.tsx     # Version history list with one-click restore
+        │   │   ├── TripFeedback.tsx     # Thumbs up/down rating & AI confidence hint
+        │   │   ├── ExpenseTracker.tsx   # Ledger, planned-vs-actual, currency settings, settle-up
+        │   │   ├── ExpenseEditor.tsx    # Modal to log / edit an expense (currency + custom splits)
+        │   │   ├── RouteEditor.tsx      # Modal to name / colour / tag a drawn route
+        │   │   ├── TripMap.tsx          # Leaflet map with 80+ destinations, drawn routes & distances
         │   │   ├── StayAndCuisine.tsx   # Consolidated stay cards & dining hotspots
         │   │   ├── BudgetVisualizer.tsx # Donut and bar charts + UPI advice
         │   │   ├── TravelGuideSafety.tsx# Climate, packing checklist & etiquette
@@ -210,6 +279,12 @@ travelai/
         │   └── NotFound.tsx
         ├── services/
         │   └── api.ts         # Type-safe API client with SSE stream reader
+        ├── lib/
+        │   ├── geo.ts         # Client-side haversine / travel-time helpers
+        │   ├── routeStyle.ts  # Colours & travel-mode metadata for drawn routes
+        │   ├── currency.ts    # Supported currencies, FX conversion & money formatting
+        │   ├── settlement.ts  # Mirror of the bill-splitting / settle-up maths
+        │   └── budget.ts      # Expense categories & planned-vs-actual helpers
         └── types/
             └── trip.ts        # Comprehensive itinerary data contract
 ```
@@ -265,6 +340,18 @@ GROQ_API_KEY=gsk_...your_groq_api_key_here
 
 # Frontend URL (for CORS allowance)
 FRONTEND_URL=http://localhost:8080
+
+# AI Generation Cache (optional)
+AI_CACHE_TTL_MS=21600000   # 6 hours
+AI_CACHE_MAX=200
+
+# Geo Routing (optional) — `haversine` (default) or `osrm`
+GEO_ROUTING_PROVIDER=haversine
+OSRM_BASE_URL=https://router.project-osrm.org
+
+# Currency Rates (optional) — Frankfurter by default (no API key required)
+CURRENCY_RATES_PROVIDER=frankfurter
+CURRENCY_CACHE_TTL_MS=43200000   # 12 hours
 ```
 
 > **Note**: Both the root and subfolder `.gitignore` files strictly ignore `.env` files. Secrets are never tracked or committed to version control.
@@ -299,6 +386,17 @@ npm install
 npm run dev
 ```
 
+### Running Tests
+
+Backend unit tests for the itinerary editing helpers, the prompt builder, the quality scorer and the generation cache run with Node's built-in test runner via `tsx`:
+
+```bash
+# From the project root
+npm test
+```
+
+> The test suite covers: activity/day reorder & edit helpers, multi-language and personalized prompt construction, seasonal adaptation, interest weighting, itinerary quality scoring, and the TTL cache.
+
 ---
 
 ## 📡 API Reference
@@ -323,6 +421,30 @@ npm run dev
 | `POST` | `/api/itinerary/:id/duplicate`| Clone trip into a new editable draft | Yes |
 | `POST` | `/api/itinerary/:id/share` | Generate public read-only share token | Yes |
 | `GET` | `/api/itinerary/shared/:shareId`| Fetch public read-only trip (unauthenticated) | No |
+| `PUT` | `/api/itinerary/:id/activities` | Update a single activity within a day | Yes |
+| `PUT` | `/api/itinerary/:id/activities/reorder` | Reorder activities within a day | Yes |
+| `PUT` | `/api/itinerary/:id/days/reorder` | Move a whole day and renumber the rest | Yes |
+| `GET` | `/api/itinerary/:id/versions` | List version history (lightweight summaries) | Yes |
+| `GET` | `/api/itinerary/:id/versions/:version` | Fetch one version's full itinerary details | Yes |
+| `POST` | `/api/itinerary/:id/versions/:version/restore` | Restore the trip to a previous version | Yes |
+| `POST` | `/api/itinerary/:id/feedback` | Submit a thumbs up/down rating for a trip | Yes |
+| `GET` | `/api/itinerary/insights` | Aggregated quality, feedback & variant analytics | Yes |
+| `GET` | `/api/itinerary/:id/expenses` | List the trip's expense ledger, travellers & finance settings | Yes |
+| `POST` | `/api/itinerary/:id/expenses` | Log a new expense (base-currency amount derived server-side) | Yes |
+| `PUT` | `/api/itinerary/:id/expenses/:expenseId` | Update an existing expense | Yes |
+| `DELETE`| `/api/itinerary/:id/expenses/:expenseId` | Remove an expense | Yes |
+| `PUT` | `/api/itinerary/:id/participants` | Replace the traveller list (re-derives equal splits) | Yes |
+| `PUT` | `/api/itinerary/:id/finance` | Change the base currency and/or refresh the trip's FX rate snapshot | Yes |
+| `POST` | `/api/itinerary/:id/routes` | Save a user-drawn route (distance recomputed server-side) | Yes |
+| `PUT` | `/api/itinerary/:id/routes/:routeId` | Update a saved route (name, day, colour, mode, points) | Yes |
+| `DELETE`| `/api/itinerary/:id/routes/:routeId` | Delete a saved route | Yes |
+
+### Geo Endpoints (`/api/geo`)
+
+| Method | Endpoint | Description | Auth Required |
+|---|---|---|---|
+| `POST` | `/api/geo/route` | Compute per-leg distance & travel time for 2–50 coordinates (haversine or OSRM) | Yes |
+| `GET` | `/api/geo/currency/rates?base=INR&symbols=USD,EUR` | Base-per-unit FX rates (12-hour cache) for currency conversion | Yes |
 
 ---
 
