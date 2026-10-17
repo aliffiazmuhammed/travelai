@@ -55,21 +55,21 @@ const Navbar = () => {
             className="flex items-center gap-2.5 group select-none min-h-[44px]"
             aria-label="TravelAI Home"
           >
-            <div className="bg-gradient-sky p-2 rounded-xl shadow-soft group-hover:shadow-card transition-all group-hover:scale-105 duration-300">
-              <Plane className="h-5 w-5 text-white" />
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-sky-500 to-primary text-white flex items-center justify-center shadow-md shadow-sky-500/25 group-hover:scale-105 transition-all">
+              <Plane className="h-5 w-5 fill-white/20 stroke-[2.2]" />
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1.5">
               <span className="text-xl font-black bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
                 TravelAI
               </span>
-              <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+              <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/25">
                 AI 2.5
               </span>
             </div>
           </Link>
 
           {/* Desktop Navigation Links */}
-          <div className="hidden md:flex items-center gap-1.5 p-1 bg-muted/50 rounded-2xl border border-border/50">
+          <div className="hidden md:flex items-center gap-1.5 p-1 bg-muted/60 rounded-2xl border border-border/70">
             {navItems.map((item) => {
               const isActive =
                 item.path === "/"
@@ -83,8 +83,8 @@ const Navbar = () => {
                   className={cn(
                     "px-4 py-2 text-xs font-bold rounded-xl transition-all min-h-[36px] flex items-center",
                     isActive
-                      ? "bg-card text-primary shadow-xs"
-                      : "text-muted-foreground hover:text-foreground hover:bg-card/50"
+                      ? "bg-card text-primary shadow-xs border border-border/40"
+                      : "text-foreground/75 hover:text-foreground hover:bg-card/60"
                   )}
                 >
                   {item.label}

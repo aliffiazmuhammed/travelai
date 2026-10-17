@@ -182,11 +182,16 @@ export const BudgetVisualizer: React.FC<BudgetVisualizerProps> = ({
                       "Estimated Cost",
                     ]}
                     contentStyle={{
-                      backgroundColor: "rgba(255, 255, 255, 0.95)",
+                      backgroundColor: "hsl(var(--card))",
+                      color: "hsl(var(--card-foreground))",
                       borderRadius: "1rem",
-                      border: "1px solid #e2e8f0",
+                      border: "1px solid hsl(var(--border))",
+                      boxShadow: "0 10px 30px -5px rgba(0, 0, 0, 0.25)",
                       fontSize: "12px",
                       fontWeight: 600,
+                    }}
+                    itemStyle={{
+                      color: "hsl(var(--card-foreground))",
                     }}
                   />
                   <Legend
@@ -220,20 +225,27 @@ export const BudgetVisualizer: React.FC<BudgetVisualizerProps> = ({
             <div className="h-64 sm:h-72 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={barData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-                  <XAxis dataKey="day" tick={{ fontSize: 11 }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
+                  <XAxis dataKey="day" tick={{ fontSize: 11, fill: "currentColor" }} stroke="hsl(var(--border))" className="text-muted-foreground" />
                   <YAxis
-                    tick={{ fontSize: 10 }}
+                    tick={{ fontSize: 10, fill: "currentColor" }}
+                    stroke="hsl(var(--border))"
+                    className="text-muted-foreground"
                     tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`}
                   />
                   <Tooltip
                     formatter={(val: number) => [`₹${val.toLocaleString("en-IN")}`, "Projected Spend"]}
                     contentStyle={{
-                      backgroundColor: "rgba(255, 255, 255, 0.95)",
+                      backgroundColor: "hsl(var(--card))",
+                      color: "hsl(var(--card-foreground))",
                       borderRadius: "1rem",
-                      border: "1px solid #e2e8f0",
+                      border: "1px solid hsl(var(--border))",
+                      boxShadow: "0 10px 30px -5px rgba(0, 0, 0, 0.25)",
                       fontSize: "12px",
                       fontWeight: 600,
+                    }}
+                    itemStyle={{
+                      color: "hsl(var(--card-foreground))",
                     }}
                   />
                   <Bar dataKey="cost" fill="#38bdf8" radius={[8, 8, 0, 0]} />

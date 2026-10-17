@@ -135,15 +135,16 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
       </div>
 
       {/* Vertical Timeline Feed */}
-      <div className="relative pl-6 sm:pl-8 space-y-12 before:absolute before:left-3 sm:before:left-4 before:top-4 before:bottom-4 before:w-0.5 before:bg-gradient-to-b before:from-primary before:via-accent before:to-muted">
+      <div className="relative pl-12 sm:pl-16 space-y-12 before:absolute before:left-4 sm:before:left-5 before:top-4 before:bottom-4 before:w-0.5 before:bg-gradient-to-b before:from-primary before:via-accent before:to-muted">
         {daysToShow.map((dayData) => {
           const actualDayIndex = itinerary.findIndex((d) => d.day === dayData.day);
+          const cleanTitle = dayData.title.replace(/^day\s*\d+\s*[:\-–]\s*/i, "");
 
           return (
             <div key={dayData.day} className="relative space-y-6">
-              {/* Day Milestone Marker */}
-              <div className="absolute -left-6 sm:-left-8 top-0 flex items-center justify-center">
-                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-black text-xs sm:text-sm shadow-md ring-4 ring-background">
+              {/* Day Milestone Marker (Centered on vertical timeline line with safe spacing) */}
+              <div className="absolute -left-12 sm:-left-16 top-0 w-8 sm:w-10 flex items-center justify-center">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-tr from-sky-500 to-primary text-white flex items-center justify-center font-black text-xs sm:text-sm shadow-md ring-4 ring-background">
                   {dayData.day}
                 </div>
               </div>
@@ -163,7 +164,7 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
                     )}
                   </div>
                   <h3 className="text-xl sm:text-2xl font-bold text-foreground">
-                    {dayData.title}
+                    {cleanTitle}
                   </h3>
                 </div>
 

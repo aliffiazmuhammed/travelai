@@ -8,75 +8,75 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    /* Travel-inspired color palette */
-    --background: 40 30% 98%;
-    --foreground: 220 20% 20%;
+    /* Travel-inspired color palette - Light Mode */
+    --background: 210 25% 98%;
+    --foreground: 220 25% 15%;
 
     --card: 0 0% 100%;
-    --card-foreground: 220 20% 20%;
+    --card-foreground: 220 25% 15%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 220 20% 20%;
+    --popover-foreground: 220 25% 15%;
 
-    /* Sky blue - primary travel color */
-    --primary: 200 85% 60%;
+    /* Sky blue - primary travel color (calibrated for high contrast with white text) */
+    --primary: 200 95% 44%;
     --primary-foreground: 0 0% 100%;
-    --primary-glow: 200 85% 75%;
+    --primary-glow: 200 90% 70%;
 
     /* Warm cream/sand - secondary */
-    --secondary: 40 60% 92%;
-    --secondary-foreground: 220 20% 30%;
+    --secondary: 210 20% 94%;
+    --secondary-foreground: 220 25% 20%;
 
-    /* Muted backgrounds */
-    --muted: 40 40% 95%;
-    --muted-foreground: 220 15% 50%;
+    /* Muted backgrounds & crisp readable text */
+    --muted: 210 20% 95%;
+    --muted-foreground: 220 18% 40%;
 
     /* Fresh green - accent */
-    --accent: 150 50% 55%;
+    --accent: 155 70% 40%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 70% 55%;
+    --destructive: 0 75% 55%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 40 30% 88%;
-    --input: 40 30% 88%;
-    --ring: 200 85% 60%;
+    --border: 220 16% 88%;
+    --input: 220 16% 88%;
+    --ring: 200 95% 44%;
 
     --radius: 0.75rem;
 
-    /* Travel-specific design tokens */
-    --gradient-sky: linear-gradient(135deg, hsl(200 85% 70%), hsl(210 80% 85%));
-    --gradient-sunrise: linear-gradient(135deg, hsl(40 90% 85%), hsl(30 85% 75%));
-    --gradient-hero: linear-gradient(180deg, hsl(200 90% 95%), hsl(40 60% 95%));
+    /* Travel-specific design tokens (Light Mode) */
+    --gradient-sky: linear-gradient(135deg, hsl(200 95% 46%), hsl(215 90% 54%));
+    --gradient-sunrise: linear-gradient(135deg, hsl(35 90% 52%), hsl(15 85% 56%));
+    --gradient-hero: linear-gradient(180deg, hsl(210 40% 98%), hsl(40 30% 96%));
     
-    --shadow-soft: 0 4px 20px -4px hsl(200 50% 60% / 0.15);
-    --shadow-card: 0 8px 30px -6px hsl(200 40% 50% / 0.2);
-    --shadow-hover: 0 12px 40px -8px hsl(200 50% 60% / 0.3);
+    --shadow-soft: 0 4px 20px -4px hsl(200 50% 50% / 0.12);
+    --shadow-card: 0 8px 30px -6px hsl(220 30% 30% / 0.10);
+    --shadow-hover: 0 12px 40px -8px hsl(200 50% 50% / 0.22);
     
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .dark {
     --background: 220 30% 8%;
-    --foreground: 40 30% 95%;
+    --foreground: 40 30% 96%;
 
     --card: 220 25% 12%;
-    --card-foreground: 40 30% 95%;
+    --card-foreground: 40 30% 96%;
 
     --popover: 220 25% 12%;
-    --popover-foreground: 40 30% 95%;
+    --popover-foreground: 40 30% 96%;
 
-    --primary: 200 85% 65%;
+    --primary: 200 90% 56%;
     --primary-foreground: 220 30% 8%;
-    --primary-glow: 200 85% 80%;
+    --primary-glow: 200 90% 75%;
 
     --secondary: 220 20% 18%;
-    --secondary-foreground: 40 30% 95%;
+    --secondary-foreground: 40 30% 96%;
 
-    --muted: 220 20% 15%;
-    --muted-foreground: 40 20% 65%;
+    --muted: 220 20% 16%;
+    --muted-foreground: 40 15% 68%;
 
-    --accent: 150 50% 60%;
+    --accent: 150 60% 55%;
     --accent-foreground: 220 30% 8%;
 
     --destructive: 0 70% 60%;
@@ -84,8 +84,13 @@ All colors MUST be HSL.
 
     --border: 220 20% 22%;
     --input: 220 20% 22%;
-    --ring: 200 85% 65%;
+    --ring: 200 90% 56%;
     
+    /* Travel-specific design tokens (Dark Mode) */
+    --gradient-sky: linear-gradient(135deg, hsl(200 90% 50%), hsl(220 85% 58%));
+    --gradient-sunrise: linear-gradient(135deg, hsl(35 85% 48%), hsl(15 80% 50%));
+    --gradient-hero: linear-gradient(180deg, hsl(220 30% 7%), hsl(220 28% 10%));
+
     --shadow-soft: 0 4px 20px -4px hsl(0 0% 0% / 0.4);
     --shadow-card: 0 8px 30px -6px hsl(0 0% 0% / 0.5);
     --shadow-hover: 0 12px 40px -8px hsl(200 50% 40% / 0.4);
