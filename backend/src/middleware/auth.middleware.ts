@@ -9,7 +9,12 @@ export const protect = async (
   next: NextFunction
 ) => {
   try {
-    const token = req.cookies.token;
+    let token = req.cookies?.token;
+
+    // Optional Bearer token header fallback (e.g. for API clients or external tools)
+    if (!token && req.headers.authorization?.startsWith('Bearer ')) {
+      token = req.headers.authorization.split(' ')[1];
+    }
 
     if (!token) {
       const message = 'Please sign in to access this feature.';
