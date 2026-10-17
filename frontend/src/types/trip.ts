@@ -288,6 +288,8 @@ export interface NearbyResponse {
   provider: string;
   radius: number;
   cached?: boolean;
+  /** False when no provider could be reached — `places` is then not authoritative. */
+  available?: boolean;
   note?: string;
   categories?: NearbyCategory[];
 }

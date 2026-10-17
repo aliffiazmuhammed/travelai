@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
+  CloudOff,
   Coffee,
   Fuel,
   Landmark,
@@ -68,6 +69,8 @@ export const NearbyExplorer: React.FC<NearbyExplorerProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  /** True when the lookup failed upstream (vs. genuinely finding nothing). */
+  const [unavailable, setUnavailable] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
 
   const selectedDayData = useMemo(
@@ -83,11 +86,15 @@ export const NearbyExplorer: React.FC<NearbyExplorerProps> = ({
   useEffect(() => {
     if (!category) {
       setPlaces([]);
+      setNote(null);
+      setUnavailable(false);
       onResults?.([]);
       return;
     }
     if (!anchor) {
       setPlaces([]);
+      setNote(null);
+      setUnavailable(false);
       onResults?.([]);
       setError("This itinerary has no located activities to search around.");
       return;
@@ -102,14 +109,19 @@ export const NearbyExplorer: React.FC<NearbyExplorerProps> = ({
       .then((response: NearbyResponse) => {
         if (cancelled) return;
         const results = response.places || [];
+        // `available: false` means the provider could not be reached — an empty
+        // list is then "we don't know", not "there is nothing here".
+        const failed = response.available === false;
         setPlaces(results);
-        setNote(response.note || null);
+        setUnavailable(failed);
+        setNote(failed ? response.note || null : null);
         onResults?.(results);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
         setPlaces([]);
         setNote(null);
+        setUnavailable(false);
         onResults?.([]);
         setError(
           err instanceof Error && err.message
@@ -239,9 +251,30 @@ export const NearbyExplorer: React.FC<NearbyExplorerProps> = ({
           </p>
         )}
 
-        {!loading && !error && category && places.length === 0 && (
+        {!loading && !error && unavailable && (
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-xl border border-amber-400/50 bg-amber-500/10 px-3 py-2.5">
+            <div className="flex items-start gap-2 min-w-0">
+              <CloudOff className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <p className="text-xs font-semibold text-amber-800 dark:text-amber-200">
+                {note || "Nearby search is temporarily unavailable. Please try again in a moment."}
+              </p>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setReloadToken((token) => token + 1)}
+              className="rounded-xl text-[11px] font-bold h-8 gap-1.5 shrink-0 sm:ml-auto border-amber-400/60 text-amber-800 dark:text-amber-200 hover:bg-amber-500/10"
+            >
+              <RefreshCw className="w-3 h-3" />
+              <span>Try again</span>
+            </Button>
+          </div>
+        )}
+
+        {!loading && !error && !unavailable && category && places.length === 0 && (
           <p className="text-xs text-muted-foreground font-medium py-1">
-            {note || "No places found nearby. Try a wider radius."}
+            No places found nearby. Try a wider radius.
           </p>
         )}
 

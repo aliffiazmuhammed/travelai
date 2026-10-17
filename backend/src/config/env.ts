@@ -44,8 +44,14 @@ const envSchema = z.object({
   // Weather + nearby search (Milestone 4). Consumed directly by services/geo/*
   OPEN_METEO_BASE: z.string().optional(),
   WEATHER_CACHE_TTL_MS: z.coerce.number().positive().optional(),
+  // Comma-separated Overpass endpoints, tried in order (replaces the built-in mirrors).
+  OVERPASS_ENDPOINTS: z.string().optional(),
+  // Deprecated single endpoint: tried first, built-in mirrors stay as fallbacks.
   OVERPASS_ENDPOINT: z.string().optional(),
+  OVERPASS_TIMEOUT_MS: z.coerce.number().positive().optional(),
+  OVERPASS_BUDGET_MS: z.coerce.number().positive().optional(),
   NEARBY_CACHE_TTL_MS: z.coerce.number().positive().optional(),
+  NEARBY_RETRY_AFTER_MS: z.coerce.number().positive().optional(),
   // Receipt uploads (Milestone 5). Consumed directly by services/finance/receipt.ts
   UPLOAD_DIR: z.string().optional(),
   MAX_UPLOAD_MB: z.coerce.number().positive().optional(),
@@ -54,6 +60,7 @@ const envSchema = z.object({
   CLOUDINARY_CLOUD_NAME: z.string().optional(),
   CLOUDINARY_API_KEY: z.string().optional(),
   CLOUDINARY_API_SECRET: z.string().optional(),
+  CLOUDINARY_FOLDER: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

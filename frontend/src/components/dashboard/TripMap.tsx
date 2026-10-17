@@ -390,6 +390,7 @@ export const TripMap: React.FC<TripMapProps> = ({
       url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
       attribution:
         'Tiles &copy; <a href="https://www.esri.com/" target="_blank" rel="noopener noreferrer">Esri</a> &mdash; Source: Esri, USGS, DeLorme, TomTom',
+      subdomains: "abc",
       maxZoom: 19,
     };
   }, [isDark, cartoApiKey]);
@@ -806,7 +807,7 @@ export const TripMap: React.FC<TripMapProps> = ({
             key={tileConfig.key}
             attribution={tileConfig.attribution}
             url={tileConfig.url}
-            subdomains={tileConfig.subdomains}
+            subdomains={tileConfig.subdomains || "abc"}
             maxZoom={tileConfig.maxZoom}
           />
 

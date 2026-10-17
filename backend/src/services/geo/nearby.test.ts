@@ -6,12 +6,35 @@ import {
   MIN_RADIUS_M,
   buildOverpassQuery,
   clampRadius,
+  clearNearbyCache,
   elementCoordinates,
+  findNearbyPlaces,
   isNearbyCategory,
   normalizeOverpassElements,
+  overpassBudgetMs,
+  overpassEndpoints,
+  overpassTimeoutMs,
+  retryAfterMs,
 } from './nearby.js';
 
 const ORIGIN: [number, number] = [11.5, 76.0];
+
+/** Runs `fn` with the given env vars applied, restoring them afterwards. */
+async function withEnv<T>(vars: Record<string, string | undefined>, fn: () => Promise<T>): Promise<T> {
+  const previous = Object.fromEntries(Object.keys(vars).map((key) => [key, process.env[key]]));
+  try {
+    for (const [key, value] of Object.entries(vars)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    return await fn();
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+}
 
 test('clampRadius applies defaults and guard rails', () => {
   assert.equal(clampRadius(undefined), DEFAULT_RADIUS_M);
@@ -119,4 +142,109 @@ test('normalizeOverpassElements drops unnamed/duplicate/far places and sorts by 
   assert.equal(normalizeOverpassElements(payload, ORIGIN, 'restaurant', 2000, 1).length, 1);
   assert.deepEqual(normalizeOverpassElements({}, ORIGIN, 'restaurant'), []);
   assert.deepEqual(normalizeOverpassElements(null, ORIGIN, 'restaurant'), []);
+});
+
+/* -------------------------------------------------------------------------- */
+/* Endpoint failover & honest failure reporting                                */
+/* -------------------------------------------------------------------------- */
+
+test('overpassEndpoints falls back to the built-in mirrors', async () => {
+  await withEnv({ OVERPASS_ENDPOINTS: undefined, OVERPASS_ENDPOINT: undefined }, async () => {
+    const endpoints = overpassEndpoints();
+    assert.ok(endpoints.length >= 2, 'more than one endpoint should be tried');
+    assert.match(endpoints[0], /^https:\/\//);
+    // A Switzerland-only extract would answer 200 with an empty list everywhere
+    // else, which is worse than being unavailable — it must never be a default.
+    assert.equal(endpoints.some((endpoint) => endpoint.includes('osm.ch')), false);
+    // The French instance rejects non-whitelisted usage with a 403.
+    assert.equal(endpoints.some((endpoint) => endpoint.includes('openstreetmap.fr')), false);
+  });
+});
+
+test('OVERPASS_ENDPOINTS replaces the list, OVERPASS_ENDPOINT keeps the fallbacks', async () => {
+  await withEnv({ OVERPASS_ENDPOINTS: 'https://one.example/api, https://two.example/api' }, async () => {
+    assert.deepEqual(overpassEndpoints(), [
+      'https://one.example/api',
+      'https://two.example/api',
+    ]);
+  });
+
+  // Duplicates and non-http entries are filtered out
+  await withEnv(
+    { OVERPASS_ENDPOINTS: 'https://dup.example/api,https://dup.example/api,ftp://x.example,nonsense' },
+    async () => {
+      assert.deepEqual(overpassEndpoints(), ['https://dup.example/api']);
+    }
+  );
+
+  // Legacy singular var: the configured endpoint is tried first and the default
+  // mirrors stay available so an old config still gains failover.
+  await withEnv(
+    { OVERPASS_ENDPOINTS: undefined, OVERPASS_ENDPOINT: 'https://mine.example/api' },
+    async () => {
+      const endpoints = overpassEndpoints();
+      assert.equal(endpoints[0], 'https://mine.example/api');
+      assert.ok(endpoints.length > 1);
+    }
+  );
+
+  // An empty/blank plural value must not disable lookups entirely
+  await withEnv({ OVERPASS_ENDPOINTS: '   ', OVERPASS_ENDPOINT: undefined }, async () => {
+    assert.ok(overpassEndpoints().length > 0);
+  });
+});
+
+test('timeout, budget and retry knobs default and honour the environment', async () => {
+  await withEnv(
+    { OVERPASS_TIMEOUT_MS: undefined, OVERPASS_BUDGET_MS: undefined, NEARBY_RETRY_AFTER_MS: undefined },
+    async () => {
+      assert.equal(overpassTimeoutMs(), 6000);
+      assert.equal(overpassBudgetMs(), 10000);
+      assert.equal(retryAfterMs(), 60000);
+    }
+  );
+
+  await withEnv(
+    { OVERPASS_TIMEOUT_MS: '1500', OVERPASS_BUDGET_MS: '3000', NEARBY_RETRY_AFTER_MS: '-5' },
+    async () => {
+      assert.equal(overpassTimeoutMs(), 1500);
+      assert.equal(overpassBudgetMs(), 3000);
+      // A nonsense value falls back to the default rather than disabling the breaker
+      assert.equal(retryAfterMs(), 60000);
+    }
+  );
+});
+
+test('a total provider outage is reported as unavailable, not as "no places"', async () => {
+  // Port 1 refuses connections immediately, so this exercises the real failover
+  // path without mocking `fetch` — and without waiting on the public network.
+  await withEnv(
+    {
+      OVERPASS_ENDPOINTS: 'http://127.0.0.1:1/api/interpreter',
+      OVERPASS_TIMEOUT_MS: '400',
+      OVERPASS_BUDGET_MS: '800',
+      NEARBY_RETRY_AFTER_MS: '60000',
+    },
+    async () => {
+      clearNearbyCache();
+
+      const failed = await findNearbyPlaces(11.5, 76.0, 'cafe', 1000);
+      assert.equal(failed.available, false);
+      assert.equal(failed.provider, 'none');
+      assert.deepEqual(failed.places, []);
+      assert.equal(failed.radius, 1000);
+      assert.match(String(failed.note), /temporarily unavailable/i);
+
+      // The circuit breaker makes an immediate retry instant and equally honest
+      const started = Date.now();
+      const retried = await findNearbyPlaces(11.5, 76.0, 'cafe', 1000);
+      assert.equal(retried.available, false);
+      assert.equal(retried.cached, true);
+      assert.ok(Date.now() - started < 250, 'a known-down provider must not be retried immediately');
+
+      // A different radius is a different lookup, so it does hit the provider
+      const otherRadius = await findNearbyPlaces(11.5, 76.0, 'cafe', 2000);
+      assert.equal(otherRadius.available, false);
+    }
+  );
 });

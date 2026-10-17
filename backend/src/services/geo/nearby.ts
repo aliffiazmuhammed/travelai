@@ -5,6 +5,15 @@
  * browser avoids CORS and the public endpoint gets one cached request per
  * coordinate/category instead of one per user. Responses are normalized into a
  * compact, distance-sorted list and cached for `NEARBY_CACHE_TTL_MS` (24h).
+ *
+ * Overpass is run by volunteers and the public instances go down or get
+ * overloaded (the primary instance can take >25s to time out). Two defences:
+ *   - several endpoints are tried in preference order within a shared time
+ *     budget (`OVERPASS_ENDPOINTS`, `OVERPASS_TIMEOUT_MS`, `OVERPASS_BUDGET_MS`);
+ *   - a short failure backoff (`NEARBY_RETRY_AFTER_MS`) keeps repeated clicks
+ *     from stalling on an instance that is known to be down.
+ * A total outage is reported honestly via `available: false` so the UI can say
+ * "temporarily unavailable" instead of pretending there is nothing nearby.
  */
 
 import { haversineKm, LatLng } from './distance.js';
@@ -160,34 +169,170 @@ export function normalizeOverpassElements(
 
 export interface NearbyResult {
   places: NearbyPlace[];
-  provider: 'overpass';
+  provider: 'overpass' | 'none';
   radius: number;
   cached?: boolean;
+  /**
+   * False when no provider could be reached: `places` is then empty because the
+   * lookup failed, *not* because the area has nothing to offer.
+   */
+  available: boolean;
   note?: string;
 }
 
-const FETCH_TIMEOUT_MS = 15000;
+const FETCH_TIMEOUT_MS = 6000;
+const TOTAL_BUDGET_MS = 10000;
 const DEFAULT_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const DEFAULT_RETRY_AFTER_MS = 60 * 1000; // 1 minute
+
+const OVERPASS_USER_AGENT = 'TravelAI/1.0 (+https://github.com/travelai; nearby search)';
+
+/**
+ * Public mirrors, in preference order. Verified against each instance's real
+ * behaviour (2025): the main German cluster is the default, `private.coffee` is
+ * its own operator. Deliberately **excluded**:
+ *   - `overpass.openstreetmap.fr` → 403 "white-listed usages only"
+ *   - `overpass.osm.ch` → a Switzerland-only extract, so it answers 200 with an
+ *     empty list everywhere else (silently wrong rather than unavailable)
+ */
+const DEFAULT_OVERPASS_ENDPOINTS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+];
+
+function envMs(name: string, fallback: number): number {
+  const raw = Number(process.env[name]);
+  return Number.isFinite(raw) && raw > 0 ? raw : fallback;
+}
 
 function cacheTtlMs(): number {
-  const raw = Number(process.env.NEARBY_CACHE_TTL_MS);
-  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_CACHE_TTL_MS;
+  return envMs('NEARBY_CACHE_TTL_MS', DEFAULT_CACHE_TTL_MS);
 }
 
-function overpassEndpoint(): string {
-  return process.env.OVERPASS_ENDPOINT || 'https://overpass-api.de/api/interpreter';
+/** How long a failed lookup is remembered before the provider is retried. */
+export function retryAfterMs(): number {
+  return envMs('NEARBY_RETRY_AFTER_MS', DEFAULT_RETRY_AFTER_MS);
 }
 
-const nearbyCache = new Map<string, { expiresAt: number; result: NearbyResult }>();
+/** Per-attempt timeout for a single Overpass endpoint. */
+export function overpassTimeoutMs(): number {
+  return envMs('OVERPASS_TIMEOUT_MS', FETCH_TIMEOUT_MS);
+}
 
-/** Clears the in-memory nearby cache (used by tests). */
-export function clearNearbyCache(): void {
-  nearbyCache.clear();
+/** Shared budget across all Overpass endpoints before giving up. */
+export function overpassBudgetMs(): number {
+  return envMs('OVERPASS_BUDGET_MS', TOTAL_BUDGET_MS);
 }
 
 /**
- * Finds named places of a category near a coordinate. Never throws: on provider
- * failure it resolves with an empty list plus an explanatory `note`.
+ * Endpoints to try, in order.
+ *
+ * - `OVERPASS_ENDPOINTS` (comma-separated) replaces the list entirely, so a
+ *   deployment can point at its own instance or a regional extract.
+ * - `OVERPASS_ENDPOINT` (singular, legacy) is tried first and the built-in
+ *   mirrors stay as fallbacks, so older configs gain failover without changes.
+ */
+export function overpassEndpoints(): string[] {
+  const split = (value: unknown): string[] =>
+    String(value ?? '')
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter((entry) => /^https?:\/\//i.test(entry));
+
+  const plural = split(process.env.OVERPASS_ENDPOINTS);
+  if (plural.length > 0) return [...new Set(plural)];
+
+  const legacy = split(process.env.OVERPASS_ENDPOINT);
+  return [...new Set([...legacy, ...DEFAULT_OVERPASS_ENDPOINTS])];
+}
+
+const UNAVAILABLE_NOTE =
+  'Nearby search is temporarily unavailable — OpenStreetMap’s servers are not responding. Please try again in a moment.';
+
+const nearbyCache = new Map<string, { expiresAt: number; result: NearbyResult }>();
+/** Keys whose lookup failed, mapped to the timestamp they may be retried after. */
+const retryCache = new Map<string, number>();
+
+/** Clears the in-memory nearby caches (used by tests). */
+export function clearNearbyCache(): void {
+  nearbyCache.clear();
+  retryCache.clear();
+}
+
+/** Describes why an endpoint attempt failed, in a log-friendly way. */
+function attemptError(error: unknown): string {
+  if (error instanceof Error) {
+    if (error.name === 'AbortError' || error.name === 'TimeoutError') return 'timed out';
+    return error.message;
+  }
+  return String(error);
+}
+
+/** POSTs an Overpass QL query and parses the JSON, aborting after `timeoutMs`. */
+async function fetchOverpass(endpoint: string, body: string, timeoutMs: number): Promise<unknown> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Accept: 'application/json',
+        // Overpass asks clients to identify themselves
+        'User-Agent': OVERPASS_USER_AGENT,
+      },
+      body,
+      signal: controller.signal,
+    });
+
+    if (!response.ok) throw new Error(`responded with ${response.status}`);
+
+    // Overpass also returns HTML error pages with a 200 status, so the status
+    // alone is never trusted — parsing is what decides success.
+    return JSON.parse(await response.text());
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
+ * Runs the query against each endpoint until one answers, within a shared
+ * budget. Returns `null` (and fills `attempts`) when every endpoint fails.
+ */
+async function queryOverpass(
+  category: NearbyCategory,
+  lat: number,
+  lng: number,
+  radius: number,
+  attempts: string[]
+): Promise<unknown | null> {
+  const body = new URLSearchParams({
+    data: buildOverpassQuery(category, lat, lng, radius),
+  }).toString();
+  const deadline = Date.now() + overpassBudgetMs();
+
+  for (const endpoint of overpassEndpoints()) {
+    const remaining = deadline - Date.now();
+    if (remaining < 500) {
+      attempts.push(`${endpoint}: skipped (budget exhausted)`);
+      continue;
+    }
+
+    try {
+      return await fetchOverpass(endpoint, body, Math.min(remaining, overpassTimeoutMs()));
+    } catch (error) {
+      attempts.push(`${endpoint}: ${attemptError(error)}`);
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Finds named places of a category near a coordinate. Never throws: on total
+ * provider failure it resolves with an empty list, `available: false` and an
+ * explanatory `note`.
  */
 export async function findNearbyPlaces(
   lat: number,
@@ -204,40 +349,42 @@ export async function findNearbyPlaces(
     return { ...cached.result, cached: true };
   }
 
-  const query = buildOverpassQuery(category, lat, lng, radius);
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  // Circuit breaker: a recent failure is remembered so rapid retries are instant
+  const retryAt = retryCache.get(key);
+  if (retryAt && Date.now() < retryAt) {
+    return {
+      places: [],
+      provider: 'none',
+      radius,
+      cached: true,
+      available: false,
+      note: UNAVAILABLE_NOTE,
+    };
+  }
 
-  try {
-    const response = await fetch(overpassEndpoint(), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        // Overpass asks clients to identify themselves
-        'User-Agent': 'TravelAI/1.0 (nearby search)',
-      },
-      body: new URLSearchParams({ data: query }).toString(),
-      signal: controller.signal,
-    });
-    if (!response.ok) throw new Error(`Overpass responded with ${response.status}`);
+  const attempts: string[] = [];
+  const json = await queryOverpass(category, lat, lng, radius, attempts);
 
-    const json: any = await response.json();
+  if (json !== null) {
     const result: NearbyResult = {
       places: normalizeOverpassElements(json, origin, category, radius),
       provider: 'overpass',
       radius,
+      available: true,
     };
     nearbyCache.set(key, { expiresAt: Date.now() + cacheTtlMs(), result });
+    retryCache.delete(key);
     return result;
-  } catch (error) {
-    console.warn('Nearby search failed:', error);
-    return {
-      places: [],
-      provider: 'overpass',
-      radius,
-      note: 'Nearby search is unavailable right now. Please try again in a moment.',
-    };
-  } finally {
-    clearTimeout(timeout);
   }
+
+  console.warn(`Nearby search failed on every Overpass endpoint — ${attempts.join(' | ')}`);
+  retryCache.set(key, Date.now() + retryAfterMs());
+
+  return {
+    places: [],
+    provider: 'none',
+    radius,
+    available: false,
+    note: UNAVAILABLE_NOTE,
+  };
 }

@@ -66,7 +66,7 @@ Traditional trip planning involves juggling dozen of browser tabs: reading confl
 - **User-Drawn Custom Routes**: Click-to-draw your own paths on the map (detours, treks, alternate drives), name them, tag a trip day, pick a colour and travel mode, and see the length instantly. Saved per trip with edit/delete, and recomputed server-side on save.
 - **Per-Day Weather Advisories**: Each day shows a live forecast chip (temperatures, rainfall, wind) colour-coded by travel risk — `clear` → `light rain` → `showers` → `rough weather` — with concrete advisories for hill-road landslides, extreme heat, cold nights and high winds. Forecasts come from Open-Meteo and degrade to a seasonal outlook for dates beyond the ~16-day window.
 - **Suggest an Indoor Alternative**: On a risky day, ask the AI to rework just that day around the conditions (museums, cafés, covered markets…). The proposal is shown for review and only replaces the day when you accept it — through the normal edit path, so version history still works.
-- **Nearby Places Search**: Find real restaurants, cafés, attractions, ATMs, pharmacies and fuel stops around any day from OpenStreetMap, sorted by distance with addresses and opening hours. Results appear as amber map markers and can be added to the day as an activity in one click.
+- **Nearby Places Search**: Find real restaurants, cafés, attractions, ATMs, pharmacies and fuel stops around any day from OpenStreetMap, sorted by distance with addresses and opening hours. Results appear as amber map markers and can be added to the day as an activity in one click. The lookup tries several Overpass endpoints in turn, so a single overloaded instance doesn't break search — and if they are all down it says so honestly, with a retry, rather than pretending nothing is nearby.
 - **Weather-Aware Plan Check**: A map-tab panel cross-references the forecast with your actual travel legs — it flags every leg running through rough weather, then proposes concrete fixes: swap a rainy day's plan onto a dry day, rebuild a high-risk day indoors, or pad the travel time. Every suggestion is an explicit action; nothing is applied silently.
 - **Interactive Pins**: Custom numbered activity markers and distinctive hotel icons with detailed popups.
 
@@ -220,7 +220,7 @@ travelai/
 │       │   │   ├── weather.ts           # Per-day advisories (Open-Meteo + seasonal fallback)
 │       │   │   ├── weather.test.ts      # Risk mapping & advisory unit tests
 │       │   │   ├── nearby.ts            # Nearby POI search (Overpass proxy + normalization)
-│       │   │   ├── nearby.test.ts       # Overpass parsing & radius guard-rail tests
+│       │   │   ├── nearby.test.ts       # Overpass parsing, radius & endpoint-failover tests
 │       │   │   ├── weatherRouting.ts    # Weather-aware routing analysis (exposed legs + fixes)
 │       │   │   └── weatherRouting.test.ts # Routing-analysis unit tests
 │       │   ├── finance/
@@ -317,7 +317,7 @@ travelai/
 |---|---|
 | **Frontend** | React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui, Lucide Icons |
 | **Mapping & Visuals** | Leaflet, React-Leaflet, OpenStreetMap, Recharts |
-| **Travel Data APIs** | Open-Meteo (weather advisories), Overpass/OSM (nearby search), OSRM (optional routing), Frankfurter/ECB (FX rates) |
+| **Travel Data APIs** | Open-Meteo (weather advisories), Overpass/OSM (nearby search, multi-endpoint failover), OSRM (optional routing), Frankfurter/ECB (FX rates) |
 | **File Uploads** | Multer (in-memory, magic-byte verified) + Cloudinary CDN (or local disk fallback) |
 | **Backend** | Node.js (v20+), Express 5, TypeScript, tsx |
 | **Database** | MongoDB, Mongoose ODM |
@@ -381,8 +381,14 @@ OPEN_METEO_BASE=https://api.open-meteo.com/v1/forecast
 WEATHER_CACHE_TTL_MS=2700000     # 45 minutes
 
 # Nearby Search (optional) — Overpass/OpenStreetMap by default (no API key required)
-OVERPASS_ENDPOINT=https://overpass-api.de/api/interpreter
+# Overpass is volunteer-run, so several endpoints are tried in order within a shared budget.
+# OVERPASS_ENDPOINTS replaces the list; OVERPASS_ENDPOINT (deprecated) is tried first with the
+# built-in mirrors kept as fallbacks. On a total outage the API returns `available: false`.
+# OVERPASS_ENDPOINTS=https://overpass-api.de/api/interpreter,https://overpass.private.coffee/api/interpreter
+OVERPASS_TIMEOUT_MS=6000         # per-endpoint attempt cap
+OVERPASS_BUDGET_MS=10000         # total budget across all endpoints
 NEARBY_CACHE_TTL_MS=86400000     # 24 hours
+NEARBY_RETRY_AFTER_MS=60000      # backoff after a failed lookup
 
 # Receipt Uploads (Milestone 5)
 # Option A: Cloudinary CDN (Recommended for production: Render / Vercel / Railway)
@@ -390,6 +396,7 @@ CLOUDINARY_URL=                     # e.g. cloudinary://<api_key>:<api_secret>@<
 CLOUDINARY_CLOUD_NAME=              # or individual keys
 CLOUDINARY_API_KEY=
 CLOUDINARY_API_SECRET=
+CLOUDINARY_FOLDER=travelai/receipts # Cloudinary folder for uploaded receipts
 
 # Option B: Local disk storage (automatic fallback when Cloudinary is unset)
 UPLOAD_DIR=backend/uploads       # defaults to <backend>/uploads when unset
@@ -492,7 +499,7 @@ npm test
 | `POST` | `/api/geo/route` | Compute per-leg distance & travel time for 2–50 coordinates (haversine or OSRM) | Yes |
 | `GET` | `/api/geo/currency/rates?base=INR&symbols=USD,EUR` | Base-per-unit FX rates (12-hour cache) for currency conversion | Yes |
 | `GET` | `/api/geo/weather?lat&lng&start&end` | Per-day forecast with risk level (`none`/`low`/`moderate`/`high`) + travel advisories (45-minute cache) | Yes |
-| `GET` | `/api/geo/nearby?lat&lng&category&radius` | Named POIs sorted by distance — categories `restaurant`, `cafe`, `attraction`, `atm`, `pharmacy`, `fuel` (24-hour cache) | Yes |
+| `GET` | `/api/geo/nearby?lat&lng&category&radius` | Named POIs sorted by distance — categories `restaurant`, `cafe`, `attraction`, `atm`, `pharmacy`, `fuel`. Multi-endpoint Overpass failover (24-hour cache); returns `available: false` + `note` instead of an empty list when every endpoint is down | Yes |
 
 ---
 
