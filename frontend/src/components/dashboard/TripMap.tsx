@@ -386,11 +386,10 @@ export const TripMap: React.FC<TripMapProps> = ({
     }
 
     return {
-      key: "osm-standard",
-      url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      key: "esri-street",
+      url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
       attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors',
-      subdomains: "abc",
+        'Tiles &copy; <a href="https://www.esri.com/" target="_blank" rel="noopener noreferrer">Esri</a> &mdash; Source: Esri, USGS, DeLorme, TomTom',
       maxZoom: 19,
     };
   }, [isDark, cartoApiKey]);
