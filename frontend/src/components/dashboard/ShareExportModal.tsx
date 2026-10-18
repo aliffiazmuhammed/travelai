@@ -13,6 +13,7 @@ import {
   Copy,
   Check,
   FileText,
+  FileDown,
   Download,
   Printer,
   Globe,
@@ -45,6 +46,22 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
   const [loadingShare, setLoadingShare] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedText, setCopiedText] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
+
+  /** Purpose-built A4 PDF (lib/pdfExport) — replaces the old print-screen dump. */
+  const handleDownloadPdf = async () => {
+    setPdfBusy(true);
+    try {
+      const { exportItineraryPdf } = await import("@/lib/pdfExport");
+      exportItineraryPdf(data);
+      toast.success("Itinerary PDF downloaded!");
+    } catch (err) {
+      console.error("Failed to generate PDF:", err);
+      toast.error("Could not generate the PDF. Please try again.");
+    } finally {
+      setPdfBusy(false);
+    }
+  };
 
   const publicUrl = shareId
     ? `${window.location.origin}/shared/${shareId}`
@@ -246,6 +263,29 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
 
         {/* 2. Export Actions Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          {/* Download PDF — purpose-built A4 document */}
+          <Button
+            type="button"
+            variant="hero"
+            disabled={pdfBusy}
+            onClick={handleDownloadPdf}
+            className="flex flex-col items-center justify-center p-3 h-auto rounded-2xl space-y-1.5 text-center shadow-sm"
+          >
+            <div className="w-8 h-8 rounded-xl bg-primary-foreground/20 text-primary-foreground flex items-center justify-center">
+              {pdfBusy ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <FileDown className="w-4 h-4" />
+              )}
+            </div>
+            <span className="text-xs font-bold text-primary-foreground">
+              {pdfBusy ? "Building PDF..." : "Download PDF"}
+            </span>
+            <span className="text-[10px] text-primary-foreground/80">
+              Clean A4 itinerary
+            </span>
+          </Button>
+
           {/* Copy Plain Text */}
           <Button
             type="button"
@@ -275,19 +315,19 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
             <span className="text-xs font-bold text-foreground">Export JSON</span>
             <span className="text-[10px] text-muted-foreground">Full data backup</span>
           </Button>
+        </div>
 
-          {/* Print / PDF */}
+        {/* Browser print — kept for users who want the full interactive view on paper */}
+        <div className="flex justify-center pb-1">
           <Button
             type="button"
-            variant="outline"
+            variant="ghost"
+            size="sm"
             onClick={handlePrint}
-            className="flex flex-col items-center justify-center p-3 h-auto rounded-2xl border-border/70 hover:border-primary/40 space-y-1.5 text-center"
+            className="rounded-xl text-[11px] font-semibold text-muted-foreground hover:text-foreground gap-1.5"
           >
-            <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-500 flex items-center justify-center">
-              <Printer className="w-4 h-4" />
-            </div>
-            <span className="text-xs font-bold text-foreground">Print / PDF</span>
-            <span className="text-[10px] text-muted-foreground">Browser print</span>
+            <Printer className="w-3.5 h-3.5" />
+            <span>Or use browser print (full screen view)</span>
           </Button>
         </div>
       </DialogContent>
