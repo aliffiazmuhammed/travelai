@@ -50,6 +50,24 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
     ? `${window.location.origin}/shared/${shareId}`
     : "";
 
+  const [revokingShare, setRevokingShare] = useState(false);
+
+  /** F7 (E5): taking the link back down — old URLs die permanently. */
+  const handleRevokeShare = async () => {
+    if (!tripId) return;
+    try {
+      setRevokingShare(true);
+      await api.revokeShare(tripId);
+      setShareId(undefined);
+      toast.success("Public link revoked — old URLs no longer work.");
+    } catch (err: any) {
+      console.error("Failed to revoke share link:", err);
+      toast.error(err.message || "Failed to revoke the public link.");
+    } finally {
+      setRevokingShare(false);
+    }
+  };
+
   const handleGenerateLink = async () => {
     if (!tripId) {
       toast.error("Trip must be saved to generate a shareable link.");
@@ -166,21 +184,38 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
 
           {canManageShare ? (
             shareId ? (
-            <div className="flex items-center gap-2">
-              <Input
-                readOnly
-                value={publicUrl}
-                className="h-10 text-xs bg-card rounded-xl border-border/80 font-mono"
-              />
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Input
+                  readOnly
+                  value={publicUrl}
+                  className="h-10 text-xs bg-card rounded-xl border-border/80 font-mono"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="hero"
+                  onClick={handleCopyLink}
+                  className="h-10 px-3.5 rounded-xl text-xs font-bold gap-1.5 shrink-0"
+                >
+                  {copiedLink ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
+                  <span>{copiedLink ? "Copied" : "Copy"}</span>
+                </Button>
+              </div>
               <Button
                 type="button"
                 size="sm"
-                variant="hero"
-                onClick={handleCopyLink}
-                className="h-10 px-3.5 rounded-xl text-xs font-bold gap-1.5 shrink-0"
+                variant="ghost"
+                disabled={revokingShare}
+                onClick={handleRevokeShare}
+                className="h-8 px-2.5 rounded-lg text-[11px] font-bold text-destructive hover:text-destructive gap-1.5"
               >
-                {copiedLink ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
-                <span>{copiedLink ? "Copied" : "Copy"}</span>
+                {revokingShare ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Globe className="w-3.5 h-3.5" />
+                )}
+                <span>Stop sharing (revoke link)</span>
               </Button>
             </div>
           ) : (

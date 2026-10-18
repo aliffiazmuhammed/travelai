@@ -433,6 +433,13 @@ class ApiClient {
     });
   }
 
+  /** F7 (E5): revokes the public link — `isPublic` off + `shareId` cleared. */
+  async revokeShare(id: string): Promise<{ success: boolean; message: string }> {
+    return this.request(`/api/itinerary/${id}/share`, {
+      method: 'DELETE',
+    });
+  }
+
   async getSharedTrip(shareId: string): Promise<Trip> {
     return this.request(`/api/itinerary/shared/${shareId}`);
   }

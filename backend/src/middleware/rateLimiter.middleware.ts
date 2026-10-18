@@ -74,3 +74,21 @@ export const inviteAcceptLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+/**
+ * Public, unauthenticated endpoint — keyed on IP (F11, E5): the shared-trip
+ * read needs an abuse brake because guessing share ids is exactly the model
+ * of the attack. 120 reads / 15 min / IP comfortably covers a human opening
+ * links (and the SPA's own refetches) while capping enumeration speed.
+ */
+export const publicShareLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 120,
+  message: {
+    success: false,
+    error: 'Too many requests. Please slow down and try again shortly.',
+    message: 'Too many requests. Please slow down and try again shortly.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});

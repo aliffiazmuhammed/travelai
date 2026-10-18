@@ -140,6 +140,8 @@ test('guards declare the expected minimum roles (spot checks)', () => {
   assert.equal(minimumFor('GET', '/:id/members'), 'viewer');
   assert.equal(minimumFor('DELETE', '/:id/members/me'), 'viewer');
   assert.equal(minimumFor('PATCH', '/:id/members/:userId'), 'owner');
+  // Sprint E5 — share-link lifecycle (F7).
+  assert.equal(minimumFor('DELETE', '/:id/share'), 'owner');
   assert.equal(minimumFor('DELETE', '/:id/members/:userId'), 'owner');
   assert.equal(minimumFor('POST', '/:id/transfer'), 'owner');
   assert.equal(minimumFor('POST', '/:id/invites'), 'owner');
@@ -211,4 +213,36 @@ test('content-mutation routes require baseRev (E4 concurrency spot checks)', () 
   // Optional: id-addressed writes lose at most that one item.
   assert.equal(revModeFor('PUT', '/:id/expenses/:expenseId'), 'optional');
   assert.equal(revModeFor('POST', '/:id/routes'), 'optional');
+});
+
+/**
+ * Sprint E5 — hardening surfaces the share-link lifecycle and the insights
+ * scope changes in the router table.
+ */
+test('share link lifecycle is owner-scoped end to end (E5)', () => {
+  const layers = routeLayers();
+
+  const minimumForE5 = (method: string, path: string): string | undefined => {
+    const layer = layers.find(
+      (candidate) =>
+        pathOf(candidate) === path && methodsOf(candidate).includes(method.toLowerCase())
+    );
+    if (!layer) return undefined;
+    const guard = (layer.route as any).stack.find(
+      (handler: any) => handler?.handle?.[TRIP_GUARD_TAG] !== undefined
+    );
+    return guard?.handle?.[TRIP_GUARD_TAG]?.min;
+  };
+
+  assert.equal(minimumForE5('POST', '/:id/share'), 'owner');
+  // F7: the revoke route exists at all...
+  assert.equal(minimumForE5('DELETE', '/:id/share'), 'owner');
+});
+
+test('the public shared endpoint carries the abuse brake limiter (F11)', () => {
+  const layer = routeLayers().find((candidate) => pathOf(candidate) === '/shared/:shareId');
+  assert.ok(layer, 'GET /shared/:shareId must be registered');
+  // publicShareLimiter + controller: at least two layers before the handler.
+  const handlers = (layer!.route as any).stack.map((entry: any) => entry.handle);
+  assert.equal(handlers.length >= 2, true, 'expected the limiter to run before the controller');
 });

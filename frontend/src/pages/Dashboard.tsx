@@ -58,7 +58,8 @@ const Dashboard: React.FC = () => {
             t.tripDetails?.trip_title === location.state.itinerary.trip_title
         );
         if (found) {
-          setSelectedTrip(found);
+          // E5 (F16): list rows are summaries — fetch the full document.
+          setSelectedTrip(await api.getTrip(found._id));
         } else {
           // Fallback constructed representation
           setSelectedTrip({
@@ -78,6 +79,20 @@ const Dashboard: React.FC = () => {
       if (showSpinner) toast.error("Failed to load your trips. Please check your connection.");
     } finally {
       if (showSpinner) setLoading(false);
+    }
+  };
+
+  /** E5 (F16): open a trip from the library via the full-document fetch. */
+  const [openingDetail, setOpeningDetail] = useState<boolean>(false);
+  const handleSelectTrip = async (trip: Trip) => {
+    setOpeningDetail(true);
+    try {
+      setSelectedTrip(await api.getTrip(trip._id));
+    } catch (err: any) {
+      console.error("Failed to open trip:", err);
+      toast.error(err.message || "Could not open this trip. Please try again.");
+    } finally {
+      setOpeningDetail(false);
     }
   };
 
@@ -209,6 +224,13 @@ const Dashboard: React.FC = () => {
       <Navbar />
 
       <main className="flex-1 container mx-auto px-4 pt-24 pb-16">
+        {/* E5 (F16): opening a card fetches the full document — keep the list
+            visible under a lightweight veil instead of flashing a skeleton. */}
+        {openingDetail && (
+          <div className="fixed inset-0 z-50 bg-background/60 backdrop-blur-sm flex items-center justify-center">
+            <Loader2 className="w-10 h-10 animate-spin text-primary" />
+          </div>
+        )}
         {loading ? (
           <div className="space-y-6">
             <div className="flex items-center justify-between p-6 rounded-3xl bg-card border border-border/70 shadow-xs">
@@ -252,7 +274,7 @@ const Dashboard: React.FC = () => {
           /* ALL TRIPS LIBRARY (GRID & LIST) VIEW */
           <MyTripsView
             trips={trips}
-            onSelectTrip={(trip) => setSelectedTrip(trip)}
+            onSelectTrip={handleSelectTrip}
             onDuplicateTrip={handleDuplicateTrip}
             onDeleteTrip={handleDeleteTrip}
             onNewPlan={() => navigate("/plan")}

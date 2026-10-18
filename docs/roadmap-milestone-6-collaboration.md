@@ -1,6 +1,6 @@
 # Milestone 6 — Collaboration & Trip Sharing
 
-**Status:** approved. **E1–E4 are shipped and verified (E4 = concurrency + live tier).** E5 (hardening pass) is next.
+**Status:** approved. **Milestone 6 is complete: E1–E5 all shipped and verified** (E4 = concurrency + live tier, E5 = hardening pass).
 
 **Scope:** let more than one person plan the same trip — invite people, assign what they can do, edit the itinerary together without overwriting each other, and track who changed what.
 
@@ -742,3 +742,31 @@ Safe to run repeatedly; matches only documents with no members.
 - Presence state is single-instance (by design, §8/§10). The toggle degrades cleanly; rev-based conflicts keep the data honest without it.
 - `trip:updated` fires on member-role/invite mutations too — the SPA treats each as "refetch the trip", which is correct but slightly eager.
 - The smoke's SSE checks need the server started with `ENABLE_TRIP_SSE=true`; with the tier off the script stops at the heartbeat step's neighbouring checks rather than the full stream assertions (documented in the header).
+
+## 18. E5 — shipped (appendix)
+
+> Ship notes, 2026-10-18. The hardening pass. Milestone 6 is now functionally complete: E1–E5 all landed.
+
+### 18.1 What landed
+
+| Area | Result |
+| --- | --- |
+| **F7 — share revoke** | New `DELETE /api/itinerary/:id/share` (owner): `isPublic = false` **and** `shareId` cleared, so scrubbed-from-history URLs are permanently 404, not paused. Re-sharing rotates to a different link (verified in smoke). `ShareExportModal` gains a destructive "Stop sharing (revoke link)" action with inline feedback. |
+| **F11 — shareId strength + abuse brake** | New links mint 16 random bytes (`crypto.randomBytes(16).toString('hex')` — 128 bits); every historical 48-bit id keeps resolving because lookup is by exact string. The anonymous `GET /shared/:shareId` now runs behind `publicShareLimiter` (120 reads / 15 min / IP). |
+| **F20 — shareId collision retry** | `shareTrip` retries mint-up-to-5-times on a Mongo duplicate-key (impossible-but-planned at 128 bits), so a collision turns into "try again" rather than a 500. |
+| **F14 — public projection as an allow-list** | `projectPublicTrip()` in `publicTrip.ts` decrees the exact payload shape; the controller just serializes it. Adds `customRoutes` (drawn routes are part of the shared plan, not sensitive). `publicProjection.test.ts` pins the key set — including a 19-field "maximal trip" fixture whose sensitive keys (`shareId`, `members`, `expenses`, `finance`, `generationMeta`, `versions`…) must all be structurally absent. |
+| **F16 — lean list rows** | `GET /api/itinerary` selects only what the dashboard cards render (title, status, `version`/`hasEdited`/`rev`, members for role, the five `tripDetails` card fields) — no ledger, no full itinerary, no meta. Opening a trip changed to an explicit full fetch (`Dashboard.handleSelectTrip` → `GET /:id`) behind a backdrop-veil loader; the same applies to the TripPlanner hand-off reselect. |
+| **F17 — insights are membership-scoped** | `GET /api/itinerary/insights` now filters `members: { $elemMatch: { userId, role: 'owner' } }` instead of `trip.userId`, matching the transfer semantics (an `$elemMatch` keeps the userId/role pair on the same member row). Smoke: the demoted owner's aggregate drops the trip while the promoted owner's picks it up. |
+| **F13 — version cap configurable** | `snapshotCurrent`'s trim now reads `env.VERSIONS_MAX` (default 30; documented in `.env.example` + README). |
+| Tests / smoke | 176/176 backend tests (new: public-projection contract, router-coverage spots for the revoke route + limiter). New `smoke-e5.mts` — 19 live checks covering F7/F11/F14/F16/F17 through real HTTP. |
+
+### 18.2 Deferred (by prior scope decision)
+
+- Email invites — the link-only decision stands; Resend integration stays out of the milestone.
+- `User.name` display names for member rows — the collaborators list keeps email-derived labels ("Traveler ····id" only when email is absent); pure polish.
+
+### 18.3 Honest limits
+
+- The F20 retry loop still saves the trip inside the retry: a fifth consecutive collision surfaces the raw 500 (statistically a heat-death-of-the-universe event at 128 bits).
+- `VERSIONS_MAX` trims the oldest snapshots at push time; trips that already exceeded 20 shrink on their next edit, not retroactively.
+- Insight aggregates cap at the 50 most recent trips (unchanged).

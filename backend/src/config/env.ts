@@ -48,6 +48,8 @@ const envSchema = z.object({
     .optional()
     .transform((value) => value !== undefined && value !== '' && value !== 'false'),
   PRESENCE_TTL_MS: z.coerce.number().positive().default(30000),
+  // F13: retained version snapshots per trip (each is a full itinerary).
+  VERSIONS_MAX: z.coerce.number().positive().default(30),
   SERVE_STATIC: z.string().optional(),
   // AI generation cache (Milestone 2). Consumed directly by services/ai/cache.ts
   AI_CACHE_TTL_MS: z.coerce.number().positive().optional(),

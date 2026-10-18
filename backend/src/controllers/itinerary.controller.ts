@@ -28,9 +28,10 @@ import { catchAsync } from '../utils/catchAsync.js';
 import { sanitizeTripFor } from '../utils/sanitizeTrip.js';
 import { roleOf } from '../services/collab/access.js';
 import { tripContext } from '../middleware/tripAccess.middleware.js';
-import { findPublicSharedTrip } from '../services/collab/publicTrip.js';
+import { findPublicSharedTrip, projectPublicTrip } from '../services/collab/publicTrip.js';
 import { AuthenticatedRequest } from '../types/index.js';
 import { AppError } from '../utils/AppError.js';
+import { env } from '../config/env.js';
 
 function parseItineraryJson(rawResponse: string): Record<string, any> {
   const cleaned = rawResponse
@@ -53,8 +54,9 @@ function parseItineraryJson(rawResponse: string): Record<string, any> {
   }
 }
 
-// Maximum number of historical version snapshots retained per trip
-const MAX_VERSIONS = 20;
+// Maximum number of historical version snapshots retained per trip (F13) —
+// configurable so deployments trade document size against undo depth.
+const MAX_VERSIONS = env.VERSIONS_MAX;
 
 /**
  * Pushes a snapshot of the trip's *current* state into its version history.
@@ -403,7 +405,15 @@ export const getUserTrips = catchAsync(
       query.$and = andConditions;
     }
 
-    const trips = await Trip.find(query).sort({ createdAt: -1 });
+    // F16 (E5): list rows are trip **summaries** — the dashboard renders
+    // cards (title, status, days, budget, group, role, rev), never the ledger
+    // or the whole itinerary. Opening a trip fetches the full document at
+    // `GET /:id`, so detail views are unaffected.
+    const trips = await Trip.find(query)
+      .sort({ createdAt: -1 })
+      .select(
+        'title status version hasEdited rev startDate endDate createdAt updatedAt members tripDetails.trip_title tripDetails.duration_days tripDetails.budget_per_person tripDetails.group_type tripDetails.season'
+      );
 
     // Annotate each row with the caller's role and project owner-only fields
     // accordingly (`sanitizeTripFor`). The row shape stays additive.
@@ -667,10 +677,20 @@ export const submitTripFeedback = catchAsync(
 /**
  * Aggregated generation/feedback analytics for the signed-in user.
  * GET /api/itinerary/insights
+ *
+ * F17 (E5): scope is **trips the user owns** — this is personal generation
+ * analytics, not a team dashboard. Ownership here is membership-based
+ * (`$elemMatch` keeps the userId/role pair on the same member row), so a trip
+ * transferred to someone else contributes to the new owner's numbers, not the
+ * previous owner's. Generation metadata is owner-facing (F17 projection) and
+ * editors/viewers get neither this aggregate nor the raw fields.
  */
 export const getTripInsights = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const trips = await Trip.find({ userId: req.userId, isDeleted: { $ne: true } })
+    const trips = await Trip.find({
+      members: { $elemMatch: { userId: new Types.ObjectId(String(req.userId)), role: 'owner' } },
+      isDeleted: { $ne: true },
+    })
       .sort({ createdAt: -1 })
       .limit(50)
       .select('title generationMeta feedback createdAt')
@@ -763,20 +783,66 @@ export const duplicateTrip = catchAsync(
   }
 );
 
+/**
+ * Creates or refreshes the public share link (F7/F11/F20).
+ *
+ * - New links carry 128 bits of entropy (F11); every historical 48-bit id
+ *   keeps resolving unchanged because lookup is by exact string.
+ * - A duplicate-key race on `shareId` (F20 — 128 bits makes it theoretical,
+ *   "rare but not impossible") is retried by minting a fresh id.
+ */
 export const shareTrip = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const { trip } = tripContext(req);
 
     if (!trip.shareId) {
-      trip.shareId = crypto.randomUUID().replace(/-/g, '').slice(0, 12);
+      const mintNewShareId = () => crypto.randomBytes(16).toString('hex'); // 128 bits
+      let minted = mintNewShareId();
+      for (let attempt = 1; attempt <= 5; attempt += 1) {
+        try {
+          trip.shareId = minted;
+          trip.isPublic = true;
+          await trip.save();
+          break;
+        } catch (error: any) {
+          // Mongo duplicate-key → the impossible-but-planned collision (F20).
+          const isDupKey = error?.code === 11000 || /duplicate key/i.test(String(error?.message));
+          if (!isDupKey || attempt === 5) throw error;
+          minted = mintNewShareId();
+        }
+      }
+    } else {
+      trip.isPublic = true;
+      await trip.save();
     }
-    trip.isPublic = true;
-    await trip.save();
 
     res.status(200).json({
       success: true,
       shareId: trip.shareId,
       message: 'Share link generated successfully',
+    });
+  }
+);
+
+/**
+ * Revokes the public share link (F7, E5). Flips `isPublic` off **and** clears
+ * `shareId`, so even someone who scrubbed the old URL from history gets the
+ * 404 — the share link is dead permanently, not just paused. Re-sharing later
+ * mints a completely different link, which is the safe default.
+ * DELETE /api/itinerary/:id/share
+ */
+export const revokeShareTrip = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { trip, role } = tripContext(req);
+
+    trip.isPublic = false;
+    trip.shareId = undefined;
+    await trip.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Share link revoked',
+      trip: { ...sanitizeTripFor(trip, role), role },
     });
   }
 );
@@ -791,13 +857,10 @@ export const getSharedTrip = catchAsync(
       throw new AppError('Shared itinerary not found or has been revoked', 404);
     }
 
-    res.status(200).json({
-      _id: trip._id,
-      title: trip.title,
-      status: trip.status,
-      tripDetails: trip.tripDetails,
-      createdAt: trip.createdAt,
-    });
+    // Exact allow-list (F14) — `projectPublicTrip` decrees the shape and the
+    // contract test pins the key set. `customRoutes` was added in E5: drawn
+    // routes are part of the plan and are not sensitive.
+    res.status(200).json(projectPublicTrip(trip));
   }
 );
 

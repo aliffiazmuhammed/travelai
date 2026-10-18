@@ -18,6 +18,7 @@ import {
   deleteTrip,
   duplicateTrip,
   shareTrip,
+  revokeShareTrip,
   getSharedTrip,
 } from '../controllers/itinerary.controller.js';
 import {
@@ -71,7 +72,7 @@ import {
   changeMemberRoleSchema,
   transferOwnershipSchema,
 } from '../schemas/collab.schema.js';
-import { generateLimiter, inviteManageLimiter } from '../middleware/rateLimiter.middleware.js';
+import { generateLimiter, inviteManageLimiter, publicShareLimiter } from '../middleware/rateLimiter.middleware.js';
 import { handleReceiptUpload } from '../middleware/upload.middleware.js';
 
 const router = Router();
@@ -95,8 +96,8 @@ router.post(
   generateItineraryStream
 );
 
-// Public Shared Trip Endpoint (No auth required)
-router.get('/shared/:shareId', getSharedTrip);
+// Public Shared Trip Endpoint (No auth required). IP-limited (F11, E5).
+router.get('/shared/:shareId', publicShareLimiter, getSharedTrip);
 
 // Full CRUD Endpoints
 router.get('/', protect, getUserTrips);
@@ -132,6 +133,7 @@ router.delete('/:id', protect, requireTripRole('owner'), deleteTrip);
 // Duplicating only needs read access; the copy becomes the caller's own trip.
 router.post('/:id/duplicate', protect, requireTripRole('viewer'), duplicateTrip);
 router.post('/:id/share', protect, requireTripRole('owner'), shareTrip);
+router.delete('/:id/share', protect, requireTripRole('owner'), revokeShareTrip);
 
 // Granular itinerary editing endpoints (Milestone 1: Trip Management & Editing)
 // E4: content mutations carry required `baseRev` so two collaborators cannot
