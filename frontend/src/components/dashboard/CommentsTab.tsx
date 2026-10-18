@@ -1,0 +1,576 @@
+import React, { useEffect, useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { toast } from "sonner";import {
+  Loader2,
+  MessageCircle,
+  Pencil,
+  RotateCcw,
+  Send,
+  Trash2,
+  X,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import type { TripComment, TripRole } from "@/types/trip";
+import type { UseTripComments } from "@/hooks/useTripComments";
+
+/**
+ * The 9th tab (Milestone 6 §19.7 / §20, sprint F6b) — day-anchored discussion
+ * beside the itinerary.
+ *
+ * Rank-aware in three states (the server enforces the real rules — this is UX
+ * honesty, not authorization): the composer is open for `commenter`+, shown
+ * WITH a "watch-only" message for viewers, and this tab itself is only mounted
+ * for real trips with a role at all (anonymous share pages never see it).
+ *
+ * Rendering is deliberately dull: plain-text bodies as React text nodes, no
+ * markdown, no rich text — XSS-safe by construction (§19.9).
+ */
+
+interface CommentsTabProps {
+  tripId: string;
+  /** The caller's own role on this trip. */
+  myRole: TripRole;
+  /** Number of itinerary days available as anchors (bounds the day picker). */
+  days?: number;
+  /** The shared comment state owned by ItineraryDisplay / useTripComments. */
+  controller: UseTripComments;
+}
+
+const COMMENT_MAX_LEN = 2000; // mirrors COMMENT_MAX_LEN (server default)
+
+const initialsFor = (label: string): string =>
+  (label || "T").trim().slice(0, 2).toUpperCase();
+
+/** Compact relative time — "3m", "2h", "5d", else a short date. */
+function relativeTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return "";
+  const seconds = Math.max(0, Math.floor((Date.now() - then) / 1000));
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+export const CommentsTab: React.FC<CommentsTabProps> = ({
+  tripId,
+  myRole,
+  days,
+  controller,
+}) => {
+  const { state } = controller;
+  const { comments, dayCounts } = state;
+  const canWrite = myRole !== "viewer";
+
+  const [dayFilter, setDayFilter] = useState<number | null>(null);
+  const [draft, setDraft] = useState("");
+  const [anchorDay, setAnchorDay] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [pendingDelete, setPendingDelete] = useState<TripComment | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  // Load the first page when the tab is opened (TabsContent mounts lazily).
+  useEffect(() => {
+    controller.ensureLoaded();
+  }, [controller]);
+
+  const dayChips = useMemo(
+    () =>
+      Object.keys(dayCounts)
+        .map(Number)
+        .filter((day) => day > 0 && dayCounts[String(day)] > 0)
+        .sort((a, b) => a - b),
+    [dayCounts]
+  );
+
+  const visible = useMemo(
+    () =>
+      dayFilter === null
+        ? comments
+        : comments.filter((row) => row.day === dayFilter),
+    [comments, dayFilter]
+  );
+
+  const anchoredDays = useMemo(() => {
+    const max = Math.max(days || 0, ...dayChips, 0);
+    return Array.from({ length: Math.max(0, max) }, (_, index) => index + 1);
+  }, [days, dayChips]);
+
+  const submit = async () => {
+    const body = draft.trim();
+    if (!body || state.submitting) return;
+    try {
+      await controller.addComment(body, anchorDay ?? undefined);
+      setDraft("");
+      toast.success("Comment added");
+    } catch (err: any) {
+      toast.error(err?.message || "Could not post your comment. Please try again.");
+    }
+  };
+
+  const startEdit = (row: TripComment) => {
+    setEditingId(row._id);
+    setEditDraft(row.body);
+  };
+
+  const saveEdit = async () => {
+    if (!editingId) return;
+    const body = editDraft.trim();
+    if (!body) return;
+    setBusyId(editingId);
+    try {
+      await controller.editComment(editingId, body);
+      setEditingId(null);
+      setEditDraft("");
+    } catch (err: any) {
+      toast.error(err?.message || "Could not save the change.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditDraft("");
+  };
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    const target = pendingDelete;
+    setPendingDelete(null);
+    setBusyId(target._id);
+    try {
+      await controller.removeComment(target);
+      toast.success(target.isYou ? "Your comment was removed" : "Comment removed");
+    } catch (err: any) {
+      toast.error(err?.message || "Could not remove the comment.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const retry = () => {
+    controller.ensureLoaded();
+    // ensureLoaded is idempotent per open; force a fresh attempt by reloading state
+  };
+
+  return (
+    <div className="space-y-4 max-w-3xl mx-auto">
+      <Card className="rounded-3xl border-border/70 bg-card shadow-xs overflow-hidden">
+        <CardContent className="p-5 sm:p-6 space-y-4">
+          {/* Header + day filter chips */}
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <MessageCircle className="w-4 h-4 text-primary" />
+              <h3 className="font-extrabold text-foreground text-sm uppercase tracking-wider">
+                Trip discussion
+              </h3>
+              <Badge variant="outline" className="text-[10px]">
+                {dayFilter === null ? comments.length : visible.length}
+              </Badge>
+            </div>
+          </div>
+
+          {dayChips.length > 0 && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setDayFilter(null)}
+                className={cn(
+                  "px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors",
+                  dayFilter === null
+                    ? "bg-primary/10 text-primary border-primary/30"
+                    : "border-border/60 text-muted-foreground hover:text-foreground"
+                )}
+              >
+                All
+              </button>
+              {dayChips.map((day) => (
+                <button
+                  key={day}
+                  type="button"
+                  onClick={() => setDayFilter(dayFilter === day ? null : day)}
+                  className={cn(
+                    "px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors",
+                    dayFilter === day
+                      ? "bg-primary/10 text-primary border-primary/30"
+                      : "border-border/60 text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Day {day} · {dayCounts[String(day)]}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Composer — rank-aware (§19.7) */}
+          {canWrite ? (
+            <div className="space-y-2">
+              <Textarea
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                    event.preventDefault();
+                    void submit();
+                  }
+                }}
+                placeholder={
+                  anchorDay
+                    ? `Ask or suggest something about Day ${anchorDay}…`
+                    : "Share a thought about this trip…"
+                }
+                rows={2}
+                maxLength={COMMENT_MAX_LEN}
+                disabled={state.submitting}
+                className="rounded-2xl text-sm resize-none"
+              />
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setAnchorDay(null)}
+                    className={cn(
+                      "px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors",
+                      anchorDay === null
+                        ? "bg-primary/10 text-primary border-primary/30"
+                        : "border-border/60 text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    Whole trip
+                  </button>
+                  {anchoredDays.slice(0, 12).map((day) => (
+                    <button
+                      key={day}
+                      type="button"
+                      onClick={() => setAnchorDay(anchorDay === day ? null : day)}
+                      className={cn(
+                        "px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors",
+                        anchorDay === day
+                          ? "bg-primary/10 text-primary border-primary/30"
+                          : "border-border/60 text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      {day}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-muted-foreground hidden sm:inline">
+                    ⌘/Ctrl + Enter
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="hero"
+                    onClick={() => void submit()}
+                    disabled={!draft.trim() || state.submitting}
+                    className="rounded-xl text-xs font-bold gap-1.5 h-9 px-3"
+                  >
+                    {state.submitting ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Send className="w-3.5 h-3.5" />
+                    )}
+                    <span>Post</span>
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-border/70 bg-muted/40 p-3 text-xs text-muted-foreground">
+              You're viewing this trip, so the discussion is read-only — ask the
+              owner to change your role to comment.
+            </div>
+          )}
+
+          {/* Stream */}
+          {state.status === "idle" || state.status === "loading" ? (
+            <div className="flex items-center justify-center py-8 text-muted-foreground">
+              <Loader2 className="w-5 h-5 animate-spin" />
+            </div>
+          ) : state.status === "error" ? (
+            <div className="flex flex-col items-center gap-2 py-8 text-muted-foreground">
+              <p className="text-xs">Could not load the discussion.</p>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={retry}
+                className="rounded-xl text-xs font-bold gap-1.5 h-8 px-3"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Retry</span>
+              </Button>
+            </div>
+          ) : visible.length === 0 ? (
+            <div className="py-8 text-center text-xs text-muted-foreground">
+              {dayFilter === null
+                ? "No comments yet — start the conversation above."
+                : "Nothing on this day yet."}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {visible.map((row) => (
+                <CommentRow
+                  key={row._id}
+                  row={row}
+                  canModerate={myRole === "owner" || Boolean(row.isYou)}
+                  isBusy={busyId === row._id}
+                  editing={editingId === row._id}
+                  editDraft={editDraft}
+                  onEditDraftChange={setEditDraft}
+                  onStartEdit={() => startEdit(row)}
+                  onSaveEdit={() => void saveEdit()}
+                  onCancelEdit={cancelEdit}
+                  onAskDelete={() => setPendingDelete(row)}
+                />
+              ))}
+              {state.nextCursor && (
+                <div className="pt-1 text-center">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    disabled={state.loadingEarlier}
+                    onClick={() => void controller.loadEarlier()}
+                    className="rounded-xl text-xs font-bold gap-1.5 h-8 px-3 text-muted-foreground"
+                  >
+                    {state.loadingEarlier ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : null}
+                    <span>Load earlier comments</span>
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Moderation / self-removal confirm (§19.7) */}
+      <AlertDialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDelete(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove this comment?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDelete?.isYou
+                ? "Your comment disappears for everyone, but a removal record is kept."
+                : "It disappears for everyone — but the removal keeps its author and time for the audit trail."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep it</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void confirmDelete()}>
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+};
+
+/* -------------------------------------------------------------------------- */
+
+interface CommentRowProps {
+  row: TripComment;
+  canModerate: boolean;
+  isBusy: boolean;
+  editing: boolean;
+  editDraft: string;
+  onEditDraftChange: (value: string) => void;
+  onStartEdit: () => void;
+  onSaveEdit: () => void;
+  onCancelEdit: () => void;
+  onAskDelete: () => void;
+}
+
+/** One bubble — right-aligned when the caller wrote it; tombstones shrink. */
+const CommentRow: React.FC<CommentRowProps> = ({
+  row,
+  canModerate,
+  isBusy,
+  editing,
+  editDraft,
+  onEditDraftChange,
+  onStartEdit,
+  onSaveEdit,
+  onCancelEdit,
+  onAskDelete,
+}) => {
+  if (row.deletedAt) {
+    return (
+      <div className="flex items-center justify-center py-1.5">
+        <span className="text-[11px] text-muted-foreground/70 italic">
+          {row.isYou ? "Your comment was removed" : "A comment was removed"}
+        </span>
+      </div>
+    );
+  }
+
+  const isMine = row.isYou;
+
+  return (
+    <div className={cn("flex gap-2", isMine ? "flex-row-reverse" : "flex-row")}>
+      <Avatar className="h-7 w-7 shrink-0">
+        <AvatarFallback
+          className={cn(
+            "text-[10px] font-bold",
+            isMine ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"
+          )}
+        >
+          {initialsFor(row.label)}
+        </AvatarFallback>
+      </Avatar>
+
+      <div
+        className={cn(
+          "min-w-0 max-w-[85%] sm:max-w-[75%] rounded-2xl border px-3 py-2",
+          isMine
+            ? "bg-primary/5 border-primary/20 rounded-tr-sm"
+            : "bg-background/60 border-border/60 rounded-tl-sm"
+        )}
+      >
+        <div
+          className={cn(
+            "flex items-center gap-1.5 flex-wrap text-[11px]",
+            isMine ? "justify-end" : "justify-start"
+          )}
+        >
+          <span className="font-bold text-foreground">
+            {isMine ? "You" : row.label}
+          </span>
+          {row.day !== undefined && (
+            <Badge
+              variant="outline"
+              className="text-[9px] px-1 py-0 h-3.5 border-border/60 text-muted-foreground"
+            >
+              Day {row.day}
+            </Badge>
+          )}
+          <span className="text-muted-foreground/70">{relativeTime(row.createdAt)}</span>
+          {row.editedAt && (
+            <span className="text-muted-foreground/60 italic">(edited)</span>
+          )}
+        </div>
+
+        {editing ? (
+          <div className="mt-1.5 space-y-1.5">
+            <Textarea
+              value={editDraft}
+              onChange={(event) => onEditDraftChange(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                  event.preventDefault();
+                  onSaveEdit();
+                }
+                if (event.key === "Escape") onCancelEdit();
+              }}
+              rows={2}
+              maxLength={COMMENT_MAX_LEN}
+              autoFocus
+              disabled={isBusy}
+              className="rounded-xl text-sm resize-none"
+            />
+            <div className="flex items-center justify-end gap-1">
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={onCancelEdit}
+                disabled={isBusy}
+                className="h-7 px-2 text-xs text-muted-foreground"
+              >
+                <X className="w-3 h-3" />
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="hero"
+                onClick={onSaveEdit}
+                disabled={isBusy || !editDraft.trim()}
+                className="h-7 px-2.5 text-xs font-bold"
+              >
+                {isBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                Save
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-foreground whitespace-pre-wrap break-words mt-0.5">
+            {row.body}
+          </p>
+        )}
+
+        {canModerate && !editing && (
+          <div
+            className={cn(
+              "flex items-center gap-0.5 mt-1.5",
+              isMine ? "justify-end" : "justify-start"
+            )}
+          >
+            {isMine && (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={onStartEdit}
+                disabled={isBusy}
+                title="Edit your comment"
+                className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-foreground gap-1"
+              >
+                <Pencil className="w-3 h-3" />
+                <span className="hidden sm:inline">Edit</span>
+              </Button>
+            )}
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={onAskDelete}
+              disabled={isBusy}
+              title={isMine ? "Remove your comment" : "Moderate — remove this comment"}
+              className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-destructive gap-1"
+            >
+              {isBusy ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <Trash2 className="w-3 h-3" />
+              )}
+              <span className="hidden sm:inline">{isMine ? "Delete" : "Remove"}</span>
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};

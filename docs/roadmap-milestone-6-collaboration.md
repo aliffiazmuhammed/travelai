@@ -1,6 +1,6 @@
 # Milestone 6 — Collaboration & Trip Sharing
 
-**Status:** approved. **Milestone 6 is complete: E1–E5 all shipped and verified** (E4 = concurrency + live tier, E5 = hardening pass). **Phase E6 (comments) in progress: F6a — comments backend — shipped and smoke-verified; F6b (frontend) pending.**
+**Status:** approved. **Milestone 6 is complete: E1–E5 all shipped and verified** (E4 = concurrency + live tier, E5 = hardening pass). **Phase E6 (comments) SHIPPED: F6a backend + F6b frontend, both verified.**
 
 **Scope:** let more than one person plan the same trip — invite people, assign what they can do, edit the itinerary together without overwriting each other, and track who changed what.
 
@@ -773,9 +773,9 @@ Safe to run repeatedly; matches only documents with no members.
 
 ---
 
-## 19. Phase E6 — Comments (F6a SHIPPED; F6b frontend pending)
+## 19. Phase E6 — Comments (SHIPPED: F6a + F6b, see §20–§21)
 
-> Planned 2026-10-18. Two independently shippable sprints: **F6a backend** — **shipped** (see §20) — and **F6b frontend** (next).
+> Planned 2026-10-18. Two independently shippable sprints: **F6a backend** — **shipped** (see §20) — and **F6b frontend** — **shipped** (see §21).
 >
 > **Roles are already the API.** `commenter` (rank 1) has existed in `TRIP_ROLES`, the rank arithmetic, `InviteDialog`'s role picker and the invite schema since E1 — comments only add the routes and UI that the rank has been waiting for. No data migration is needed.
 
@@ -966,3 +966,33 @@ components/dashboard/CommentsTab.tsx    list, composer, day filter chips, tombst
 - The comment-create limiter is per-user in-process; behind multiple instances it degrades exactly like presence (§8/§19.10).
 - Orphaned rows after a hard trip delete linger (§19.10 unchanged).
 - No `editedAt` window and no notification payloads yet — those arrive with F6b/F10.
+
+---
+
+## 21. Appendix — Phase E6 sprint F6b (comments frontend) SHIPPED
+
+> Shipped 2026-10-18, one commit. `npx tsc --noEmit` clean + `vite build` green (the comment surface code-splits inside the existing `ItineraryDisplay` chunk).
+
+### 21.1 What shipped
+
+| Piece | File / change |
+|---|---|
+| Types | `types/trip.ts` — `TripComment` (no `userId` on the wire; the doc-comment codifies "never trust `frame.isYou`"). |
+| API | `services/api.ts` — `getTripComments` / `addTripComment` / `editTripComment` / `removeTripComment`; deliberately **no `baseRev`** — comment writes never touch the trip document. |
+| SSE hook | `hooks/useTripEvents.ts` — new `onCommentEvent` callback + `CommentFrame` union; the ref-callback pattern avoids resubscribing the stream. |
+| State | `hooks/useTripComments.ts` — newest-first list, cursor "Load earlier", **optimistic add with rollback** (limiter 429 / cap 409 roll back the placeholder + the day-chip bump), optimistic tombstone blanking, `_id`-deduped live ingest. |
+| UI | `components/dashboard/CommentsTab.tsx` — the 9th tab: day filter chips (`dayCounts`), day-anchored composer (⌘/Ctrl+Enter), own bubbles right-aligned, tombstones as hairlines, inline edit, author/owner removal behind a confirm, viewer locked-state copy, empty/error/retry states. |
+| Wiring | `ItineraryDisplay.tsx` — `useTripComments` lives next to the ONE EventSource; `onCommentEvent` lands frames no matter which tab is open; `Discuss` trigger + content are gated by the same `isRealTrip && Boolean(role)` pattern as People. |
+
+### 21.2 Decisions worth remembering
+
+1. **One state owner, one stream.** The commenter state lives in `ItineraryDisplay` (not in `CommentsTab`) so comment frames merge even while the user is on another tab, and there is never a second SSE/heartbeat connection per trip.
+2. **Tab mounts are lazy** (Radix unmounts inactive `TabsContent`), so the first page fetch happens `onTabOpen` via `ensureLoaded()` (idempotent, retried on the next open after a failure) — a visitor who never opens *Discuss* never pays for the query.
+3. **The identity contract:** HTTP responses' `isYou` is authority; live frames' `isYou` is ignored (it is the author's view). Dedupe by `_id` makes the author's optimistic echo idempotent even when their own frame arrives mid-flight.
+4. **`dayCounts` stay server-truth:** the first load reads the aggregation; the composer/removal nudge locally in between; live frames never guess at the aggregate (they only prepend/patch rows).
+
+### 21.3 Honest limits
+
+- **Stretch F6b2 (per-day badges in `DayTimeline`) is not shipped** — the tab's day chips are the cut that made the sprint; the badges need `dayCounts` threaded into the timeline component.
+- **Unread counts are not shipped** — that is the F10 notification-center work (a `TripReadState` collection, never embedded in `Trip`).
+- **Frames during the initial load** prepend ahead of the pending page read; the page read replaces the list wholesale, which is correct (server truth) but can transiently hide a frame-arrived row until the reader catches up — invisible in practice (the reader and the sheet land within one round-trip).

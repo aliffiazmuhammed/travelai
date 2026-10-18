@@ -24,6 +24,7 @@ import type {
   TripMember,
   TripInviteInfo,
   InvitePreview,
+  TripComment,
 } from '@/types';
 
 export interface StreamProgressEvent {
@@ -497,6 +498,37 @@ class ApiClient {
     token: string
   ): Promise<{ success: boolean; role: Exclude<TripRole, 'owner'>; alreadyMember: boolean; tripId: string; message: string }> {
     return this.request(`/api/invites/${encodeURIComponent(token)}/accept`, { method: 'POST' });
+  }
+
+  // Comments (Milestone 6, sprint F6a / F6b). No baseRev: comment writes never
+  // touch the Trip document, so nothing here can trigger a REV_CONFLICT.
+  async getTripComments(
+    id: string,
+    params?: { before?: string; limit?: number }
+  ): Promise<{ success: boolean; comments: TripComment[]; nextCursor: string | null; dayCounts: Record<string, number> }> {
+    const search = new URLSearchParams();
+    if (params?.before) search.set('before', params.before);
+    if (params?.limit) search.set('limit', String(params.limit));
+    const query = search.toString();
+    return this.request(`/api/itinerary/${id}/comments${query ? `?${query}` : ''}`);
+  }
+
+  async addTripComment(id: string, payload: { body: string; day?: number }): Promise<{ success: boolean; comment: TripComment }> {
+    return this.request(`/api/itinerary/${id}/comments`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async editTripComment(id: string, commentId: string, body: string): Promise<{ success: boolean; comment: TripComment }> {
+    return this.request(`/api/itinerary/${id}/comments/${commentId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ body }),
+    });
+  }
+
+  async removeTripComment(id: string, commentId: string): Promise<{ success: boolean; comment: TripComment }> {
+    return this.request(`/api/itinerary/${id}/comments/${commentId}`, { method: 'DELETE' });
   }
 
   /** E4b — keep the SSE presence entry alive (decoration only; errors ignored). */

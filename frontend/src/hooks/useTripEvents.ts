@@ -48,9 +48,20 @@ export function appFeatures(): Promise<HealthFeatures> {
 interface UseTripEventsOptions {
   /** Called (debounced) for every `trip:updated` — the caller refetches. */
   onTripUpdated?: () => void;
+  /** Called for every `comment:new` / `comment:update` frame (F6a/F6b). */
+  onCommentEvent?: (frame: CommentFrame) => void;
   /** Heartbeat cadence; must stay below the server TTL (30s default). */
   heartbeatMs?: number;
 }
+
+/**
+ * A comment frame (Milestone 6 §19.4). `comment` is the server's projected row;
+ * `isYou` on a fan-out frame is the AUTHOR's view, not the recipient's — every
+ * consumer must dedupe by `_id` and trust its own POST responses instead.
+ */
+export type CommentFrame =
+  | { type: 'comment:new'; tripId: string; comment: import('@/types').TripComment }
+  | { type: 'comment:update'; tripId: string; comment: import('@/types').TripComment };
 
 /**
  * mount an SSE stream + heartbeat loop for a trip. Returns the live roster
@@ -66,6 +77,8 @@ export function useTripEvents(
   // Latest callback without resubscribing the EventSource on re-render.
   const onTripUpdatedRef = useRef(onTripUpdated);
   onTripUpdatedRef.current = onTripUpdated;
+  const onCommentEventRef = useRef(onCommentEvent);
+  onCommentEventRef.current = onCommentEvent;
 
   // Coalesce bursts of trip:updated into one refetch (a save touches many
   // routes; the UI needs one fresh read, not N).
@@ -103,6 +116,8 @@ export function useTripEvents(
               setPresence(event.users as PresenceUser[]);
             } else if (event?.type === 'trip:updated') {
               notifyUpdate();
+            } else if (event?.type === 'comment:new' || event?.type === 'comment:update') {
+              onCommentEventRef.current?.(event as CommentFrame);
             }
           } catch {
             /* malformed frame — ignore, keep-alives stay as comments */

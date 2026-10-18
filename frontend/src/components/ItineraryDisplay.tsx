@@ -12,6 +12,7 @@ import {
   History,
   Receipt,
   Users,
+  MessageCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -33,6 +34,8 @@ import { NearbyExplorer } from "./dashboard/NearbyExplorer";
 import { WeatherRoutingCard } from "./dashboard/WeatherRoutingCard";
 import { DayAlternativeDialog } from "./dashboard/DayAlternativeDialog";
 import { TripMembers } from "./dashboard/TripMembers";
+import { CommentsTab } from "./dashboard/CommentsTab";
+import { useTripComments } from "@/hooks/useTripComments";
 import { useTripEvents, type PresenceUser } from "@/hooks/useTripEvents";
 import { endDateFromStart, itineraryAnchor, zipWeatherToDays } from "@/lib/weather";
 import { swapDayPlans } from "@/lib/weatherRouting";
@@ -162,6 +165,8 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
   const canRestore = role ? role === "owner" || role === "editor" : true;
   // The People tab appears only for real trips with a Milestone 6 payload.
   const showPeopleTab = Boolean(isRealTrip && role);
+  // Same gate for the discussion tab (F6b) — the server decides who may write.
+  const showCommentsTab = showPeopleTab;
 
   /** E4b: `trip:updated` from another collaborator → silent refetch. Never
    * overwrites state while there are unsaved local edits (the conflict toast
@@ -179,10 +184,19 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
   };
 
   // Live roster + remote-write notifications (no-op when the tier is off).
+  //
+  // F6b: the comment state is owned HERE (next to the single EventSource) and
+  // handed down to CommentsTab — frames land in it no matter which tab the
+  // user is on, and duplicates are impossible because dedupe happens by `_id`.
+  const commentsController = useTripComments(showCommentsTab ? tripId : undefined);
+  const commentsIngestRef = useRef(commentsController.ingest);
+  commentsIngestRef.current = commentsController.ingest;
+
   const livePresence = useTripEvents(isRealTrip ? tripId : undefined, {
     onTripUpdated: () => {
       void liveRefresh();
     },
+    onCommentEvent: (frame) => commentsIngestRef.current(frame),
   });
 
   // --- Weather advisories (Milestone 4.4) ---
@@ -650,6 +664,17 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
                 <span className="hidden lg:inline">People</span>
               </TabsTrigger>
             )}
+
+            {showCommentsTab && (
+              <TabsTrigger
+                value="comments"
+                title="Discussion"
+                className="py-2.5 px-3 rounded-xl text-xs font-bold gap-2 shrink-0 data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
+              >
+                <MessageCircle className="w-3.5 h-3.5" />
+                <span className="hidden lg:inline">Discuss</span>
+              </TabsTrigger>
+            )}
           </TabsList>
         </div>
 
@@ -756,6 +781,18 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
         {showPeopleTab && (
           <TabsContent value="people" className="outline-hidden animate-fade-in">
             <TripMembers tripId={tripId!} myRole={role!} />
+          </TabsContent>
+        )}
+
+        {/* TAB 9: Trip discussion (Milestone 6 §19.7 / sprint F6b) */}
+        {showCommentsTab && (
+          <TabsContent value="comments" className="outline-hidden animate-fade-in">
+            <CommentsTab
+              tripId={tripId!}
+              myRole={role!}
+              days={safeData.duration_days}
+              controller={commentsController}
+            />
           </TabsContent>
         )}
       </Tabs>

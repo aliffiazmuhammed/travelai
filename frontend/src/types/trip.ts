@@ -449,6 +449,28 @@ export interface TripInviteInfo {
   createdAt: string;
 }
 
+/**
+ * One comment row as returned by the `/comments` endpoints (Milestone 6 §19.5,
+ * F6a). `userId` is deliberately NOT on the wire: identity ships as `label`
+ * (email local-part) + `isYou`. A tombstone keeps its slot with an empty body.
+ * On SSE frames `isYou` is the *author's* view — clients must not trust it
+ * (they dedupe by `_id` and know their own rows from POST responses).
+ */
+export interface TripComment {
+  _id: string;
+  tripId: string;
+  label: string;
+  /** Empty string on a tombstone. */
+  body: string;
+  /** Optional day anchor (1..day count); absent = about the trip in general. */
+  day?: number;
+  /** True on rows authored by the caller (reliable in HTTP responses only). */
+  isYou: boolean;
+  createdAt: string;
+  editedAt?: string;
+  deletedAt?: string;
+}
+
 /** What a signed-in user sees before accepting an invite. */
 export interface InvitePreview {
   trip: { title: string; destination?: string };

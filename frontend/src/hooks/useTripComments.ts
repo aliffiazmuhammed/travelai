@@ -1,0 +1,264 @@
+import { useCallback, useRef, useState } from 'react';
+import { api } from '@/services/api';
+import type { TripComment } from '@/types';
+import type { CommentFrame } from '@/hooks/useTripEvents';
+
+/**
+ * Trip comments state (Milestone 6 §19.7 / §20, sprint F6b).
+ *
+ * The state lives in `ItineraryDisplay` (which owns the one EventSource via
+ * `useTripEvents`) and is handed to `CommentsTab` as props — so a comment that
+ * arrives while the user is on another tab still merges here, and only ONE SSE
+ * channel exists per open trip. Rules encoded below:
+ *
+ * - **The stream is newest-first**, newest at the top — matching the server's
+ *   cursor direction; "Load earlier" appends older pages to the bottom.
+ * - **Dedupe by `_id` everywhere** (§19.4): a frame for a row the client
+ *   already holds is a patch, never a duplicate — this also makes the author's
+ *   own optimistic echo idempotent.
+ * - **`frame.isYou` is never trusted** (§20.2): frames carry the *author's*
+ *   view. Rows only get marked `isYou` when the caller's own HTTP response
+ *   produced them.
+ * - **dayCounts stay server-truth**: the initial load reads the aggregate and
+ *   the composer/removal nudge it locally in between — no client-side
+ *   re-aggregation over rows the client may not have loaded.
+ */
+
+export interface TripCommentsState {
+  comments: TripComment[];
+  dayCounts: Record<string, number>;
+  /** `null` when the older end of the stream is reached. */
+  nextCursor: string | null;
+  /** 'idle' = never opened, 'loading' = first page in flight, then ready/error. */
+  status: 'idle' | 'loading' | 'ready' | 'error';
+  loadingEarlier: boolean;
+  submitting: boolean;
+}
+
+export interface UseTripComments {
+  state: TripCommentsState;
+  /** First-page fetch — called when the tab is first opened. Idempotent. */
+  ensureLoaded: () => void;
+  loadEarlier: () => Promise<void>;
+  /** Resolves true on success; throws with the server message on failure. */
+  addComment: (body: string, day?: number) => Promise<boolean>;
+  editComment: (commentId: string, body: string) => Promise<boolean>;
+  removeComment: (comment: TripComment) => Promise<void>;
+  /** Live ingest — wired to `useTripEvents.onCommentEvent`. */
+  ingest: (frame: CommentFrame) => void;
+}
+
+/** Merges one row into the newest-first list by `_id`: patch in place, else prepend. */
+function mergeRow(list: TripComment[], row: TripComment, markMine: boolean): TripComment[] {
+  const normalized: TripComment = markMine ? { ...row, isYou: true } : row;
+  const index = list.findIndex((existing) => existing._id === normalized._id);
+  if (index === -1) return [normalized, ...list];
+  const next = [...list];
+  next[index] = normalized;
+  return next;
+}
+
+export function useTripComments(tripId?: string): UseTripComments {
+  const [state, setState] = useState<TripCommentsState>({
+    comments: [],
+    dayCounts: {},
+    nextCursor: null,
+    status: 'idle',
+    loadingEarlier: false,
+    submitting: false,
+  });
+
+  // Ref mirrors so event handlers never read state inside a setState updater
+  // (React may invoke updaters more than once — side effects belong in refs).
+  const bootstrapped = useRef(false); // guards a double first fetch
+  const cursorRef = useRef<string | null>(null);
+  const loadingEarlierRef = useRef(false);
+
+  /** Applies one server-shaped comment and marks it ours only when ours. */
+  const applyRow = useCallback((row: TripComment, mine: boolean) => {
+    setState((prev) => ({ ...prev, comments: mergeRow(prev.comments, row, mine) }));
+  }, []);
+
+  /** Bumps (or rolls back) one day-chip count locally between server reads. */
+  const bumpDayCount = useCallback((day: number | undefined, delta: number) => {
+    if (day === undefined) return;
+    setState((prev) => {
+      const key = String(day);
+      const next = Math.max(0, (prev.dayCounts[key] || 0) + delta);
+      return { ...prev, dayCounts: { ...prev.dayCounts, [key]: next } };
+    });
+  }, []);
+
+  const ensureLoaded = useCallback(() => {
+    if (!tripId || bootstrapped.current) return;
+    bootstrapped.current = true;
+    setState((prev) => ({ ...prev, status: 'loading' }));
+    void (async () => {
+      try {
+        const result = await api.getTripComments(tripId, { limit: 50 });
+        cursorRef.current = result.nextCursor ?? null;
+        setState((prev) => ({
+          ...prev,
+          comments: result.comments || [],
+          dayCounts: result.dayCounts || {},
+          nextCursor: result.nextCursor ?? null,
+          status: 'ready',
+        }));
+      } catch (err: any) {
+        bootstrapped.current = false; // allow a retry on the next tab open
+        setState((prev) => ({ ...prev, status: 'error' }));
+        console.error('comments: initial load failed', err?.message || err);
+      }
+    })();
+  }, [tripId]);
+
+  const loadEarlier = useCallback(async () => {
+    if (!tripId) return;
+    const before = cursorRef.current;
+    if (!before || loadingEarlierRef.current) return;
+    loadingEarlierRef.current = true;
+    setState((prev) => ({ ...prev, loadingEarlier: true }));
+    try {
+      const result = await api.getTripComments(tripId, { before, limit: 50 });
+      cursorRef.current = result.nextCursor ?? null;
+      setState((prev) => {
+        const known = new Set(prev.comments.map((existing) => existing._id));
+        const fresh = (result.comments || []).filter((row) => !known.has(row._id));
+        return {
+          ...prev,
+          // Older rows go to the BOTTOM (the list is newest-first).
+          comments: [...prev.comments, ...fresh],
+          nextCursor: result.nextCursor ?? null,
+          loadingEarlier: false,
+        };
+      });
+    } catch (err: any) {
+      setState((prev) => ({ ...prev, loadingEarlier: false }));
+      console.error('comments: load-earlier failed', err?.message || err);
+    } finally {
+      loadingEarlierRef.current = false;
+    }
+  }, [tripId]);
+
+  /**
+   * Optimistic add (§19.7): an in-flight row renders immediately and either
+   * becomes the server truth on 201, or rolls back on any failure (limiter
+   * 429, per-trip cap 409, network).
+   */
+  const addComment = useCallback(
+    async (body: string, day?: number): Promise<boolean> => {
+      if (!tripId) return false;
+      const tempId = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const optimistic: TripComment = {
+        _id: tempId,
+        tripId,
+        label: 'You',
+        body,
+        isYou: true,
+        createdAt: new Date().toISOString(),
+        ...(day !== undefined ? { day } : {}),
+      };
+
+      setState((prev) => ({
+        ...prev,
+        comments: [optimistic, ...prev.comments],
+        submitting: true,
+      }));
+      bumpDayCount(day, +1);
+
+      try {
+        const result = await api.addTripComment(tripId, {
+          body,
+          ...(day !== undefined ? { day } : {}),
+        });
+        setState((prev) => ({
+          ...prev,
+          // Drop the placeholder AND any same-_id row a frame may have raced
+          // in with; the authoritative row replaces both right after.
+          comments: prev.comments.filter(
+            (row) => row._id !== tempId && row._id !== result.comment._id
+          ),
+          submitting: false,
+        }));
+        applyRow(result.comment, true);
+        return true;
+      } catch (err) {
+        setState((prev) => ({
+          ...prev,
+          comments: prev.comments.filter((row) => row._id !== tempId),
+          submitting: false,
+        }));
+        bumpDayCount(day, -1);
+        throw err;
+      }
+    },
+    [tripId, applyRow, bumpDayCount]
+  );
+
+  const editComment = useCallback(
+    async (commentId: string, body: string): Promise<boolean> => {
+      if (!tripId) return false;
+      const result = await api.editTripComment(tripId, commentId, body);
+      applyRow(result.comment, true);
+      return true;
+    },
+    [tripId, applyRow]
+  );
+
+  /** Author-or-owner removal; the server answers with the tombstone row. */
+  const removeComment = useCallback(
+    async (comment: TripComment): Promise<void> => {
+      if (!tripId) return;
+      // Optimistically blank the body so the words vanish instantly for
+      // readers; the DELETE response finalizes the audit stamp (or rolls back).
+      setState((prev) => ({
+        ...prev,
+        comments: prev.comments.map((row) =>
+          row._id === comment._id ? { ...row, body: '' } : row
+        ),
+      }));
+      bumpDayCount(comment.day, -1);
+      try {
+        const result = await api.removeTripComment(tripId, comment._id);
+        applyRow(result.comment, comment.isYou);
+      } catch (err) {
+        // Undo the optimistic blank when the removal was refused.
+        setState((prev) => ({
+          ...prev,
+          comments: mergeRow(prev.comments, comment, false),
+        }));
+        bumpDayCount(comment.day, +1);
+        throw err;
+      }
+    },
+    [tripId, applyRow, bumpDayCount]
+  );
+
+  /**
+   * Live ingest — pure dedupe, no refetch, no dayCounts guessing: an unknown
+   * row's chip count only becomes exact on the next `ensureLoaded`.
+   */
+  const ingest = useCallback((frame: CommentFrame) => {
+    if (!frame?.comment?._id) return;
+    setState((prev) => {
+      const row = frame.comment;
+      const had = prev.comments.some((existing) => existing._id === row._id);
+      return {
+        ...prev,
+        comments: had
+          ? prev.comments.map((existing) => (existing._id === row._id ? row : existing))
+          : [row, ...prev.comments],
+      };
+    });
+  }, []);
+
+  return {
+    state,
+    ensureLoaded,
+    loadEarlier,
+    addComment,
+    editComment,
+    removeComment,
+    ingest,
+  };
+}
