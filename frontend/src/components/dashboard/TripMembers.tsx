@@ -250,15 +250,19 @@ export const TripMembers: React.FC<TripMembersProps> = ({ tripId, myRole }) => {
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
-                      <Badge
-                        className={cn(
-                          "px-2 py-0.5 text-[10px] font-bold gap-1",
-                          ROLE_BADGE_STYLE[member.role]
-                        )}
-                      >
-                        {isRowOwner && <Crown className="w-3 h-3" />}
-                        <span>{roleLabel(member.role)}</span>
-                      </Badge>
+                      {/* Redundant with the owner's role dropdown — hiding it
+                          on editable rows frees ~80px of name width on phones. */}
+                      {(isRowOwner || !isOwner) && (
+                        <Badge
+                          className={cn(
+                            "px-2 py-0.5 text-[10px] font-bold gap-1",
+                            ROLE_BADGE_STYLE[member.role]
+                          )}
+                        >
+                          {isRowOwner && <Crown className="w-3 h-3" />}
+                          <span>{roleLabel(member.role)}</span>
+                        </Badge>
+                      )}
 
                       {isOwner && !isRowOwner && (
                         <>

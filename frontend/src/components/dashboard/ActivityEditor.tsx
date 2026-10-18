@@ -214,14 +214,16 @@ export const ActivityEditor: React.FC<ActivityEditorProps> = ({
               <Input
                 value={form.latitude}
                 onChange={(e) => update("latitude", e.target.value)}
-                placeholder="Latitude (e.g. 11.5516)"
+                placeholder="Latitude"
+                title="e.g. 11.5516"
                 className="h-10 text-sm rounded-xl"
                 inputMode="decimal"
               />
               <Input
                 value={form.longitude}
                 onChange={(e) => update("longitude", e.target.value)}
-                placeholder="Longitude (e.g. 76.0874)"
+                placeholder="Longitude"
+                title="e.g. 76.0874"
                 className="h-10 text-sm rounded-xl"
                 inputMode="decimal"
               />

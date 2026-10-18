@@ -570,73 +570,84 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
         <div className="sticky top-16 z-30 bg-background/85 backdrop-blur-md py-2 -mx-2 px-2">
           <TabsList
             className={cn(
-              "grid w-full h-auto p-1.5 bg-muted/60 border border-border/60 rounded-2xl shadow-xs gap-1 grid-cols-4 sm:grid-cols-4 lg:grid-cols-8",
+              // Mobile/tablet: one horizontally-scrollable row of icon-only
+              // pills (labels would wrap into two cramped rows of tiny cells).
+              // From lg up: the familiar label grid.
+              "flex w-full max-w-full overflow-x-auto scrollbar-none h-auto p-1.5 bg-muted/60 border border-border/60 rounded-2xl shadow-xs gap-1 lg:grid lg:grid-cols-8",
               !showPeopleTab && "lg:grid-cols-7"
             )}
           >
             <TabsTrigger
               value="timeline"
-              className="py-2.5 rounded-xl text-xs font-bold gap-2 data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
+              title="Day Timeline"
+              className="py-2.5 px-3 rounded-xl text-xs font-bold gap-2 shrink-0 data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
             >
               <Calendar className="w-3.5 h-3.5" />
-              <span>Day Timeline</span>
+              <span className="hidden lg:inline">Day Timeline</span>
             </TabsTrigger>
 
             <TabsTrigger
               value="map"
-              className="py-2.5 rounded-xl text-xs font-bold gap-2 data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
+              title="Interactive Map"
+              className="py-2.5 px-3 rounded-xl text-xs font-bold gap-2 shrink-0 data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
             >
               <MapPin className="w-3.5 h-3.5" />
-              <span>Interactive Map</span>
+              <span className="hidden lg:inline">Interactive Map</span>
             </TabsTrigger>
 
             <TabsTrigger
               value="budget"
-              className="py-2.5 rounded-xl text-xs font-bold gap-2 data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
+              title="Budget Analytics"
+              className="py-2.5 px-3 rounded-xl text-xs font-bold gap-2 shrink-0 data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
             >
               <Wallet className="w-3.5 h-3.5" />
-              <span>Budget Analytics</span>
+              <span className="hidden lg:inline">Budget Analytics</span>
             </TabsTrigger>
 
             <TabsTrigger
               value="stays"
-              className="py-2.5 rounded-xl text-xs font-bold gap-2 data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
+              title="Stays & Dining"
+              className="py-2.5 px-3 rounded-xl text-xs font-bold gap-2 shrink-0 data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
             >
               <Bed className="w-3.5 h-3.5" />
-              <span>Stays & Dining</span>
+              <span className="hidden lg:inline">Stays & Dining</span>
             </TabsTrigger>
 
             <TabsTrigger
               value="guide"
-              className="py-2.5 rounded-xl text-xs font-bold gap-2 data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
+              title="Guide & Safety"
+              className="py-2.5 px-3 rounded-xl text-xs font-bold gap-2 shrink-0 data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
             >
               <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Guide & Safety</span>
+              <span className="hidden lg:inline">Guide & Safety</span>
             </TabsTrigger>
 
             <TabsTrigger
               value="expenses"
-              className="py-2.5 rounded-xl text-xs font-bold gap-2 data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
+              title="Expenses"
+              className="py-2.5 px-3 rounded-xl text-xs font-bold gap-2 shrink-0 data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
             >
               <Receipt className="w-3.5 h-3.5" />
-              <span>Expenses</span>
+              <span className="hidden lg:inline">Expenses</span>
             </TabsTrigger>
 
             <TabsTrigger
               value="history"
-              className="py-2.5 rounded-xl text-xs font-bold gap-2 data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
+              title="History"
+              className="py-2.5 px-3 rounded-xl text-xs font-bold gap-2 shrink-0 data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
             >
               <History className="w-3.5 h-3.5" />
-              <span>History</span>
+              <span className="hidden lg:inline">History</span>
             </TabsTrigger>
 
             {showPeopleTab && (
               <TabsTrigger
                 value="people"
-                className="py-2.5 rounded-xl text-xs font-bold gap-2 data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
+                title="People"
+                className="py-2.5 px-3 rounded-xl text-xs font-bold gap-2 shrink-0 data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
               >
                 <Users className="w-3.5 h-3.5" />
-                <span>People</span>
+                <span className="hidden lg:inline">People</span>
               </TabsTrigger>
             )}
           </TabsList>
