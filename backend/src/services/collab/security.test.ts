@@ -195,6 +195,7 @@ test('verifyCsrf: token comparison is safe against crafted protobufs — plain s
 test('built-in deploy origins are approved', () => {
   assert.equal(isAllowedCorsOrigin('https://travelai-eta.vercel.app'), true);
   assert.equal(isAllowedCorsOrigin('https://travelai-8cm4.vercel.app'), true);
+  assert.equal(isAllowedCorsOrigin('https://travelai-tjce.onrender.com'), true);
 });
 
 test('localhost dev ports are approved', () => {

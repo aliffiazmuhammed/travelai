@@ -18,6 +18,7 @@ const BUILT_IN_ORIGINS = [
   // Known production SPA deployments (added explicitly, not by suffix)
   'https://travelai-eta.vercel.app',
   'https://travelai-8cm4.vercel.app',
+  'https://travelai-tjce.onrender.com',
 ];
 
 /** True when `origin` may receive credentialed responses. */
@@ -27,6 +28,7 @@ export function isAllowedCorsOrigin(rawOrigin: string): boolean {
 
   const candidates = [
     ...BUILT_IN_ORIGINS,
+    process.env.RENDER_EXTERNAL_URL || '',
     ...(env.FRONTEND_URL || '').split(','),
     ...(env.ALLOWED_EXTRA_ORIGINS || '').split(','),
   ]
