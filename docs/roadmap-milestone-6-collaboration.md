@@ -608,7 +608,7 @@ Safe to run repeatedly; matches only documents with no members.
 1. **Scope of the first sprint.** E1 (access core + security prerequisite) only, or E1+E2 together?
 2. **Email invites?** Link-only (no new dependency) or add Resend in E5?
 3. **Fix the pre-existing bugs now or separately?** F1 (CORS/CSRF, Critical) and F4 (participant `_id` churn) are not collaboration features but are prerequisites for doing this safely.
-4. **Comments** (the `commenter` role) — in scope for this milestone or a later one?
+4. **Comments** (the `commenter` role) — in scope for this milestone or a later one? → Later. Landed in E1–E5; the plan is drafted in **§19 (Phase E6)**.
 
 
 ---
@@ -770,3 +770,165 @@ Safe to run repeatedly; matches only documents with no members.
 - The F20 retry loop still saves the trip inside the retry: a fifth consecutive collision surfaces the raw 500 (statistically a heat-death-of-the-universe event at 128 bits).
 - `VERSIONS_MAX` trims the oldest snapshots at push time; trips that already exceeded 20 shrink on their next edit, not retroactively.
 - Insight aggregates cap at the 50 most recent trips (unchanged).
+
+---
+
+## 19. Phase E6 — Comments (DRAFT — not approved, not shipped)
+
+> Planning stage, 2026-10-18. Planned as the next milestone. Two independently shippable sprints: **F6a backend**, **F6b frontend**. Status line of this document stays "complete" until F6a ships.
+>
+> **Roles are already the API.** `commenter` (rank 1) has existed in `TRIP_ROLES`, the rank arithmetic, `InviteDialog`'s role picker and the invite schema since E1 — comments only add the routes and UI that the rank has been waiting for. No data migration is needed.
+
+### 19.1 What the user can do
+
+- *"Let my mom leave a note on Day 2 without touching the itinerary."*
+- *"I ask a question next to what it is about — pinned to the day it concerns."*
+- *"An owner tidies up: a vandal comment disappears for everyone, but I keep an audit trail."*
+- *"A viewer just reads — and the UI tells them why they can't write."*
+
+### 19.2 Data model — a separate collection, deliberately
+
+The F13 lesson from this milestone: embedded arrays under `Trip` (`members`, `versions`, `expenses`, `customRoutes`) are bounded by pattern in a single trip, but comments are a social stream and grow with *people*, not trip content. Embedding them would repeat the unbounded-array mistake and repaginate every trip read.
+
+```ts
+// backend/src/models/TripComment.ts
+export interface ITripComment {
+  tripId: Types.ObjectId;    // indexed — the only lookup key besides _id
+  userId: Types.ObjectId;    // ref User — never denormalized away; audit field
+  body: string;              // trimmed, 1..COMMENT_MAX_LEN (default 2000)
+  day?: number;              // optional day anchor (1..999); undefined = general
+  editedAt?: Date;           // set on PATCH
+  deletedAt?: Date;          // soft-delete tombstone (moderation)
+  createdAt: Date;           // cursor + ordering
+  updatedAt: Date;
+}
+```
+
+Indexes:
+
+```ts
+commentSchema.index({ tripId: 1, createdAt: -1 });   // pagination + the POST cap check
+```
+
+**Why `createdAt` also serves as the pagination cursor.** ObjectId monotonicity plus an insert-only row (writes never change `createdAt`) makes `{ createdAt, _id }` a stable cursor; ties across the same millisecond resolve by `_id` for a deterministic order.
+
+**Why soft-delete.** A hard-removed row breaks threads, hides moderation evidence, and cannot be undone. The tombstone keeps `userId` and timing; the body is replaced. (Comments outlive a trip's hard delete — same as `TripInvite` rows today; §19.8.)
+
+**Explicitly not embedded into `Trip`, and not rev-coupled.** A comment write never touches the `Trip` document — no `rev` bump, so collaborators' open edits never see a spurious 409 from someone leaving a remark. Comment arrival is a separate message lane (§19.4) on the existing SSE channel.
+
+### 19.3 API surface and guard matrix
+
+| Method | Path | Rank | Notes |
+|---|---|---|---|
+| `GET` | `/api/itinerary/:id/comments` | `viewer` | `?before="<createdAt ISO>\|_id"` cursor, `limit` ≤ 50. Returns `{ success, comments, nextCursor, dayCounts }` — `dayCounts` is a parallel `countDocuments`-per-day aggregation for the day badges. |
+| `POST` | `/api/itinerary/:id/comments` | `commenter` | `{ body, day? }` → 201 hydrated comment. Per-user rate limiter (§19.6). |
+| `PATCH` | `/api/itinerary/:id/comments/:commentId` | `viewer` + author-of-record | `{ body }`; author-only (rank is irrelevant to *authorship* — an ex-editor demoted to viewer still owns their old comments); sets `editedAt`. |
+| `DELETE` | `/api/itinerary/:id/comments/:commentId` | `viewer` + author-or-owner | Author deletes own; **owner moderates anyone's**. Sets `deletedAt`, empties the body. |
+
+**Rank-vs-authorship is a two-layer check, like member management.** The uniform rank gates at the router (`viewer` for the author/owner routes is intentionally *any member*), and `services/collab/comments.ts` does the ownership decision: author-xor-owner. This is the same shape as `assertMemberRemoval` and gets the same service-level tests.
+
+- **404 vs 403 semantics unchanged (§3.2):** no membership → 404 (the trip guard loads the trip first, so this is free); wrong rank when POSTing → 403 with the copy "You don't have permission to comment on this trip."
+- **New zod schema** `comments.schema.ts`: `body` = trimmed non-empty string ≤ `COMMENT_MAX_LEN` (rejects whitespace-only), `day` optional positive int; `validate()` strips everything else.
+- **Route placement:** appended to `itinerary.routes.ts` with the other `:id` routes — the router-coverage test forces a rank declaration for each, immediately, which is exactly the E1 defense working as designed.
+
+### 19.4 Live delivery — one channel, a new frame type
+
+The E4 bus (`presence.ts`) is content-agnostic: any frame `{ type, ... }` fanned to per-trip subscribers by trip id. Comments extend it — no new channel, no new connection:
+
+```ts
+// services/collab/presence.ts — one new export beside emitTripUpdated
+export function emitCommentEvent(tripId: string, frame: unknown): void { ... }
+```
+
+Frame kinds emitted (service-level, after hydration — the same pattern as the three explicit `Trip.updateOne` emitters):
+
+- `{ type: 'comment:new', comment }` — the full hydrated row (includes `label`, `isYou` computed per-recipient? **No — `isYou` is a projection concern,** see §19.5; the frame carries `userId` and the SPA filters locally).
+- `{ type: 'comment:update', comment }` — edited row or a `{ body: '', deletedAt }` tombstone, for in-place patching.
+
+**Emission must not touch `emitTripUpdated`** — the SPA's generic "refetch the trip" path stays reserved for document changes so a comment storm cannot trigger itinerary refetches.
+
+### 19.5 Backend service surface
+
+```ts
+// services/collab/comments.ts
+listTripComments(tripId, { before?, limit })     → { rows, nextCursor, dayCounts }
+createTripComment(trip, userId, { body, day? })  → hydrated row; enforces the per-trip cap
+ensureCommentAuthor(commentId, userId)           → row or 404 (ownership check only)
+editTripComment(row, userId, { body })           → author-only, sets editedAt
+removeTripComment(row, userId, role)             → author-or-owner, tombstone
+projectComment(row, viewerId)                    → { _id, tripId, userId?, label, body, day?, isYou,
+                                                     createdAt, editedAt?, deletedAt? }
+```
+
+- **`label` comes from `User.email`'s local-part** — the exact pattern the members UI uses since E2 (§18.2). Adding `User.name` later upgrades every label at once; nothing in the comment shape changes.
+- **`userId` is not published to clients other than... actually is:** only `label` + `isYou` ship; the raw `userId` stays server-side (consistent with member-row projection, and it removes any user-id enumeration from the comment surface). The SPA needs no ids for live frames — matching is by `_id`.
+- **Hydration reads `User` in one `$in` projection per page** (`email` only); single-comment frames hydrate one row.
+- **Per-trip write cap:** `COMMENT_MAX_PER_TRIP` (default 200) checked via one indexed `countDocuments` on POST — bounds abuse and document growth while staying O(1)-ish. Full-trip → 409 with a plain message.
+- **Rate limiter:** `commentCreateLimiter` — `userOrIpKey` (F18 pattern), 60 posts / 15 min, on POST only; reads/edits/deletes stay unthrottled beyond the general API surface.
+
+### 19.6 Configuration
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `COMMENT_MAX_LEN` | `2000` | Body length cap (chars, zod-enforced). |
+| `COMMENT_MAX_PER_TRIP` | `200` | Per-trip cap on non-deleted comments; POST 409 above it. |
+| `COMMENT_CREATE_PER_15MIN` | `60` | Per-user POST limiter (keyed user-or-IP per F18). |
+| `COMMENTS_PAGE_SIZE` | `50` | Server max per page regardless of a larger `limit`. |
+
+### 19.7 Frontend
+
+```
+hooks/useTripComments.ts                page state + cursor "load more" + live ingest (§19.4)
+components/dashboard/CommentsTab.tsx    list, composer, day filter chips, tombstones, locked state
+```
+
+- **`CommentsTab` (a 9th tab on real trips, alongside People):** shown for any member with `role` (`showCommentsTab = isRealTrip && Boolean(role)`, the E3 cosmetic pattern — the *server* enforces who can write). Renders: day filter chips (from `dayCounts`), the comment stream (own bubbles right-aligned, others left, "(edited)" markers, tombstones as thin "comment removed" rows), and the composer.
+- **The composer is rank-aware in three states:** open for `commenter`+ (textarea, plain text rendered via text nodes — no rich text, no markdown → XSS-safe by construction); *disabled with "Viewers can't comment — ask the owner to change your role"* for viewers; hidden entirely on the public share page (route guards answer 404 for anonymous callers there, so it must not be attempted).
+- **Live ingest through the existing `useTripEvents` hook:** it already receives every frame for the subscribed trip; extend its callback surface with `onCommentEvent` (typed discriminated union) so `useTripComments` appends/patches in place. Dedupe by `_id` (idempotent frames, since a participating client can also be the author echoing their own write).
+- **Optimistic add with rollback:** the POST response truth-serializes the row (`createTripComment` returns the hydrated projection), so the app pattern stays manual-`useState`, matching how the codebase avoids React Query hooks (F21 aside).
+- **Stretch item (F6b2, cuttable):** per-day comment-count badges inline in `DayTimeline`. Requires threading `dayCounts` down; the day-chip filter inside the tab is the first cut and ships alone.
+- **Moderation affordance in `TripMembers`: nothing.** Owner deletion lives where the comment lives: an inline owner-only delete on others' bubbles, with a confirm.
+
+### 19.8 Sprints
+
+### F6a — Comments backend *(ships alone; zero UI change)*
+
+- `models/TripComment.ts` + indexes; `schemas/comments.schema.ts`.
+- `services/collab/comments.ts` — list/panel cap/author rules/hydration (§19.5).
+- `controllers/collab.controller.ts` — the four handlers; routes appended to `itinerary.routes.ts` with guards; `commentCreateLimiter`.
+- `presence.ts` — `emitCommentEvent` export; service-level emissions per frame kind (§19.4).
+- `env.ts` + `.env.example` + README: the four variables of §19.6.
+- Tests: router-coverage spots (the three routes' ranks POST=`commenter`, DELETE=`viewer`+author-or-owner); service tests — whitespace body rejected, length boundary, tombstone preserving `userId` while emptying `body`, cap arithmetic at `COMMENT_MAX_PER_TRIP`, author-xor-owner matrix including the demoted-author edge (a demoted-to-viewer author can still edit/delete their own), cursor pagination (tie-break determinism), and `dayCounts` aggregation. **Live smoke** `smoke-e6.mts` reusing the `smoke-e5.mts` harness: viewer denied POST (403), commenter full lifecycle, non-member 404, public share endpoint untouched.
+
+*Effort: M. Risk: low — the guard, limiter, sanitize and SSE machinery all exist; the work is glue + tests.*
+
+### F6b — Comments frontend
+
+- Types (`TripComment`), four `api.ts` methods, `useTripComments`, `CommentsTab` + the 9th-tab wiring and conditional grid span (mirroring the 8th-tab pattern), `useTripEvents.onCommentEvent`.
+- Locked/empty states; optimistic add + conflict-free load-more; tombstone rendering; owner moderation control.
+- Stretch: `DayTimeline` badges (F6b2).
+
+*Effort: M. Risk: none structural — the tab scaffolding, gating and live-tier plumbing are all E3/E4 patterns.*
+
+**Dependency order:** `F6a ─► F6b` (plus the stretch item last). Each lands as one commit, built/tests/smoke-verified per the established workflow, ship-note appendix (§19.x shipped) added to this document.
+
+### 19.9 Flaws this plan closes by design
+
+| Risk | Why it cannot happen |
+|---|---|
+| A viewer or anonymous user writing a comment | `requireTripRole('commenter')` at the router; the rank ladder already outlaws viewer 0 < 1. |
+| Comment-id usability for enumeration probing | Non-members get 404 (existing trip guard); comment routes never return existence for strangers. |
+| XSS through comment bodies | Plain text, ≤ 2000 chars, rendered as React text nodes; no HTML/markdown parsing anywhere. |
+| A comment storm inflating the trip document | Comments live in their own collection with per-trip and per-user caps; the trip document never grows. |
+| A spurious 409 from concurrent commentary | Comment writes never touch `rev` and never emit `trip:updated`. |
+| A demoted author losing moderation over their own words | Author-of-record checks binds to `userId`, not current rank. |
+| A vandal noted in the removal | Soft-delete tombstones: the owner's removals keep `userId` + timestamp for the audit trail. |
+| A route silently unguarded | Appended routes fail the router-coverage test until ranked — the E1 §6.3 test does its job again. |
+
+### 19.10 Residual risks (stated openly)
+
+1. **Comment edit is allowed forever** (no window). Fine for a travel-planning context; revisit only if cross-trip reputation matters someday.
+2. **Day-anchor is free-floating text so far as UI goes** — day chips reflect what people actually attached; nothing validates that `day` corresponds to a real itinerary day.
+3. **Orphaned comment rows after a hard trip delete** linger (tripId lookup never matches). Cleanup is a periodic script—only worth writing if collection size ever matters.
+4. **Multi-instance parity:** `emitCommentEvent` rides the same in-process bus as presence — live comment frames degrade to the E4a focus-refetch across instances exactly like the roster does.
+5. **`label` collision:** email ≤2 people with the same local-part on one trip (e.g. two "kiran" Gmail) label identically. Cosmetic; the deferred `User.name` is the fix.
