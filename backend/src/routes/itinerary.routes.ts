@@ -36,6 +36,7 @@ import {
   deleteTripRoute,
 } from '../controllers/route.controller.js';
 import { protect } from '../middleware/auth.middleware.js';
+import { requireTripRole } from '../middleware/tripAccess.middleware.js';
 import { validate } from '../middleware/validate.middleware.js';
 import {
   generateItinerarySchema,
@@ -57,6 +58,8 @@ import { generateLimiter } from '../middleware/rateLimiter.middleware.js';
 import { handleReceiptUpload } from '../middleware/upload.middleware.js';
 
 const router = Router();
+
+// --- Public / non-trip-scoped endpoints (no role guard by design) -----------
 
 // Generation Endpoints
 router.post(
@@ -84,33 +87,73 @@ router.get('/', protect, getUserTrips);
 // Insights must be declared before the generic /:id route
 router.get('/insights', protect, getTripInsights);
 
-router.get('/:id', protect, getTripById);
-router.put('/:id', protect, validate(updateTripSchema), updateTrip);
-router.delete('/:id', protect, deleteTrip);
-router.post('/:id/duplicate', protect, duplicateTrip);
-router.post('/:id/share', protect, shareTrip);
+// --- Trip-scoped endpoints (guarded by requireTripRole — one choke point) ---
+
+// Every trip-scoped route below MUST carry a `requireTripRole(minimum)` guard
+// (`docs/roadmap-milestone-6-collaboration.md` §3.2 + §6.3). The coverage test
+// in `src/services/collab/routerCoverage.test.ts` walks this router and fails
+// CI when a trip-scoped route is missing its guard — adding a route without
+// one is impossible to merge, which is what keeps the choke point honest.
+//
+// `withVersions` mirrors the old `+versions` selects: version payloads live in
+// a `select: false` field, so only the routes that read or snapshot history
+// load it.
+
+router.get('/:id', protect, requireTripRole('viewer'), getTripById);
+
+// Owner: rename / change status / replace itinerary content
+router.put(
+  '/:id',
+  protect,
+  requireTripRole('owner', { withVersions: true, revMode: 'optional' }),
+  validate(updateTripSchema),
+  updateTrip
+);
+router.delete('/:id', protect, requireTripRole('owner'), deleteTrip);
+// Duplicating only needs read access; the copy becomes the caller's own trip.
+router.post('/:id/duplicate', protect, requireTripRole('viewer'), duplicateTrip);
+router.post('/:id/share', protect, requireTripRole('owner'), shareTrip);
 
 // Granular itinerary editing endpoints (Milestone 1: Trip Management & Editing)
 router.put(
   '/:id/activities',
   protect,
+  requireTripRole('editor', { withVersions: true, revMode: 'optional' }),
   validate(updateActivitySchema),
   updateTripActivity
 );
 router.put(
   '/:id/activities/reorder',
   protect,
+  requireTripRole('editor', { withVersions: true, revMode: 'optional' }),
   validate(reorderActivitiesSchema),
   reorderActivities
 );
-router.put('/:id/days/reorder', protect, validate(moveDaySchema), moveTripDay);
+router.put(
+  '/:id/days/reorder',
+  protect,
+  requireTripRole('editor', { withVersions: true, revMode: 'optional' }),
+  validate(moveDaySchema),
+  moveTripDay
+);
 
 // Version history endpoints
-router.get('/:id/versions', protect, getTripVersions);
-router.get('/:id/versions/:version', protect, getTripVersionDetails);
+router.get(
+  '/:id/versions',
+  protect,
+  requireTripRole('viewer', { withVersions: true }),
+  getTripVersions
+);
+router.get(
+  '/:id/versions/:version',
+  protect,
+  requireTripRole('viewer', { withVersions: true }),
+  getTripVersionDetails
+);
 router.post(
   '/:id/versions/:version/restore',
   protect,
+  requireTripRole('editor', { withVersions: true, revMode: 'optional' }),
   validate(restoreVersionSchema),
   restoreTripVersion
 );
@@ -119,49 +162,97 @@ router.post(
 router.post(
   '/:id/feedback',
   protect,
+  requireTripRole('owner'),
   validate(tripFeedbackSchema),
   submitTripFeedback
 );
 
 // Expense ledger & travellers (Milestone 5: Budget & Financial)
-router.get('/:id/expenses', protect, getTripExpenses);
-router.post('/:id/expenses', protect, validate(createExpenseSchema), addTripExpense);
+router.get('/:id/expenses', protect, requireTripRole('viewer'), getTripExpenses);
+router.post(
+  '/:id/expenses',
+  protect,
+  requireTripRole('editor', { revMode: 'optional' }),
+  validate(createExpenseSchema),
+  addTripExpense
+);
 router.put(
   '/:id/expenses/:expenseId',
   protect,
+  requireTripRole('editor', { revMode: 'optional' }),
   validate(updateExpenseSchema),
   updateTripExpense
 );
-router.delete('/:id/expenses/:expenseId', protect, deleteTripExpense);
+router.delete(
+  '/:id/expenses/:expenseId',
+  protect,
+  requireTripRole('editor', { revMode: 'optional' }),
+  deleteTripExpense
+);
 
 // Receipt upload / removal (Milestone 5: Budget & Financial)
 router.post(
   '/:id/expenses/:expenseId/receipt',
   protect,
+  requireTripRole('editor', { revMode: 'optional' }),
   handleReceiptUpload,
   uploadExpenseReceipt
 );
-router.delete('/:id/expenses/:expenseId/receipt', protect, deleteExpenseReceipt);
+router.delete(
+  '/:id/expenses/:expenseId/receipt',
+  protect,
+  requireTripRole('editor', { revMode: 'optional' }),
+  deleteExpenseReceipt
+);
 
 router.put(
   '/:id/participants',
   protect,
+  requireTripRole('editor', { revMode: 'optional' }),
   validate(participantsSchema),
   updateTripParticipants
 );
 
 // Currency & rates (Milestone 5: Budget & Financial)
-router.put('/:id/finance', protect, validate(financeUpdateSchema), updateTripFinance);
+router.put(
+  '/:id/finance',
+  protect,
+  requireTripRole('editor', { revMode: 'optional' }),
+  validate(financeUpdateSchema),
+  updateTripFinance
+);
 
 // Weather-aware day alternative (Milestone 4: Map & Geo)
-router.post('/:id/days/:day/indoor-alternative', protect, suggestDayAlternative);
+router.post(
+  '/:id/days/:day/indoor-alternative',
+  protect,
+  requireTripRole('editor'),
+  suggestDayAlternative
+);
 
 // Weather-aware routing analysis (Milestone 4: Map & Geo)
-router.get('/:id/weather-routing', protect, getWeatherRouting);
+router.get('/:id/weather-routing', protect, requireTripRole('viewer'), getWeatherRouting);
 
 // User-drawn custom routes (Milestone 4: Map & Geo)
-router.post('/:id/routes', protect, validate(createRouteSchema), addTripRoute);
-router.put('/:id/routes/:routeId', protect, validate(updateRouteSchema), updateTripRoute);
-router.delete('/:id/routes/:routeId', protect, deleteTripRoute);
+router.post(
+  '/:id/routes',
+  protect,
+  requireTripRole('editor', { revMode: 'optional' }),
+  validate(createRouteSchema),
+  addTripRoute
+);
+router.put(
+  '/:id/routes/:routeId',
+  protect,
+  requireTripRole('editor', { revMode: 'optional' }),
+  validate(updateRouteSchema),
+  updateTripRoute
+);
+router.delete(
+  '/:id/routes/:routeId',
+  protect,
+  requireTripRole('editor', { revMode: 'optional' }),
+  deleteTripRoute
+);
 
 export default router;

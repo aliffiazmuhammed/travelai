@@ -254,7 +254,7 @@ export const ExpenseTracker: React.FC<ExpenseTrackerProps> = ({
     try {
       setSavingPeople(true);
       const trip = await api.updateParticipants(tripId, [
-        ...people.map((p) => ({ name: p.name, isMe: p.isMe })),
+        ...people.map((p) => ({ _id: p._id, name: p.name, isMe: p.isMe })),
         { name: newParticipant.trim() },
       ]);
       applyTrip(trip);
@@ -272,7 +272,9 @@ export const ExpenseTracker: React.FC<ExpenseTrackerProps> = ({
       setSavingPeople(true);
       const trip = await api.updateParticipants(
         tripId,
-        people.filter((p) => p._id !== id).map((p) => ({ name: p.name, isMe: p.isMe }))
+        people
+          .filter((p) => p._id !== id)
+          .map((p) => ({ _id: p._id, name: p.name, isMe: p.isMe }))
       );
       applyTrip(trip);
     } catch (err) {

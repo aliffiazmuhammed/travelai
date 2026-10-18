@@ -360,8 +360,12 @@ JWT_SECRET=super_secret_jwt_passphrase_change_me_in_production
 GEMINI_API_KEY=AIzaSy...your_gemini_api_key_here
 GROQ_API_KEY=gsk_...your_groq_api_key_here
 
-# Frontend URL (for CORS allowance)
+# Frontend URL (for CORS allowance — exact origins, comma-separated for multiple)
+# Milestone 6 note: wildcard suffixes (*.vercel.app / *.onrender.com) are no longer
+# accepted. List every deployment (including Vercel previews) explicitly.
 FRONTEND_URL=http://localhost:8080
+# Optional: extra exact origins beyond FRONTEND_URL
+ALLOWED_EXTRA_ORIGINS=
 
 # AI Generation Cache (optional)
 AI_CACHE_TTL_MS=21600000   # 6 hours

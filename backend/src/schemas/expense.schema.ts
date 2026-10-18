@@ -39,10 +39,14 @@ export const financeUpdateSchema = z.object({
 export const participantsSchema = z.object({
   participants: z
     .array(
-      z.object({
-        name: z.string().min(1).max(60),
-        isMe: z.boolean().optional(),
-      })
+      z
+        .object({
+          // Existing participants may echo their `_id` so the server keeps the
+          // same id (custom splits reference it — bug F4).
+          _id: z.string().max(64).optional(),
+          name: z.string().min(1).max(60),
+          isMe: z.boolean().optional(),
+        })
     )
     .max(20, 'At most 20 travellers are supported'),
 });

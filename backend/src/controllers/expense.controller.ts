@@ -1,10 +1,10 @@
 import { Response } from 'express';
 import crypto from 'crypto';
-import Trip from '../models/Trip.js';
 import { catchAsync } from '../utils/catchAsync.js';
-import { sanitizeTrip } from '../utils/sanitizeTrip.js';
+import { sanitizeTripFor } from '../utils/sanitizeTrip.js';
 import { AppError } from '../utils/AppError.js';
 import { AuthenticatedRequest } from '../types/index.js';
+import { tripContext } from '../middleware/tripAccess.middleware.js';
 import {
   computeAmountInBase,
   computeEqualShares,
@@ -23,19 +23,6 @@ import {
 } from '../services/finance/receipt.js';
 
 const round2 = (n: number): number => Math.round((Number(n) || 0) * 100) / 100;
-
-/** Loads a trip owned by the current user (or throws a 404). */
-async function findOwnedTrip(id: unknown, userId?: string) {
-  const trip = await Trip.findOne({
-    _id: String(id),
-    userId,
-    isDeleted: { $ne: true },
-  });
-  if (!trip) {
-    throw new AppError('Trip not found', 404);
-  }
-  return trip;
-}
 
 const baseCurrencyOf = (trip: any): string =>
   String(trip.finance?.baseCurrency || DEFAULT_BASE_CURRENCY).toUpperCase();
@@ -123,15 +110,7 @@ function deriveAmountAndShares(
  */
 export const getTripExpenses = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const trip = await Trip.findOne({
-      _id: String(req.params.id),
-      userId: req.userId,
-      isDeleted: { $ne: true },
-    }).select('expenses participants finance');
-
-    if (!trip) {
-      throw new AppError('Trip not found', 404);
-    }
+    const { trip } = tripContext(req);
 
     res.status(200).json({
       success: true,
@@ -148,7 +127,7 @@ export const getTripExpenses = catchAsync(
  */
 export const addTripExpense = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const trip = await findOwnedTrip(req.params.id, req.userId);
+    const { trip, role } = tripContext(req);
     const body = req.body || {};
     const base = baseCurrencyOf(trip);
     const currency = String(body.currency || base).toUpperCase();
@@ -176,7 +155,7 @@ export const addTripExpense = catchAsync(
 
     (trip.expenses as any).push(expense);
     await trip.save();
-    res.status(201).json(sanitizeTrip(trip));
+    res.status(201).json(sanitizeTripFor(trip, role));
   }
 );
 
@@ -186,7 +165,7 @@ export const addTripExpense = catchAsync(
  */
 export const updateTripExpense = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const trip = await findOwnedTrip(req.params.id, req.userId);
+    const { trip, role } = tripContext(req);
     const expense: any = (trip.expenses as any).id(req.params.expenseId);
 
     if (!expense) {
@@ -225,7 +204,7 @@ export const updateTripExpense = catchAsync(
     });
 
     await trip.save();
-    res.status(200).json(sanitizeTrip(trip));
+    res.status(200).json(sanitizeTripFor(trip, role));
   }
 );
 
@@ -235,7 +214,7 @@ export const updateTripExpense = catchAsync(
  */
 export const deleteTripExpense = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const trip = await findOwnedTrip(req.params.id, req.userId);
+    const { trip, role } = tripContext(req);
     const expense: any = (trip.expenses as any).id(req.params.expenseId);
 
     if (!expense) {
@@ -249,7 +228,7 @@ export const deleteTripExpense = catchAsync(
     // Keep the uploads directory free of orphaned files
     await deleteReceiptFile(receiptUrl);
 
-    res.status(200).json(sanitizeTrip(trip));
+    res.status(200).json(sanitizeTripFor(trip, role));
   }
 );
 
@@ -265,7 +244,7 @@ export const uploadExpenseReceipt = catchAsync(
       throw new AppError('Please choose a receipt file to upload.', 400);
     }
 
-    const trip = await findOwnedTrip(req.params.id, req.userId);
+    const { trip, role } = tripContext(req);
     const expense: any = (trip.expenses as any).id(req.params.expenseId);
 
     if (!expense) {
@@ -294,7 +273,7 @@ export const uploadExpenseReceipt = catchAsync(
     expense.receiptUrl = nextUrl;
     await trip.save();
 
-    res.status(200).json(sanitizeTrip(trip));
+    res.status(200).json(sanitizeTripFor(trip, role));
   }
 );
 
@@ -304,7 +283,7 @@ export const uploadExpenseReceipt = catchAsync(
  */
 export const deleteExpenseReceipt = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const trip = await findOwnedTrip(req.params.id, req.userId);
+    const { trip, role } = tripContext(req);
     const expense: any = (trip.expenses as any).id(req.params.expenseId);
 
     if (!expense) {
@@ -317,7 +296,7 @@ export const deleteExpenseReceipt = catchAsync(
 
     await deleteReceiptFile(previousUrl);
 
-    res.status(200).json(sanitizeTrip(trip));
+    res.status(200).json(sanitizeTripFor(trip, role));
   }
 );
 
@@ -327,13 +306,14 @@ export const deleteExpenseReceipt = catchAsync(
  */
 export const updateTripParticipants = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const trip = await findOwnedTrip(req.params.id, req.userId);
-    const participants = (req.body?.participants || []) as { name: string; isMe?: boolean }[];
+    const { trip, role } = tripContext(req);
+    const incoming = (req.body?.participants || []) as Array<{
+      _id?: string;
+      name: string;
+      isMe?: boolean;
+    }>;
 
-    trip.participants = participants.map((p) => ({
-      name: p.name,
-      isMe: Boolean(p.isMe),
-    })) as any;
+    trip.participants = reconcileParticipants(trip, incoming) as any;
 
     // Re-derive equal splits so stored shares stay consistent with the new list
     const base = baseCurrencyOf(trip);
@@ -348,9 +328,67 @@ export const updateTripParticipants = catchAsync(
     }
 
     await trip.save();
-    res.status(200).json(sanitizeTrip(trip));
+    res.status(200).json(sanitizeTripFor(trip, role));
   }
 );
+
+/**
+ * Reconciles the incoming traveller rows with the existing participants while
+ * keeping each surviving participant's `_id` stable (bug F4).
+ *
+ * Custom expense splits (`shares[].participantId`) and `paidBy` reference these
+ * ids, so the previous behaviour — `.map()`ing the array into fresh subdocs —
+ * silently re-pointed every expense at participants that no longer exist.
+ *
+ * Ids survive in two ways:
+ * 1. the client echoes `_id` back (the schema passes it through);
+ * 2. a client row with the same trimmed `name` rescues an existing participant
+ *    that has not been claimed yet (covers clients that never send `_id`).
+ * Rows matching neither are new participants and get fresh ids. Existing
+ * participants that no row claims are removed — preserving the historical
+ * behaviour — and equal-splits are re-derived afterwards.
+ */
+function reconcileParticipants(
+  trip: any,
+  incoming: Array<{ _id?: string; name: string; isMe?: boolean }>
+): Array<{ _id?: string; name: string; isMe: boolean }> {
+  const existing: any[] = [...(trip.participants || [])];
+  const claimed = new Set<string>();
+  const normalize = (value: unknown): string => String(value ?? '').trim();
+
+  const rows = incoming.map((row) => {
+    const name = normalize(row.name) || 'Traveller';
+    const isMe = Boolean(row.isMe);
+
+    const echoedId = row._id != null ? String(row._id) : '';
+    const claimedById =
+      echoedId
+        ? existing.find(
+            (participant) =>
+              participant && String(participant._id) === echoedId && !claimed.has(echoedId)
+          )
+        : undefined;
+
+    const claimedByName =
+      claimedById ||
+      existing.find(
+        (participant) =>
+          participant &&
+          !claimed.has(String(participant._id)) &&
+          normalize(participant.name) === name
+      );
+
+    if (claimedByName) {
+      const id = String(claimedByName._id);
+      claimed.add(id);
+      return { _id: id, name, isMe };
+    }
+
+    return { name, isMe };
+  });
+
+  return rows;
+}
 
 /**
  * Changes the trip's base currency and/or refreshes the cached FX snapshot.
@@ -360,7 +398,7 @@ export const updateTripParticipants = catchAsync(
  */
 export const updateTripFinance = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const trip = await findOwnedTrip(req.params.id, req.userId);
+    const { trip, role } = tripContext(req);
     const body = req.body || {};
 
     if (!body.baseCurrency && !body.refresh) {
@@ -408,6 +446,6 @@ export const updateTripFinance = catchAsync(
     } as any;
 
     await trip.save();
-    res.status(200).json(sanitizeTrip(trip));
+    res.status(200).json(sanitizeTripFor(trip, role));
   }
 );

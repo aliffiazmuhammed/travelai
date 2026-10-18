@@ -24,7 +24,9 @@ import {
 } from '../services/itinerary/editing.js';
 import Trip from '../models/Trip.js';
 import { catchAsync } from '../utils/catchAsync.js';
-import { sanitizeTrip } from '../utils/sanitizeTrip.js';
+import { sanitizeTripFor } from '../utils/sanitizeTrip.js';
+import { tripContext } from '../middleware/tripAccess.middleware.js';
+import { findPublicSharedTrip } from '../services/collab/publicTrip.js';
 import { AuthenticatedRequest } from '../types/index.js';
 import { AppError } from '../utils/AppError.js';
 
@@ -228,7 +230,7 @@ export const generateItinerary = catchAsync(
     });
     await trip.save();
 
-    res.status(200).json(sanitizeTrip(trip));
+    res.status(200).json(sanitizeTripFor(trip, 'owner'));
   }
 );
 
@@ -386,36 +388,16 @@ export const getUserTrips = catchAsync(
 
 export const getTripById = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const { id } = req.params;
+    const { trip, role } = tripContext(req);
 
-    const trip = await Trip.findOne({
-      _id: id,
-      userId: req.userId,
-      isDeleted: { $ne: true },
-    });
-
-    if (!trip) {
-      throw new AppError('Trip not found', 404);
-    }
-
-    res.status(200).json(sanitizeTrip(trip));
+    res.status(200).json(sanitizeTripFor(trip, role));
   }
 );
 
 export const updateTrip = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const { id } = req.params;
     const { title, status, tripDetails } = req.body;
-
-    const trip = await Trip.findOne({
-      _id: id,
-      userId: req.userId,
-      isDeleted: { $ne: true },
-    }).select('+versions');
-
-    if (!trip) {
-      throw new AppError('Trip not found', 404);
-    }
+    const { trip, role } = tripContext(req);
 
     const detailsChanged =
       tripDetails !== undefined &&
@@ -438,7 +420,7 @@ export const updateTrip = catchAsync(
 
     await trip.save();
 
-    res.status(200).json(sanitizeTrip(trip));
+    res.status(200).json(sanitizeTripFor(trip, role));
   }
 );
 
@@ -448,18 +430,8 @@ export const updateTrip = catchAsync(
  */
 export const updateTripActivity = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const { id } = req.params;
     const { day, activityIndex, activity } = req.body;
-
-    const trip = await Trip.findOne({
-      _id: id,
-      userId: req.userId,
-      isDeleted: { $ne: true },
-    }).select('+versions');
-
-    if (!trip) {
-      throw new AppError('Trip not found', 404);
-    }
+    const { trip, role } = tripContext(req);
 
     const itinerary = getItineraryDays(trip);
 
@@ -480,7 +452,7 @@ export const updateTripActivity = catchAsync(
     trip.hasEdited = true;
     await trip.save();
 
-    res.status(200).json(sanitizeTrip(trip));
+    res.status(200).json(sanitizeTripFor(trip, role));
   }
 );
 
@@ -491,18 +463,8 @@ export const updateTripActivity = catchAsync(
  */
 export const reorderActivities = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const { id } = req.params;
     const { day, order } = req.body;
-
-    const trip = await Trip.findOne({
-      _id: id,
-      userId: req.userId,
-      isDeleted: { $ne: true },
-    }).select('+versions');
-
-    if (!trip) {
-      throw new AppError('Trip not found', 404);
-    }
+    const { trip, role } = tripContext(req);
 
     const itinerary = getItineraryDays(trip);
     const dayIndex = findDayIndex(itinerary, day);
@@ -528,7 +490,7 @@ export const reorderActivities = catchAsync(
     trip.hasEdited = true;
     await trip.save();
 
-    res.status(200).json(sanitizeTrip(trip));
+    res.status(200).json(sanitizeTripFor(trip, role));
   }
 );
 
@@ -538,18 +500,8 @@ export const reorderActivities = catchAsync(
  */
 export const moveTripDay = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const { id } = req.params;
     const { fromIndex, toIndex } = req.body;
-
-    const trip = await Trip.findOne({
-      _id: id,
-      userId: req.userId,
-      isDeleted: { $ne: true },
-    }).select('+versions');
-
-    if (!trip) {
-      throw new AppError('Trip not found', 404);
-    }
+    const { trip, role } = tripContext(req);
 
     const itinerary = getItineraryDays(trip);
     if (itinerary.length < 2) {
@@ -559,7 +511,7 @@ export const moveTripDay = catchAsync(
       throw new AppError('The requested day position is out of range.', 400);
     }
     if (fromIndex === toIndex) {
-      return res.status(200).json(sanitizeTrip(trip));
+      return res.status(200).json(sanitizeTripFor(trip, role));
     }
 
     snapshotCurrent(trip, 'Reordered trip days');
@@ -571,7 +523,7 @@ export const moveTripDay = catchAsync(
     trip.hasEdited = true;
     await trip.save();
 
-    res.status(200).json(sanitizeTrip(trip));
+    res.status(200).json(sanitizeTripFor(trip, role));
   }
 );
 
@@ -581,20 +533,10 @@ export const moveTripDay = catchAsync(
  */
 export const getTripVersions = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const { id } = req.params;
+    const { trip } = tripContext(req);
 
-    const trip = await Trip.findOne({
-      _id: id,
-      userId: req.userId,
-      isDeleted: { $ne: true },
-    }).select('+versions');
-
-    if (!trip) {
-      throw new AppError('Trip not found', 404);
-    }
-
-    const versions = (trip.versions || [])
-      .map((v) => ({
+    const versions = ((trip.versions || []) as any[])
+      .map((v: any) => ({
         version: v.version,
         title: v.title,
         note: v.note,
@@ -604,7 +546,7 @@ export const getTripVersions = catchAsync(
           : 0,
         budget: v.tripDetails?.budget_breakdown?.total ?? null,
       }))
-      .sort((a, b) => b.version - a.version);
+      .sort((a: any, b: any) => b.version - a.version);
 
     res.status(200).json({
       success: true,
@@ -621,19 +563,10 @@ export const getTripVersions = catchAsync(
  */
 export const getTripVersionDetails = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const { id, version } = req.params;
+    const { version } = req.params;
+    const { trip } = tripContext(req);
 
-    const trip = await Trip.findOne({
-      _id: id,
-      userId: req.userId,
-      isDeleted: { $ne: true },
-    }).select('+versions');
-
-    if (!trip) {
-      throw new AppError('Trip not found', 404);
-    }
-
-    const target = (trip.versions || []).find((v) => v.version === Number(version));
+    const target = (trip.versions || []).find((v: any) => v.version === Number(version));
     if (!target) {
       throw new AppError('That version could not be found.', 404);
     }
@@ -658,18 +591,9 @@ export const restoreTripVersion = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const { id, version } = req.params;
     const { note } = req.body || {};
+    const { trip, role } = tripContext(req);
 
-    const trip = await Trip.findOne({
-      _id: id,
-      userId: req.userId,
-      isDeleted: { $ne: true },
-    }).select('+versions');
-
-    if (!trip) {
-      throw new AppError('Trip not found', 404);
-    }
-
-    const target = (trip.versions || []).find((v) => v.version === Number(version));
+    const target = (trip.versions || []).find((v: any) => v.version === Number(version));
     if (!target) {
       throw new AppError('That version could not be found.', 404);
     }
@@ -682,7 +606,7 @@ export const restoreTripVersion = catchAsync(
     trip.hasEdited = true;
     await trip.save();
 
-    res.status(200).json(sanitizeTrip(trip));
+    res.status(200).json(sanitizeTripFor(trip, role));
   }
 );
 
@@ -693,18 +617,8 @@ export const restoreTripVersion = catchAsync(
  */
 export const submitTripFeedback = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const { id } = req.params;
     const { rating, comment } = req.body;
-
-    const trip = await Trip.findOne({
-      _id: id,
-      userId: req.userId,
-      isDeleted: { $ne: true },
-    });
-
-    if (!trip) {
-      throw new AppError('Trip not found', 404);
-    }
+    const { trip } = tripContext(req);
 
     trip.feedback = {
       rating,
@@ -775,17 +689,7 @@ export const getTripInsights = catchAsync(
 
 export const deleteTrip = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const { id } = req.params;
-
-    const trip = await Trip.findOne({
-      _id: id,
-      userId: req.userId,
-      isDeleted: { $ne: true },
-    });
-
-    if (!trip) {
-      throw new AppError('Trip not found', 404);
-    }
+    const { trip } = tripContext(req);
 
     trip.isDeleted = true;
     await trip.save();
@@ -796,17 +700,7 @@ export const deleteTrip = catchAsync(
 
 export const duplicateTrip = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const { id } = req.params;
-
-    const trip = await Trip.findOne({
-      _id: id,
-      userId: req.userId,
-      isDeleted: { $ne: true },
-    });
-
-    if (!trip) {
-      throw new AppError('Trip not found', 404);
-    }
+    const { trip } = tripContext(req);
 
     const clonedDetails = JSON.parse(JSON.stringify(trip.tripDetails));
     const originalTitle = trip.title || clonedDetails.trip_title || 'Trip';
@@ -820,7 +714,7 @@ export const duplicateTrip = catchAsync(
       isDeleted: false,
       tripDetails: clonedDetails,
       // Drawn routes are part of the plan, so they carry over to the copy
-      customRoutes: (trip.customRoutes || []).map((route) => ({
+      customRoutes: ((trip.customRoutes || []) as any[]).map((route: any) => ({
         name: route.name,
         day: route.day,
         color: route.color,
@@ -832,23 +726,13 @@ export const duplicateTrip = catchAsync(
 
     await newTrip.save();
 
-    res.status(201).json(newTrip);
+    res.status(201).json(sanitizeTripFor(newTrip, 'owner'));
   }
 );
 
 export const shareTrip = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const { id } = req.params;
-
-    const trip = await Trip.findOne({
-      _id: id,
-      userId: req.userId,
-      isDeleted: { $ne: true },
-    });
-
-    if (!trip) {
-      throw new AppError('Trip not found', 404);
-    }
+    const { trip } = tripContext(req);
 
     if (!trip.shareId) {
       trip.shareId = crypto.randomUUID().replace(/-/g, '').slice(0, 12);
@@ -868,11 +752,7 @@ export const getSharedTrip = catchAsync(
   async (req: Request, res: Response) => {
     const { shareId } = req.params;
 
-    const trip = await Trip.findOne({
-      shareId,
-      isDeleted: { $ne: true },
-      isPublic: true,
-    });
+    const trip = await findPublicSharedTrip(String(shareId));
 
     if (!trip) {
       throw new AppError('Shared itinerary not found or has been revoked', 404);
@@ -932,15 +812,7 @@ export const suggestDayAlternative = catchAsync(
       throw new AppError('Please provide a valid day number.', 400);
     }
 
-    const trip = await Trip.findOne({
-      _id: String(req.params.id),
-      userId: req.userId,
-      isDeleted: { $ne: true },
-    });
-
-    if (!trip) {
-      throw new AppError('Trip not found', 404);
-    }
+    const { trip } = tripContext(req);
 
     const days = getItineraryDays(trip);
     const dayIndex = findDayIndex(days, dayNumber);
@@ -1020,15 +892,7 @@ function dayActivityCoordinates(day: any): [number, number][] {
  */
 export const getWeatherRouting = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const trip = await Trip.findOne({
-      _id: String(req.params.id),
-      userId: req.userId,
-      isDeleted: { $ne: true },
-    });
-
-    if (!trip) {
-      throw new AppError('Trip not found', 404);
-    }
+    const { trip } = tripContext(req);
 
     const days = [...getItineraryDays(trip)].sort(
       (a, b) => (Number(a?.day) || 0) - (Number(b?.day) || 0)

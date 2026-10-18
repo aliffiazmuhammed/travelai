@@ -1,0 +1,647 @@
+# Milestone 6 — Collaboration & Trip Sharing
+
+**Status:** approved. **E1 (authorization core + security prerequisite + F4) is shipped and verified.** E2 is next.
+
+**Scope:** let more than one person plan the same trip — invite people, assign what they can do, edit the itinerary together without overwriting each other, and track who changed what.
+
+**Reading order:** §1 defines the feature. §2 audits what the code does today. §3 is the target architecture. **§4 is the flaw register — the part that answers "check every flaw"**. §5 is the sprint plan. §6–§9 are testing, migration, rejected options and config. §10–§12 are residual risks, open decisions and the recommendation.
+
+> **On "no loopholes".** No design is provably loophole-free, and claiming otherwise would be dishonest. What this design *can* do is make loopholes structurally hard to introduce and loudly visible if someone tries:
+> 1. **One authorization choke point.** Every trip-scoped request passes through a single guard. The 2 duplicated helpers and ~20 inline ownership filters that exist today are deleted.
+> 2. **A CI test that walks the Express router stack** and fails if any trip-scoped route lacks a role guard (§6.3). A new endpoint that forgets a guard breaks the build.
+> 3. **An explicit residual-risk register** (§10) listing what is still *knowingly* unsolved.
+>
+> That is the strongest guarantee available. Everything else is flagged in §4 with evidence.
+
+---
+
+## 1. The feature
+
+### 1.1 Three sharing modes that must never be conflated
+
+The single most common way this feature goes wrong is treating "sharing" as one thing. TravelAI needs three distinct, non-overlapping modes:
+
+| Mode | Audience | Auth | Persistence | Exists today |
+|---|---|---|---|---|
+| **Private** | the creator only | yes | `userId` | ✅ |
+| **Members** | authenticated collaborators with roles | yes | `members[]` | ❌ **this milestone** |
+| **Public link** | anyone with the URL (read-only, no account) | no | `shareId` + `isPublic` | ✅ (partially — no revoke) |
+
+They are independent: a trip can have members *and* an active public link, and the public link must never expose anything that only members may see (expenses, member emails, the share link itself).
+
+### 1.2 Jobs to be done
+
+- *"My partner and I are planning the same trip — we shouldn't have to trade screenshots."*
+- *"I planned it, but my friend knows the city and should be able to swap day 3."*
+- *"Show my family the plan, but don't let them change it."*
+- *"Let my sibling add what they paid, without letting them delete the itinerary."*
+- *"Who changed day 4, and can we undo it?"*
+
+### 1.3 Roles and the permission matrix
+
+Role rank is the security primitive: `viewer 0 < commenter 1 < editor 2 < owner 3`. A route declares the minimum rank it needs.
+
+`commenter` ships in the type but has no UI until comments exist (Phase E6); it is reserved so no data migration is needed later.
+
+| Capability | owner | editor | commenter | viewer | public link |
+|---|:--:|:--:|:--:|:--:|:--:|
+| View the itinerary | ✅ | ✅ | ✅ | ✅ | ✅ |
+| View expenses / settlement | ✅ | ✅ | ✅ | ✅ | ❌ |
+| View who else is on the trip | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Add / edit / delete activities, reorder days | ✅ | ✅ | ❌ | ❌ | ❌ |
+| AI "indoor alternative" for a day | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Expenses, custom routes, travellers, currency | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Restore an old version | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Comment | ✅ | ✅ | ✅ | ❌ | ❌ |
+| Rename trip / change status | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Delete trip | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Invite / remove people, change roles | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Create or revoke the public link | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Transfer ownership | ✅ | ❌ | ❌ | ❌ | ❌ |
+| See AI generation metadata / quality score | ✅ | ❌ | ❌ | ❌ | ❌ |
+
+Two deliberate calls:
+
+- **Viewers see the money.** A traveller in the group who cannot see what the room costs is not actually on the trip. The public link still shows nothing financial.
+- **Editors cannot delete or re-share.** Deleting is irreversible and re-sharing is a privacy action. Owner-only.
+
+### 1.4 Invitations
+
+Two channels, deliberately asymmetric:
+
+- **Invite link (primary).** The owner generates a link and sends it however they like — WhatsApp, SMS, email. Zero new infrastructure, and it matches how this audience actually communicates. Optionally bound to one email address and optionally single-use.
+- **Email invite (optional, Phase E5).** Requires a transactional email provider. Recommended: Resend (HTTP API, ~3,000 emails/month free, no SMTP setup). This is the only new third-party dependency the milestone needs, and it is optional.
+
+---
+
+## 2. Current-state audit
+
+### 2.1 What exists
+
+| Concern | Reality |
+|---|---|
+| Ownership | `Trip.userId: ObjectId` (required, indexed) is the only ownership field. |
+| Enforcement | Inline `Trip.findOne({ _id, userId: req.userId, isDeleted: { $ne: true } })` in `itinerary.controller.ts` (~20 sites), plus a `findOwnedTrip()` helper **duplicated** in `expense.controller.ts:28` and `route.controller.ts:14`. |
+| Auth | `protect` (`middleware/auth.middleware.ts`) verifies a JWT from an httpOnly cookie or Bearer header and sets `req.userId: string`. No roles anywhere. |
+| `User` | `{ email, password, googleId, timestamps }`. **No name, no roles, no deleted flag.** |
+| Public link | `shareId` (unique, sparse) + `isPublic`; `POST /:id/share` creates it; `GET /api/itinerary/shared/:shareId` serves a narrow allow-list projection. **No revoke endpoint.** |
+| People | `Trip.participants: [{ _id, name, isMe? }]` — **free-text names for expense splitting, not linked to users**. |
+| Versioning | `version: number` + `hasEdited` + `versions[]` (`select: false`), snapshot on itinerary content change. |
+| Concurrency | **None.** Last write wins. No revision, no `If-Match`, no optimistic locking. |
+| Rate limiting | `authLimiter` (10 / 15 min / IP) and `generateLimiter` (20 / hour / IP). |
+| Frontend | React Query v5 (`staleTime` 5 min, `refetchOnWindowFocus: false`). Routes `/`, `/auth`, `/plan`, `/shared/:shareId`, `/dashboard` (only protected route). |
+| Email / realtime | **Neither exists.** No mailer dependency, no websocket/SSE anywhere. |
+
+### 2.2 What blocks collaboration
+
+1. **Access is a `userId` equality check in 20 places.** There is no policy object to extend, so adding roles means touching every site — and missing one is a silent security hole.
+2. **A trip has exactly one possible viewer-relative field** (`isMe`) stored on the document — already incorrect once two people look at the same trip.
+3. **No conflict detection**, so two editors on day 3 silently destroy each other's work.
+4. **`GET /api/itinerary` filters on `userId`**, so a shared trip would never appear in the collaborator's dashboard.
+5. **The trips list returns whole documents** including the full expense ledger, which will grow with members.
+6. **The public payload is an allow-list** (good) but has no contract test, so adding a field to `tripDetails` could leak it anonymously.
+
+---
+
+## 3. Target architecture
+
+### 3.1 Data model
+
+**`Trip` — additions only** (no field is removed, so existing documents stay readable):
+
+```ts
+export type TripRole = 'owner' | 'editor' | 'commenter' | 'viewer';
+
+export interface ITripMember {
+  userId: Types.ObjectId;          // ref User
+  role: TripRole;
+  invitedBy?: Types.ObjectId;
+  joinedAt: Date;
+}
+
+export interface ITrip {
+  // --- unchanged ---
+  userId: Types.ObjectId;          // creator; audit trail + back-compat only
+  // --- new ---
+  members: ITripMember[];          // authoritative access list
+  rev: number;                     // optimistic-concurrency counter (default 1)
+}
+```
+
+New indexes:
+
+```ts
+tripSchema.index({ 'members.userId': 1, isDeleted: 1, createdAt: -1 });
+```
+
+**Why keep `userId` instead of replacing it.** It is the creator, it preserves the existing index and every existing query during rollout, and it lets the access helper treat the creator as owner even before the backfill runs (§7). It is never used for authorization once §3.2 lands.
+
+**Why `members` instead of a separate `TripMember` collection.** Membership is always read together with the trip (every access check needs the role), bounded (≤ 25), and never queried independently. A separate collection would add a join to the hottest path for no benefit.
+
+**Why not derive members from participants.** `participants` are free-text names for splitting money and must survive a member being removed (their past expenses still count). Members are authenticated identities. Merging them would corrupt the ledger. Instead, link them (§3.9).
+
+**`TripInvite` — new collection:**
+
+```ts
+export interface ITripInvite {
+  tripId: Types.ObjectId;    // indexed
+  tokenHash: string;         // sha256(raw token) — unique, indexed
+  tokenHint: string;         // first 6 chars, for the owner's own list UI
+  role: Exclude<TripRole, 'owner'>;
+  kind: 'link' | 'email';
+  email?: string;            // lowercased; binds the invite when kind === 'email'
+  createdBy: Types.ObjectId;
+  expiresAt: Date;           // TTL index (expireAfterSeconds: 0)
+  maxUses: number;
+  acceptedBy: Types.ObjectId[];  // atomic $addToSet; its length enforces maxUses
+  revokedAt?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+```
+
+**The raw token is never stored.** A database dump therefore cannot be replayed into trip access. `tokenHash` is the lookup key; `acceptedBy` makes usage accounting exact and race-free (§3.5).
+
+### 3.2 The authorization choke point
+
+One module owns all trip-access decisions. Nothing else may query `Trip` for access.
+
+```ts
+// backend/src/services/collab/access.ts
+
+export const ROLE_RANK: Record<TripRole, number> = { viewer: 0, commenter: 1, editor: 2, owner: 3 };
+
+/** The caller's role, or null when they have no access at all. */
+export function roleOf(trip: Pick<ITrip, 'userId' | 'members'>, userId: string): TripRole | null {
+  const member = (trip.members || []).find((m) => String(m.userId) === String(userId));
+  if (member) return member.role;
+  // Pre-backfill fallback: the creator is always the owner (removed in E5).
+  return String(trip.userId) === String(userId) ? 'owner' : null;
+}
+
+export function can(role: TripRole | null, min: TripRole): boolean {
+  return role !== null && ROLE_RANK[role] >= ROLE_RANK[min];
+}
+
+/** Loads a trip the caller may see, or throws 404 (never 403 — no existence leak). */
+export async function loadTripForMember(
+  tripId: string,
+  userId: string,
+  opts: { withVersions?: boolean } = {}
+): Promise<ITrip> { /* findOne({_id, isDeleted:{$ne:true}}) then roleOf() check */ }
+
+/** Guard factory used by the router. */
+export function requireTripRole(min: TripRole, opts?: { withVersions?: boolean }): RequestHandler
+```
+
+**404 vs 403.** No access at all → **404**, identical to a nonexistent trip, so trip ids cannot be probed. A member who lacks the *rank* for an action → **403**, because they already know the trip exists and a useful error beats a confusing one. This distinction is deliberate and must be documented in the API docs.
+
+**`requireTripRole` also does the concurrency check** (§3.6) so no controller can forget it, and stashes the loaded document on `req.trip` so controllers reuse one query instead of re-scoping:
+
+```ts
+if (min !== 'viewer' && baseRev !== undefined && Number(baseRev) !== trip.rev) {
+  return res.status(409).json({ success: false, code: 'REV_CONFLICT', currentRev: trip.rev, updatedAt: trip.updatedAt, message: '...' });
+}
+req.trip = trip;
+```
+
+### 3.3 Route guard matrix
+
+Every trip-scoped route declares its minimum rank. `requireTripRole` is applied at the **router**, not inside controllers.
+
+| Route | Guard |
+|---|---|
+| `GET /api/itinerary` | `protect` + membership filter in the query |
+| `GET /api/itinerary/:id` | `requireTripRole('viewer')` |
+| `PUT /api/itinerary/:id` | `requireTripRole('owner')` |
+| `DELETE /api/itinerary/:id` | `requireTripRole('owner')` |
+| `POST /api/itinerary/:id/duplicate` | `requireTripRole('viewer')` (any member may fork) |
+| `POST /api/itinerary/:id/share` | `requireTripRole('owner')` |
+| `DELETE /api/itinerary/:id/share` **(new)** | `requireTripRole('owner')` |
+| `PUT /:id/activities`, `PUT /:id/activities/reorder`, `PUT /:id/days/reorder` | `requireTripRole('editor')` + rev |
+| `POST /:id/days/:day/indoor-alternative` | `requireTripRole('editor')` + limiter |
+| `GET /:id/versions`, `GET /:id/versions/:v` | `requireTripRole('viewer', { withVersions: true })` |
+| `POST /:id/versions/:v/restore` | `requireTripRole('editor', { withVersions: true })` + rev |
+| `POST /:id/feedback` | `requireTripRole('owner')` (see F12) |
+| `GET /:id/insights` (aggregate) | `protect` (owner-scoped query — see F17) |
+| `GET/POST/PUT/DELETE /:id/expenses*` | `requireTripRole('editor')` |
+| `PUT /:id/participants` | `requireTripRole('editor')` + rev |
+| `PUT /:id/finance` | `requireTripRole('editor')` |
+| `GET /:id/weather-routing` | `requireTripRole('viewer')` |
+| `POST/PUT/DELETE /:id/routes*` | `requireTripRole('editor')` |
+| `GET /:id/members` **(new)** | `requireTripRole('viewer')` |
+| `POST/GET/DELETE /:id/invites*` **(new)** | `requireTripRole('owner')` |
+| `PATCH/DELETE /:id/members/:userId` **(new)** | `requireTripRole('owner')` |
+| `DELETE /:id/members/me` **(new)** | `requireTripRole('viewer')` + owner blocked |
+| `POST /:id/transfer` **(new)** | `requireTripRole('owner')` + rev |
+| `GET /:id/events` **(new, E4)** | `requireTripRole('viewer')` |
+| `GET /api/itinerary/shared/:shareId` | **public** (`isPublic` only — unchanged) |
+| `POST /api/invites/:token/accept` | `protect` + token validation |
+| `GET /api/invites/:token` | `protect` + token validation |
+
+> **Route-ordering trap:** `/members/me` must be declared **before** `/members/:userId`, and `/shared/:shareId` and `/insights` before `/:id`. Express matches in declaration order, so a misplaced route silently turns `me` into a userId. The coverage test (§6.3) asserts the ordering.
+
+**New top-level router** `invites.routes.ts` mounted at `/api/invites` — the token identifies the resource, not the trip, so it does not belong under `/api/itinerary`.
+
+### 3.4 API surface
+
+| Method | Path | Rank | Body / notes |
+|---|---|---|---|
+| `GET` | `/api/itinerary?scope=owned\|shared\|all` | member | adds `role` to each row |
+| `GET` | `/api/itinerary/:id` | viewer | returns `rev`, `role`, `members` (projection varies by caller) |
+| `POST` | `/api/itinerary/:id/invites` | owner | `{ role, kind, email?, maxUses?, ttlHours? }` → returns the raw link **once** |
+| `GET` | `/api/itinerary/:id/invites` | owner | hashes + hints only, never raw tokens |
+| `DELETE` | `/api/itinerary/:id/invites/:inviteId` | owner | revoke |
+| `GET` | `/api/itinerary/:id/members` | viewer | role-dependent projection |
+| `PATCH` | `/api/itinerary/:id/members/:userId` | owner | `{ role }` — cannot demote the last owner |
+| `DELETE` | `/api/itinerary/:id/members/:userId` | owner | remove |
+| `DELETE` | `/api/itinerary/:id/members/me` | viewer | leave; owner gets 409 "transfer first" |
+| `POST` | `/api/itinerary/:id/transfer` | owner | `{ toUserId, baseRev }` |
+| `GET` | `/api/invites/:token` | auth | preview (trip title, role, inviter) — **does not consume a use** |
+| `POST` | `/api/invites/:token/accept` | auth | consume + join (idempotent) |
+| `GET` | `/api/itinerary/:id/events` | viewer | SSE (E4) |
+
+### 3.5 Invitation mechanics
+
+**Token.** `crypto.randomBytes(32)` → base64url (256 bits). Only `sha256(token)` is stored. Entropy makes brute force infeasible; the acceptance endpoint is rate-limited anyway.
+
+**Redemption — idempotent, race-free, ordered for the safe failure direction:**
+
+```ts
+const hash = sha256(rawToken);
+const invite = await TripInvite.findOne({ tokenHash: hash, revokedAt: null, expiresAt: { $gt: now } });
+if (!invite) throw new AppError('This invite link is invalid or has expired.', 404);   // generic
+
+// (a) Email binding
+if (invite.email && invite.email !== user.email.toLowerCase())
+  throw new AppError('This invitation was sent to a different email address.', 403);
+
+// (b) Already a member → success, no use consumed (makes double-click harmless)
+const already = await Trip.findOne({ _id: invite.tripId, 'members.userId': userId });
+if (already) { ensureRoleAtLeast(already, userId, invite.role); return 200; }   // never downgrade
+
+// (c) Add membership first (idempotent via the $ne guard), THEN claim the use.
+await Trip.updateOne(
+  { _id: invite.tripId, isDeleted: { $ne: true }, 'members.userId': { $ne: userId } },
+  { $push: { members: { userId, role: invite.role, invitedBy: invite.createdBy, joinedAt: new Date() } } }
+);
+
+// (d) Claim the use atomically — $expr makes reads and writes one operation,
+//     so two concurrent accepts cannot both pass a maxUses check.
+const claimed = await TripInvite.findOneAndUpdate(
+  { _id: invite._id, revokedAt: null, expiresAt: { $gt: now },
+    $expr: { $lt: [{ $size: '$acceptedBy' }, '$maxUses'] } },
+  { $addToSet: { acceptedBy: userId } },
+  { new: true }
+);
+if (!claimed) throw new AppError('This invite link is no longer valid.', 410);
+```
+
+**Why membership before the claim.** Without multi-document transactions (unavailable on a standalone MongoDB — see §8), a crash between the two writes is possible. Ordering them this way makes the failure mode *"a member was added but a use was not counted"* — bounded, owner-revocable, and harmless. The reverse order would silently swallow an invitation. No transaction is worth requiring a replica set for local development.
+
+**Why `$expr` + `$addToSet` instead of a counter.** A `uses: {$lt: maxUses}` filter plus `{$inc: {uses:1}}` is *not* atomic against a concurrent read-then-write, and it double-counts a user who accepts twice. Sized-array comparison in a single `findOneAndUpdate` is atomic and deduplicates naturally.
+
+**Single-use vs multi-use.** `maxUses: 1` for "invite this specific person"; a larger value for a group link. Default from `INVITE_DEFAULT_MAX_USES`.
+
+**Token handling in the browser.** The frontend reads the path segment, immediately `POST`s it, then `history.replaceState`s the URL to strip it, so it never lingers in history or leaks via `Referer`. Helmet already sets `Referrer-Policy: no-referrer`.
+
+### 3.6 Concurrency
+
+**Mechanism: a monotonic `rev` + a 409 on mismatch.** Deliberately *not* a CRDT (§8).
+
+- `rev` starts at 1 and increments on **every** write to the trip document.
+- Enforced centrally by schema hooks so no controller can forget:
+  ```ts
+  tripSchema.pre('save', function () { if (this.isModified()) this.rev = (this.rev ?? 1) + 1; });
+  for (const op of ['findOneAndUpdate', 'updateOne', 'updateMany'] as const) {
+    tripSchema.pre(op, function () { this.setUpdate({ ...this.getUpdate(), $inc: { ...(this.getUpdate().$inc ?? {}), rev: 1 } }); });
+  }
+  ```
+- Clients send `baseRev`. **Required** where a stale write can destroy work: itinerary content, reorders, day moves, version restore, participant replacement, ownership transfer. **Optional** for id-addressed writes (one expense, one route), where the worst case is losing a concurrent edit to *that one item* and the response carries the new `rev`.
+- Any direct `updateOne`/`findOneAndUpdate` outside the hooks is a hole, so §6.3 includes a test asserting `rev` increments across every write path.
+
+**Why not the whole-document `PUT` as the collaboration primitive.** It maximises the conflict surface: two people editing unrelated days both rewrite the entire `tripDetails` blob. The app already has granular endpoints (activity, reorder, day move, route, expense) — collaboration should push *more* work through them, not less. `PUT /:id` becomes owner-only metadata.
+
+**Conflict UX.** 409 → toast *"This plan changed while you were editing"* with **Reload latest**, plus the existing version history to see what happened. Optimistic UI rolls back to the server's `rev`.
+
+### 3.7 Notifications and presence
+
+**Phase E4 ships presence only — not collaborative editing.**
+
+- **Awareness tier (E4a):** `refetchOnWindowFocus` enabled for the trip query, `refetchInterval` ~20 s while the editor is open, and `rev`-driven invalidation. Cheap, no new infrastructure.
+- **Live tier (E4b):** `GET /api/itinerary/:id/events` — **SSE**, not WebSocket. Native `EventSource`, works over plain HTTP, no dependency, auto-reconnects. Emits `{type:'trip:updated', rev}` and `{type:'presence', users:[…]}`. Auth via the existing cookie (`withCredentials: true`).
+- Presence uses an in-process map with a TTL (`PRESENCE_TTL_MS`, 30 s) refreshed by heartbeat. **Presence is never an authorization input** — it is decoration; the guard remains the only gate.
+- **Scaling limitation, stated openly:** the in-process bus does not cross multiple server instances. With one instance (current Render setup) it is correct; with horizontal scaling it degrades to "no live presence" while `rev` conflicts keep data correct. Redis pub/sub is the upgrade path.
+
+**Version restore and collaboration.** Restoring an old version must snapshot the *current* state first (append-only history) so a restore is never destructive and is itself undoable, and it must bump `rev` so other open clients see it. Verify the existing `restoreTripVersion` does the former.
+
+### 3.8 Frontend architecture
+
+```
+pages/InviteAccept.tsx                 /invite/:token  — preview, join, redirect-if-signed-out
+components/dashboard/TripMembers.tsx   member list, role change, remove, leave, transfer
+components/dashboard/InviteDialog.tsx  role picker, expiry, single/multi-use, copy link, QR
+hooks/useTripAccess.ts                 role → canEdit / canManageMembers / canDelete / isOwner
+```
+
+- **`useTripAccess` is cosmetic only.** It hides or disables controls; the server decides. Stated here because "the UI hides the button" is a classic thing to mistake for authorization.
+- Dashboard gains a **"Shared with me"** section (trips where `role !== 'owner'`) with a role badge.
+- Editing components are already gated on optional `onSave`/`readOnly` props — collaboration reuses that path, so a viewer gets a genuinely non-editable render, not just hidden buttons.
+- **Sign-in round-trip:** `/invite/:token` while signed out → `/auth` with `state.from` (the existing `ProtectedRoute` pattern) **plus `sessionStorage`**, because a full page reload drops router state.
+- **Cache hygiene:** clear the React Query cache on logout and on user change (see F21).
+
+### 3.9 Reconciling members with expense participants
+
+Two sources of truth for "who is on this trip" is a design smell, so link rather than merge:
+
+- `ITripParticipant` gains `userId?: Types.ObjectId`.
+- When a member joins, the server links them to an existing participant by name or creates one. Removing a member **unlinks** their participant (keeps the name) so historical expenses and settlement stay valid.
+- Fix the existing `_id` churn bug first (F4) — it is a prerequisite for member removal not corrupting the ledger.
+
+---
+
+## 4. Flaw register
+
+Severity: **Critical** = data loss / account compromise · **High** = wrong results or a security hole under realistic conditions · **Medium** = degraded UX or latent risk · **Low** = hygiene.
+
+### 4.1 Critical
+
+| # | Flaw | Evidence | Mitigation |
+|---|---|---|---|
+| **F1** | **Credentialed CORS accepts any `*.vercel.app` / `*.onrender.com` origin, and production cookies are `SameSite=None`.** Any attacker can deploy a free `evil.vercel.app` page, make `fetch(..., {credentials:'include'})` calls to the API, read the response, and mutate trips. There is no CSRF token anywhere. Trip data is exfiltratable today; with collaboration an attacker could add themselves as a member. | `index.ts:53-66` (suffix allow-list + `credentials: true`), `auth.controller.ts:13` (`sameSite: 'none'` in prod) | Replace suffix matching with a strict explicit allow-list **and** add an `Origin`/`Sec-Fetch-Site` verification middleware, **and** move to a same-origin deployment with `SameSite=Lax`, **and** add a double-submit CSRF token on state-changing routes. Ship as E1.0 — before members exist. |
+| **F2** | **Authorization is scattered across 2 duplicated helpers and ~20 inline `userId` filters.** Extending it to roles means touching every site; one miss is a silent access-control hole. There is no policy object and no test that a route is guarded. | `expense.controller.ts:28`, `route.controller.ts:14`, `itinerary.controller.ts` (20 sites) | §3.2 single choke point; §6.3 router-coverage test that fails CI; ESLint `no-restricted-syntax` banning `userId: req.userId` outside the access module. |
+| **F3** | **No concurrency control.** Two editors on the same trip silently overwrite each other; `PUT /:id` sends the whole `tripDetails` blob. Data loss with no error and no detection. | No `rev`/`__v`/`If-Match` anywhere; `updateTrip` writes the whole object | §3.6 `rev` + schema hooks + 409; granular endpoints; UI conflict recovery. |
+
+### 4.2 High
+
+| # | Flaw | Evidence | Mitigation |
+|---|---|---|---|
+| **F4** | **`updateTripParticipants` regenerates every participant `_id`,** orphaning `shares[].participantId` and `paidBy` on **custom-split** expenses (equal splits are recomputed, custom ones are not). Settlement then computes against participants that no longer exist. Pre-existing bug; member removal would trigger it constantly. | `expense.controller.ts:333-336` (new subdocuments ⇒ new `_id`s); only `splitMode === 'equal'` is re-derived (line 341) | Match by `_id` and preserve ids; never recreate the array. Validate that removed ids are unreferenced, or reassign explicitly. Add a settlement regression test. **Prerequisite for E2.** |
+| **F5** | **`isMe` is stored per-document but means "the person looking at this screen".** Only one viewer can ever be "me". | `Trip.ts:51`, `expense.controller.ts:335`, `TripParticipant.isMe` | Derive "me" client-side from `participant.userId === currentUser.id`; stop writing/trusting `isMe`. Keep the field readable for legacy data. |
+| **F6** | **`sanitizeTrip` only deletes `versions`.** It is not role-aware, so once members exist it would ship every member's email, the `shareId` (letting a viewer re-share a private trip) and `generationMeta` to everyone. | `utils/sanitizeTrip.ts:6-9` | Make it `sanitizeTripFor(trip, role)`: an **allow-list** projection. `shareId`/`isPublic` owner-only; full member emails owner-only; `generationMeta` owner-only; public-link projection unchanged and separate. Add a contract test. |
+| **F7** | **A public link can never be revoked.** Once `POST /:id/share` runs, `isPublic` stays true forever; only deleting the trip removes it. | `itinerary.controller.ts:839-865`; no revoke route | `DELETE /:id/share` (owner) → `isPublic = false`, clear `shareId` (old URLs die permanently). |
+| **F8** | **Collaboration turns AI endpoints into a shared cost centre.** The AI indoor-alternative endpoint has **no rate limiter**; `generateLimiter` covers only `/generate*`. A recruited "editor" could burn quota indefinitely. | `itinerary.routes.ts:157` (no limiter), `rateLimiter.middleware.ts` | Require `editor` rank **and** add a per-trip + per-user AI limiter; keep the existing cache. |
+| **F9** | **The dashboard lists only trips where `userId === me`,** so a shared trip would never appear. Feature-blocking. | `itinerary.controller.ts:365-368` | `$or: [{ userId: me }, { 'members.userId': me }]` + `role` per row + `?scope=`. |
+
+### 4.3 Medium
+
+| # | Flaw | Evidence | Mitigation |
+|---|---|---|---|
+| **F10** | **The client never refetches on focus and caches for 5 minutes,** so a collaborator's changes are invisible until a manual reload. | `App.tsx:19-26` | Enable `refetchOnWindowFocus` and a ~20 s `refetchInterval` for the trip-detail query only, plus `rev`-driven invalidation. |
+| **F11** | **`shareId` is 48 bits and the public endpoint is unauthenticated and unrate-limited.** Guessing is impractical online but weak by modern standards, and there is no abuse brake. | `itinerary.controller.ts:854` (12 hex chars), route has no limiter | 16 random bytes (128 bits) for new links; old links keep resolving; add a limiter to the shared endpoint. |
+| **F12** | **`feedback` is a single per-trip field,** so with collaborators only one opinion can exist and the endpoint is writable by any owner-adjacent caller. | `Trip.ts:94` | Owner-only in E1; per-user `feedbacks[]` as a later change. |
+| **F13** | **Unbounded embedded arrays** (`versions`, `expenses`, `members`, `customRoutes`) push toward Mongo's 16 MB document ceiling; each version snapshot is a full itinerary. | `Trip.ts:236-268` | Cap `versions` (keep the newest N, e.g. 30) and page `expenses` when it grows. Raise now so it is a known boundary. |
+| **F14** | **The public payload omits `customRoutes`** while `SharedTrip.tsx` passes `trip.customRoutes` — drawn routes silently never render on shared pages. | `itinerary.controller.ts:881-887` vs `SharedTrip.tsx:127` | Add `customRoutes` to the public projection (it is not sensitive) and assert the projection in a contract test. |
+| **F15** | **No email capability at all,** so email invites require a new dependency. Not a bug — a scope fact. | `backend/package.json` (no mailer) | Link invites are the primary channel; Resend only if email invites are wanted (§1.4). |
+| **F21** | **The React Query cache is never cleared on logout or user change.** On a shared browser, the next user can be served the previous user's trips from memory for up to 5 minutes. | `UserContext.tsx:124-138` (`logout` only calls `setUser(null)`); no `queryClient.clear()` | `queryClient.clear()` on auth change. |
+
+### 4.4 Low
+
+| # | Flaw | Evidence | Mitigation |
+|---|---|---|---|
+| **F16** | The trips list returns **whole documents** including the full expense ledger. Grows with members and expenses. | `itinerary.controller.ts:382` | Later: return a `TripSummary` projection; keep the full fetch for the detail view. |
+| **F17** | **`GET /insights` scope becomes ambiguous** — it aggregates `userId: me`, but after collaboration should "trips I can see" include trips I merely edit? That would expose someone else's generation cost/quality metadata. | `itinerary.controller.ts:726` | Keep it **owner-only** and say so. |
+| **F18** | **`authLimiter` and `generateLimiter` are per-IP.** A shared college/office NAT can lock everyone out, and per-IP limits are the wrong shape for invite endpoints that are per-user. | `rateLimiter.middleware.ts` | Key invite limiters on `userId` with an IP fallback; keep IP for `authLimiter` but raise the ceiling or key on IP+email. |
+| **F19** | **Deleting an owner's account would orphan trips and invites.** No delete-account endpoint exists today, so this is latent — but collaboration makes "the owner vanished" a real state. | No delete-account route; `User` has no `isDeleted` | When account deletion is built: block it for owners with members, or auto-transfer, or keep trips readable. Record the dependency. |
+| **F20** | **A `shareId` collision would throw a duplicate-key error (500).** 48 bits makes it rare, not impossible. | `itinerary.controller.ts:854` + unique index | Retry generation on `11000`; 128-bit ids make it moot. |
+| **F22** | `authLimiter`'s 10/15 min is counted per IP, so a legitimate user behind a shared egress can be locked out. Pre-existing; noted because invite actions add more auth-adjacent traffic. | `rateLimiter.middleware.ts:3-13` | Consider IP+email keying. |
+
+### 4.5 Flaws considered and closed *by design* (not left to chance)
+
+| Risk | Why it cannot happen |
+|---|---|
+| Invite token recovered from a database leak | Only `sha256(token)` is stored; the raw value is shown once and never persisted. |
+| Two concurrent accepts both passing a `maxUses` check | `$expr: {$lt:[{$size:'$acceptedBy'},'$maxUses']}` and `$addToSet` execute as one atomic operation. |
+| Double-clicking "Join" consuming two uses | Already-a-member returns early without claiming a use. |
+| An invite escalating someone to owner | `TripInvite.role` excludes `owner` at the type **and** schema level. |
+| A viewer re-sharing a private trip | `shareId` is stripped by `sanitizeTripFor` for non-owners, and `POST /:id/share` requires owner rank. |
+| A removed member keeping access via cache | Every trip request re-checks membership server-side; the UI shows "you no longer have access" on 404. |
+| A trip left with zero owners | Removing/leaving/demoting the last owner returns 409; ownership transfer is a single atomic `$set` of both members. |
+| An orphaned member entry from a partial write | Members are matched by `userId` with `$ne` guards, so re-running any write is idempotent. |
+| Trip existence probing via errors | No access ⇒ 404, identical to a nonexistent trip. |
+| Token leaking through `Referer` | Immediately `replaceState`d away; helmet sends `Referrer-Policy: no-referrer`. |
+| A route silently missing a guard | §6.3 router-coverage test fails the build. Signing out | see | 128b | | |
+| A new trip route written after this milestone | Same coverage test — it fails until a rank is declared. |
+
+---
+
+## 5. Execution plan
+
+Five sprints, each independently shippable and independently reversible.
+
+### E1 — Authorization core *(no user-visible change)*
+
+**Goal:** replace scattered ownership checks with one policy, add `rev`, and fix the security prerequisite. Single-user behaviour must be byte-identical at the end.
+
+- **E1.0 Security prerequisite:** F1 — strict CORS allow-list, `Origin`/`Sec-Fetch-Site` verification, `SameSite=Lax` with a same-origin deployment, CSRF double-submit token. *Can ship alone.*
+- `services/collab/access.ts` — `roleOf`, `can`, `loadTripForMember`, `requireTripRole`.
+- `Trip.members[]` + `Trip.rev` + the `{ 'members.userId': 1, isDeleted: 1, createdAt: -1 }` index.
+- `rev` schema hooks (`pre('save')` + `pre('findOneAndUpdate'|'updateOne'|'updateMany')`) and 409 mapping in the error handler.
+- **Delete** both `findOwnedTrip` copies and every inline `userId: req.userId` trip filter; controllers consume `req.trip`.
+- `sanitizeTripFor(trip, role)` (F6) with the owner-only fields stripped.
+- Migration script + `npm run migrate:members` (§7).
+- Tests: role matrix (table-driven), guard behaviour (404 vs 403), `rev` hooks on every write path, sanitizer projections, **router-coverage** and **route-ordering** tests.
+
+**Exit criteria:** full existing suite green; new tests green; a request as a non-owner to any trip route returns 404; any trip route without a guard fails a test.
+
+*Effort: L. Risk: the refactor touches ~25 call sites — mitigated by the coverage test landing before the refactor.*
+
+### E2 — Membership and invitations *(backend)*
+
+**Goal:** the API can express everything in §1.3–§1.5.
+
+- `TripInvite` model, indexes, TTL.
+- `services/collab/invites.ts` — token mint/hash/verify, `redeemInvite()` per §3.5.
+- `controllers/collab.controller.ts` — members CRUD, role change, remove, leave, transfer, invite create/list/revoke, invite preview/accept.
+- `routes/invites.routes.ts` + new trip routes in the correct order.
+- `GET /` membership scoping + `role` + `?scope=` (F9).
+- Participant linking (`userId`) and the F4 `_id`-preservation fix.
+- Rate limiters keyed on `userId` (F18) + `TRIP_MAX_MEMBERS` cap.
+- Tests: invite lifecycle, expiry, revoke, email binding, `maxUses` races (concurrent `Promise.all` accepts), idempotent re-accept, last-owner protection, transfer atomicity, participant-id preservation + settlement regression.
+
+*Effort: L. Risk: the atomicity of membership-then-claim — covered by ordered writes + a concurrent-accept test.*
+
+### E3 — Collaboration UI
+
+- `useTripAccess`, `TripMembers`, `InviteDialog`, `pages/InviteAccept` (`/invite/:token`), `App.tsx` route.
+- Dashboard "Shared with me" section + role badges.
+- Gate editing components on rank via the existing `onSave`/`readOnly` props; hide owner-only controls.
+- `queryClient.clear()` on auth change (F21); `refetchOnWindowFocus` for the trip query (F10).
+- Invite link copy + QR; token stripped from the URL after use.
+- Types: `Trip.rev`, `Trip.role`, `TripMember`, `TripInvite`, `InvitePreview`.
+
+*Effort: L. Risk: none structural — the read-only rendering path already exists.*
+
+### E4 — Concurrency and live awareness
+
+- Enforce `baseRev` on content mutations; 409 responses; optimistic-UI rollback.
+- Conflict toast + "Reload latest" + link to version history.
+- E4a: polling/refetch; E4b: SSE `/:id/events` + presence TTL + avatar stack behind `ENABLE_TRIP_SSE`.
+- Tests: 409 on a stale `baseRev`; two sequential writers; SSE connect/disconnect and TTL expiry.
+
+*Effort: M. Risk: SSE is single-instance only — documented, and correctness never depends on it.*
+
+### E5 — Hardening and the rest of the register
+
+- F7 revoke link, F11 128-bit ids + limiter, F14 public projection fix, F17 insights owner-only, F20 collision retry, F13 versions cap.
+- Optional: **email invites** via Resend (`RESEND_API_KEY`, `EMAIL_FROM`) + a provider abstraction so it can be disabled.
+- Remove the `roleOf` pre-backfill fallback once the backfill is confirmed everywhere.
+- Optional: `User.name` so the members UI has a human label instead of an email local-part.
+
+*Effort: M.*
+
+### Dependency order
+
+```
+E1.0 (security) ─┐
+E1 (access core) ┴─► E2 (invites + members) ─► E3 (UI) ─► E4 (concurrency + presence) ─► E5 (hardening)
+                     ▲
+                     └── F4 participant-id fix must land here
+```
+
+---
+
+## 6. Testing strategy
+
+1. **Unit — policy.** `roleOf`/`can` table-driven across every role × capability in §1.3. Pure functions, fast, exhaustive.
+2. **Unit — invite logic.** Token mint/hash round-trip, expiry boundary, revoke, email binding, `maxUses` arithmetic, and a **concurrent redemption test** (`await Promise.all([accept(), accept()])` asserting exactly one use is consumed).
+3. **Unit — `rev`.** Assert the counter increments on `save()`, `findOneAndUpdate`, `updateOne` and `updateMany`, and that a stale `baseRev` yields 409.
+4. **Unit — sanitizer.** For each role, assert `shareId`/`isPublic`/`generationMeta` are absent for non-owners and full member emails are owner-only; assert the public projection is an exact allow-list (a "no new field leaks" contract test).
+5. **Structural — the anti-loophole tests (most valuable here):**
+   - **Router coverage:** walk `itineraryRoutes.stack`, find every route whose path contains `:id`, and assert its handler chain includes a `requireTripRole` guard tagged `__tripGuard`, against an explicit allow-list (`/shared/:shareId`). Also assert every *non*-`/:id` trip route is intentional.
+   - **Route ordering:** assert the resolved order puts `/members/me` before `/members/:userId`, and `/shared/:shareId` and `/insights` before `/:id`.
+   - **No direct ownership filters:** grep/ESLint assertion that `userId: req.userId` appears only inside `services/collab/`.
+6. **Regression — the ledger.** Extend the settlement suite to prove that adding/removing members and participants never corrupts custom splits (F4) or `paidBy`.
+7. **Integration — end to end.** Owner invites → second account accepts → edits a day → owner sees it with a new `rev` → removed member gets 404. Against a real test database.
+
+---
+
+## 7. Migration and rollout
+
+**Backfill** (`backend/scripts/backfill-members.ts`, `npm run migrate:members`) — idempotent, one aggregation-pipeline update:
+
+```js
+await Trip.updateMany(
+  { 'members.0': { $exists: false } },
+  { $set: {
+      members: [{ userId: '$userId', role: 'owner', invitedBy: null, joinedAt: '$createdAt' }],
+      rev: { $ifNull: ['$rev', 1] },
+  } }
+);
+```
+
+Safe to run repeatedly; matches only documents with no members.
+
+**Zero-downtime order:**
+1. Deploy the schema + indexes (additive; old code ignores them).
+2. `roleOf` keeps the creator fallback, so authorization is correct with **or** without the backfill.
+3. Run the backfill.
+4. Deploy the code that lists by membership (F9). Until step 3 completes, the `$or` query covers both shapes.
+5. Remove the fallback in E5 once the backfill is verified.
+
+**Rollback:** every step is additive. Reverting the code leaves `members`/`rev` populated but ignored, and the old `userId` path still works — `userId` is never dropped.
+
+---
+
+## 8. Explicitly rejected options
+
+| Option | Why rejected |
+|---|---|
+| **CRDT / Yjs / Automerge real-time editing** | Requires replacing the persistence model and reworking the AI-generated JSON blob (a coarse, deeply nested object with string arrays) into fine-grained ops. Enormous rewrite for a feature whose real conflicts are rare and coarse ("we both edited day 3"). `rev` + granular endpoints + history covers it. Revisit only if simultaneous editing becomes the norm. |
+| **Pessimistic locking** ("trip is locked while someone edits") | Hostile for asynchronous collaborators and creates stuck locks after a closed tab. |
+| **Whole-document `PUT` as the collaboration primitive** | Maximises the conflict surface. Use the granular endpoints instead. |
+| **Email-only invitations** | Deliverability risk, a new dependency, and the audience lives on WhatsApp. Link-first, email optional. |
+| **Replacing `userId` with `members`** | Forces a destructive migration and breaks the existing index and queries during rollout. Keep `userId` as creator/audit. |
+| **Reusing `Trip.version` for concurrency** | It is the user-visible itinerary-history counter, and restore semantics depend on it. Conflating it with a concurrency token breaks restore. Hence a separate `rev`. |
+| **Multi-document MongoDB transactions for invite acceptance** | Requires a replica set; standalone local MongoDB would break. Idempotent ordered writes plus a documented bounded window instead. |
+| **Making `participants` the member list** | Free-text names vs authenticated identities, and participants must outlive membership for the ledger. Link instead of merge. |
+| **Trusting a client-supplied role** | The guard reads the role from the database on every request. The client's role is for rendering only. |
+| **WebSocket** | SSE is sufficient, simpler, dependency-free, and reconnects natively. |
+| **Storing raw invite tokens** | A database leak would become trip access. Hash only. |
+
+---
+
+## 9. Configuration
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `TRIP_MAX_MEMBERS` | `25` | Cap per trip (abuse + document size). |
+| `INVITE_TTL_HOURS` | `168` | Default invite lifetime (7 days). |
+| `INVITE_DEFAULT_MAX_USES` | `1` | Single-use by default. |
+| `INVITE_LINK_BASE` | `FRONTEND_URL` | Base URL used to build the invite link. |
+| `INVITE_CREATE_PER_HOUR` | `30` | Per-user invite-creation limiter. |
+| `AI_DAY_LIMIT_PER_HOUR` | `10` | Per-user AI day-alternative limiter (F8). |
+| `PRESENCE_TTL_MS` | `30000` | Presence heartbeat expiry (E4). |
+| `ENABLE_TRIP_SSE` | `false` | Feature flag for the live tier. |
+| `VERSIONS_MAX` | `30` | Cap retained version snapshots (F13). |
+| `RESEND_API_KEY`, `EMAIL_FROM` | — | Only if email invites ship (E5, optional). |
+
+---
+
+## 10. Residual risks (knowingly unsolved)
+
+1. **Not real-time.** Two people editing the same day within the polling window both hit a 409 and one redoes their edit. Accepted; alternative rejected in §8.
+2. **Presence is single-instance.** Correct on one server, degraded on many; never a correctness dependency.
+3. **No transaction boundary.** A crash between "add member" and "claim use" over-counts a use. Bounded, ordered, and documented.
+4. **`rev` completeness depends on the hooks.** A future direct `collection.updateOne` (bypassing Mongoose) would not bump `rev`; the hook test covers Mongoose paths only.
+5. **Member emails are visible to the owner** (masked for other members). Adding `User.name` is the cleaner fix; deferred.
+6. **Feedback remains single-valued** per trip until `feedbacks[]` (F12).
+7. **F19** becomes real only when account deletion exists.
+8. **A determined owner can still take a screenshot.** Everything above protects access control, not the humans holding the data.
+
+---
+
+## 11. What "done" looks like
+
+- I can invite someone by link, they join with the role I chose, and both of us can edit without silently overwriting each other.
+- A viewer genuinely cannot change anything, even with a crafted request.
+- An invitation can be revoked and expires; a removed member loses access immediately.
+- A public link shows the itinerary and nothing financial, and can now be revoked.
+- I can see who changed what, and undo it.
+- Every trip-scoped route is provably guarded by a test, not by review.
+- The Critical CORS/CSRF flaw (F1) is closed.
+
+---
+
+## 12. Open decisions
+
+1. **Scope of the first sprint.** E1 (access core + security prerequisite) only, or E1+E2 together?
+2. **Email invites?** Link-only (no new dependency) or add Resend in E5?
+3. **Fix the pre-existing bugs now or separately?** F1 (CORS/CSRF, Critical) and F4 (participant `_id` churn) are not collaboration features but are prerequisites for doing this safely.
+4. **Comments** (the `commenter` role) — in scope for this milestone or a later one?
+
+
+---
+
+## 14. E1 — shipped (appendix)
+
+> Ship notes, 2026-10-18. Anything that differs from the blueprint above is listed under **Deviations** (§14.2); everything else matches §3.
+
+### 14.1 What landed
+
+| Area | Result |
+| --- | --- |
+| `services/collab/access.ts` | Roles/ranks (`viewer(0) < commenter(1) < editor(2) < owner(3)`), capability matrix (`TRIP_CAPABILITIES`), `can()`/`roleCan()`, `roleOf()` with the creator fallback and a test that a corrupted member role grants nothing. |
+| `middleware/tripAccess.middleware.ts` | `requireTripRole(min, { withVersions, revMode })` — one authorization choke point. Loads the doc once, 404-vs-403 semantics per §3.2, optional `baseRev` → 409 `REV_CONFLICT` (machinery live; `required` mode flips on in E4), stashes `req.trip`/`req.tripRole`. Tagged `TRIP_GUARD_TAG` for CI. `tripContext(req)` gives controllers the guarded document and fails loudly (500) when a route forgot its guard. |
+| Router | Every `/:id…` route in `itinerary.routes.ts` declares its guard: `viewer` reads, `editor` content writes, `owner` settings/delete/share/feedback; `duplicate` requires only viewer. `withVersions` replaces the old `+versions` selects. |
+| Controllers | All 3 controllers read `req.trip` — zero `Trip.findOne` left in controllers. `duplicateTrip` response is sanitized; `getSharedTrip` moved to `services/collab/publicTrip.ts`. |
+| Trip model | `members[] (userId, role, invitedBy?, joinedAt)` + index `{'members.userId':1, isDeleted:1, createdAt:-1}` + `rev (default 1)` with hooks: `pre('save')` bumps on modified non-new saves; `findOneAndUpdate`/`updateOne`/`updateMany` merge `$inc: {rev:1}` (operator-aware, including the no-$ shorthand form). |
+| Sanitizer | `sanitizeTripFor(trip, role)` — owner output identical to the old `sanitizeTrip`; non-owners never see `shareId`, `isPublic`, `generationMeta` (F6 first cut). |
+| **F1 fix** | CORS: exact allow-list only (`services/collab/httpOrigins.ts`; `*.vercel.app`/`*.onrender.com` suffix matching deleted; `ALLOWED_EXTRA_ORIGINS` + comma-separated `FRONTEND_URL` opt-in). CSRF: double-submit (`middleware/csrf.middleware.ts`) — `csrf` cookie issued app-wide, `GET /api/auth/csrf` returns the token in the body (works for the cross-origin Vercel→Render SPA), `X-CSRF-Token` required on writes (Bearer-token and signup/signin/logout/csrf exempt). Frontend `api.ts` fetches/caches the header, self-heals on a 403/refresh. |
+| **F4 fix** | `reconcileParticipants()` keeps surviving participants' `_id` — via echoed `_id` (schema passes it through) or a same-name match against an unclaimed existing row; removed rows are dropped as before; equal splits re-derived. Frontend `ExpenseTracker` now echoes `_id`s. |
+| Migration | `scripts/backfill-members.ts` (`npm run migrate:members`) — idempotent aggregated `updateMany` via the raw collection so rev hooks don't double-count; `$createdAt`/`$$NOW` fallback note for MongoDB < 5. |
+| Verification | Build clean · **150/150** backend tests · frontend `tsc --noEmit` clean. **Live smoke test**: health OK, `csrf` issues a token, signup (exempt) 201, authenticated POST without header 403, with header 400 (validation) → the defense works; wildcard `evil.vercel.app` preflight rejected, known origin 204 with the right allow-origin. Smoke data removed afterward. |
+
+### 14.2 Deviations from the blueprint
+
+1. **CSRF token instead of SameSite=Lax.** The doc proposed cookie hardening via `SameSite=Lax`; with the SPA deployed cross-origin that signs users out (cross-site `fetch` stops sending the cookie). The double-submit token closes the same CSRF hole without touching deployment. Cookies stay `SameSite=None` in production (unchanged).
+2. **Full-document loads in the guard.** A few handlers previously did narrow `.select()` projections (`expenses participants finance`); they now consume the whole guarded document — one query instead of two, no second source of truth.
+3. **Lists unchanged.** `getUserTrips`/`getTripInsights` stay creator-scoped (`Trip.find`); membership-aware listing lands with E2 (F9) per the plan.
+4. **Guard tag placement.** `TRIP_GUARD_TAG` is set on the *outer* handler Express mounts (the `catchAsync` wrapper), so the coverage test introspects exactly what runs.
+
+### 14.3 Honest limits
+
+- `baseRev` is accepted but **not yet required** (clients don't send it yet) — the schema + guard machinery is live; `revMode: 'required'` flips on in E4 together with frontend rev plumbing.
+- `roleOf`'s creator fallback keeps legacy trips working **before** `migrate:members` runs; run it once per environment, after which it is a safety net only.
+- The strict CORS allow-list means **Vercel preview deployments** no longer get access implicitly — list them explicitly in `ALLOWED_EXTRA_ORIGINS` (documented in `backend/.env.example`).
+- Unknown roles in `members[]` grant nothing (tested); anonymous users can never pass `can()` (tested).

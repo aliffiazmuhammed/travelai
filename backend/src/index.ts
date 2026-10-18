@@ -13,6 +13,8 @@ import itineraryRoutes from './routes/itinerary.routes.js';
 import geoRoutes from './routes/geo.routes.js';
 import { errorHandler } from './middleware/error.middleware.js';
 import { isCloudinaryConfigured, uploadDir } from './services/finance/receipt.js';
+import { CSRF_HEADER, issueCsrfCookie, verifyCsrf } from './middleware/csrf.middleware.js';
+import { isAllowedCorsOrigin } from './services/collab/httpOrigins.js';
 
 const app = express();
 
@@ -30,33 +32,22 @@ app.use(
   })
 );
 
-// CORS configuration (handles custom domain, Render URLs, and local development)
-const configuredOrigins = (env.FRONTEND_URL || '')
-  .split(',')
-  .map((u) => u.trim().replace(/\/+$/, ''))
-  .filter(Boolean);
-
-const allowedOrigins = [
-  'http://localhost:5173',
-  'http://localhost:8080',
-  'http://localhost:3000',
-  'https://travelai-eta.vercel.app',
-  'https://travelai-8cm4.vercel.app',
-  ...configuredOrigins,
-];
-
+// CORS configuration (E1.0 / flaw F1 — strict allow-list).
+//
+// The previous configuration matched by *suffix* (`*.vercel.app`,
+// `*.onrender.com`) with `credentials: true`. Anyone can deploy free hosting
+// under those domains, so `evil.vercel.app` was an allowed origin for
+// credentialed requests — a cross-origin read/write channel against a signed-in
+// user. Matching is now by exact origin: the hosts below, plus anything from
+// `FRONTEND_URL`/`ALLOWED_EXTRA_ORIGINS` (comma-separated) without a trailing
+// slash. When the same service hosts the SPA (single-service deployments),
+// same-origin requests carry no Origin header and skip CORS entirely.
 app.use(
   cors({
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
       const cleanOrigin = origin.replace(/\/+$/, '');
-      if (
-        allowedOrigins.includes(cleanOrigin) ||
-        cleanOrigin.endsWith('.onrender.com') ||
-        cleanOrigin.endsWith('.vercel.app')
-      ) {
-        return callback(null, true);
-      }
+      if (isAllowedCorsOrigin(cleanOrigin)) return callback(null, true);
       return callback(
         new Error(`The CORS policy for this site does not allow access from Origin: ${origin}`),
         false
@@ -70,6 +61,15 @@ app.use(
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
+
+// CSRF defense (E1.0 / flaw F1). Needs the parsed cookies, and `cors` handles
+// `OPTIONS` preflights above, so the registration order is deliberate:
+// 1. issue the `csrf` cookie when missing (any request can recover),
+// 2. reject non-GET requests that do not echo it in `X-CSRF-Token`.
+app.use(issueCsrfCookie);
+app.use(verifyCsrf);
+// Referenced for the header name contract used by `frontend/src/services/api.ts`.
+void CSRF_HEADER;
 
 // Static Frontend Discovery (Unified Monorepo Single-Service Deployment)
 const __filename = fileURLToPath(import.meta.url);

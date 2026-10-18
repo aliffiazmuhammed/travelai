@@ -1,35 +1,27 @@
 import { Response } from 'express';
-import Trip from '../models/Trip.js';
 import { catchAsync } from '../utils/catchAsync.js';
-import { sanitizeTrip } from '../utils/sanitizeTrip.js';
+import { sanitizeTripFor } from '../utils/sanitizeTrip.js';
 import { AppError } from '../utils/AppError.js';
 import { AuthenticatedRequest } from '../types/index.js';
+import { tripContext } from '../middleware/tripAccess.middleware.js';
 import {
   MAX_ROUTES_PER_TRIP,
   normalizeRoutePoints,
   routeDistanceKm,
 } from '../services/geo/customRoute.js';
 
-/** Loads a trip owned by the current user (or throws a 404). */
-async function findOwnedTrip(id: unknown, userId?: string) {
-  const trip = await Trip.findOne({
-    _id: String(id),
-    userId,
-    isDeleted: { $ne: true },
-  });
-  if (!trip) {
-    throw new AppError('Trip not found', 404);
-  }
-  return trip;
-}
-
 /**
- * Adds a user-drawn route to a trip. Distances are always recomputed
- * server-side so clients cannot inject bogus lengths.
- * POST /api/itinerary/:id/routes
+ * Custom routes are trip metadata: the router's `requireTripRole('editor')`
+ * guard has already authorized the caller and loaded the document, so these
+ * handlers work directly on `req.trip`.
+ *
+ * Adding / updating / deleting a user-drawn route. Distances are always
+ * recomputed server-side so clients cannot inject bogus lengths.
  */
+
+/** Adds a user-drawn route to a trip. POST /api/itinerary/:id/routes */
 export const addTripRoute = catchAsync(async (req: AuthenticatedRequest, res: Response) => {
-  const trip = await findOwnedTrip(req.params.id, req.userId);
+  const { trip, role } = tripContext(req);
 
   if ((trip.customRoutes?.length || 0) >= MAX_ROUTES_PER_TRIP) {
     throw new AppError(`You can save up to ${MAX_ROUTES_PER_TRIP} custom routes per trip.`, 400);
@@ -54,7 +46,7 @@ export const addTripRoute = catchAsync(async (req: AuthenticatedRequest, res: Re
   (trip.customRoutes as any).push(route);
   await trip.save();
 
-  res.status(201).json(sanitizeTrip(trip));
+  res.status(201).json(sanitizeTripFor(trip, role));
 });
 
 /**
@@ -63,7 +55,7 @@ export const addTripRoute = catchAsync(async (req: AuthenticatedRequest, res: Re
  */
 export const updateTripRoute = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const trip = await findOwnedTrip(req.params.id, req.userId);
+    const { trip, role } = tripContext(req);
     const route: any = (trip.customRoutes as any).id(req.params.routeId);
 
     if (!route) {
@@ -87,17 +79,14 @@ export const updateTripRoute = catchAsync(
     }
 
     await trip.save();
-    res.status(200).json(sanitizeTrip(trip));
+    res.status(200).json(sanitizeTripFor(trip, role));
   }
 );
 
-/**
- * Deletes a saved route.
- * DELETE /api/itinerary/:id/routes/:routeId
- */
+/** Deletes a saved route. DELETE /api/itinerary/:id/routes/:routeId */
 export const deleteTripRoute = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const trip = await findOwnedTrip(req.params.id, req.userId);
+    const { trip, role } = tripContext(req);
     const route: any = (trip.customRoutes as any).id(req.params.routeId);
 
     if (!route) {
@@ -106,6 +95,6 @@ export const deleteTripRoute = catchAsync(
 
     route.deleteOne();
     await trip.save();
-    res.status(200).json(sanitizeTrip(trip));
+    res.status(200).json(sanitizeTripFor(trip, role));
   }
 );

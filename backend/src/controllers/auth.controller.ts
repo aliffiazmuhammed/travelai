@@ -3,6 +3,8 @@ import * as authService from '../services/auth.service.js';
 import { catchAsync } from '../utils/catchAsync.js';
 import { AuthenticatedRequest } from '../types/index.js';
 
+export { getCsrfToken } from '../middleware/csrf.middleware.js';
+
 export const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
 
 export const getCookieOptions = () => {

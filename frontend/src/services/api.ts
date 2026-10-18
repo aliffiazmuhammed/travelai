@@ -31,19 +31,74 @@ export interface StreamProgressEvent {
 class ApiClient {
   private baseUrl: string;
 
+  /** CSRF token held in memory (never in localStorage — see csrf.middleware). */
+  private csrfToken: string | null = null;
+
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl;
   }
 
+  /**
+   * Ensures a CSRF token is available for state-changing requests (backend
+   * double-submit defense). The token comes from `GET /api/auth/csrf`, which
+   * works cross-origin because the response body is CORS-protected.
+   */
+  private async ensureCsrf(): Promise<string | null> {
+    if (this.csrfToken) return this.csrfToken;
+
+    // Same-origin deployments can read the `csrf` cookie directly.
+    try {
+      const match = /(?:^|;\s*)csrf=([^;]+)/.exec(document.cookie || '');
+      if (match?.[1]) {
+        this.csrfToken = decodeURIComponent(match[1]);
+        return this.csrfToken;
+      }
+    } catch {
+      /* non-browser context — fall through to the endpoint */
+    }
+
+    try {
+      const response = await fetch(`${this.baseUrl}/api/auth/csrf`, {
+        credentials: 'include',
+      });
+      if (response.ok) {
+        const data = (await response.json()) as { csrfToken?: string };
+        if (data?.csrfToken) {
+          this.csrfToken = data.csrfToken;
+          return this.csrfToken;
+        }
+      }
+    } catch {
+      /* network hiccup — the backend will respond 403 with a friendly trigger */
+    }
+
+    return null;
+  }
+
+  /** Attaches the CSRF header to a mutable headers object for unsafe methods. */
+  private async applyCsrf(method: string | undefined, headers: Record<string, string>) {
+    if (!method || ['GET', 'HEAD', 'OPTIONS'].includes(method.toUpperCase())) return;
+    const token = await this.ensureCsrf();
+    if (token) headers['X-CSRF-Token'] = token;
+  }
+
+  /** Whether a 403 hints that the CSRF token must be refetched. */
+  private static isCsrfRecovery(status: number, message: string): boolean {
+    return status === 403 && /refresh/i.test(message);
+  }
+
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...((options.headers as Record<string, string>) || {}),
+    };
+    await this.applyCsrf(options.method, headers);
+
     const config: RequestInit = {
       credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
       ...options,
+      headers,
     };
 
     let response: Response;
@@ -80,6 +135,11 @@ class ApiClient {
         (response.status >= 500
           ? 'Something went wrong on our end. Please try again in a few moments.'
           : 'Request could not be completed. Please try again.');
+      // A CSRF refresh hint means our in-memory token went stale — drop it so
+      // the caller's next attempt fetches a fresh one.
+      if (ApiClient.isCsrfRecovery(response.status, message)) {
+        this.csrfToken = null;
+      }
       throw new Error(message);
     }
 
@@ -93,11 +153,15 @@ class ApiClient {
   private async requestForm<T>(endpoint: string, body: FormData): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
 
+    const headers: Record<string, string> = {};
+    await this.applyCsrf('POST', headers);
+
     let response: Response;
     try {
       response = await fetch(url, {
         method: 'POST',
         credentials: 'include',
+        headers,
         body,
       });
     } catch {
@@ -176,11 +240,11 @@ class ApiClient {
     const url = `${this.baseUrl}/api/itinerary/generate-stream`;
 
     try {
+      const streamHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+      await this.applyCsrf('POST', streamHeaders);
       const response = await fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: streamHeaders,
         credentials: 'include',
         body: JSON.stringify(input),
       });
@@ -438,7 +502,7 @@ class ApiClient {
 
   async updateParticipants(
     id: string,
-    participants: { name: string; isMe?: boolean }[]
+    participants: { _id?: string; name: string; isMe?: boolean }[]
   ): Promise<Trip> {
     return this.request(`/api/itinerary/${id}/participants`, {
       method: 'PUT',

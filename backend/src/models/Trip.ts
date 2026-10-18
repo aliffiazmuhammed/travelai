@@ -72,6 +72,17 @@ export interface ICustomRoute {
   createdAt: Date;
 }
 
+import type { TripRole } from '../services/collab/access.js';
+
+export interface ITripMember {
+  /** The collaborating user's `_id`. */
+  userId: Types.ObjectId;
+  role: TripRole;
+  /** Who created the invitation that added this member (absent for the creator). */
+  invitedBy?: Types.ObjectId;
+  joinedAt: Date;
+}
+
 export interface ITrip extends Document {
   userId: Types.ObjectId;
   title?: string;
@@ -88,6 +99,17 @@ export interface ITrip extends Document {
   versions: ITripVersion[];
   /** Prompt version used to generate the trip (Milestone 2). */
   promptVersion?: string;
+  /**
+   * Every authenticated person with access, including the creator as owner
+   * (Milestone 6). The authoritative access list — `userId` remains as the
+   * creator/audit field only.
+   */
+  members: ITripMember[];
+  /**
+   * Optimistic-concurrency counter (Milestone 6 §3.6). Bumped by schema hooks
+   * on every write; clients send `baseRev` and get a 409 when it is stale.
+   */
+  rev: number;
   /** Rich generation metadata: variant, language, quality score, request echo, etc. */
   generationMeta?: Record<string, any>;
   /** User rating of the generated itinerary (drives personalization + A/B insights). */
@@ -120,6 +142,16 @@ const tripFeedbackSchema = new Schema<ITripFeedback>(
     rating: { type: String, enum: ['up', 'down'], required: true },
     comment: { type: String, trim: true, maxlength: 500 },
     submittedAt: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
+const tripMemberSchema = new Schema<ITripMember>(
+  {
+    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    role: { type: String, enum: ['owner', 'editor', 'commenter', 'viewer'], required: true },
+    invitedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    joinedAt: { type: Date, required: true, default: Date.now },
   },
   { _id: false }
 );
@@ -242,6 +274,15 @@ const tripSchema = new Schema<ITrip>(
       type: String,
       trim: true,
     },
+    members: {
+      type: [tripMemberSchema],
+      default: [],
+    },
+    rev: {
+      type: Number,
+      default: 1,
+      min: 1,
+    },
     generationMeta: {
       type: Schema.Types.Mixed,
       default: undefined,
@@ -271,5 +312,42 @@ const tripSchema = new Schema<ITrip>(
 );
 
 tripSchema.index({ userId: 1, isDeleted: 1, createdAt: -1 });
+// Membership lookups: the dashboard lists trips the user is a member of.
+tripSchema.index({ 'members.userId': 1, isDeleted: 1, createdAt: -1 });
+
+/**
+ * Optimistic concurrency (Milestone 6 §3.6). `rev` must move on **every**
+ * write path so a stale client is always caught — document saves and direct
+ * query updates alike. Bumping in hooks (instead of sprinkling `rev = rev + 1`
+ * through controllers) means a new write path cannot forget it.
+ */
+tripSchema.pre('save', function () {
+  // Fresh documents start at the default (1); only real rewrites count.
+  if (!this.isNew && this.isModified()) {
+    this.rev = (this.rev ?? 1) + 1;
+  }
+});
+
+/** Adds/submerges `$inc: { rev: 1 }` into a direct query update. */
+function withRevBump(update: Record<string, unknown> | null): Record<string, unknown> | null {
+  if (!update || Array.isArray(update)) return update;
+
+  const existing = (update.$inc !== undefined ? update.$inc : {}) as Record<string, unknown>;
+  const bumped = { ...existing, rev: Number(existing.rev ?? 0) + 1 };
+
+  const hasOperator = Object.keys(update).some((key) => key.startsWith('$'));
+  return hasOperator
+    ? { ...update, $inc: bumped }
+    : { $set: { ...update }, $inc: bumped };
+}
+
+for (const operation of ['findOneAndUpdate', 'updateOne', 'updateMany'] as const) {
+  tripSchema.pre(operation, function () {
+    const nextUpdate = withRevBump(this.getUpdate() as Record<string, unknown> | null);
+    if (nextUpdate) {
+      this.setUpdate(nextUpdate as any);
+    }
+  });
+}
 
 export default mongoose.model<ITrip>('Trip', tripSchema);
