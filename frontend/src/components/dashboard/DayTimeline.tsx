@@ -412,7 +412,7 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
 
                   return (
                     <React.Fragment key={`${dayData.day}-${actIdx}`}>
-                    {actIdx > 0 && leg && (
+                    {actIdx > 0 && leg && leg.km >= 0.05 && (
                       <div className="flex items-center gap-2 -mt-1 pl-1 text-[11px] font-semibold text-muted-foreground">
                         <span className="w-px h-3.5 bg-border" />
                         <Car className="w-3.5 h-3.5 text-primary/70" />
@@ -456,14 +456,17 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
                         isDragTarget && "ring-2 ring-primary border-primary/60"
                       )}
                     >
-                      <CardContent className="p-4 flex items-start justify-between gap-3">
-                        <div className="flex items-start gap-2.5 flex-1">
-                          {/* Drag handle */}
+                      <CardContent className="p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                        <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                          {/* Drag handle — desktop only: HTML5 drag is unusable
+                              on touch, so mobile reorders via the arrows in the
+                              action row below. Keeping it hidden frees ~20px
+                              of on-device text width. */}
                           {canEdit && (
                             <span
                               aria-hidden="true"
                               title="Drag to reorder activity"
-                              className="mt-1 text-muted-foreground/60 hover:text-primary cursor-grab active:cursor-grabbing shrink-0"
+                              className="hidden sm:block mt-1 text-muted-foreground/60 hover:text-primary cursor-grab active:cursor-grabbing shrink-0"
                             >
                               <GripVertical className="w-4 h-4" />
                             </span>
@@ -474,7 +477,7 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
                             {timeSlot.icon}
                           </div>
 
-                          <div className="flex-1 space-y-1">
+                          <div className="flex-1 min-w-0 space-y-1">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
                                 {actTime || timeSlot.label}
@@ -528,7 +531,7 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
                                   {actTitle}
                                 </p>
                                 {actDesc && (
-                                  <p className="text-xs text-muted-foreground leading-relaxed">
+                                  <p className="text-[13px] sm:text-xs text-muted-foreground leading-relaxed">
                                     {actDesc}
                                   </p>
                                 )}
@@ -537,19 +540,21 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
                           </div>
                         </div>
 
-                        {/* Inline Actions */}
+                        {/* Inline Actions — a bottom row on mobile (no hover on
+                            touch, and a right column would starve the text),
+                            the familiar right-hand stack on sm+. */}
                         {canEdit && !isEditing && (
-                          <div className="flex items-center gap-1 opacity-70 group-hover:opacity-100 transition-opacity">
+                          <div className="flex items-center gap-1 border-t border-border/40 pt-2 -mb-0.5 sm:border-0 sm:pt-0 sm:mb-0 shrink-0 sm:opacity-70 sm:group-hover:opacity-100 transition-opacity">
                             <Button
                               type="button"
                               size="icon"
                               variant="ghost"
                               title="Reorder up"
                               disabled={actIdx === 0}
-                              className="h-7 w-7 text-muted-foreground hover:text-primary rounded-lg hidden sm:inline-flex"
+                              className="h-8 w-8 sm:h-7 sm:w-7 text-muted-foreground hover:text-primary rounded-lg inline-flex"
                               onClick={() => applyReorder(actualDayIndex, actIdx, actIdx - 1)}
                             >
-                              <ChevronUp className="w-3 h-3" />
+                              <ChevronUp className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
                             </Button>
                             <Button
                               type="button"
@@ -557,46 +562,46 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
                               variant="ghost"
                               title="Reorder down"
                               disabled={actIdx === dayData.activities.length - 1}
-                              className="h-7 w-7 text-muted-foreground hover:text-primary rounded-lg hidden sm:inline-flex"
+                              className="h-8 w-8 sm:h-7 sm:w-7 text-muted-foreground hover:text-primary rounded-lg inline-flex"
                               onClick={() => applyReorder(actualDayIndex, actIdx, actIdx + 1)}
                             >
-                              <ChevronDown className="w-3 h-3" />
+                              <ChevronDown className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
                             </Button>
                             <Button
                               type="button"
                               size="icon"
                               variant="ghost"
                               title="Edit details"
-                              className="h-7 w-7 text-muted-foreground hover:text-primary rounded-lg"
+                              className="h-8 w-8 sm:h-7 sm:w-7 text-muted-foreground hover:text-primary rounded-lg"
                               onClick={() =>
                                 setEditorTarget({ dayIndex: actualDayIndex, actIndex: actIdx })
                               }
                             >
-                              <SlidersHorizontal className="w-3 h-3" />
+                              <SlidersHorizontal className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
                             </Button>
                             <Button
                               type="button"
                               size="icon"
                               variant="ghost"
                               title="Rename"
-                              className="h-7 w-7 text-muted-foreground hover:text-primary rounded-lg"
+                              className="h-8 w-8 sm:h-7 sm:w-7 text-muted-foreground hover:text-primary rounded-lg"
                               onClick={() =>
                                 handleStartEdit(actualDayIndex, actIdx, actTitle)
                               }
                             >
-                              <Edit2 className="w-3 h-3" />
+                              <Edit2 className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
                             </Button>
                             <Button
                               type="button"
                               size="icon"
                               variant="ghost"
                               title="Delete activity"
-                              className="h-7 w-7 text-muted-foreground hover:text-destructive rounded-lg"
+                              className="h-8 w-8 sm:h-7 sm:w-7 text-muted-foreground hover:text-destructive rounded-lg ml-auto sm:ml-0"
                               onClick={() =>
                                 handleDeleteActivity(actualDayIndex, actIdx)
                               }
                             >
-                              <Trash2 className="w-3 h-3" />
+                              <Trash2 className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
                             </Button>
                           </div>
                         )}
