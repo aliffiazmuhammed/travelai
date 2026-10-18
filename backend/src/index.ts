@@ -10,6 +10,7 @@ import connectDB from './db.js';
 import { env } from './config/env.js';
 import authRoutes from './routes/auth.routes.js';
 import itineraryRoutes from './routes/itinerary.routes.js';
+import invitesRoutes from './routes/invites.routes.js';
 import geoRoutes from './routes/geo.routes.js';
 import { errorHandler } from './middleware/error.middleware.js';
 import { isCloudinaryConfigured, uploadDir } from './services/finance/receipt.js';
@@ -139,6 +140,7 @@ app.get('/api/health', (_req, res) => {
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/itinerary', itineraryRoutes);
+app.use('/api/invites', invitesRoutes);
 app.use('/api/geo', geoRoutes);
 
 // Uploaded receipt files (Milestone 5.5). Registered before the SPA fallback so

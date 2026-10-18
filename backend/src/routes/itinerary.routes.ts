@@ -21,6 +21,16 @@ import {
   getSharedTrip,
 } from '../controllers/itinerary.controller.js';
 import {
+  listTripMembers,
+  leaveTrip,
+  changeMemberRole,
+  removeMember,
+  transferOwnership,
+  createTripInviteHandler,
+  listTripInvites,
+  revokTripInviteHandler,
+} from '../controllers/collab.controller.js';
+import {
   getTripExpenses,
   addTripExpense,
   updateTripExpense,
@@ -54,7 +64,12 @@ import {
   financeUpdateSchema,
 } from '../schemas/expense.schema.js';
 import { createRouteSchema, updateRouteSchema } from '../schemas/route.schema.js';
-import { generateLimiter } from '../middleware/rateLimiter.middleware.js';
+import {
+  createInviteSchema,
+  changeMemberRoleSchema,
+  transferOwnershipSchema,
+} from '../schemas/collab.schema.js';
+import { generateLimiter, inviteManageLimiter } from '../middleware/rateLimiter.middleware.js';
 import { handleReceiptUpload } from '../middleware/upload.middleware.js';
 
 const router = Router();
@@ -254,5 +269,42 @@ router.delete(
   requireTripRole('editor', { revMode: 'optional' }),
   deleteTripRoute
 );
+
+// --- Collaboration (Milestone 6, sprint E2) ---------------------------------
+
+// Members: `me` MUST be declared before `:userId`, or `DELETE /members/me`
+// would be captured by the remove-member route. Covered by the router-ordering
+// test in `services/collab/routerCoverage.test.ts`.
+router.get('/:id/members', protect, requireTripRole('viewer'), listTripMembers);
+router.delete('/:id/members/me', protect, requireTripRole('viewer'), leaveTrip);
+router.patch(
+  '/:id/members/:userId',
+  protect,
+  requireTripRole('owner'),
+  validate(changeMemberRoleSchema),
+  changeMemberRole
+);
+router.delete('/:id/members/:userId', protect, requireTripRole('owner'), removeMember);
+
+// Ownership transfer: only owners transfer.
+router.post(
+  '/:id/transfer',
+  protect,
+  requireTripRole('owner', { revMode: 'optional' }),
+  validate(transferOwnershipSchema),
+  transferOwnership
+);
+
+// Invites — owner creates/lists/revokes.
+router.post(
+  '/:id/invites',
+  protect,
+  requireTripRole('owner'),
+  inviteManageLimiter,
+  validate(createInviteSchema),
+  createTripInviteHandler
+);
+router.get('/:id/invites', protect, requireTripRole('owner'), listTripInvites);
+router.delete('/:id/invites/:inviteId', protect, requireTripRole('owner'), revokTripInviteHandler);
 
 export default router;

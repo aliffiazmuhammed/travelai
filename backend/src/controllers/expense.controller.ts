@@ -347,11 +347,14 @@ export const updateTripParticipants = catchAsync(
  * Rows matching neither are new participants and get fresh ids. Existing
  * participants that no row claims are removed — preserving the historical
  * behaviour — and equal-splits are re-derived afterwards.
+ *
+ * A matched participant's member link (`userId`, Milestone 6 §3.9) also
+ * carries over, so re-saving the traveller list never unlinks a collaborator.
  */
 function reconcileParticipants(
   trip: any,
   incoming: Array<{ _id?: string; name: string; isMe?: boolean }>
-): Array<{ _id?: string; name: string; isMe: boolean }> {
+): Array<{ _id?: string; userId?: unknown; name: string; isMe: boolean }> {
   const existing: any[] = [...(trip.participants || [])];
   const claimed = new Set<string>();
   const normalize = (value: unknown): string => String(value ?? '').trim();
@@ -381,7 +384,10 @@ function reconcileParticipants(
     if (claimedByName) {
       const id = String(claimedByName._id);
       claimed.add(id);
-      return { _id: id, name, isMe };
+      // Keep the member link (`userId`) so re-saving the traveller list never
+      // unlinks the participant from a collaborator (Milestone 6 §3.9).
+      const linked = claimedByName.userId ? { userId: claimedByName.userId } : {};
+      return { ...linked, _id: id, name, isMe };
     }
 
     return { name, isMe };

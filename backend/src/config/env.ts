@@ -37,6 +37,10 @@ const envSchema = z.object({
    * an exact `http(s)://host[:port]` entry.
    */
   ALLOWED_EXTRA_ORIGINS: z.string().optional(),
+  // Collaboration (Milestone 6). Consumed directly by services/collab/*
+  TRIP_MAX_MEMBERS: z.coerce.number().positive().default(25),
+  INVITE_TTL_HOURS: z.coerce.number().positive().default(168),
+  INVITE_DEFAULT_MAX_USES: z.coerce.number().positive().default(1),
   SERVE_STATIC: z.string().optional(),
   // AI generation cache (Milestone 2). Consumed directly by services/ai/cache.ts
   AI_CACHE_TTL_MS: z.coerce.number().positive().optional(),

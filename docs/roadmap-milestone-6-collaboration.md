@@ -1,6 +1,6 @@
 # Milestone 6 — Collaboration & Trip Sharing
 
-**Status:** approved. **E1 (authorization core + security prerequisite + F4) is shipped and verified.** E2 is next.
+**Status:** approved. **E1 (authorization core + security prerequisite + F4) and E2 (membership, invites, ownership transfer, F9 + F18) are shipped and verified.** E3 (UI) is next.
 
 **Scope:** let more than one person plan the same trip — invite people, assign what they can do, edit the itinerary together without overwriting each other, and track who changed what.
 
@@ -645,3 +645,38 @@ Safe to run repeatedly; matches only documents with no members.
 - `roleOf`'s creator fallback keeps legacy trips working **before** `migrate:members` runs; run it once per environment, after which it is a safety net only.
 - The strict CORS allow-list means **Vercel preview deployments** no longer get access implicitly — list them explicitly in `ALLOWED_EXTRA_ORIGINS` (documented in `backend/.env.example`).
 - Unknown roles in `members[]` grant nothing (tested); anonymous users can never pass `can()` (tested).
+
+## 15. E2 — shipped (appendix)
+
+> Ship notes, 2026-10-18. Members, invites, ownership transfer and the membership-aware dashboard landed. Everything below the line matches §3 §3.4/§3.5/§3.9 unless flagged under **Deviations** (§15.2).
+
+### 15.1 What landed
+
+| Area | Result |
+| --- | --- |
+| `models/TripInvite.ts` | `tripId, tokenHash (unique), tokenHint, role, kind (link/email), email, createdBy, expiresAt, maxUses, acceptedBy[], revokedAt`. **The raw token is never stored** — only `sha256(token)`; a DB leak cannot be replayed into trip access. Model-level validate block makes an `owner` invite un-mintable. TTL index on `expiresAt` (`expireAfterSeconds: 0`). |
+| `services/collab/invites.ts` | Mint (256-bit base64url) → hash → hint; `createTripInvite` (email invites forced single-use); `revokeTripInvite`; `previewInvite` (never consumes); **`redeemInvite` per §3.5**: token lookup → email binding (403) → already-member short-circuit (idempotent, no use consumed, role *upgraded* if the invite ranks higher, never downgraded) → real `TRIP_MAX_MEMBERS` cap (409) → membership-first guarded write (`members.userId $ne` idempotency) → use claimed atomically with `$expr { $lt:[{$size:$acceptedBy}, $maxUses]}` + `$addToSet` (lost race → 410). |
+| `services/collab/members.ts` | Pure invariant rules + participant plumbing: emails to the owner only in `projectMembers`; `assertRoleChange` (PATCH can never assign `owner` or touch an owner); `assertMemberRemoval`; `assertLeave` (owner must transfer first); `resolveTransfer`; `performTransfer` = promote-then-demote (two hook-driven writes; a transient 2-owner window is safe, a 0-owner window is not); `linkParticipant` / `unlinkParticipant`. |
+| `controllers/collab.controller.ts` + routes | Trip-scoped: `GET/DELETE /:id/members/me`, `GET /:id/members`, `PATCH/DELETE /:id/members/:userId`, `POST /:id/transfer`, `POST/GET/DELETE /:id/invites*` — all guarded on the router (`me` declared before `:userId`, covered by the ordering test). Token-identified `GET /api/invites/:token` + `POST /api/invites/:token/accept` mounted at their own router: the invite **is** the authorization there (hashed lookup + expiry + revocation), and `TripInvite.role` still cannot be `owner`. |
+| F9 (dashboard) | `GET /api/itinerary` now accepts `?scope=owned\|shared\|all` (default `all`) over `$or: [creator, members.userId]`; each row is annotated with `roleOf(trip, caller)` and passed through `sanitizeTripFor`, so a shared member never receives `shareId`/`isPublic`/`generationMeta` in the list either. Search composes under `$and` instead of clobbering the scope filter. |
+| F18 (limiters) | `inviteManageLimiter` (30/h), `inviteAcceptLimiter` (20/15min), `invitePreviewLimiter` (60/15min) — **user-keyed** with IP fallback. |
+| Participant linking (§3.9) | `participants[].userId` added to the schema; on accept, a matching **unlinked** participant (email local-part name) gets `userId`; member removal unlinks without deleting; `reconcileParticipants` now carries `userId` across re-saves so the F4 `_id` fix never silently unlinks people. |
+| Config | `TRIP_MAX_MEMBERS=25`, `INVITE_TTL_HOURS=168`, `INVITE_DEFAULT_MAX_USES=1` (documented in `.env.example`/README). |
+| Tests | `services/collab/invites.test.ts` (token hygiene, owner-role un-mintable via schema + model validate, clamp knobs, invariants beyond rank, ledger linking/unlinking); `routerCoverage.test.ts` extended: 8 new guarded-rank spot checks, `me`-before-`:userId` ordering, plus a new structural test asserting **zero `Trip.findOne`/`findById` in controllers**. |
+| Verification | Build clean · **161/161** backend tests · frontend `tsc --noEmit` clean. **Live smoke test** (`scripts/smoke-e2.mts`, throwaway data, self-cleaning): 31/31 checks — owner-role invite rejected, invite minted with hint only, preview without consuming, accept → editor member, idempotent re-accept without consuming, `?scope=shared` row with `role: editor` and owner-side fields hidden, member emails owner-only, editor rank-blocked from inviting/role-changing, viewer→editor PATCH, member link survives participant re-save, transfer to a non-member refused, transfer promotes/demotes correctly, new owner can't leave without transferring, editor leaves cleanly. |
+
+### 15.2 Deviations from the blueprint
+
+1. **Transfer is two writes, not one atomic `$set` of both members.** `bulkWrite` bypasses the mongoose rev hooks (§3.6 needs `rev` to move on every write). Promote first, then demote: the transient window has *two* owners — the safe direction — instead of the zero-owner window a single write would raster differently.
+2. **Participant linking does not invent rows.** §3.9 sketches "link by name **or create one**"; an unmatched member creates nothing — silently adding a "john.doe" participant to the expense ledger nobody entered would corrupt counts nobody asked for. Unlinked members simply don't appear in splits until the owner adds them (or names align).
+3. **Member emails are owner-only in the members list** (masked nothing for others — the field is absent). The doc's "full emails owner-only, masked for editors" was simplified to absence for non-owners; nothing E3-planned needs masked emails, and absence cannot leak.
+4. **The transfer's old-owner fallback role is `editor`.** §12 left the role open; editor keeps work-in-progress rights while making unambiguous who owns the trip now.
+5. **`ensureRoleAtLeast` (re-accept upgrade) added.** Not explicit in §3.5: an editor member re-opening a *viewer* invite that ranks lower simply keeps their role (no downgrade — matches the doc), and an invite that ranks *higher* upgrades them in place; both idempotent, neither consumes a use.
+
+### 15.3 Honest limits
+
+- Redemption accepts the doc's bounded failure mode: a member can join in the window where the use-claim then loses the race (they stay a member while `usedCount < acceptedBy` by one). Owner-revocable and harmless; surfaced in `projectInvite` as consistent counts.
+- `GET /api/itinerary` list rows are still full documents (F16 projection tightening is E5).
+- Transfer/promote writes do not yet take a `baseRev` check — `revMode: 'required'` flips on globally in E4.
+- Invite TTL index: Mongo runs TTL once per minute, so an expired invite may exist visibly for up to ~60s; redemption already treats expiry as authoritative.
+- The writing smoke script (`scripts/smoke-e2.mts`) mutates the real DB by design (throwaway docs, and cleans up after itself); keep it out of CI.

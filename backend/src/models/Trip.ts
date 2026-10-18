@@ -49,6 +49,12 @@ export interface ITripParticipant {
   _id?: Types.ObjectId;
   name: string;
   isMe?: boolean;
+  /**
+   * Set when the participant corresponds to an authenticated collaborator
+   * (Milestone 6 §3.9). Participants must survive member removal, so removal
+   * *unlinks* (clears `userId`) rather than deleting the row.
+   */
+  userId?: Types.ObjectId;
 }
 
 export interface ITripFinance {
@@ -195,6 +201,7 @@ const expenseSchema = new Schema<ITripExpense>({
 const participantSchema = new Schema<ITripParticipant>({
   name: { type: String, required: true, trim: true, maxlength: 60 },
   isMe: { type: Boolean, default: false },
+  userId: { type: Schema.Types.ObjectId, ref: 'User' },
 });
 
 const financeSchema = new Schema<ITripFinance>(

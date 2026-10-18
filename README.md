@@ -367,6 +367,11 @@ FRONTEND_URL=http://localhost:8080
 # Optional: extra exact origins beyond FRONTEND_URL
 ALLOWED_EXTRA_ORIGINS=
 
+# Collaboration (Milestone 6, sprint E2)
+TRIP_MAX_MEMBERS=25            # hard cap on members per trip (incl. the owner)
+INVITE_TTL_HOURS=168           # default invite lifetime (168h = 1 week); max 720h
+INVITE_DEFAULT_MAX_USES=1      # default uses per link invite (email invites are always 1)
+
 # AI Generation Cache (optional)
 AI_CACHE_TTL_MS=21600000   # 6 hours
 AI_CACHE_MAX=200

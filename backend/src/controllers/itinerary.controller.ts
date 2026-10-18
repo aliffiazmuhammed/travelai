@@ -23,8 +23,10 @@ import {
   updateActivityInDays,
 } from '../services/itinerary/editing.js';
 import Trip from '../models/Trip.js';
+import { Types } from 'mongoose';
 import { catchAsync } from '../utils/catchAsync.js';
 import { sanitizeTripFor } from '../utils/sanitizeTrip.js';
+import { roleOf } from '../services/collab/access.js';
 import { tripContext } from '../middleware/tripAccess.middleware.js';
 import { findPublicSharedTrip } from '../services/collab/publicTrip.js';
 import { AuthenticatedRequest } from '../types/index.js';
@@ -362,12 +364,29 @@ export const generateItineraryStream = async (req: AuthenticatedRequest, res: Re
 
 export const getUserTrips = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const { search, status } = req.query;
+    const { search, status, scope: rawScope } = req.query as Record<string, unknown>;
+
+    // Milestone 6 (F9): the dashboard lists trips the user owns OR belongs to.
+    // Scoped on the members list, which makes membership authoritative while
+    // the creator's `userId` keeps legacy documents listing correctly.
+    const scope = rawScope === 'owned' || rawScope === 'shared' ? rawScope : 'all';
+    const memberId = new Types.ObjectId(String(req.userId));
+    const memberMatcher = { 'members.userId': memberId };
 
     const query: Record<string, any> = {
-      userId: req.userId,
       isDeleted: { $ne: true },
     };
+    // Search and membership scope each need their own `$or`, so they compose
+    // under `$and` instead of one clobbering the other.
+    const andConditions: Record<string, any>[] = [];
+
+    if (scope === 'owned') {
+      query.userId = req.userId;
+    } else if (scope === 'shared') {
+      Object.assign(query, memberMatcher);
+    } else {
+      andConditions.push({ $or: [{ userId: req.userId }, memberMatcher] });
+    }
 
     if (status && typeof status === 'string' && status !== 'all') {
       query.status = status;
@@ -375,14 +394,25 @@ export const getUserTrips = catchAsync(
 
     if (search && typeof search === 'string' && search.trim()) {
       const searchRegex = new RegExp(search.trim(), 'i');
-      query.$or = [
-        { title: searchRegex },
-        { 'tripDetails.trip_title': searchRegex },
-      ];
+      andConditions.push({
+        $or: [{ title: searchRegex }, { 'tripDetails.trip_title': searchRegex }],
+      });
+    }
+
+    if (andConditions.length > 0) {
+      query.$and = andConditions;
     }
 
     const trips = await Trip.find(query).sort({ createdAt: -1 });
-    res.status(200).json(trips);
+
+    // Annotate each row with the caller's role and project owner-only fields
+    // accordingly (`sanitizeTripFor`). The row shape stays additive.
+    const rows = trips.map((trip: any) => {
+      const role = roleOf(trip, String(req.userId));
+      return { ...sanitizeTripFor(trip, role), role };
+    });
+
+    res.status(200).json(rows);
   }
 );
 

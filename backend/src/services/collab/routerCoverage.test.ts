@@ -76,6 +76,44 @@ test('specific routes resolve in the order their guards assume', () => {
   assert.ok(indexOfFirstIdRoute > -1, 'expected trip routes to exist');
   assert.ok(indexOfInsights > -1 && indexOfInsights < indexOfFirstIdRoute,
     '/insights must be declared before /:id or Express will match GET /:id first');
+
+  // Sprint E2: `DELETE /:id/members/me` must precede `DELETE /:id/members/:userId`,
+  // otherwise "me" would be parsed as a member ObjectId and leave impossible.
+  const indexOfMe = paths.indexOf('/:id/members/me');
+  const indexOfUserParam = paths.indexOf('/:id/members/:userId');
+  assert.ok(indexOfMe > -1 && indexOfUserParam > -1, 'expected member routes to exist');
+  assert.ok(indexOfMe < indexOfUserParam,
+    '/:id/members/me must be declared before /:id/members/:userId');
+});
+
+/**
+ * Structural invariant: controllers never resolve trips themselves — the
+ * authorization choke point (`requireTripRole`) owns every `Trip.findOne`.
+ * This keeps "authorization lives on the router" enforceable, not aspirational.
+ */
+test('controllers contain zero trip lookups (choke-point invariant)', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const url = await import('node:url');
+
+  const here = path.dirname(url.fileURLToPath(import.meta.url));
+  const controllersDir = path.resolve(here, '../../controllers');
+  const files = fs
+    .readdirSync(controllersDir)
+    .filter((file) => file.endsWith('.controller.ts'));
+
+  assert.ok(files.length >= 4, `expected the API controllers to exist, found: ${files}`);
+
+  const offenders = files.filter((file) => {
+    const source = fs.readFileSync(path.join(controllersDir, file), 'utf8');
+    return /Trip\.(findOne|findById)\(/.test(source);
+  });
+
+  assert.deepEqual(
+    offenders,
+    [],
+    'Controllers must not look trips up directly; use tripContext() / services'
+  );
 });
 
 test('guards declare the expected minimum roles (spot checks)', () => {
@@ -98,6 +136,15 @@ test('guards declare the expected minimum roles (spot checks)', () => {
   assert.equal(minimumFor('POST', '/:id/share'), 'owner');
   assert.equal(minimumFor('PUT', '/:id/expenses/:expenseId'), 'editor');
   assert.equal(minimumFor('PUT', '/:id/participants'), 'editor');
+  // Sprint E2 — members & invites.
+  assert.equal(minimumFor('GET', '/:id/members'), 'viewer');
+  assert.equal(minimumFor('DELETE', '/:id/members/me'), 'viewer');
+  assert.equal(minimumFor('PATCH', '/:id/members/:userId'), 'owner');
+  assert.equal(minimumFor('DELETE', '/:id/members/:userId'), 'owner');
+  assert.equal(minimumFor('POST', '/:id/transfer'), 'owner');
+  assert.equal(minimumFor('POST', '/:id/invites'), 'owner');
+  assert.equal(minimumFor('GET', '/:id/invites'), 'owner');
+  assert.equal(minimumFor('DELETE', '/:id/invites/:inviteId'), 'owner');
 });
 
 test('version-cap routes expose history only with the versions field loaded', () => {
