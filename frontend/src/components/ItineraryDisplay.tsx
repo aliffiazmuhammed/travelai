@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { api } from "@/services/api";
 import { isRevConflict, toastConflict } from "@/lib/conflicts";
+import { withItineraryDefaults } from "@/lib/itineraryDefaults";
 import { cn } from "@/lib/utils";
 import { TripHeader } from "./dashboard/TripHeader";
 import { DayTimeline } from "./dashboard/DayTimeline";
@@ -139,9 +140,13 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
   onBackToList,
   onNewPlan,
 }) => {
+  // Legacy AI payloads miss whole sections of the prompt contract (Milestone 2
+  // shape evolved); normalize once here so no downstream read can crash.
+  const safeData = useMemo(() => withItineraryDefaults(data), [data]);
+
   // Allow interactive in-memory customization of itinerary activities
   const [itinerary, setItinerary] = useState<ItineraryData["day_by_day_itinerary"]>(
-    data.day_by_day_itinerary
+    safeData.day_by_day_itinerary
   );
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
   /** Mirror for the live-tier callback (E4b): the SSE hook reads it from a ref. */
@@ -350,9 +355,9 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
   };
 
   useEffect(() => {
-    setItinerary(data.day_by_day_itinerary);
+    setItinerary(safeData.day_by_day_itinerary);
     setHasUnsavedChanges(false);
-  }, [data]);
+  }, [safeData]);
 
   const handleUpdateItinerary = (
     updated: ItineraryData["day_by_day_itinerary"]
@@ -364,7 +369,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
   const handleSaveTrigger = async () => {
     if (!onSave) return;
     const updatedDetails: ItineraryData = {
-      ...data,
+      ...safeData,
       day_by_day_itinerary: itinerary,
     };
     await onSave(updatedDetails);
@@ -377,7 +382,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
       return;
     }
     const timer = setTimeout(() => {
-      onSave({ ...data, day_by_day_itinerary: itinerary })
+      onSave({ ...safeData, day_by_day_itinerary: itinerary })
         .then(() => setHasUnsavedChanges(false))
         .catch(() => {
           /* Error toast is raised by the parent save handler */
@@ -402,7 +407,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
 
         // Ensure any pending add/delete/rename changes are saved first
         if (hasUnsavedChanges && onSave) {
-          await onSave({ ...data, day_by_day_itinerary: itinerary });
+          await onSave({ ...safeData, day_by_day_itinerary: itinerary });
           setHasUnsavedChanges(false);
         }
 
@@ -427,7 +432,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
         setIsPersisting(false);
       }
     },
-    [hasUnsavedChanges, onSave, data, itinerary, onTripUpdated]
+    [hasUnsavedChanges, onSave, safeData, itinerary, onTripUpdated]
   );
 
   /** E4: "Reload latest" for a 409 conflict — replace local state wholesale. */
@@ -513,7 +518,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
     <div className="space-y-8 animate-fade-in max-w-6xl mx-auto pb-16">
       {/* 1. Enhanced Hero Header with Quick Stats & Share Actions */}
       <TripHeader
-        data={data}
+        data={safeData}
         tripId={tripId}
         status={status}
         version={version}
@@ -529,14 +534,14 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
       />
 
       {/* Highlights Bar */}
-      {data.highlights && data.highlights.length > 0 && (
+      {safeData.highlights && safeData.highlights.length > 0 && (
         <Card className="rounded-3xl border border-border/70 bg-card/60 backdrop-blur-sm shadow-xs overflow-hidden">
           <CardContent className="p-4 sm:p-5 flex flex-wrap items-center gap-2.5">
             <div className="flex items-center gap-2 text-xs font-bold text-primary uppercase tracking-wider shrink-0 pr-2">
               <Camera className="w-4 h-4" />
               <span>Key Highlights:</span>
             </div>
-            {data.highlights.map((h, i) => (
+            {safeData.highlights.map((h, i) => (
               <Badge
                 key={i}
                 variant="outline"
@@ -673,7 +678,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
             />
           )}
           <TripMap
-            destination={data.trip_title}
+            destination={safeData.trip_title}
             itinerary={itinerary}
             tripId={tripId}
             customRoutes={customRoutes}
@@ -687,25 +692,25 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
         {/* TAB 3: Budget Analytics View */}
         <TabsContent value="budget" className="outline-hidden animate-fade-in">
           <BudgetVisualizer
-            budget={data.budget_breakdown}
-            daysCount={data.duration_days}
-            groupType={data.group_type}
-            paymentTips={data.footnotes_safety_tips.payment}
-            perPersonBudget={data.budget_per_person}
+            budget={safeData.budget_breakdown}
+            daysCount={safeData.duration_days}
+            groupType={safeData.group_type}
+            paymentTips={safeData.footnotes_safety_tips.payment}
+            perPersonBudget={safeData.budget_per_person}
           />
         </TabsContent>
 
         {/* TAB 4: Stays & Culinary Hotspots View */}
         <TabsContent value="stays" className="outline-hidden animate-fade-in">
-          <StayAndCuisine itinerary={itinerary} destination={data.trip_title} />
+          <StayAndCuisine itinerary={itinerary} destination={safeData.trip_title} />
         </TabsContent>
 
         {/* TAB 5: Travel Guide & Safety View */}
         <TabsContent value="guide" className="outline-hidden animate-fade-in">
           <TravelGuideSafety
-            guide={data.local_transport}
-            weather={data.weather_advisory}
-            footnotes={data.footnotes_safety_tips}
+            guide={safeData.local_transport}
+            weather={safeData.weather_advisory}
+            footnotes={safeData.footnotes_safety_tips}
           />
         </TabsContent>
 
@@ -718,8 +723,8 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
             baseCurrency={finance?.baseCurrency || "INR"}
             exchangeRates={finance?.exchangeRates}
             ratesUpdatedAt={finance?.ratesUpdatedAt}
-            plannedBudget={data.budget_breakdown}
-            daysCount={data.duration_days}
+            plannedBudget={safeData.budget_breakdown}
+            daysCount={safeData.duration_days}
             canEdit={isRealTrip && Boolean(onSave)}
             onUpdated={onTripUpdated}
           />
