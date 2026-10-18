@@ -596,6 +596,23 @@ npm run build
 
 ---
 
+## 🚀 Deploy checklist (Milestone 6+)
+
+Run this **once right after the first deploy** against every new MongoDB database — including each environment (local / staging / production) of the same cluster:
+
+```bash
+npm run migrate:members
+```
+
+It backfills legacy trips with their owner `members[]` row and `rev` for Milestone 6 access control. It is idempotent and additive — re-running is always safe.
+
+> **Why it is required:** since sprint E4, authorization reads `members[]` only (the pre-backfill creator fallback was removed for security reasons — a left/transferred owner would otherwise keep access). A trip without member rows appears in list results but answers 404 on open until backfilled. The read-only audit tool `backend/scripts/db-audit.mts` lists every database on the cluster with its `trips` and `legacyNoMembers` counts (0 remaining = done):
+> ```bash
+> $env:AUDIT_URI='<database-uri>'; npx tsx scripts/db-audit.mts   # from backend/
+> ```
+
+---
+
 ## 🔒 Security & Best Practices
 - **No Secret Leaks**: Strict `.gitignore` configurations ensure zero `.env` or sensitive credentials enter git history.
 - **HTTP-Only Cookies**: Authentication tokens are stored in `httpOnly`, `secure`, `sameSite: none` cookies to mitigate XSS attacks.
