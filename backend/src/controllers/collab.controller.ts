@@ -29,6 +29,13 @@ import {
   removePresence,
   subscribe,
 } from '../services/collab/presence.js';
+import {
+  createTripComment,
+  editTripComment,
+  listTripComments,
+  loadTripComment,
+  removeTripComment,
+} from '../services/collab/comments.js';
 
 /**
  * Collaboration endpoints (Milestone 6, sprint E2).
@@ -190,6 +197,68 @@ export const revokTripInviteHandler = catchAsync(
     const { trip } = tripContext(req);
     const invite = await revokeTripInvite(String(trip._id), String(req.params.inviteId));
     res.status(200).json({ success: true, invite: projectInvite(invite) });
+  }
+);
+
+/* -------------------------------------------------------------------------- */
+/*  Comments (trip-scoped, F6a)                                                */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Comments never touch the `Trip` document (§19.2), so — unlike every other
+ * trip-scoped write below — these handlers deliberately ignore `req.rev` and
+ * never bump it: posting a remark must not invalidate a collaborator's open
+ * edit. Rank floors live on the router; authorship rules live in the service.
+ */
+
+/** GET /api/itinerary/:id/comments — newest-first page + day counts. */
+export const getTripComments = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { trip } = tripContext(req);
+    const result = await listTripComments(
+      String((trip as any)._id),
+      { before: req.query.before, limit: req.query.limit },
+      String(req.userId)
+    );
+    res.status(200).json({ success: true, ...result });
+  }
+);
+
+/** POST /api/itinerary/:id/comments — commenter and above. */
+export const postTripComment = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { trip } = tripContext(req);
+    const comment = await createTripComment(trip, String(req.userId), {
+      body: req.body?.body,
+      day: req.body?.day,
+    });
+    res.status(201).json({ success: true, comment });
+  }
+);
+
+/** PATCH /api/itinerary/:id/comments/:commentId — author only. */
+export const patchTripComment = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { trip } = tripContext(req);
+    const row = await loadTripComment(
+      String((trip as any)._id),
+      String(req.params.commentId)
+    );
+    const comment = await editTripComment(row, String(req.userId), req.body?.body);
+    res.status(200).json({ success: true, comment });
+  }
+);
+
+/** DELETE /api/itinerary/:id/comments/:commentId — author or owner (soft). */
+export const deleteTripComment = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { trip, role } = tripContext(req);
+    const row = await loadTripComment(
+      String((trip as any)._id),
+      String(req.params.commentId)
+    );
+    const comment = await removeTripComment(row, String(req.userId), role);
+    res.status(200).json({ success: true, comment });
   }
 );
 

@@ -1,4 +1,5 @@
 import rateLimit from 'express-rate-limit';
+import { env } from '../config/env.js';
 
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -70,6 +71,25 @@ export const inviteAcceptLimiter = rateLimit({
     success: false,
     error: 'Too many join attempts. Please try again shortly.',
     message: 'Too many join attempts. Please try again shortly.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
+ * Comment creation (Milestone 6 §19.5, F6a): user-keyed like the other collab
+ * actions. Comments are chattier than invites, so the window is per 15 minutes
+ * and the cap is configurable (`COMMENT_CREATE_PER_15MIN`).
+ */
+export const commentCreateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: env.COMMENT_CREATE_PER_15MIN,
+  keyGenerator: userOrIpKey,
+  validate: false,
+  message: {
+    success: false,
+    error: 'You are commenting too quickly. Please wait a moment and try again.',
+    message: 'You are commenting too quickly. Please wait a moment and try again.',
   },
   standardHeaders: true,
   legacyHeaders: false,

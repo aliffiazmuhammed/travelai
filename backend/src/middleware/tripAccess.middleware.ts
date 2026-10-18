@@ -91,8 +91,9 @@ const OUT_OF_DATE_MESSAGE =
   'Your view of this trip is out of date. Reload the latest version before making changes.';
 
 /**
- * Guard factory. `min` is the minimum role rank accepted; `commenter` has no
- * routes yet (reserved) and a trip's creator is an `owner` member.
+ * Guard factory. `min` is the minimum role rank accepted — `commenter` is the
+ * floor for posting to a trip's comment stream (F6a); a trip's creator is an
+ * `owner` member.
  */
 export function requireTripRole(
   min: TripRole,

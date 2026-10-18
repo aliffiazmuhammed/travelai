@@ -26,7 +26,15 @@ type Listener = (tripId: string, event: TripEvent) => void;
 
 export type TripEvent =
   | { type: 'trip:updated'; tripId: string }
-  | { type: 'presence'; tripId: string; users: Array<Omit<PresenceEntry, 'lastSeen'>> };
+  | { type: 'presence'; tripId: string; users: Array<Omit<PresenceEntry, 'lastSeen'>> }
+  /**
+   * Comment frames (Milestone 6 §19.4, F6a). `comment` is an already-projected
+   * `CommentRow`; `isYou` on a fan-out frame is the *author's* view only — the
+   * SPA recomputes it from the row it holds, since one frame reaches every
+   * member (see the note in services/collab/comments.ts).
+   */
+  | { type: 'comment:new'; tripId: string; comment: unknown }
+  | { type: 'comment:update'; tripId: string; comment: unknown };
 
 const presenceByTrip = new Map<string, Map<string, PresenceEntry>>();
 const listeners = new Set<Listener>();
@@ -104,6 +112,21 @@ export function broadcastPresence(tripId: string): void {
 export function emitTripUpdated(tripId: string): void {
   if (!tripId) return;
   emit(tripId, { type: 'trip:updated', tripId });
+}
+
+/**
+ * Fan-out for a created/edited/removed comment (Milestone 6 §19.4, F6a).
+ *
+ * Comments live in their own collection and never bump `Trip.rev`, so this
+ * frame — not `trip:updated` — is what keeps collaborators' streams live. It is
+ * a pure broadcast: no `rev` participated, so nothing here can trigger a 409.
+ */
+export function emitCommentEvent(
+  tripId: string,
+  frame: { type: 'comment:new' | 'comment:update'; comment: unknown }
+): void {
+  if (!tripId) return;
+  emit(tripId, { ...frame, tripId } as TripEvent);
 }
 
 function emit(tripId: string, event: TripEvent): void {

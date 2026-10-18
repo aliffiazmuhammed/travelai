@@ -150,6 +150,14 @@ test('guards declare the expected minimum roles (spot checks)', () => {
   // Sprint E4 — live tier.
   assert.equal(minimumFor('GET', '/:id/events'), 'viewer');
   assert.equal(minimumFor('POST', '/:id/events/heartbeat'), 'viewer');
+  // Sprint F6a — comments. Read is viewer; posting is the first route to use
+  // the `commenter` rank (the tier existed, reserved, until now).
+  assert.equal(minimumFor('GET', '/:id/comments'), 'viewer');
+  assert.equal(minimumFor('POST', '/:id/comments'), 'commenter');
+  // Edit/delete sit at `viewer`: authorship, not rank, is the rule (a demoted
+  // ex-editor still owns their words).
+  assert.equal(minimumFor('PATCH', '/:id/comments/:commentId'), 'viewer');
+  assert.equal(minimumFor('DELETE', '/:id/comments/:commentId'), 'viewer');
 });
 
 test('version-cap routes expose history only with the versions field loaded', () => {

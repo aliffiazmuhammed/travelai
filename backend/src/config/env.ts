@@ -50,6 +50,11 @@ const envSchema = z.object({
   PRESENCE_TTL_MS: z.coerce.number().positive().default(30000),
   // F13: retained version snapshots per trip (each is a full itinerary).
   VERSIONS_MAX: z.coerce.number().positive().default(30),
+  // F6a comments (§19.5). Consumed directly by services/collab/comments.ts
+  COMMENT_MAX_LEN: z.coerce.number().positive().default(2000),
+  COMMENT_MAX_PER_TRIP: z.coerce.number().positive().default(200),
+  COMMENT_CREATE_PER_15MIN: z.coerce.number().positive().default(60),
+  COMMENTS_PAGE_SIZE: z.coerce.number().positive().default(50),
   SERVE_STATIC: z.string().optional(),
   // AI generation cache (Milestone 2). Consumed directly by services/ai/cache.ts
   AI_CACHE_TTL_MS: z.coerce.number().positive().optional(),

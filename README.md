@@ -379,6 +379,12 @@ PRESENCE_TTL_MS=30000          # presence entry TTL — clients heartbeat at ≥
 # Version history (Milestone 6, sprint E5 / flaw F13)
 VERSIONS_MAX=30                # version snapshots retained per trip (each stores a full itinerary)
 
+# Comments (Milestone 6, sprint F6a)
+COMMENT_MAX_LEN=2000           # per-comment body cap (chars, zod-enforced)
+COMMENT_MAX_PER_TRIP=200       # max live (non-deleted) comments per trip; POST 409s above it
+COMMENT_CREATE_PER_15MIN=60    # per-user POST limiter (keyed user-or-IP, F18 pattern)
+COMMENTS_PAGE_SIZE=50          # server max comments per page regardless of a larger `limit`
+
 # AI Generation Cache (optional)
 AI_CACHE_TTL_MS=21600000   # 6 hours
 AI_CACHE_MAX=200

@@ -1,6 +1,6 @@
 # Milestone 6 — Collaboration & Trip Sharing
 
-**Status:** approved. **Milestone 6 is complete: E1–E5 all shipped and verified** (E4 = concurrency + live tier, E5 = hardening pass).
+**Status:** approved. **Milestone 6 is complete: E1–E5 all shipped and verified** (E4 = concurrency + live tier, E5 = hardening pass). **Phase E6 (comments) in progress: F6a — comments backend — shipped and smoke-verified; F6b (frontend) pending.**
 
 **Scope:** let more than one person plan the same trip — invite people, assign what they can do, edit the itinerary together without overwriting each other, and track who changed what.
 
@@ -773,9 +773,9 @@ Safe to run repeatedly; matches only documents with no members.
 
 ---
 
-## 19. Phase E6 — Comments (DRAFT — not approved, not shipped)
+## 19. Phase E6 — Comments (F6a SHIPPED; F6b frontend pending)
 
-> Planning stage, 2026-10-18. Planned as the next milestone. Two independently shippable sprints: **F6a backend**, **F6b frontend**. Status line of this document stays "complete" until F6a ships.
+> Planned 2026-10-18. Two independently shippable sprints: **F6a backend** — **shipped** (see §20) — and **F6b frontend** (next).
 >
 > **Roles are already the API.** `commenter` (rank 1) has existed in `TRIP_ROLES`, the rank arithmetic, `InviteDialog`'s role picker and the invite schema since E1 — comments only add the routes and UI that the rank has been waiting for. No data migration is needed.
 
@@ -932,3 +932,37 @@ components/dashboard/CommentsTab.tsx    list, composer, day filter chips, tombst
 3. **Orphaned comment rows after a hard trip delete** linger (tripId lookup never matches). Cleanup is a periodic script—only worth writing if collection size ever matters.
 4. **Multi-instance parity:** `emitCommentEvent` rides the same in-process bus as presence — live comment frames degrade to the E4a focus-refetch across instances exactly like the roster does.
 5. **`label` collision:** email ≤2 people with the same local-part on one trip (e.g. two "kiran" Gmail) label identically. Cosmetic; the deferred `User.name` is the fix.
+
+---
+
+## 20. Appendix — Phase E6 sprint F6a (comments backend) SHIPPED
+
+> Shipped 2026-10-18, one commit. Zero UI change. 195/195 backend tests (19 new), live smoke `smoke-e6.mts` — 31 checks — **ALL PASS** against `127.0.0.1:5059` with `ENABLE_TRIP_SSE=true`.
+
+### 20.1 What shipped
+
+| Piece | File / change |
+|---|---|
+| Model + indexes | `models/TripComment.ts` — `{ tripId, userId, body, day?, editedAt?, deletedAt? }`; indexes `{tripId, createdAt:-1, _id:-1}` (pagination + cap check) and `{tripId, day, deletedAt}` (day badges). Tombstone invariant is a **cross-field validator** ("non-empty unless `deletedAt`"), not `required`. |
+| Zod schemas | `schemas/comments.schema.ts` — `createCommentSchema` (`body` trimmed 1..`COMMENT_MAX_LEN`, rejects whitespace-only; `day` coerced 1..999) + `updateCommentSchema`. |
+| Service | `services/collab/comments.ts` — pure rules (`parseCursor`, `buildCursorFilter`, `resolveLimit`, `assertCommentCap`, `assertCommentAuthor`, `assertCommentRemoval`, `projectComment`, `dayCountsFrom`, `emailLabel`) + data access (`listTripComments`, `createTripComment`, `loadTripComment`, `editTripComment`, `removeTripComment`). Comments **never touch `Trip`/`rev`** and never emit `trip:updated`. |
+| Controllers | `collab.controller.ts` — `getTripComments` / `postTripComment` / `patchTripComment` / `deleteTripComment`. |
+| Routes | `GET/POST /:id/comments` + `PATCH/DELETE /:id/comments/:commentId`; ranks `viewer` / `commenter` / `viewer`+author / `viewer`+author-or-owner; `commentCreateLimiter` on POST only. **First consumer of the `commenter` rank.** |
+| Bus | `presence.ts` — `emitCommentEvent` + `comment:new` / `comment:update` frame kinds on the existing SSR channel. |
+| Config | `COMMENT_MAX_LEN=2000`, `COMMENT_MAX_PER_TRIP=200`, `COMMENT_CREATE_PER_15MIN=60`, `COMMENTS_PAGE_SIZE=50` in `env.ts`, `.env.example`, README. |
+| Tests | `comments.test.ts` (19 pure-rule tests: schemas, cursors, caps, author/moderation matrix, tombstone projection, labels) + 4 router-coverage rank spots. |
+| Smoke | `scripts/smoke-e6.mts` — ranks (403 below commenter), non-member 404s, schema 400s, full author/owner lifecycle, tombstones, `dayCounts`, composite-cursor pagination, authorship surviving demotion, rev-untouched invariant, live `comment:new` SSE frame. |
+
+### 20.2 Deviations from the §19 plan (with reasons)
+
+1. **Cursor format is the exact composite `"<ISO>|<_id>"`.** The plan's looser `?before` shape was first implemented as a bare ObjectId mint, which the live smoke exposed: an ObjectId's embedded timestamp is *second*-resolution while `createdAt` is millisecond, so the cursor's time never matched and page 2 came back **empty**. The minted cursor is now full-millisecond plus the `_id` tie-break; a bare ObjectId or ISO string is still accepted leniently. Single-index pagination stays O(log n).
+2. **`body` is not `required: true`.** The first live run failed with `Path 'body' is required.` because a tombstone legitimately stores `body: ''`. The invariant is cross-field ("non-empty unless removed") and lives in a schema validator instead.
+3. **Frames carry no `userId` and ship the author's own `isYou`.** One broadcast frame reaches every member, so `isYou` cannot be per-recipient server-side. The contract is therefore: the SPA **never trusts `frame.isYou`** — it dedupes by `_id` against rows it already holds (its own POST responses mark authorship), which also removes user-id enumeration from the wire (stronger than the plan's "frame carries `userId`").
+4. **`ensureCommentAuthor` (plan) split into `loadTripComment` (trip-scoped 404) + `assertCommentAuthor` (403)** — the 404 and the 403 are different branches of the same guard matrix and get tested separately.
+
+### 20.3 Honest limits
+
+- The per-trip cap counts live (non-deleted) comments only; tombstones do not consume it (deliberate — moderation should not eat a trip's quota).
+- The comment-create limiter is per-user in-process; behind multiple instances it degrades exactly like presence (§8/§19.10).
+- Orphaned rows after a hard trip delete linger (§19.10 unchanged).
+- No `editedAt` window and no notification payloads yet — those arrive with F6b/F10.

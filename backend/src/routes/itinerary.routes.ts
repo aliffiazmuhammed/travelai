@@ -32,6 +32,10 @@ import {
   revokTripInviteHandler,
   sendPresenceHeartbeat,
   subscribeTripEvents,
+  getTripComments,
+  postTripComment,
+  patchTripComment,
+  deleteTripComment,
 } from '../controllers/collab.controller.js';
 import {
   getTripExpenses,
@@ -72,7 +76,13 @@ import {
   changeMemberRoleSchema,
   transferOwnershipSchema,
 } from '../schemas/collab.schema.js';
-import { generateLimiter, inviteManageLimiter, publicShareLimiter } from '../middleware/rateLimiter.middleware.js';
+import { createCommentSchema, updateCommentSchema } from '../schemas/comments.schema.js';
+import {
+  commentCreateLimiter,
+  generateLimiter,
+  inviteManageLimiter,
+  publicShareLimiter,
+} from '../middleware/rateLimiter.middleware.js';
 import { handleReceiptUpload } from '../middleware/upload.middleware.js';
 
 const router = Router();
@@ -329,5 +339,28 @@ router.post(
 );
 router.get('/:id/invites', protect, requireTripRole('owner'), listTripInvites);
 router.delete('/:id/invites/:inviteId', protect, requireTripRole('owner'), revokTripInviteHandler);
+
+// Comments (Milestone 6, sprint F6a §19). Reads are viewer-level; posting needs
+// `commenter`. The PATCH/DELETE pair sits at `viewer` because authorship — not
+// rank — is the rule there: an ex-editor demoted to viewer still owns their
+// words, and an owner moderates anyone's. The service decides 403/404; the
+// guard only guarantees the caller belongs to the trip at all.
+router.get('/:id/comments', protect, requireTripRole('viewer'), getTripComments);
+router.post(
+  '/:id/comments',
+  protect,
+  requireTripRole('commenter'),
+  commentCreateLimiter,
+  validate(createCommentSchema),
+  postTripComment
+);
+router.patch(
+  '/:id/comments/:commentId',
+  protect,
+  requireTripRole('viewer'),
+  validate(updateCommentSchema),
+  patchTripComment
+);
+router.delete('/:id/comments/:commentId', protect, requireTripRole('viewer'), deleteTripComment);
 
 export default router;
