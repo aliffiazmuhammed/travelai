@@ -132,6 +132,18 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
     });
   }, [trips, search, statusFilter]);
 
+  // Milestone 6 (F9): trips the user owns vs trips shared with them. The role
+  // annotation comes with every trip row; a missing role reads as owned
+  // (legacy payloads / freshly generated previews).
+  const ownedTrips = useMemo(
+    () => filteredTrips.filter((trip) => !trip.role || trip.role === "owner"),
+    [filteredTrips]
+  );
+  const sharedTrips = useMemo(
+    () => filteredTrips.filter((trip) => trip.role && trip.role !== "owner"),
+    [filteredTrips]
+  );
+
   const handleDuplicate = async (e: React.MouseEvent, tripId: string) => {
     e.stopPropagation();
     try {
@@ -234,7 +246,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
       </div>
 
       {/* Trips Content */}
-      {filteredTrips.length === 0 ? (
+      {ownedTrips.length === 0 && sharedTrips.length === 0 ? (
         <div className="p-12 text-center rounded-3xl bg-card/60 backdrop-blur-sm border border-dashed border-border/80 space-y-4">
           <div className="w-16 h-16 rounded-3xl bg-primary/10 text-primary flex items-center justify-center mx-auto shadow-inner">
             <Compass className="w-8 h-8 animate-pulse" />
@@ -263,8 +275,9 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
         </div>
       ) : viewMode === "grid" ? (
         /* GRID VIEW */
+        <div className="space-y-10">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredTrips.map((trip) => {
+          {ownedTrips.map((trip) => {
             const title =
               trip.title || trip.tripDetails?.trip_title || "Custom Trip";
             const cover = getTripCover(title);
@@ -376,10 +389,11 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
             );
           })}
         </div>
+        </div>
       ) : (
         /* LIST VIEW */
         <div className="space-y-3">
-          {filteredTrips.map((trip) => {
+          {ownedTrips.map((trip) => {
             const title =
               trip.title || trip.tripDetails?.trip_title || "Custom Trip";
             const cover = getTripCover(title);
@@ -468,6 +482,102 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
                     className="h-9 w-9 text-muted-foreground hover:text-destructive rounded-xl"
                   >
                     <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* "Shared with me" (Milestone 6 §3.8): trips owned by someone else.
+          Deletion is never offered — only the owner can delete on the server. */}
+      {sharedTrips.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 pt-2">
+            <Users className="w-4 h-4 text-primary" />
+            <h3 className="text-sm font-black uppercase tracking-wider text-foreground">
+              Shared with me
+            </h3>
+            <Badge variant="outline" className="text-[10px]">
+              {sharedTrips.length}
+            </Badge>
+          </div>
+          {sharedTrips.map((trip) => {
+            const title =
+              trip.title || trip.tripDetails?.trip_title || "Shared trip";
+            const cover = getTripCover(title);
+            const days = trip.tripDetails?.duration_days || 5;
+            const budget = trip.tripDetails?.budget_per_person || 15000;
+            const isActing = actionLoadingId === trip._id;
+            const roleStyle =
+              trip.role === "editor"
+                ? "bg-emerald-500/10 text-emerald-600 border-emerald-200 dark:border-emerald-800"
+                : trip.role === "commenter"
+                ? "bg-sky-500/10 text-sky-600 border-sky-200 dark:border-sky-800"
+                : "bg-muted text-muted-foreground border-border";
+
+            return (
+              <div
+                key={trip._id}
+                onClick={() => onSelectTrip(trip)}
+                className="p-4 rounded-3xl bg-card border border-border/70 hover:border-primary/50 shadow-xs hover:shadow-card transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer group"
+              >
+                <div className="flex items-center gap-4">
+                  <img
+                    src={cover}
+                    alt={title}
+                    className="w-16 h-16 rounded-2xl object-cover shrink-0 shadow-xs"
+                  />
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Badge
+                        className={cn(
+                          "px-2 py-0.5 text-[10px] font-bold capitalize",
+                          roleStyle
+                        )}
+                      >
+                        {trip.role}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(trip.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <h4 className="font-extrabold text-sm sm:text-base text-foreground group-hover:text-primary transition-colors line-clamp-1">
+                      {title}
+                    </h4>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      <span>{days} Days</span>
+                      <span>•</span>
+                      <span>₹{budget.toLocaleString("en-IN")}/person</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-end sm:self-center">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="rounded-xl text-xs font-bold h-9 px-3 gap-1"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectTrip(trip);
+                    }}
+                  >
+                    <span>Open</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    title="Duplicate this trip into your own library"
+                    disabled={isActing}
+                    onClick={(e) => handleDuplicate(e, trip._id)}
+                    className="h-9 w-9 text-muted-foreground hover:text-primary rounded-xl"
+                  >
+                    <Copy className="w-4 h-4" />
                   </Button>
                 </div>
               </div>

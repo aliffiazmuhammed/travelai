@@ -320,6 +320,7 @@ export const TripHeader: React.FC<TripHeaderProps> = ({
         onClose={() => setIsShareModalOpen(false)}
         tripId={tripId}
         data={data}
+        canManageShare={Boolean(onStatusChange)}
       />
     </div>
   );

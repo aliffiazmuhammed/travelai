@@ -29,6 +29,8 @@ interface ShareExportModalProps {
   tripId?: string;
   data: ItineraryData;
   initialShareId?: string;
+  /** Creating/reading the share link is owner-only on the server (Milestone 6 §3.3). */
+  canManageShare?: boolean;
 }
 
 export const ShareExportModal: React.FC<ShareExportModalProps> = ({
@@ -37,6 +39,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
   tripId,
   data,
   initialShareId,
+  canManageShare = true,
 }) => {
   const [shareId, setShareId] = useState<string | undefined>(initialShareId);
   const [loadingShare, setLoadingShare] = useState(false);
@@ -149,7 +152,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        {/* 1. Public Share Link Section */}
+        {/* 1. Public Share Link Section (owner-only — link creation is a server gate) */}
         <div className="p-4 rounded-2xl bg-muted/30 border border-border/70 space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
@@ -157,11 +160,12 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
               <span>Public Read-Only Web Link</span>
             </span>
             <span className="text-[10px] text-muted-foreground">
-              {shareId ? "Active" : "Not yet generated"}
+              {shareId ? "Active" : canManageShare ? "Not yet generated" : "Owner only"}
             </span>
           </div>
 
-          {shareId ? (
+          {canManageShare ? (
+            shareId ? (
             <div className="flex items-center gap-2">
               <Input
                 readOnly
@@ -194,6 +198,11 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
               )}
               <span>{loadingShare ? "Creating Public Link..." : "Create Public Share Link"}</span>
             </Button>
+            )
+          ) : (
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              Only the trip owner can create or see the share link.
+            </p>
           )}
           <p className="text-[11px] text-muted-foreground leading-relaxed">
             Anyone with this link can view the interactive itinerary without needing an account.

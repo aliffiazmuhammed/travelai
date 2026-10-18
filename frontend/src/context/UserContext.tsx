@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { API_BASE_URL } from '../config';
+import { queryClient } from '../lib/queryClient';
 
 import type { User, AuthContextType } from '@/types';
 
@@ -79,6 +80,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const errorMsg = extractErrorMessage(data, response.status);
         throw new Error(errorMsg);
       }
+      // Identity change → drop any cached trips of the previous session (F21).
+      queryClient.clear();
       setUser(data.user);
     } catch (err: any) {
       const friendlyMsg = err.message || 'Unable to create account. Please try again.';
@@ -111,6 +114,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const errorMsg = extractErrorMessage(data, response.status);
         throw new Error(errorMsg);
       }
+      // Identity change → drop any cached trips of the previous session (F21).
+      queryClient.clear();
       setUser(data.user);
     } catch (err: any) {
       const friendlyMsg = err.message || 'Unable to sign in. Please try again.';
@@ -129,6 +134,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         method: 'POST',
         credentials: 'include',
       });
+      // F21: a signed-out app must not keep the user's trips in memory.
+      queryClient.clear();
       setUser(null);
     } catch (err: any) {
       setError(err.message || 'Logout failed.');

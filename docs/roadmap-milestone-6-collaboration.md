@@ -1,6 +1,6 @@
 # Milestone 6 — Collaboration & Trip Sharing
 
-**Status:** approved. **E1 (authorization core + security prerequisite + F4) and E2 (membership, invites, ownership transfer, F9 + F18) are shipped and verified.** E3 (UI) is next.
+**Status:** approved. **E1, E2 and E3 (members/invites UI) are shipped and verified.** E4 (concurrency + presence) is in progress.
 
 **Scope:** let more than one person plan the same trip — invite people, assign what they can do, edit the itinerary together without overwriting each other, and track who changed what.
 
@@ -680,3 +680,35 @@ Safe to run repeatedly; matches only documents with no members.
 - Transfer/promote writes do not yet take a `baseRev` check — `revMode: 'required'` flips on globally in E4.
 - Invite TTL index: Mongo runs TTL once per minute, so an expired invite may exist visibly for up to ~60s; redemption already treats expiry as authoritative.
 - The writing smoke script (`scripts/smoke-e2.mts`) mutates the real DB by design (throwaway docs, and cleans up after itself); keep it out of CI.
+
+## 16. E3 — shipped (appendix)
+
+> Ship notes, 2026-10-18. The collaboration UI landed; every rank decision stays server-side.
+
+### 16.1 What landed
+
+| Area | Result |
+| --- | --- |
+| `hooks/useTripAccess.ts` | `role → isOwner / canEdit / canManage / atLeast()`. Cosmetic gating only (per §3.8): missing annotation falls back to creator/owner for legacy payloads and the temp generated preview, so single-user behaviour is unchanged. |
+| API client | `getTrips` gained `?scope=`; new calls: members list/patch/remove/leave, transfer, invites create/list/revoke (raw link returned exactly once), invite `preview` + `accept`. CSRF plumbing reused — no bypass. |
+| `pages/InviteAccept.tsx` + route | `/invite/:token`: preview (title, role, inviter, expiry, email binding), join, per §3.5 the token is `history.replaceState`d off the URL after use and re-remembered through the auth round trip in `sessionStorage` (location.state can be dropped by a full reload). Signed-out visitors → `/auth?state.from` → back. Errors (invalid/expired/wrong email) render with the server's message. |
+| `components/dashboard/TripMembers.tsx` | Member list w/ role badges + owner actions (role select → PATCH, remove, transfer with confirm dialog), leave button (non-owner), and the owner's sent-invitations list (token hints only, revoke buttons). |
+| `components/dashboard/InviteDialog.tsx` | Role picker (editor/commenter/viewer), uses (1/5/15/25), expiry (24h→30d), copyable result view; created invite shows once. QR was dropped (no QR dep in the SPA; copy + native share cover it — see deviations). |
+| Dashboard | "Shared with me" section with per-trip role badges; delete button only offered on owned trips (mirrors the owner-only server rule); `onSave`/`onStatusChange` reach the display **only** for editor/owner; People tab (members+invites) appears for real trips with a Milestone-6 payload. |
+| Rank-aware components | `TripFeedback` renders read-only for non-owners (rating is owner-only, F12); `TripVersions` hides Restore for viewer/commenter; `ShareExportModal` hides create/copy of the public link for non-owners. |
+| Cache hygiene (F21) | `lib/queryClient.ts` shared client; `queryClient.clear()` on signin, signup **and** logout. |
+| Server touch-up | Every trip payload (`GET /:id`, updates, granular edits, duplicate, generate) now carries `role` so the SPA can gate exactly what the guard allows. |
+| Verification | backend build ✅ · 161/161 tests ✅ · frontend `tsc --noEmit` ✅ · `vite build` ✅. |
+
+### 16.2 Deviations from the blueprint
+
+1. **No QR code on the invite dialog.** The SPA has no QR dependency and copying/sharing the link covers the same reach; QR would be additive polish in E5+ if wanted.
+2. **People tab instead of a separate members page.** The doc sketches `TripMembers` as a panel; placing it as the 8th tab of the itinerary display keeps members, invites and history one click apart.
+3. **Rating widget stays visible but read-only** for non-owners instead of hidden — it explains why the buttons are gone rather than leaving an odd gap.
+4. **Delete stays visible-and-blocked in the handler** (friendly toast) rather than being fully hidden for shared trips in the library, because the row-level "role" annotation is the only distinction and it is authoritative.
+
+### 16.3 Honest limits
+
+- Presence/rollback UX is E4; two people editing simultaneously still reconcile server-side only (409 handling lands next).
+- The People tab needs a trip payload annotated with a role — trips opened through the sha link (`/shared/:shareId`) correctly never show it.
+- `TripMembers` falls back to "Traveler ····id" labels because `User.name` does not exist yet (E5 optional item).

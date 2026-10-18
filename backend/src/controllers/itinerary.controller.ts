@@ -232,7 +232,7 @@ export const generateItinerary = catchAsync(
     });
     await trip.save();
 
-    res.status(200).json(sanitizeTripFor(trip, 'owner'));
+    res.status(200).json({ ...sanitizeTripFor(trip, 'owner'), role: 'owner' as const });
   }
 );
 
@@ -304,7 +304,7 @@ export const generateItineraryStream = async (req: AuthenticatedRequest, res: Re
           type: 'progress',
           stage: 4,
           progress: 85,
-          message: `Optimizing ₹${budget} budget allocation, transport routes & permit notes...`,
+          message: `Optimizing â‚¹${budget} budget allocation, transport routes & permit notes...`,
         });
       }
     });
@@ -420,7 +420,10 @@ export const getTripById = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const { trip, role } = tripContext(req);
 
-    res.status(200).json(sanitizeTripFor(trip, role));
+    // `role` annotates the payload so the SPA can gate its controls (cosmetic
+    // only â€” the server enforces everything). Absent `role` reads as "owner"
+    // for legacy single-user payloads.
+    res.status(200).json({ ...sanitizeTripFor(trip, role), role });
   }
 );
 
@@ -450,7 +453,7 @@ export const updateTrip = catchAsync(
 
     await trip.save();
 
-    res.status(200).json(sanitizeTripFor(trip, role));
+    res.status(200).json({ ...sanitizeTripFor(trip, role), role });
   }
 );
 
@@ -482,7 +485,7 @@ export const updateTripActivity = catchAsync(
     trip.hasEdited = true;
     await trip.save();
 
-    res.status(200).json(sanitizeTripFor(trip, role));
+    res.status(200).json({ ...sanitizeTripFor(trip, role), role });
   }
 );
 
@@ -520,7 +523,7 @@ export const reorderActivities = catchAsync(
     trip.hasEdited = true;
     await trip.save();
 
-    res.status(200).json(sanitizeTripFor(trip, role));
+    res.status(200).json({ ...sanitizeTripFor(trip, role), role });
   }
 );
 
@@ -541,7 +544,7 @@ export const moveTripDay = catchAsync(
       throw new AppError('The requested day position is out of range.', 400);
     }
     if (fromIndex === toIndex) {
-      return res.status(200).json(sanitizeTripFor(trip, role));
+      return res.status(200).json({ ...sanitizeTripFor(trip, role), role });
     }
 
     snapshotCurrent(trip, 'Reordered trip days');
@@ -553,7 +556,7 @@ export const moveTripDay = catchAsync(
     trip.hasEdited = true;
     await trip.save();
 
-    res.status(200).json(sanitizeTripFor(trip, role));
+    res.status(200).json({ ...sanitizeTripFor(trip, role), role });
   }
 );
 
@@ -636,7 +639,7 @@ export const restoreTripVersion = catchAsync(
     trip.hasEdited = true;
     await trip.save();
 
-    res.status(200).json(sanitizeTripFor(trip, role));
+    res.status(200).json({ ...sanitizeTripFor(trip, role), role });
   }
 );
 
@@ -756,7 +759,7 @@ export const duplicateTrip = catchAsync(
 
     await newTrip.save();
 
-    res.status(201).json(sanitizeTripFor(newTrip, 'owner'));
+    res.status(201).json({ ...sanitizeTripFor(newTrip, 'owner'), role: 'owner' as const });;
   }
 );
 
@@ -831,7 +834,7 @@ function collectItineraryCoordinates(days: any[]): [number, number][] {
 /**
  * Suggests a weather-aware replacement for a single day (Milestone 4.4).
  *
- * Only returns the proposal — the client applies it through the normal
+ * Only returns the proposal â€” the client applies it through the normal
  * granular edit endpoints, so version history and undo keep working.
  * POST /api/itinerary/:id/days/:day/indoor-alternative
  */
@@ -916,7 +919,7 @@ function dayActivityCoordinates(day: any): [number, number][] {
  * its activities, flagging exposed travel legs and proposing concrete fixes
  * (day swaps, indoor rebuilds, travel buffers).
  *
- * The response is advisory only — nothing is persisted; the client applies a
+ * The response is advisory only â€” nothing is persisted; the client applies a
  * suggestion through the normal itinerary edit endpoints.
  * GET /api/itinerary/:id/weather-routing
  */

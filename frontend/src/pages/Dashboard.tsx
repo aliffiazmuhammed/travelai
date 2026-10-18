@@ -7,16 +7,22 @@ import { Loader2 } from "lucide-react";
 import ItineraryDisplay from "@/components/ItineraryDisplay";
 import { MyTripsView } from "@/components/dashboard/MyTripsView";
 import { TripsGridSkeleton } from "@/components/dashboard/TripSkeletons";
+import { useAuth } from "@/context/UserContext";
+import { useTripAccess } from "@/hooks/useTripAccess";
 import type { Trip, ItineraryData, TripFeedback } from "@/types/trip";
 
 const Dashboard: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const [trips, setTrips] = useState<Trip[]>([]);
   const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [isSaving, setIsSaving] = useState<boolean>(false);
+
+  // Milestone 6 §3.8: role → UI gating. Cosmetic only — the server enforces.
+  const access = useTripAccess(selectedTrip, user?._id);
 
   // Fetch all user trips on mount
   useEffect(() => {
@@ -69,8 +75,14 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  // Delete Trip Handler
+  // Delete Trip Handler — owner-only on the server; mirrored here so a shared
+  // member never sees a doomed confirm dialog.
   const handleDeleteTrip = async (tripId: string) => {
+    const trip = trips.find((t) => t._id === tripId);
+    if (trip?.role && trip.role !== "owner") {
+      toast.error("Only the trip owner can delete it. Use “Duplicate” for your own copy.");
+      return;
+    }
     try {
       await api.deleteTrip(tripId);
       toast.success("Trip deleted successfully.");
@@ -164,6 +176,13 @@ const Dashboard: React.FC = () => {
               status={selectedTrip.status || "planned"}
               version={selectedTrip.version}
               hasEdited={selectedTrip.hasEdited}
+              role={access.role ?? undefined}
+              members={selectedTrip.members}
+              onStatusChange={access.isOwner ? handleStatusChange : undefined}
+              onSave={access.canEdit ? handleSaveTrip : undefined}
+              canRate={access.isOwner}
+              isSaving={isSaving}
+              onTripUpdated={handleTripUpdated}
               feedback={selectedTrip.feedback}
               generationMeta={selectedTrip.generationMeta}
               expenses={selectedTrip.expenses}
@@ -172,10 +191,6 @@ const Dashboard: React.FC = () => {
               customRoutes={selectedTrip.customRoutes}
               startDate={selectedTrip.startDate}
               onFeedbackSubmitted={handleFeedbackSubmitted}
-              onStatusChange={handleStatusChange}
-              onSave={handleSaveTrip}
-              isSaving={isSaving}
-              onTripUpdated={handleTripUpdated}
               onBackToList={() => setSelectedTrip(null)}
               onNewPlan={() => navigate("/plan")}
             />

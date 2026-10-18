@@ -20,6 +20,10 @@ import type {
   NearbyResponse,
   DayAlternative,
   WeatherRoutingResponse,
+  TripRole,
+  TripMember,
+  TripInviteInfo,
+  InvitePreview,
 } from '@/types';
 
 export interface StreamProgressEvent {
@@ -331,10 +335,11 @@ class ApiClient {
     }
   }
 
-  async getTrips(params?: { search?: string; status?: string }): Promise<Trip[]> {
+  async getTrips(params?: { search?: string; status?: string; scope?: 'owned' | 'shared' | 'all' }): Promise<Trip[]> {
     const query = new URLSearchParams();
     if (params?.search) query.append('search', params.search);
     if (params?.status && params.status !== 'all') query.append('status', params.status);
+    if (params?.scope) query.append('scope', params.scope);
     const queryString = query.toString() ? `?${query.toString()}` : '';
     return this.request(`/api/itinerary${queryString}`);
   }
@@ -373,6 +378,61 @@ class ApiClient {
 
   async getSharedTrip(shareId: string): Promise<Trip> {
     return this.request(`/api/itinerary/shared/${shareId}`);
+  }
+
+  // Collaboration (Milestone 6: members, invites, ownership)
+  async getTripMembers(id: string): Promise<{ success: boolean; members: TripMember[] }> {
+    return this.request(`/api/itinerary/${id}/members`);
+  }
+
+  async leaveTrip(id: string): Promise<{ success: boolean; message: string }> {
+    return this.request(`/api/itinerary/${id}/members/me`, { method: 'DELETE' });
+  }
+
+  async changeMemberRole(id: string, userId: string, role: TripRole): Promise<{ success: boolean; members: TripMember[] }> {
+    return this.request(`/api/itinerary/${id}/members/${userId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ role }),
+    });
+  }
+
+  async removeMember(id: string, userId: string): Promise<{ success: boolean; members: TripMember[] }> {
+    return this.request(`/api/itinerary/${id}/members/${userId}`, { method: 'DELETE' });
+  }
+
+  async transferOwnership(id: string, toUserId: string): Promise<{ success: boolean; message: string; members: TripMember[] }> {
+    return this.request(`/api/itinerary/${id}/transfer`, {
+      method: 'POST',
+      body: JSON.stringify({ toUserId }),
+    });
+  }
+
+  async createTripInvite(
+    id: string,
+    payload: { role: Exclude<TripRole, 'owner'>; kind?: 'link' | 'email'; email?: string; maxUses?: number; ttlHours?: number }
+  ): Promise<{ success: boolean; invite: TripInviteInfo; link: string }> {
+    return this.request(`/api/itinerary/${id}/invites`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getTripInvites(id: string): Promise<{ success: boolean; invites: TripInviteInfo[] }> {
+    return this.request(`/api/itinerary/${id}/invites`);
+  }
+
+  async revokeTripInvite(id: string, inviteId: string): Promise<{ success: boolean; invite: TripInviteInfo }> {
+    return this.request(`/api/itinerary/${id}/invites/${inviteId}`, { method: 'DELETE' });
+  }
+
+  async getInvitePreview(token: string): Promise<{ success: boolean } & InvitePreview> {
+    return this.request(`/api/invites/${encodeURIComponent(token)}`);
+  }
+
+  async acceptInvite(
+    token: string
+  ): Promise<{ success: boolean; role: Exclude<TripRole, 'owner'>; alreadyMember: boolean; tripId: string; message: string }> {
+    return this.request(`/api/invites/${encodeURIComponent(token)}/accept`, { method: 'POST' });
   }
 
   // Granular itinerary editing endpoints (Milestone 1)

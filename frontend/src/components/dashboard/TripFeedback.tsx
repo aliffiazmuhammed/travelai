@@ -11,6 +11,8 @@ interface TripFeedbackProps {
   initialFeedback?: TripFeedbackType;
   /** Optional AI quality score (0-100) shown as a confidence hint. */
   qualityScore?: number;
+  /** Rating is owner-only on the server (F12); the widget renders read-only otherwise. */
+  canRate?: boolean;
   onSubmitted?: (feedback: TripFeedbackType) => void;
 }
 
@@ -22,6 +24,7 @@ export const TripFeedback: React.FC<TripFeedbackProps> = ({
   tripId,
   initialFeedback,
   qualityScore,
+  canRate = true,
   onSubmitted,
 }) => {
   const [rating, setRating] = useState<"up" | "down" | undefined>(
@@ -99,8 +102,16 @@ export const TripFeedback: React.FC<TripFeedbackProps> = ({
           )}
         </div>
         <div className="flex items-center gap-2">
-          {renderButton("up")}
-          {renderButton("down")}
+          {canRate ? (
+            <>
+              {renderButton("up")}
+              {renderButton("down")}
+            </>
+          ) : (
+            <span className="text-[11px] text-muted-foreground font-medium">
+              Only the trip owner can rate this itinerary
+            </span>
+          )}
         </div>
       </CardContent>
     </Card>

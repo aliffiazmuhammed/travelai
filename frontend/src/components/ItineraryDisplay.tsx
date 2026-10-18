@@ -11,11 +11,13 @@ import {
   Camera,
   History,
   Receipt,
+  Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { api } from "@/services/api";
+import { cn } from "@/lib/utils";
 import { TripHeader } from "./dashboard/TripHeader";
 import { DayTimeline } from "./dashboard/DayTimeline";
 import { TripMap } from "./dashboard/TripMap";
@@ -28,6 +30,7 @@ import { ExpenseTracker } from "./dashboard/ExpenseTracker";
 import { NearbyExplorer } from "./dashboard/NearbyExplorer";
 import { WeatherRoutingCard } from "./dashboard/WeatherRoutingCard";
 import { DayAlternativeDialog } from "./dashboard/DayAlternativeDialog";
+import { TripMembers } from "./dashboard/TripMembers";
 import { endDateFromStart, itineraryAnchor, zipWeatherToDays } from "@/lib/weather";
 import { swapDayPlans } from "@/lib/weatherRouting";
 import type {
@@ -42,7 +45,9 @@ import type {
   TripFeedback as TripFeedbackType,
   TripFinance,
   TripGenerationMeta,
+  TripMemberSummary,
   TripParticipant,
+  TripRole,
   WeatherRoutingAnalysis,
 } from "@/types/trip";
 export type { ItineraryData } from "@/types/trip";
@@ -55,6 +60,10 @@ interface ItineraryDisplayProps {
   version?: number;
   /** Whether the trip has ever been edited. */
   hasEdited?: boolean;
+  /** The caller's role on this trip (Milestone 6 §3.8; undefined = legacy payload). */
+  role?: TripRole;
+  /** Embedded member list from the trip payload (renders the People tab). */
+  members?: TripMemberSummary[];
   onStatusChange?: (newStatus: "draft" | "planned" | "ongoing" | "completed") => void;
   onSave?: (updatedDetails: ItineraryData) => Promise<void>;
   isSaving?: boolean;
@@ -104,6 +113,8 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
   status,
   version,
   hasEdited,
+  role,
+  members,
   onStatusChange,
   onSave,
   isSaving,
@@ -115,6 +126,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
   finance,
   customRoutes,
   startDate,
+  canRate = true,
   onFeedbackSubmitted,
   onBackToList,
   onNewPlan,
@@ -128,6 +140,12 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
 
   const isRealTrip = Boolean(tripId && !tripId.startsWith("temp-"));
   const autoSaveEnabled = Boolean(onSave && isRealTrip);
+
+  // Milestone 6 — cosmetic role gates (server enforces the real rules).
+  const isOwner = role ? role === "owner" : Boolean(onSave);
+  const canRestore = role ? role === "owner" || role === "editor" : true;
+  // The People tab appears only for real trips with a Milestone 6 payload.
+  const showPeopleTab = Boolean(isRealTrip && role);
 
   // --- Weather advisories (Milestone 4.4) ---
   const [weatherByDay, setWeatherByDay] = useState<Record<number, DailyWeather>>({});
@@ -482,6 +500,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
           tripId={tripId}
           initialFeedback={feedback}
           qualityScore={generationMeta?.qualityScore}
+          canRate={canRate && isOwner}
           onSubmitted={onFeedbackSubmitted}
         />
       )}
@@ -489,7 +508,12 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
       {/* 2. Main Multi-View Tabs Navigation */}
       <Tabs defaultValue="timeline" className="w-full space-y-6">
         <div className="sticky top-16 z-30 bg-background/85 backdrop-blur-md py-2 -mx-2 px-2">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 h-auto p-1.5 bg-muted/60 border border-border/60 rounded-2xl shadow-xs gap-1">
+          <TabsList
+            className={cn(
+              "grid w-full h-auto p-1.5 bg-muted/60 border border-border/60 rounded-2xl shadow-xs gap-1 grid-cols-4 sm:grid-cols-4 lg:grid-cols-8",
+              !showPeopleTab && "lg:grid-cols-7"
+            )}
+          >
             <TabsTrigger
               value="timeline"
               className="py-2.5 rounded-xl text-xs font-bold gap-2 data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
@@ -545,6 +569,16 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
               <History className="w-3.5 h-3.5" />
               <span>History</span>
             </TabsTrigger>
+
+            {showPeopleTab && (
+              <TabsTrigger
+                value="people"
+                className="py-2.5 rounded-xl text-xs font-bold gap-2 data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>People</span>
+              </TabsTrigger>
+            )}
           </TabsList>
         </div>
 
@@ -642,9 +676,17 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
             tripId={tripId}
             currentVersion={version}
             hasEdited={hasEdited}
+            canRestore={canRestore}
             onRestored={handleVersionRestored}
           />
         </TabsContent>
+
+        {/* TAB 8: People & sharing view (Milestone 6 §3.8) */}
+        {showPeopleTab && (
+          <TabsContent value="people" className="outline-hidden animate-fade-in">
+            <TripMembers tripId={tripId!} myRole={role!} />
+          </TabsContent>
+        )}
       </Tabs>
 
       {/* Weather-aware day alternative (Milestone 4.4) */}

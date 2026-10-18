@@ -30,6 +30,8 @@ interface TripVersionsProps {
   tripId?: string;
   currentVersion?: number;
   hasEdited?: boolean;
+  /** Restore is an editor action on the server (Milestone 6 §3.3). */
+  canRestore?: boolean;
   onRestored: (trip: Trip) => void;
 }
 
@@ -52,6 +54,7 @@ export const TripVersions: React.FC<TripVersionsProps> = ({
   tripId,
   currentVersion,
   hasEdited,
+  canRestore = true,
   onRestored,
 }) => {
   const [versions, setVersions] = useState<TripVersionSummary[]>([]);
@@ -244,16 +247,22 @@ export const TripVersions: React.FC<TripVersionsProps> = ({
                   </div>
                 </div>
 
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setTargetVersion(v)}
-                  className="rounded-xl text-xs font-bold h-9 gap-1.5 self-start sm:self-auto shrink-0"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Restore</span>
-                </Button>
+                {canRestore ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setTargetVersion(v)}
+                    className="rounded-xl text-xs font-bold h-9 gap-1.5 self-start sm:self-auto shrink-0"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Restore</span>
+                  </Button>
+                ) : (
+                  <Badge variant="outline" className="text-[10px] self-start sm:self-auto shrink-0">
+                    read-only
+                  </Badge>
+                )}
               </CardContent>
             </Card>
           ))}

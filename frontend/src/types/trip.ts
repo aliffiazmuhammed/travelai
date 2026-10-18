@@ -379,6 +379,8 @@ export interface RouteResult {
 export interface Trip {
   _id: string;
   title?: string;
+  /** Creator's user id (audit trail; Milestone 6 keeps authorization in members[]). */
+  userId?: string;
   /** Planned trip window (drives per-day weather). */
   startDate?: string;
   endDate?: string;
@@ -386,6 +388,12 @@ export interface Trip {
   isDeleted?: boolean;
   version?: number;
   hasEdited?: boolean;
+  /** Optimistic-concurrency counter (Milestone 6 §3.6) — moves on every write. */
+  rev?: number;
+  /** The caller's role on this trip (Milestone 6). Absent for legacy payloads. */
+  role?: TripRole;
+  /** Member list — visible to every member (used to render "who is on this trip"). */
+  members?: TripMemberSummary[];
   tripDetails: ItineraryData;
   promptVersion?: string;
   generationMeta?: TripGenerationMeta;
@@ -400,6 +408,55 @@ export interface Trip {
   customRoutes?: CustomRoute[];
   createdAt: string;
   updatedAt: string;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Collaboration (Milestone 6)                                                 */
+/* -------------------------------------------------------------------------- */
+
+export type TripRole = 'owner' | 'editor' | 'commenter' | 'viewer';
+
+/** A member row as returned by `GET /:id/members`. */
+export interface TripMember {
+  userId: string;
+  role: TripRole;
+  joinedAt: string;
+  /** Email — populated for the owner's view only (F6). */
+  email?: string;
+  /** True on the caller's own row. */
+  isYou?: boolean;
+}
+
+/** Embedded member shape on sanitized trip payloads (no email). */
+export interface TripMemberSummary {
+  userId: string;
+  role: TripRole;
+  invitedBy?: string;
+  joinedAt?: string;
+}
+
+/** An invitation as seen in the owner's list — token hints, never raw tokens. */
+export interface TripInviteInfo {
+  _id: string;
+  role: Exclude<TripRole, 'owner'>;
+  kind: 'link' | 'email';
+  email?: string | null;
+  tokenHint: string;
+  expiresAt: string;
+  maxUses: number;
+  usedCount: number;
+  revokedAt: string | null;
+  createdAt: string;
+}
+
+/** What a signed-in user sees before accepting an invite. */
+export interface InvitePreview {
+  trip: { title: string; destination?: string };
+  role: Exclude<TripRole, 'owner'>;
+  kind: 'link' | 'email';
+  invitedBy?: string;
+  expiresAt: string;
+  emailBoundTo?: string;
 }
 
 export interface TripVersionSummary {
