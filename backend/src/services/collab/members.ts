@@ -1,5 +1,6 @@
 import { AppError } from '../../utils/AppError.js';
 import { ROLE_RANK, can, type TripRole } from './access.js';
+import { emitTripUpdated } from './presence.js';
 import User from '../../models/User.js';
 import Trip from '../../models/Trip.js';
 import { Types } from 'mongoose';
@@ -146,6 +147,9 @@ export async function performTransfer(
     { _id: trip._id, 'members.userId': new Types.ObjectId(fromUserId) },
     { $set: { 'members.$.role': 'editor' } }
   );
+  // Direct `Trip.updateOne` does not run post hooks (mongoose limitation) —
+  // the E4 change notification is emitted here explicitly.
+  emitTripUpdated(String(trip._id));
 
   return Trip.findById(trip._id);
 }

@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { api } from "@/services/api";
+import { isRevConflict, toastConflict } from "@/lib/conflicts";
 import { cn } from "@/lib/utils";
 import { TripHeader } from "./dashboard/TripHeader";
 import { DayTimeline } from "./dashboard/DayTimeline";
@@ -31,6 +32,7 @@ import { NearbyExplorer } from "./dashboard/NearbyExplorer";
 import { WeatherRoutingCard } from "./dashboard/WeatherRoutingCard";
 import { DayAlternativeDialog } from "./dashboard/DayAlternativeDialog";
 import { TripMembers } from "./dashboard/TripMembers";
+import { useTripEvents, type PresenceUser } from "@/hooks/useTripEvents";
 import { endDateFromStart, itineraryAnchor, zipWeatherToDays } from "@/lib/weather";
 import { swapDayPlans } from "@/lib/weatherRouting";
 import type {
@@ -64,6 +66,10 @@ interface ItineraryDisplayProps {
   role?: TripRole;
   /** Embedded member list from the trip payload (renders the People tab). */
   members?: TripMemberSummary[];
+  /** Live roster for the avatar stack (E4b, empty when the tier is off). */
+  presence?: PresenceUser[];
+  /** The viewer's user id — used to drop their own entry from the stack. */
+  currentUserId?: string;
   onStatusChange?: (newStatus: "draft" | "planned" | "ongoing" | "completed") => void;
   onSave?: (updatedDetails: ItineraryData) => Promise<void>;
   isSaving?: boolean;
@@ -115,6 +121,8 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
   hasEdited,
   role,
   members,
+  presence,
+  currentUserId,
   onStatusChange,
   onSave,
   isSaving,
@@ -136,6 +144,9 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
     data.day_by_day_itinerary
   );
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
+  /** Mirror for the live-tier callback (E4b): the SSE hook reads it from a ref. */
+  const hasUnsavedChangesRef = useRef<boolean>(false);
+  hasUnsavedChangesRef.current = hasUnsavedChanges;
   const [isPersisting, setIsPersisting] = useState<boolean>(false);
 
   const isRealTrip = Boolean(tripId && !tripId.startsWith("temp-"));
@@ -146,6 +157,28 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
   const canRestore = role ? role === "owner" || role === "editor" : true;
   // The People tab appears only for real trips with a Milestone 6 payload.
   const showPeopleTab = Boolean(isRealTrip && role);
+
+  /** E4b: `trip:updated` from another collaborator → silent refetch. Never
+   * overwrites state while there are unsaved local edits (the conflict toast
+   * is the reconciliation path instead). */
+  const liveRefresh = async () => {
+    if (!isRealTrip || !tripId || hasUnsavedChangesRef.current) return;
+    try {
+      const fresh = await api.getTrip(tripId);
+      if (hasUnsavedChangesRef.current) return;
+      setItinerary(fresh.tripDetails.day_by_day_itinerary);
+      onTripUpdated?.(fresh);
+    } catch {
+      /* the 409 path handles real conflicts; silent here */
+    }
+  };
+
+  // Live roster + remote-write notifications (no-op when the tier is off).
+  const livePresence = useTripEvents(isRealTrip ? tripId : undefined, {
+    onTripUpdated: () => {
+      void liveRefresh();
+    },
+  });
 
   // --- Weather advisories (Milestone 4.4) ---
   const [weatherByDay, setWeatherByDay] = useState<Record<number, DailyWeather>>({});
@@ -381,17 +414,37 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
       } catch (err) {
         console.error("Failed to persist itinerary change:", err);
         setItinerary(previous);
-        toast.error(
-          err instanceof Error
-            ? err.message
-            : "Could not save your changes. Please try again."
-        );
+        if (isRevConflict(err)) {
+          toastConflict(err, () => reloadLatest());
+        } else {
+          toast.error(
+            err instanceof Error
+              ? err.message
+              : "Could not save your changes. Please try again."
+          );
+        }
       } finally {
         setIsPersisting(false);
       }
     },
     [hasUnsavedChanges, onSave, data, itinerary, onTripUpdated]
   );
+
+  /** E4: "Reload latest" for a 409 conflict — replace local state wholesale. */
+  const reloadLatest = async () => {
+    if (!isRealTrip || !tripId) return;
+    try {
+      const fresh = await api.getTrip(tripId);
+      setItinerary(fresh.tripDetails.day_by_day_itinerary);
+      setHasUnsavedChanges(false);
+      onTripUpdated?.(fresh);
+      toast.success("Reloaded the latest version of this trip.");
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Could not reload the trip."
+      );
+    }
+  };
 
   const handleUpdateActivity = (
     dayNumber: number,
@@ -465,6 +518,8 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
         status={status}
         version={version}
         hasEdited={hasEdited}
+        presence={livePresence}
+        currentUserId={currentUserId}
         onStatusChange={onStatusChange}
         onSave={onSave ? handleSaveTrigger : undefined}
         isSaving={isSaving || isPersisting}

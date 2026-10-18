@@ -87,6 +87,9 @@ const FORBIDDEN_MESSAGE =
 const REV_CONFLICT_MESSAGE =
   'This trip was changed by someone else while you were working. Reload the latest version to continue.';
 
+const OUT_OF_DATE_MESSAGE =
+  'Your view of this trip is out of date. Reload the latest version before making changes.';
+
 /**
  * Guard factory. `min` is the minimum role rank accepted; `commenter` has no
  * routes yet (reserved) and a trip's creator is an `owner` member.
@@ -126,10 +129,16 @@ export function requireTripRole(
       const baseRev = parseBaseRev(req.body?.baseRev);
 
       if (revMode === 'required' && baseRev === undefined) {
-        throw new AppError(
-          'Your view of this trip is out of date. Refresh the trip and try again.',
-          409
-        );
+        // Same structured shape as a genuine conflict so the client treats
+        // "did not send a rev" and "sent a stale rev" with one UX path.
+        return res.status(409).json({
+          success: false,
+          code: 'REV_CONFLICT',
+          currentRev: trip.rev ?? 1,
+          updatedAt: trip.updatedAt,
+          error: OUT_OF_DATE_MESSAGE,
+          message: OUT_OF_DATE_MESSAGE,
+        });
       }
 
       if (baseRev !== undefined && Number(trip.rev ?? 1) !== baseRev) {

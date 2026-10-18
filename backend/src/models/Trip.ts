@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document, Types } from 'mongoose';
+import { emitTripUpdated } from '../services/collab/presence.js';
 
 export interface ITripVersion {
   version: number;
@@ -356,5 +357,23 @@ for (const operation of ['findOneAndUpdate', 'updateOne', 'updateMany'] as const
     }
   });
 }
+
+/**
+ * E4: every successful Trip write fans out a `trip:updated` event to any open
+ * SSE streams (services/collab/presence.ts). Failures inside the bus are
+ * swallowed by the bus itself — a dead stream can never break a write.
+ */
+tripSchema.post('save', function () {
+  emitTripUpdated(String(this._id));
+});
+tripSchema.post('findOneAndUpdate', { document: false }, function (doc: any) {
+  if (doc) emitTripUpdated(String(doc._id));
+});
+/**
+ * `post('updateOne'|'updateMany')` is NOT supported by mongoose query
+ * middleware, so the three direct `Trip.updateOne` call sites (members.ts ×2,
+ * invites.ts ×1) emit the change notification themselves. Everything else in
+ * the app goes through `trip.save()` above — covered automatically.
+ */
 
 export default mongoose.model<ITrip>('Trip', tripSchema);

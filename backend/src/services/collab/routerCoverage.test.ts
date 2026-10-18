@@ -145,12 +145,15 @@ test('guards declare the expected minimum roles (spot checks)', () => {
   assert.equal(minimumFor('POST', '/:id/invites'), 'owner');
   assert.equal(minimumFor('GET', '/:id/invites'), 'owner');
   assert.equal(minimumFor('DELETE', '/:id/invites/:inviteId'), 'owner');
+  // Sprint E4 — live tier.
+  assert.equal(minimumFor('GET', '/:id/events'), 'viewer');
+  assert.equal(minimumFor('POST', '/:id/events/heartbeat'), 'viewer');
 });
 
 test('version-cap routes expose history only with the versions field loaded', () => {
   const layers = routeLayers();
 
-  const optionsFor = (method: string, path: string): { withVersions?: boolean } => {
+  const optionsFor = (method: string, path: string): { withVersions?: boolean; revMode?: string } => {
     const layer = layers.find(
       (candidate) =>
         pathOf(candidate) === path && methodsOf(candidate).includes(method.toLowerCase())
@@ -165,4 +168,47 @@ test('version-cap routes expose history only with the versions field loaded', ()
   assert.equal(optionsFor('GET', '/:id/versions').withVersions, true);
   assert.equal(optionsFor('PUT', '/:id').withVersions, true);
   assert.equal(optionsFor('GET', '/:id/expenses').withVersions, undefined);
+});
+
+/**
+ * Sprint E4 — `revMode: 'required'` is set per route (`§3.6`), so the guarantee
+ * that "no controller can forget the concurrency check" extends to the routes
+ * where a stale write destroys work wholesale. Whole-document and multi-item
+ * mutations must demand a `baseRev`; id-addressed writes stay `optional`.
+ */
+test('content-mutation routes require baseRev (E4 concurrency spot checks)', () => {
+  const layers = routeLayers();
+
+  const revModeFor = (method: string, path: string): string | undefined => {
+    const layer = layers.find(
+      (candidate) =>
+        pathOf(candidate) === path && methodsOf(candidate).includes(method.toLowerCase())
+    );
+    if (!layer) return undefined;
+    const guard = (layer.route as any).stack.find(
+      (handler: any) => handler?.handle?.[TRIP_GUARD_TAG] !== undefined
+    );
+    return guard?.handle?.[TRIP_GUARD_TAG]?.options?.revMode;
+  };
+
+  // Required: a stale write here overwrites more than its own item.
+  for (const [method, path] of [
+    ['PUT', '/:id'],
+    ['PUT', '/:id/activities'],
+    ['PUT', '/:id/activities/reorder'],
+    ['PUT', '/:id/days/reorder'],
+    ['PUT', '/:id/participants'],
+    ['POST', '/:id/versions/:version/restore'],
+    ['POST', '/:id/transfer'],
+  ] as const) {
+    assert.equal(
+      revModeFor(method, path),
+      'required',
+      `${method} ${path} must run with revMode 'required' under E4`
+    );
+  }
+
+  // Optional: id-addressed writes lose at most that one item.
+  assert.equal(revModeFor('PUT', '/:id/expenses/:expenseId'), 'optional');
+  assert.equal(revModeFor('POST', '/:id/routes'), 'optional');
 });

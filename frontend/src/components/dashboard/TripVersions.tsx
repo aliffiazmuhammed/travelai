@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/services/api";
+import { isRevConflict, toastConflict } from "@/lib/conflicts";
 import type { Trip, TripVersionSummary } from "@/types/trip";
 
 interface TripVersionsProps {
@@ -96,7 +97,22 @@ export const TripVersions: React.FC<TripVersionsProps> = ({
       await loadVersions();
     } catch (err) {
       console.error("Failed to restore version:", err);
-      toast.error(err instanceof Error ? err.message : "Could not restore that version.");
+      if (isRevConflict(err)) {
+        toastConflict(err, async () => {
+          try {
+            const fresh = await api.getTrip(tripId!);
+            onRestored(fresh);
+            await loadVersions();
+            toast.success("Reloaded the latest version of this trip.");
+          } catch (reloadErr) {
+            toast.error(
+              reloadErr instanceof Error ? reloadErr.message : "Could not reload the trip."
+            );
+          }
+        });
+      } else {
+        toast.error(err instanceof Error ? err.message : "Could not restore that version.");
+      }
     } finally {
       setRestoring(false);
       setTargetVersion(null);

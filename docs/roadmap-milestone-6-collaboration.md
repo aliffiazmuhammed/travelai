@@ -1,6 +1,6 @@
 # Milestone 6 — Collaboration & Trip Sharing
 
-**Status:** approved. **E1, E2 and E3 (members/invites UI) are shipped and verified.** E4 (concurrency + presence) is in progress.
+**Status:** approved. **E1–E4 are shipped and verified (E4 = concurrency + live tier).** E5 (hardening pass) is next.
 
 **Scope:** let more than one person plan the same trip — invite people, assign what they can do, edit the itinerary together without overwriting each other, and track who changed what.
 
@@ -712,3 +712,33 @@ Safe to run repeatedly; matches only documents with no members.
 - Presence/rollback UX is E4; two people editing simultaneously still reconcile server-side only (409 handling lands next).
 - The People tab needs a trip payload annotated with a role — trips opened through the sha link (`/shared/:shareId`) correctly never show it.
 - `TripMembers` falls back to "Traveler ····id" labels because `User.name` does not exist yet (E5 optional item).
+
+## 17. E4 — shipped (appendix)
+
+> Ship notes, 2026-10-18. One increment: concurrency enforcement + the live tier.
+
+### 17.1 What landed
+
+| Area | Result |
+| --- | --- |
+| `revMode: 'required'` flips on | `PUT /:id`, `PUT /:id/activities`, `PUT /:id/activities/reorder`, `PUT /:id/days/reorder`, `PUT /:id/participants`, version restore, ownership transfer. Id-addressed writes (expense/route/finance) stay `optional` per §3.6. Router-coverage spots both claim groups in CI. |
+| Guard change | A **missing** `baseRev` under `required` now answers the same structured `409 { code: 'REV_CONFLICT', currentRev, updatedAt }` as a stale rev, so the client has one conflict path instead of two. |
+| `participants` no-op writes | The reconcile reuses identical subdocs → `save()` became a no-op and `rev` stuck. `markModified('participants')` now guarantees a user-visible write always moves `rev` (caught by the smoke before any user could). |
+| api.ts rev plumbing | `ApiError` keeps `{status, code, currentRev}`; the client remembers the latest `rev` from every trip-shaped payload and injects `baseRev` into the seven required mutations automatically — no component had to thread revs through. |
+| Conflict UX | `lib/conflicts.ts` + "Reload latest" toast action wired into the itinerary persist flow, the dashboard save/status handlers and version restore; a remote `trip:updated` triggers a silent refetch that yields to unsaved local edits instead of clobbering them. |
+| E4a refreshing | Dashboard listens to `focus`/`visibilitychange` and polls every 20s (quiet — no spinner, no toast on failure), keeping both the list and the open trip's rev fresh. |
+| E4b presence | `services/collab/presence.ts` (in-process TTL map + tiny bus, §3.7 exactly as scoped), `GET /:id/events` SSE (viewer-guarded, keepalive ping every 15s), `POST /:id/events/heartbeat` (204), `Trip` write hooks fan out `trip:updated` (`post('save')`/`post('findOneAndUpdate')`; the three direct `Trip.updateOne` call sites emit explicitly because mongoose has no post-update query middleware). |
+| SPA live tier | `hooks/useTripEvents.ts` — subscribes only after a cached `/api/health` probe reports `collab.sse` (a disabled tier means zero event-source attempts, no retry spam); heartbeats every 10s via the CSRF-plumbed client; TripHeader renders the live collaborator avatar stack (own entry filtered out, +N overflow). |
+| Env | `ENABLE_TRIP_SSE` (default false, string-parsed — `Boolean('false')` is a trap), `PRESENCE_TTL_MS` (30000), both in `.env.example`. Health reports `collab.sse` for feature discovery. |
+| Tests | presence.service suite (TTL prune, dedup, roster projection, bus fan-out + a throwing subscriber can't break the bus), router-coverage spots for `required`/`optional` groupings and the two live-tier routes. 171/171 backend tests. |
+| Smoke | `smoke-e2.mts` extended to 45 checks: no-rev write → 409 REV_CONFLICT; stale rev → 409 + `currentRev`; two sequential writers chained through published revs, then the leftover rev authoritatively rejected; participants/transfer now carry baseRev; SSE frames (`trip:updated`, `presence` roster via heartbeat) observed on a real stream; **non-member refused the stream (404)** — which caught the flaw below. |
+
+### 17.2 The one shipped early (E5 item pulled forward)
+
+`roleOf`'s **creator fallback is gone**, in E4 rather than E5, because the smoke proved it was a live hole: an owner who *left* (or was transferred away from) their own trip kept owner access to everything — including the new SSE stream — because `trip.userId === userId` returned `'owner'` with zero regard for `members[]`. The `migrate:members` backfill has run on the served database (1 legacy trip backfilled, 0 remaining), so `members[]` is authoritative everywhere; the tests were rewritten to pin "creator with no member row ⇒ no access".
+
+### 17.3 Honest limits
+
+- Presence state is single-instance (by design, §8/§10). The toggle degrades cleanly; rev-based conflicts keep the data honest without it.
+- `trip:updated` fires on member-role/invite mutations too — the SPA treats each as "refetch the trip", which is correct but slightly eager.
+- The smoke's SSE checks need the server started with `ENABLE_TRIP_SSE=true`; with the tier off the script stops at the heartbeat step's neighbouring checks rather than the full stream assertions (documented in the header).

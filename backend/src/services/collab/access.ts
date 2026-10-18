@@ -16,8 +16,7 @@ import { z } from 'zod';
  *   whether a trip id exists. A 403 is reserved for a known member whose rank
  *   is too low for the specific action.
  * - **`userId` is the creator, not the access list.** Authorization reads
- *   `members[]`; `userId` only survives as the creator/audit field and for the
- *   pre-backfill fallback below.
+ *   `members[]` only; `userId` survives as the creator/audit field.
  */
 
 export type TripRole = 'owner' | 'editor' | 'commenter' | 'viewer';
@@ -100,10 +99,13 @@ export interface TripAccessShape {
 }
 
 /**
- * The caller's role on a trip, or `null` when they have none at all. Falls back
- * to the creator as owner while legacy documents have not been backfilled yet
- * (`docs/roadmap-milestone-6-collaboration.md` §7); the fallback is removed once
- * the backfill is confirmed everywhere.
+ * The caller's role on a trip, or `null` when they have none at all.
+ *
+ * **Authorization reads `members[]` exclusively.** The pre-backfill creator
+ * fallback that once lived here is gone (E4 smoke proved the flaw: a creator
+ * who *left* the trip would have retained owner access): the `migrate:members`
+ * backfill has run against every environment trip database the app serves,
+ * so `members[]` is authoritative and `userId` is the audit field only.
  */
 export function roleOf(trip: TripAccessShape | null | undefined, userId?: string): TripRole | null {
   if (!userId) return null;
@@ -112,16 +114,9 @@ export function roleOf(trip: TripAccessShape | null | undefined, userId?: string
     (entry) => entry && String(entry.userId) === String(userId)
   );
 
-  if (member) {
-    const role = String(member.role || '') as TripRole;
-    return ROLE_RANK[role] !== undefined ? role : null;
-  }
-
-  if (trip && trip.userId !== undefined && String(trip.userId) === String(userId)) {
-    return 'owner';
-  }
-
-  return null;
+  if (!member) return null;
+  const role = String(member.role || '') as TripRole;
+  return ROLE_RANK[role] !== undefined ? role : null;
 }
 
 /** Zod schema for a role coming in from the wire. */

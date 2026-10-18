@@ -29,6 +29,8 @@ import {
   createTripInviteHandler,
   listTripInvites,
   revokTripInviteHandler,
+  sendPresenceHeartbeat,
+  subscribeTripEvents,
 } from '../controllers/collab.controller.js';
 import {
   getTripExpenses,
@@ -116,11 +118,13 @@ router.get('/insights', protect, getTripInsights);
 
 router.get('/:id', protect, requireTripRole('viewer'), getTripById);
 
-// Owner: rename / change status / replace itinerary content
+// Owner: rename / change status / replace itinerary content.
+// E4: `baseRev` is REQUIRED here — a whole-document PUT with a stale view
+// would destroy anyone's concurrent edits wholesale.
 router.put(
   '/:id',
   protect,
-  requireTripRole('owner', { withVersions: true, revMode: 'optional' }),
+  requireTripRole('owner', { withVersions: true, revMode: 'required' }),
   validate(updateTripSchema),
   updateTrip
 );
@@ -130,24 +134,28 @@ router.post('/:id/duplicate', protect, requireTripRole('viewer'), duplicateTrip)
 router.post('/:id/share', protect, requireTripRole('owner'), shareTrip);
 
 // Granular itinerary editing endpoints (Milestone 1: Trip Management & Editing)
+// E4: content mutations carry required `baseRev` so two collaborators cannot
+// silently overwrite each other; id-addressed writes (expense/route) below
+// stay `optional` per §3.6 — worst case is losing a concurrent edit to that
+// one item.
 router.put(
   '/:id/activities',
   protect,
-  requireTripRole('editor', { withVersions: true, revMode: 'optional' }),
+  requireTripRole('editor', { withVersions: true, revMode: 'required' }),
   validate(updateActivitySchema),
   updateTripActivity
 );
 router.put(
   '/:id/activities/reorder',
   protect,
-  requireTripRole('editor', { withVersions: true, revMode: 'optional' }),
+  requireTripRole('editor', { withVersions: true, revMode: 'required' }),
   validate(reorderActivitiesSchema),
   reorderActivities
 );
 router.put(
   '/:id/days/reorder',
   protect,
-  requireTripRole('editor', { withVersions: true, revMode: 'optional' }),
+  requireTripRole('editor', { withVersions: true, revMode: 'required' }),
   validate(moveDaySchema),
   moveTripDay
 );
@@ -168,10 +176,22 @@ router.get(
 router.post(
   '/:id/versions/:version/restore',
   protect,
-  requireTripRole('editor', { withVersions: true, revMode: 'optional' }),
+  requireTripRole('editor', { withVersions: true, revMode: 'required' }),
   validate(restoreVersionSchema),
   restoreTripVersion
 );
+
+// Live tier (E4): SSE stream + presence heartbeat. Declared before the
+// version paths is irrelevant (distinct subpaths); both sit behind the same
+// viewer guard as every other read. The SSE handler is not catchAsync — once
+// stream headers are set, error responses must not be JSON.
+router.post(
+  '/:id/events/heartbeat',
+  protect,
+  requireTripRole('viewer'),
+  sendPresenceHeartbeat
+);
+router.get('/:id/events', protect, requireTripRole('viewer'), subscribeTripEvents);
 
 // Feedback endpoint (Milestone 2: AI prompt improvements / A-B insights)
 router.post(
@@ -223,7 +243,7 @@ router.delete(
 router.put(
   '/:id/participants',
   protect,
-  requireTripRole('editor', { revMode: 'optional' }),
+  requireTripRole('editor', { revMode: 'required' }),
   validate(participantsSchema),
   updateTripParticipants
 );
@@ -286,11 +306,12 @@ router.patch(
 );
 router.delete('/:id/members/:userId', protect, requireTripRole('owner'), removeMember);
 
-// Ownership transfer: only owners transfer.
+// Ownership transfer: only owners transfer; required `baseRev` so a stale
+// owner cannot clobber a concurrent members change.
 router.post(
   '/:id/transfer',
   protect,
-  requireTripRole('owner', { revMode: 'optional' }),
+  requireTripRole('owner', { revMode: 'required' }),
   validate(transferOwnershipSchema),
   transferOwnership
 );

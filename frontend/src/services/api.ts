@@ -32,11 +32,59 @@ export interface StreamProgressEvent {
   message: string;
 }
 
+/**
+ * An error that keeps the server's status and structured fields around.
+ * Milestone 6 uses `code === 'REV_CONFLICT'` for the optimistic-concurrency
+ * flow (`docs/roadmap-milestone-6-collaboration.md` §3.6).
+ */
+export class ApiError extends Error {
+  status: number;
+  code?: string;
+  /** The server-side rev at conflict time — safe to resume from after reload. */
+  currentRev?: number;
+
+  constructor(message: string, status: number, code?: string, currentRev?: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.code = code;
+    this.currentRev = currentRev;
+  }
+}
+
 class ApiClient {
   private baseUrl: string;
 
   /** CSRF token held in memory (never in localStorage — see csrf.middleware). */
   private csrfToken: string | null = null;
+
+  /**
+   * E4 — the last `rev` observed per trip, from any trip-shaped payload. The
+   * rev-requiring mutations send it as `baseRev`; a 409 REV_CONFLICT means
+   * someone else wrote first and the UI offers "Reload latest".
+   */
+  private tripRevs = new Map<string, number>();
+
+  /** Records a fresher rev from any trip-shaped payload (`_id` + `rev`). */
+  private noteRev(payload: any): void {
+    if (Array.isArray(payload)) {
+      payload.forEach((item) => this.noteRev(item));
+      return;
+    }
+    const trip = payload?.trip;
+    const id = payload?._id ?? trip?._id;
+    const rev =
+      typeof payload?.rev === 'number' ? payload.rev : typeof trip?.rev === 'number' ? trip.rev : undefined;
+    if (id && typeof rev === 'number') {
+      this.tripRevs.set(String(id), rev);
+    }
+  }
+
+  /** Injects the client's best-known `baseRev` into a mutation body (E4). */
+  private withBaseRev(tripId: string, body?: Record<string, unknown>): string {
+    const rev = this.tripRevs.get(String(tripId));
+    return JSON.stringify({ ...(body ?? {}), baseRev: rev });
+  }
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl;
@@ -144,7 +192,14 @@ class ApiClient {
       if (ApiClient.isCsrfRecovery(response.status, message)) {
         this.csrfToken = null;
       }
-      throw new Error(message);
+      throw new ApiError(message, response.status, data?.code, data?.currentRev);
+    }
+
+    // E4: rev tracking. Every trip-shaped payload carries `rev`; remember the
+    // freshest one per trip so mutation methods can send `baseRev` without
+    // every component having to thread it through.
+    if (data && typeof data === 'object') {
+      this.noteRev(data);
     }
 
     return data;
@@ -354,7 +409,9 @@ class ApiClient {
   ): Promise<Trip> {
     return this.request(`/api/itinerary/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(updates),
+      // revMode 'required' (E4): the owner's whole-document PUT must say which
+      // version it was looking at.
+      body: this.withBaseRev(id, updates),
     });
   }
 
@@ -403,7 +460,7 @@ class ApiClient {
   async transferOwnership(id: string, toUserId: string): Promise<{ success: boolean; message: string; members: TripMember[] }> {
     return this.request(`/api/itinerary/${id}/transfer`, {
       method: 'POST',
-      body: JSON.stringify({ toUserId }),
+      body: this.withBaseRev(id, { toUserId }),
     });
   }
 
@@ -435,14 +492,24 @@ class ApiClient {
     return this.request(`/api/invites/${encodeURIComponent(token)}/accept`, { method: 'POST' });
   }
 
+  /** E4b — keep the SSE presence entry alive (decoration only; errors ignored). */
+  async sendPresenceHeartbeat(id: string): Promise<void> {
+    try {
+      await this.request(`/api/itinerary/${id}/events/heartbeat`, { method: 'POST' });
+    } catch {
+      /* presence is decoration — a missed heartbeat only freezes our own avatar */
+    }
+  }
+
   // Granular itinerary editing endpoints (Milestone 1)
+  // These routes run with revMode 'required' (E4) — baseRev injected.
   async updateActivity(
     id: string,
     payload: { day: number; activityIndex: number; activity: ActivityItem }
   ): Promise<Trip> {
     return this.request(`/api/itinerary/${id}/activities`, {
       method: 'PUT',
-      body: JSON.stringify(payload),
+      body: this.withBaseRev(id, payload),
     });
   }
 
@@ -452,7 +519,7 @@ class ApiClient {
   ): Promise<Trip> {
     return this.request(`/api/itinerary/${id}/activities/reorder`, {
       method: 'PUT',
-      body: JSON.stringify(payload),
+      body: this.withBaseRev(id, payload),
     });
   }
 
@@ -462,7 +529,7 @@ class ApiClient {
   ): Promise<Trip> {
     return this.request(`/api/itinerary/${id}/days/reorder`, {
       method: 'PUT',
-      body: JSON.stringify(payload),
+      body: this.withBaseRev(id, payload),
     });
   }
 
@@ -482,7 +549,7 @@ class ApiClient {
   ): Promise<Trip> {
     return this.request(`/api/itinerary/${id}/versions/${version}/restore`, {
       method: 'POST',
-      body: JSON.stringify({ note }),
+      body: this.withBaseRev(id, { note }),
     });
   }
 
@@ -566,7 +633,8 @@ class ApiClient {
   ): Promise<Trip> {
     return this.request(`/api/itinerary/${id}/participants`, {
       method: 'PUT',
-      body: JSON.stringify({ participants }),
+      // Whole-list replacement → revMode 'required' (E4).
+      body: this.withBaseRev(id, { participants }),
     });
   }
 

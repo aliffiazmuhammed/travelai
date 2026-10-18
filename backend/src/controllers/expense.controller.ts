@@ -314,6 +314,10 @@ export const updateTripParticipants = catchAsync(
     }>;
 
     trip.participants = reconcileParticipants(trip, incoming) as any;
+    // E4: a participants re-save must count as a write even when the reconciled
+    // list is content-identical (mongoose then skips the save and `rev`
+    // would never move — the pre-save bump keys off `isModified`).
+    trip.markModified('participants');
 
     // Re-derive equal splits so stored shares stay consistent with the new list
     const base = baseCurrencyOf(trip);

@@ -1,0 +1,130 @@
+/**
+ * Trip presence + change notifications (Milestone 6 §3.7, sprint E4b).
+ *
+ * THIS IS SINGLE-INSTANCE INFRASTRUCTURE, BY DESIGN AND DOCUMENTED: the map
+ * and the bus live in this process. With one server instance (the current
+ * Render deployment) it is correct; behind multiple instances it degrades to
+ * "no live presence" while `rev` conflicts keep the data correct. Redis
+ * pub/sub is the upgrade path — deliberately not taken now (§8).
+ *
+ * Presence is **decoration, never authorization**: the SSE channel and the
+ * heartbeat route are guarded by the same `requireTripRole` choke point as
+ * everything else, but nothing in the access layer reads presence.
+ */
+
+import { env } from '../../config/env.js';
+
+export interface PresenceEntry {
+  userId: string;
+  /** Best-effort display label (email local part; no User.name exists yet). */
+  label: string;
+  role: import('./access.js').TripRole;
+  lastSeen: number;
+}
+
+type Listener = (tripId: string, event: TripEvent) => void;
+
+export type TripEvent =
+  | { type: 'trip:updated'; tripId: string }
+  | { type: 'presence'; tripId: string; users: Array<Omit<PresenceEntry, 'lastSeen'>> };
+
+const presenceByTrip = new Map<string, Map<string, PresenceEntry>>();
+const listeners = new Set<Listener>();
+
+/** Globally disabled live tier → the controller returns 404 before getting here. */
+export const isSseEnabled = (): boolean => env.ENABLE_TRIP_SSE;
+
+/** Records a heartbeat; returns whether this user had gone quiet (for logs). */
+export function heartbeat(tripId: string, user: Omit<PresenceEntry, 'lastSeen'>): void {
+  pruneTrip(tripId);
+  let members = presenceByTrip.get(tripId);
+  if (!members) {
+    members = new Map();
+    presenceByTrip.set(tripId, members);
+  }
+  members.set(user.userId, { ...user, lastSeen: Date.now() });
+}
+
+/** Removes one user's presence (the client's SSE stream closed). */
+export function removePresence(tripId: string, userId: string): void {
+  const members = presenceByTrip.get(tripId);
+  if (!members) return;
+  members.delete(userId);
+  if (members.size === 0) {
+    presenceByTrip.delete(tripId);
+  } else {
+    broadcastPresence(tripId);
+  }
+}
+
+/** Live (non-expired) participants of a trip, newest heartbeat first. */
+export function listPresence(tripId: string): Array<Omit<PresenceEntry, 'lastSeen'>> {
+  pruneTrip(tripId);
+  const members = presenceByTrip.get(tripId);
+  if (!members) return [];
+  return [...members.values()]
+    .sort((a, b) => b.lastSeen - a.lastSeen)
+    .map(({ lastSeen, ...user }) => ({ ...user }));
+}
+
+/** TTL sweep for one trip — expired heartbeats are simply gone. */
+function pruneTrip(tripId: string): void {
+  const members = presenceByTrip.get(tripId);
+  if (!members) return;
+  const cutoff = Date.now() - env.PRESENCE_TTL_MS;
+  for (const [userId, entry] of members) {
+    if (entry.lastSeen < cutoff) {
+      members.delete(userId);
+    }
+  }
+  if (members.size === 0) {
+    presenceByTrip.delete(tripId);
+  }
+}
+
+/** Current live roster and whether it changed since the last broadcast. */
+let lastBroadcast: Map<string, string> = new Map();
+
+/**
+ * Fan-out presence to every open SSE stream for the trip. Cheap state-diff so
+ * heartbeats from one user do not spam streams with identical rosters.
+ */
+export function broadcastPresence(tripId: string): void {
+  const roster = listPresence(tripId);
+  const signature = roster
+    .map((entry) => `${entry.userId}:${entry.role}`)
+    .sort()
+    .join('|');
+  if (lastBroadcast.get(tripId) === signature) return;
+  lastBroadcast.set(tripId, signature);
+  emit(tripId, { type: 'presence', tripId, users: roster });
+}
+
+/** Change notification from any Trip write payload that carries an id. */
+export function emitTripUpdated(tripId: string): void {
+  if (!tripId) return;
+  emit(tripId, { type: 'trip:updated', tripId });
+}
+
+function emit(tripId: string, event: TripEvent): void {
+  for (const listener of listeners) {
+    try {
+      listener(tripId, event);
+    } catch {
+      // A broken SSE stream must never take down the write path.
+    }
+  }
+}
+
+/** Subscribes a stream (one per open SSE connection). Returns the unsubscriber. */
+export function subscribe(listener: Listener): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+/** Test helper: clears all state between suites. */
+export function resetForTests(): void {
+  presenceByTrip.clear();
+  listeners.clear();
+  lastBroadcast = new Map();
+}

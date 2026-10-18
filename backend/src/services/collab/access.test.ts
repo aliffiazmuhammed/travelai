@@ -72,14 +72,17 @@ test('declared inheritance is consistent with rank arithmetic', () => {
   }
 });
 
-test('roleOf(): the creator is owner through the backfill fallback', () => {
-  assert.equal(roleOf(tripOf(), OWNER), 'owner');
+test('roleOf(): a creator with no member entry has NO access (fallback removed)', () => {
+  // The pre-backfill creator fallback is gone (E4): `migrate:members` has run
+  // everywhere, so `members[]` is authoritative. A creator whose member row
+  // was removed by another owner — or who left — must not keep any access.
+  assert.equal(roleOf(tripOf(), OWNER), null);
 });
 
-test('roleOf(): membership wins over the creator fallback', () => {
+test('roleOf(): membership is the only grant', () => {
   const trip = tripOf({ members: [{ userId: OTHER, role: 'viewer' }] });
   assert.equal(roleOf(trip, OTHER), 'viewer');
-  assert.equal(roleOf(trip, OWNER), 'owner');
+  assert.equal(roleOf(trip, OWNER), null);
 });
 
 test('roleOf(): a demoted creator keeps only the member role (§1.3)', () => {

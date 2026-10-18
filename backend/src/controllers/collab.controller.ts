@@ -23,6 +23,12 @@ import {
   resolveTransfer,
   unlinkParticipant,
 } from '../services/collab/members.js';
+import {
+  broadcastPresence,
+  heartbeat,
+  removePresence,
+  subscribe,
+} from '../services/collab/presence.js';
 
 /**
  * Collaboration endpoints (Milestone 6, sprint E2).
@@ -223,6 +229,87 @@ export const acceptInvite = catchAsync(
         ? 'You are already part of this trip.'
         : `Welcome aboard — you joined as ${result.role}.`,
     });
+  }
+);
+
+/* -------------------------------------------------------------------------- */
+/*  Live tier (trip-scoped, E4b) — presence only, never authorization          */
+/* -------------------------------------------------------------------------- */
+
+const PRESENCE_BROADCAST_MS = 15000;
+const PRESENCE_ANNOUNCE_MS = 5000;
+
+/**
+ * GET /api/itinerary/:id/events — the SSE stream.
+ *
+ * Mounted behind `requireTripRole('viewer')` like every read. The guard has
+ * already answered with JSON on 401/403/404 by the time the stream opens, so
+ * once here we may only write SSE frames. Two frame kinds per §3.7:
+ * `trip:updated` (from the Trip write hooks → `presence.ts`) and `presence`
+ * (the live roster). A keepalive comment every 15s keeps proxies open, and
+ * the local broadcast timer covers the "same roster" state-diff.
+ */
+export const subscribeTripEvents = async (req: AuthenticatedRequest, res: Response) => {
+  const { trip, role } = tripContext(req);
+  const tripId = String((trip as any)._id);
+  const userId = String(req.userId);
+  const user = await User.findOne({ _id: userId }).select('email');
+
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+  res.write(':ok\n\n');
+
+  const writeEvent = (event: unknown) => {
+    try {
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
+    } catch {
+      // The close handler cleans up; writes after close are harmless no-ops.
+    }
+  };
+
+  const unsubscribe = subscribe((eventTripId, event) => {
+    if (eventTripId === tripId) writeEvent(event);
+  });
+
+  // Initial presence snapshot so avatars appear immediately.
+  heartbeat(tripId, {
+    userId,
+    label: (user?.email || userId).split('@')[0] || 'Traveler',
+    role,
+  });
+  const announce = () => broadcastPresence(tripId);
+  announce();
+
+  // Roster broadcast timer: catches TTL expiries that no heartbeat retriggers.
+  const presenceTimer = setInterval(announce, PRESENCE_ANNOUNCE_MS);
+  const keepAlive = setInterval(() => res.write(':ping\n\n'), PRESENCE_BROADCAST_MS);
+
+  const cleanup = () => {
+    clearInterval(presenceTimer);
+    clearInterval(keepAlive);
+    unsubscribe();
+    removePresence(tripId, userId);
+  };
+  req.on('close', cleanup);
+  res.on('close', cleanup);
+};
+
+/** POST /api/itinerary/:id/events/heartbeat — refresh the caller's presence TTL. */
+export const sendPresenceHeartbeat = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { trip, role } = tripContext(req);
+    const user = await User.findOne({ _id: req.userId }).select('email');
+    heartbeat(String((trip as any)._id), {
+      userId: String(req.userId),
+      label: (user?.email || String(req.userId)).split('@')[0] || 'Traveler',
+      role,
+    });
+    broadcastPresence(String((trip as any)._id));
+    res.status(204).end();
   }
 );
 

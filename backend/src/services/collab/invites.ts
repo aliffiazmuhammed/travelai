@@ -4,6 +4,7 @@ import Trip, { ITrip } from '../../models/Trip.js';
 import { AppError } from '../../utils/AppError.js';
 import { env } from '../../config/env.js';
 import { ROLE_RANK, can, invitableRoleSchema, type TripRole } from './access.js';
+import { emitTripUpdated } from './presence.js';
 import User from '../../models/User.js';
 
 /**
@@ -316,5 +317,8 @@ export async function redeemInvite(rawToken: string, user: { id: string; email?:
   invite.acceptedBy = claimed.acceptedBy;
 
   const fresh: any = await Trip.findById(trip._id);
+  // Direct `Trip.updateOne` does not run post hooks (mongoose limitation) —
+  // the E4 change notification is emitted here explicitly (new member visible).
+  emitTripUpdated(String(trip._id));
   return { trip: fresh ?? trip, invite, role, alreadyMember: false };
 }

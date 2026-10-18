@@ -253,18 +253,80 @@ async function main() {
   );
   await mongoose.disconnect();
 
-  // (12) Guest (editor) re-saves participants; the _id + userId must survive.
-  const tripForGuest = await api('GET', `/itinerary/${tripId}`, { email: GUEST_EMAIL });
-  const participantsEcho = (tripForGuest.body?.participants || []).map((p: any) => ({
+  // ------- E4: optimistic concurrency (`rev` + baseRev, 409 conflict) -------
+  // Required mode without a rev: the guard refuses with the same structured
+  // REV_CONFLICT 409 as a genuine stale write ("reload first" UX).
+  const staleProbe = await api('PUT', `/itinerary/${tripId}/participants`, {
+    email: GUEST_EMAIL,
+    body: { participants: [{ name: 'ghost' }] },
+  });
+  check(
+    "required rev: write without baseRev is a 409 REV_CONFLICT",
+    staleProbe.status === 409 && staleProbe.body?.code === 'REV_CONFLICT',
+    staleProbe.body
+  );
+
+  // A genuinely stale rev (one behind reality).
+  const beforeStale = await api('GET', `/itinerary/${tripId}`, { email: GUEST_EMAIL });
+  check('trip payload carries rev', typeof beforeStale.body?.rev === 'number', beforeStale.body?.rev);
+  const participantsEcho = (beforeStale.body?.participants || []).map((p: any) => ({
     _id: p._id,
     name: p.name,
     isMe: Boolean(p.isMe),
   }));
+  const staleWrite = await api('PUT', `/itinerary/${tripId}/participants`, {
+    email: GUEST_EMAIL,
+    body: {
+      participants: [{ name: 'stale-writer' }],
+      baseRev: Math.max(1, (beforeStale.body?.rev ?? 1) - 1),
+    },
+  });
+  check(
+    'stale baseRev is a 409 with the currentRev hint',
+    staleWrite.status === 409 && staleWrite.body?.code === 'REV_CONFLICT' &&
+      staleWrite.body?.currentRev === beforeStale.body?.rev,
+    staleWrite.body
+  );
+
+  // Two sequential writers: the guest writes from the fresh rev, then the
+  // owner writes from the rev the guest's response just published.
+  const writerA = await api('PUT', `/itinerary/${tripId}/participants`, {
+    email: GUEST_EMAIL,
+    body: { participants: participantsEcho, baseRev: beforeStale.body?.rev },
+  });
+  check('writer A lands with a fresh baseRev', writerA.status === 200, writerA.body);
+  const writerARev = writerA.body?.rev;
+  const writerB = await api('PUT', `/itinerary/${tripId}/participants`, {
+    email: OWNER_EMAIL,
+    body: { participants: participantsEcho, baseRev: writerARev },
+  });
+  check('writer B (owner) lands with the rev A published', writerB.status === 200, writerB.body);
+  check(
+    'rev increments across sequential writers',
+    typeof writerARev === 'number' && writerB.body?.rev === writerARev + 1,
+    { writerARev, writerBRev: writerB.body?.rev }
+  );
+  // A writer still holding writer A's rev is now the stale one:
+  const leftoverStale = await api('PUT', `/itinerary/${tripId}/participants`, {
+    email: GUEST_EMAIL,
+    body: { participants: participantsEcho, baseRev: writerARev },
+  });
+  check(
+    'an out-of-date writer is rejected after the other landed',
+    leftoverStale.status === 409 && leftoverStale.body?.code === 'REV_CONFLICT',
+    leftoverStale.body
+  );
+
+  // (12) Guest (editor) re-saves participants — E4: PUT /participants runs with
+  // revMode 'required', so the write must carry the rev it just read
+  // (re-uses `participantsEcho` from the E4 block above).
+  const tripForGuest = await api('GET', `/itinerary/${tripId}`, { email: GUEST_EMAIL });
+  const guestRev = tripForGuest.body?.rev;
   const putParticipants = await api('PUT', `/itinerary/${tripId}/participants`, {
     email: GUEST_EMAIL,
-    body: { participants: participantsEcho },
+    body: { participants: participantsEcho, baseRev: guestRev },
   });
-  check('editor can update participants', putParticipants.status === 200, putParticipants.body);
+  check('editor can update participants (with baseRev)', putParticipants.status === 200, putParticipants.body);
   await mongoose.connect(process.env.MONGODB_URI as string);
   const afterPut = await Trip.findById(tripId);
   const linkAfterPut = (afterPut?.participants || []).find(
@@ -274,15 +336,17 @@ async function main() {
   await mongoose.disconnect();
 
   // (13) Owner cannot transfer to a stranger; transfers to the guest.
+  // E4: transfer is revMode 'required' now — send a fresh baseRev.
   const badTransfer = await api('POST', `/itinerary/${tripId}/transfer`, {
     email: OWNER_EMAIL,
-    body: { toUserId: 'a'.repeat(24) },
+    body: { toUserId: 'a'.repeat(24), baseRev: (await api('GET', `/itinerary/${tripId}`, { email: OWNER_EMAIL })).body?.rev },
   });
   check('transfer to a non-member is refused', badTransfer.status === 404, badTransfer.body);
 
+  const ownerTripNow = await api('GET', `/itinerary/${tripId}`, { email: OWNER_EMAIL });
   const transfer = await api('POST', `/itinerary/${tripId}/transfer`, {
     email: OWNER_EMAIL,
-    body: { toUserId: String(guest._id) },
+    body: { toUserId: String(guest._id), baseRev: ownerTripNow.body?.rev },
   });
   check(
     'transfer promotes the guest, demotes the owner',
@@ -310,11 +374,120 @@ async function main() {
     goneList.body
   );
 
+  /* -------------------- E4b: SSE live tier (presence) ------------------- */
+  // Requires the server to run with ENABLE_TRIP_SSE=true. When the tier is
+  // off, GET /:id/events answers 404 — which itself is a valid expectation.
+  const VIEWER_EMAIL = 'smoke-e2-viewer@example.com';
+  await mongoose.connect(process.env.MONGODB_URI as string);
+  const viewer = await User.findOneAndUpdate(
+    { email: VIEWER_EMAIL },
+    { email: VIEWER_EMAIL, password: passwordHash },
+    { upsert: true, new: true }
+  );
+  await mongoose.disconnect();
+
+  // A third member joins as viewer (the E2 multi-use link still had a use).
+  const viewerTrip = await api('GET', `/itinerary/${tripId}`, { email: GUEST_EMAIL });
+  const viewerInvite = await api('POST', `/itinerary/${tripId}/invites`, {
+    email: GUEST_EMAIL,
+    body: { role: 'viewer', kind: 'link', maxUses: 1, ttlHours: 24, baseRev: viewerTrip.body?.rev },
+  });
+  check('SSE setup: invite mint with baseRev', viewerInvite.status === 201, viewerInvite.body);
+  const viewerToken = (viewerInvite.body?.link ?? '').split('/invite/')[1] ?? '';
+  await signin(VIEWER_EMAIL);
+  const viewerAccept = await api('POST', `/invites/${viewerToken}/accept`, { email: VIEWER_EMAIL });
+  check('SSE setup: viewer joins', viewerAccept.status === 200, viewerAccept.body);
+
+  // The SSE stream itself is raw SSE, not JSON:
+  async function collectSseFrames(email: string, ms: number): Promise<string[]> {
+    const res = await fetch(`${BASE}/itinerary/${tripId}/events`, {
+      headers: authHeader(email),
+    });
+    if (!res.ok || !res.body) throw new Error(`SSE failed: ${res.status}`);
+    const frames: string[] = [];
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    const stop = setTimeout(() => void reader.cancel().catch(() => {}), ms);
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let split = buffer.indexOf('\n\n');
+        while (split !== -1) {
+          const block = buffer.slice(0, split);
+          buffer = buffer.slice(split + 2);
+          const line = block.split('\n').find((l) => l.startsWith('data: '));
+          if (line) frames.push(line.slice(6).trim());
+          split = buffer.indexOf('\n\n');
+        }
+      }
+    } catch {
+      /* the cancel lands here — that's the disconnect path */
+    }
+    clearTimeout(stop);
+    return frames;
+  }
+
+  let sseFrames: string[] = [];
+  const sseReading = collectSseFrames(VIEWER_EMAIL, 4500).then(
+    (frames) => {
+      sseFrames = frames;
+    },
+    (err) => {
+      console.log('     SSE reader failed:', String(err));
+    }
+  );
+  await new Promise((resolve) => setTimeout(resolve, 700));
+
+  const beat = await api('POST', `/itinerary/${tripId}/events/heartbeat`, { email: GUEST_EMAIL });
+  check('presence heartbeat answers 204', beat.status === 204, beat.status);
+
+  const freshOwnerTrip = await api('GET', `/itinerary/${tripId}`, { email: GUEST_EMAIL });
+  await api('PUT', `/itinerary/${tripId}/participants`, {
+    email: GUEST_EMAIL,
+    body: { participants: participantsEcho, baseRev: freshOwnerTrip.body?.rev },
+  });
+  await sseReading;
+  const parsedFrames = sseFrames
+    .map((frame) => {
+      try {
+        return JSON.parse(frame);
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+  check(
+    'SSE stream received trip:updated for the remote write',
+    parsedFrames.some((frame) => frame.type === 'trip:updated'),
+    parsedFrames.map((frame) => frame.type)
+  );
+  check(
+    'SSE presence frame lists the heartbeating member',
+    parsedFrames.some(
+      (frame) =>
+        frame.type === 'presence' &&
+        (frame.users || []).some((u: any) => u.userId === String(guest._id))
+    ),
+    parsedFrames.find((frame) => frame.type === 'presence')
+  );
+
+  // A non-member cannot open the presence stream (404 = indistinguishable).
+  const outsiderSse = await fetch(`${BASE}/itinerary/${tripId}/events`, {
+    headers: authHeader(OWNER_EMAIL),
+  });
+  check('non-member is refused the SSE stream', outsiderSse.status === 404, outsiderSse.status);
+  void outsiderSse.body?.cancel?.().catch?.(() => {});
+
   /* ------------------------------- cleanup ------------------------------ */
   await mongoose.connect(process.env.MONGODB_URI as string);
   await Trip.deleteMany({ _id: tripId });
   await (await import('../src/models/TripInvite.js')).default.deleteMany({ tripId });
-  await User.deleteMany({ email: { $in: [OWNER_EMAIL, GUEST_EMAIL] } });
+  await User.deleteMany({
+    email: { $in: [OWNER_EMAIL, GUEST_EMAIL, VIEWER_EMAIL] },
+  });
   const removed = await Trip.countDocuments({ _id: tripId });  await mongoose.disconnect();
   check('smoke data cleaned up', removed === 0);
 

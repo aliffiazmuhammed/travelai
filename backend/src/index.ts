@@ -118,6 +118,11 @@ app.get('/api/health', (_req, res) => {
     database: dbStatusMap[dbState] || 'unknown',
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
+    // E4b feature discovery: the SPA opens SSE streams only when this is true
+    // (ENABLE_TRIP_SSE) so a disabled tier never produces retry spam.
+    collab: {
+      sse: env.ENABLE_TRIP_SSE,
+    },
     staticServing: {
       enabled: Boolean(shouldServeStatic && frontendDist),
       resolvedPath: frontendDist || 'NOT_FOUND',

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Calendar,
   Users,
@@ -20,6 +21,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { ShareExportModal } from "./ShareExportModal";
+import type { PresenceUser } from "@/hooks/useTripEvents";
 import type { ItineraryData } from "@/types/trip";
 
 interface TripHeaderProps {
@@ -28,6 +30,10 @@ interface TripHeaderProps {
   status?: "draft" | "planned" | "ongoing" | "completed";
   version?: number;
   hasEdited?: boolean;
+  /** Live roster for the avatar stack (E4b; empty when the tier is off). */
+  presence?: PresenceUser[];
+  /** The viewer's user id — their own presence entry is not shown back to them. */
+  currentUserId?: string;
   onStatusChange?: (newStatus: "draft" | "planned" | "ongoing" | "completed") => void;
   onSave?: () => void;
   isSaving?: boolean;
@@ -73,6 +79,8 @@ export const TripHeader: React.FC<TripHeaderProps> = ({
   status = "planned",
   version,
   hasEdited,
+  presence,
+  currentUserId,
   onStatusChange,
   onSave,
   isSaving,
@@ -81,6 +89,11 @@ export const TripHeader: React.FC<TripHeaderProps> = ({
   onNewPlan,
 }) => {
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+
+  // E4b — other people currently viewing this trip (never ourselves).
+  const others = (presence ?? []).filter(
+    (person) => !currentUserId || String(person.userId) !== String(currentUserId)
+  );
 
   // Match cover image prioritizing specific destinations before regional keywords
   const getCoverImage = (): string => {
@@ -166,6 +179,32 @@ export const TripHeader: React.FC<TripHeaderProps> = ({
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+            {/* E4b — live collaborators right now (empty when the tier is off) */}
+            {others.length > 0 && (
+              <div className="flex items-center gap-1.5 mr-1">
+                <div className="flex -space-x-2">
+                  {others.slice(0, 4).map((person) => (
+                    <Avatar key={person.userId} className="h-8 w-8 ring-2 ring-white/40 shadow-md">
+                      <AvatarFallback
+                        className="bg-primary text-primary-foreground text-[10px] font-bold"
+                        title={`${person.label} (${person.role}) is viewing this trip`}
+                      >
+                        {person.label.slice(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                  ))}
+                </div>
+                {others.length > 4 && (
+                  <span className="text-[10px] font-bold text-white/90 bg-black/60 backdrop-blur-md rounded-full px-2 py-0.5">
+                    +{others.length - 4}
+                  </span>
+                )}
+                <span className="hidden lg:inline text-[10px] font-semibold text-white/80">
+                  {others.length === 1 ? "is here" : "are here"}
+                </span>
+              </div>
+            )}
+
             {/* Save Changes Button if unsaved changes exist */}
             {onSave && (
               <Button

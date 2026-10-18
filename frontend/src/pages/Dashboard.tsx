@@ -9,6 +9,7 @@ import { MyTripsView } from "@/components/dashboard/MyTripsView";
 import { TripsGridSkeleton } from "@/components/dashboard/TripSkeletons";
 import { useAuth } from "@/context/UserContext";
 import { useTripAccess } from "@/hooks/useTripAccess";
+import { isRevConflict, toastConflict } from "@/lib/conflicts";
 import type { Trip, ItineraryData, TripFeedback } from "@/types/trip";
 
 const Dashboard: React.FC = () => {
@@ -27,11 +28,26 @@ const Dashboard: React.FC = () => {
   // Fetch all user trips on mount
   useEffect(() => {
     loadTrips();
+    // E4a (F10): collaborators' writes surface without a manual refresh —
+    // refetch on tab focus/visibility plus a gentle poll while this screen
+    // is mounted. Failures stay silent; the last known list remains shown.
+    const refetchQuietly = () => {
+      if (!document.hidden) void refreshTripsQuietly();
+    };
+    window.addEventListener("focus", refetchQuietly);
+    document.addEventListener("visibilitychange", refetchQuietly);
+    const interval = setInterval(refetchQuietly, 20000);
+    return () => {
+      window.removeEventListener("focus", refetchQuietly);
+      document.removeEventListener("visibilitychange", refetchQuietly);
+      clearInterval(interval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const loadTrips = async () => {
+  const loadTrips = async (showSpinner = true) => {
     try {
-      setLoading(true);
+      if (showSpinner) setLoading(true);
       const data = await api.getTrips();
       setTrips(data);
 
@@ -54,12 +70,27 @@ const Dashboard: React.FC = () => {
             updatedAt: new Date().toISOString(),
           });
         }
+        // Consume the hand-off so a later quiet refresh doesn't reselect.
+        navigate({ ...location, state: null }, { replace: true });
       }
     } catch (err: any) {
       console.error("Failed to fetch trips:", err);
-      toast.error("Failed to load your trips. Please check your connection.");
+      if (showSpinner) toast.error("Failed to load your trips. Please check your connection.");
     } finally {
-      setLoading(false);
+      if (showSpinner) setLoading(false);
+    }
+  };
+
+  /** E4a: silent refresh — list + (if open) the selected trip's fresh `rev`. */
+  const refreshTripsQuietly = async () => {
+    try {
+      const data = await api.getTrips();
+      setTrips(data);
+      setSelectedTrip((prev) =>
+        prev ? (data.find((t) => t._id === prev._id) ?? prev) : prev
+      );
+    } catch {
+      /* silent — offline polishing */
     }
   };
 
@@ -112,7 +143,11 @@ const Dashboard: React.FC = () => {
       toast.success(`Trip status updated to "${newStatus}"`);
     } catch (err: any) {
       console.error("Failed to update status:", err);
-      toast.error("Could not update trip status.");
+      if (isRevConflict(err)) {
+        toastConflict(err, () => reloadSelectedTrip());
+      } else {
+        toast.error("Could not update trip status.");
+      }
     }
   };
 
@@ -131,10 +166,27 @@ const Dashboard: React.FC = () => {
       toast.success("Changes saved successfully to your trip!");
     } catch (err: any) {
       console.error("Failed to save trip:", err);
-      toast.error("Could not save changes. Please try again.");
+      if (isRevConflict(err)) {
+        toastConflict(err, () => reloadSelectedTrip());
+      } else {
+        toast.error("Could not save changes. Please try again.");
+      }
       throw err;
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  /** E4: 409 recovery — refetch the selected trip and swap it in wholesale. */
+  const reloadSelectedTrip = async () => {
+    if (!selectedTrip || selectedTrip._id.startsWith("temp-")) return;
+    try {
+      const fresh = await api.getTrip(selectedTrip._id);
+      handleTripUpdated(fresh);
+      toast.success("Reloaded the latest version of this trip.");
+    } catch (err: any) {
+      console.error("Failed to reload trip:", err);
+      toast.error(err.message || "Could not reload the trip.");
     }
   };
 
@@ -178,6 +230,7 @@ const Dashboard: React.FC = () => {
               hasEdited={selectedTrip.hasEdited}
               role={access.role ?? undefined}
               members={selectedTrip.members}
+              currentUserId={user?._id}
               onStatusChange={access.isOwner ? handleStatusChange : undefined}
               onSave={access.canEdit ? handleSaveTrip : undefined}
               canRate={access.isOwner}

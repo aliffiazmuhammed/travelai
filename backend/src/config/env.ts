@@ -41,6 +41,13 @@ const envSchema = z.object({
   TRIP_MAX_MEMBERS: z.coerce.number().positive().default(25),
   INVITE_TTL_HOURS: z.coerce.number().positive().default(168),
   INVITE_DEFAULT_MAX_USES: z.coerce.number().positive().default(1),
+  // E4 presence (SSE). The live tier is opt-in per environment. NOTE: parsed
+  // as a string first — `Boolean('false')` is true, which would be a trap.
+  ENABLE_TRIP_SSE: z
+    .string()
+    .optional()
+    .transform((value) => value !== undefined && value !== '' && value !== 'false'),
+  PRESENCE_TTL_MS: z.coerce.number().positive().default(30000),
   SERVE_STATIC: z.string().optional(),
   // AI generation cache (Milestone 2). Consumed directly by services/ai/cache.ts
   AI_CACHE_TTL_MS: z.coerce.number().positive().optional(),
