@@ -96,14 +96,33 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  /** E4a: silent refresh — list + (if open) the selected trip's fresh `rev`. */
+  /**
+   * E4a: silent refresh — list, plus (if a trip is open) its fresh `rev` and
+   * role. E5 (F16) note: list rows are LEAN summaries with no
+   * `day_by_day_itinerary`/`budget_breakdown`, so they must never be swapped
+   * wholesale into the open trip — only the freshness fields are merged onto
+   * the full document already held in state. (This was the "details vanish
+   * after ~20s" bug.)
+   */
   const refreshTripsQuietly = async () => {
     try {
       const data = await api.getTrips();
       setTrips(data);
-      setSelectedTrip((prev) =>
-        prev ? (data.find((t) => t._id === prev._id) ?? prev) : prev
-      );
+      setSelectedTrip((prev) => {
+        if (!prev || prev._id.startsWith("temp-")) return prev;
+        const fresh = data.find((t) => t._id === prev._id);
+        if (!fresh) return prev;
+        return {
+          ...prev,
+          rev: typeof fresh.rev === "number" ? fresh.rev : prev.rev,
+          role: fresh.role ?? prev.role,
+          members: fresh.members ?? prev.members,
+          status: fresh.status ?? prev.status,
+          startDate: fresh.startDate ?? prev.startDate,
+          hasEdited: fresh.hasEdited ?? prev.hasEdited,
+          version: fresh.version ?? prev.version,
+        };
+      });
     } catch {
       /* silent — offline polishing */
     }
