@@ -162,7 +162,7 @@ Backend error alphabet: 403 non-author promote, 409 duplicate / no-content / rem
 
 ### 12.6 Frontend (F10b) — SHIPPED same day
 
-- **`lib/chatCrypto.ts`** — browser-side crypto module: identity mint/load/publish (ECDH P-256, private half NEVER leaves the device), backup-code export (`TAI1.<base64 JSON JWK>`) + import, per-trip member-pubkey cache (localStorage — survives a wrapper LEAVING the trip), envelope wrap/unwrap (`base64(JSON {v,w,iv,d})` — the wrapper id rides inside so recipients can resolve any member who re-shared; **superseded by the v2 format in §12.13**, which adds the wrapper's device key and binds the slot into the AEAD), message encrypt/decrypt (`<b64 iv>.<b64 ct>`).
+- **`lib/chatCrypto.ts`** — browser-side crypto module: identity mint/load/publish (ECDH P-256, private half NEVER leaves the device), backup-code export (`TAI1.<base64 JSON JWK>`) + import (**removed in §12.14** — the device unlocks itself now), per-trip member-pubkey cache (localStorage — survives a wrapper LEAVING the trip), envelope wrap/unwrap (`base64(JSON {v,w,iv,d})` — the wrapper id rides inside so recipients can resolve any member who re-shared; **superseded by the v2 format in §12.13**, which adds the wrapper's device key and binds the slot into the AEAD), message encrypt/decrypt (`<b64 iv>.<b64 ct>`).
 - **`hooks/useTripChatCrypto.ts`** — the per-trip session: identity publish → keys fetch → bootstrap (mint epoch 1, envelope every member with a published key; races lose gracefully to 409 + retry) → unwrap (my envelope) → ready; `keyless` until another member's open client self-heals; `off`/`error` fall back to HONEST plaintext. Owns the decrypt pass (`syncRows`) and a just-written plaintext cache so own bubbles never blink into base64.
 - **`useTripComments`** — `addComment(body, day, e2ee, plaintextHint)`, `editComment(..., e2ee)`; the optimistic bubble always shows the words, never the ciphertext.
 - **`CommentsTab`** — `bodyOf(row)` renders decrypted text (🔒 placeholder when the key isn't unlocked yet), composer encrypts on send, edit box never opens a base64 blob, feed header gains an honest E2EE / Plain-text badge, chat surface shows a keyless banner.
@@ -210,7 +210,7 @@ Re-verified after the format change: 223/223 backend tests; smoke-f10 ALL PASS (
 - **Self-heal is finally wired** (the `POST /:id/chat/envelopes` route existed since F10 but no client ever called it): a client that holds the key wraps it for every EMPTY device slot it can see — `healSlots`. `ready` clients re-check every 15s while chat is open (plus window focus); `keyless` clients poll every 6s. So: open chat on the working device → the second device unlocks itself within seconds, no user action. Late joiners get full history the same way.
 - Bootstrap (epoch 1) envelopes every published device key of every member.
 
-**Result:** keyless on a second device is now a transient, self-resolving state (the banner's "unlocks automatically once another device opens chat" wording); the backup code remains as an offline fallback.
+**Result:** keyless on a second device is now a transient, self-resolving state (the banner's "unlocks automatically once another device opens chat" wording); the backup code remains as an offline fallback until §12.14 removed it at the user's call.
 
 **Verified:** backend `tsc` + **261/261** tests (new pure rules: `mergePubKeyList` cap/dedupe, `memberDeviceKeys`, device-slot targeting walls, multi-device projection incl. legacy envelopes); live `smoke-f10.mts` extended with a **real second-device case** (second identity published → no slot → device opens nothing → holder heals the slot → same conversation key, cross-decrypts, `envelopedPubKeys` reaches 2) and a non-member DEVICE-key wall.
 
@@ -222,7 +222,7 @@ The user is the product owner: **members of a trip do not want to read about enc
 - **Unreadable rows** say "Waiting for this message…" (WhatsApp's wording) — the old "Encrypted message — can't be decrypted on this device yet." is gone.
 - **Degraded sending is still disclosed**, because silent plaintext would be a trust bug — but in plain words, once, just above the composer: "Messages you send here aren't protected yet." with a quiet **Reconnect** link (runs the key flow). No cause text, no banner, no amber box.
 - **Assistant disclosure** lost its crypto clauses: it now says the reply appears in this chat instead of "(decrypted)… the answer is encrypted into the thread".
-- The key dialog (an explicit settings flow reached from the toolbar key icon, not the message stream) keeps its functional wording, minus the word "encrypted" where it was decorative.
+- The key dialog (an explicit settings flow reached from the toolbar key icon, not the message stream) keeps its functional wording, minus the word "encrypted" where it was decorative. (**Removed entirely in §12.14.**)
 - Edit is refused on a row this device cannot read (it would have seeded the edit box with the placeholder and overwritten the real message on save).
 
 ### 12.11 Invite links — the request origin is the truth (user-reported, 2026-10-19)
@@ -295,4 +295,25 @@ The user reported that encryption/decryption still had "some serious flaws" and 
 - Frontend `tsc -p tsconfig.app.json` + `vite build` clean; SPA mirror refreshed.
 
 **Files:** `frontend/src/lib/chatCryptoCore.ts` (new, dependency-free), `frontend/src/lib/chatCrypto.ts` (shell), `frontend/src/hooks/useTripChatCrypto.ts`, `frontend/src/types/trip.ts`, `frontend/src/components/dashboard/CommentsTab.tsx`, `frontend/src/components/dashboard/DiscussionDrawer.tsx`, `backend/src/services/collab/chatKeys.ts` (+ tests), `backend/scripts/smoke-f10.mts`.
+
+> Superseded in part by §12.14: the backup-code *UI and codec* described above were removed at the user's call. The `assertKeyPairMatches` check it added exists only to guard an imported code, so it went with the import path.
+
+### 12.14 No key backup dialog — the device unlocks itself (user call, 2026-10-20)
+
+**The user's call, verbatim in spirit:** members should have no role at all in copying or pasting a key. The "Chat key backup" modal and the key icon that opened it are gone.
+
+**Removed:** the dialog (export textarea + copy button, import textarea, "Unlock this device"), the toolbar `KeyRound` trigger, `ChatCryptoApi.exportBackupCode` / `importBackupCode` and their hook implementations, the shell's `exportBackupCode` / `importBackupCode`, and the backup-code codec in the core (`TAI1.…`, `storedBackupCode`, `adoptBackupCode`, plus the `assertKeyPairMatches` guard that only existed to validate an imported code). The private identity key now leaves the browser in **no** form, for any reason.
+
+**Why it is safe to delete:** the code was the workaround for the F10e defect (healing only ever worked from the device that minted the key). With that fixed, a new browser — or a cleared profile, which mints a fresh device key and publishes it — is unlocked by any member's open client within seconds, and since what history needs is the *conversation key* (not the old private key), the device reads the entire thread exactly like any second device (§12.9). The manual path is genuinely redundant, and a modal that asks people to paste `TAI1.…` blobs was the most confusing surface in the app.
+
+**UI honesty:** with the remedy gone, the keyless composer line states what actually happens instead of pointing at a dialog that no longer exists: *"Chat is unlocking on this device — messages you send now aren't protected yet."* plus Reconnect.
+
+**Honest limits this re-introduces (accepted trade-off, not a hidden one):**
+
+1. There is no manual recovery path left. A device that no other client can heal — every other member's browser closed forever, the trip left by everyone else, or the member cleared their profile while being the *only* holder of the trip key — stays locked, and that trip's encrypted history is unreadable for good. Before this call, exporting a backup code was the escape hatch for exactly that case; the product owner ruled the hatch out.
+2. A single-member trip whose only browser is cleared loses that trip's chat history permanently (the epoch document still holds envelopes no surviving device key can open).
+
+Both were already true for anyone who never copied a code; the difference is that the UI no longer offers one. Recovering the *option* later means reintroducing a user-handled secret — which is precisely what was rejected here.
+
+**Verified:** frontend `tsc -p tsconfig.app.json` + `vite build` clean; SPA mirror refreshed; no `TAI1`, `KeyRound`, `Dialog` (drawer), `exportBackupCode` or `importBackupCode` reference remains in `frontend/src` (backend is untouched by this call — it never saw the code).
 

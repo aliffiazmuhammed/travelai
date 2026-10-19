@@ -5,9 +5,7 @@ import {
   encryptMessage,
   decryptMessage,
   ensureIdentity,
-  exportBackupCode as chatExportBackupCode,
   generateConversationKey,
-  importBackupCode,
   memberDeviceKeysOf,
   mergeMemberKeys,
   slotIsUsable,
@@ -56,8 +54,9 @@ export interface ChatCryptoApi {
    * Only meaningful while `keyless`:
    * - 'missing'  no envelope for this account exists yet (awaiting a share),
    * - 'mismatch' an envelope exists but was wrapped to ANOTHER device's key —
-   *              the ordinary "second browser" case, healed by importing this
-   *              account's backup code (Retry alone can never fix it).
+   *              the ordinary "second browser" case. It needs no user action:
+   *              any member whose client holds the key re-wraps this device's
+   *              slot within seconds (the F10e healing rule).
    */
   keylessReason?: 'missing' | 'mismatch';
   /** True when this row is ciphertext per its flag (independent of state). */
@@ -78,10 +77,6 @@ export interface ChatCryptoApi {
   ) => Promise<{ body: string; e2ee: boolean }>;
   /** Re-runs the key flow in place (the fallback banner's Retry action). */
   retry: () => void;
-  /** Key backup code (null = nothing to export yet). */
-  exportBackupCode: () => Promise<string | null>;
-  /** Imports a backup code; re-runs the key flow with the restored identity. */
-  importBackupCode: (code: string) => Promise<void>;
 }
 
 /** Empty render value while a ciphertext row is not (yet) readable. */
@@ -463,21 +458,6 @@ export function useTripChatCrypto(
     setTick((t) => t + 1);
   }, []);
 
-  /* -------------------------------- backup UI ------------------------------ */
-
-  const exportCode = useCallback((): Promise<string | null> => chatExportBackupCode(), []);
-
-  const importCode = useCallback(
-    async (code: string) => {
-      await importBackupCode(code);
-      // Restored: the same pubKey ⇒ the same envelopes still open. Re-run.
-      convKeyRef.current = null;
-      plainCacheRef.current.clear();
-      await runKeyFlow();
-    },
-    [runKeyFlow]
-  );
-
   /* --------------------------------- reads --------------------------------- */
 
   const isEncrypted = useCallback((row: { e2ee?: boolean }) => Boolean(row?.e2ee), []);
@@ -500,7 +480,5 @@ export function useTripChatCrypto(
     rememberPlaintext,
     encryptOutgoing,
     retry,
-    exportBackupCode: exportCode,
-    importBackupCode: importCode,
   };
 }

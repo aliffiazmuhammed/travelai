@@ -207,8 +207,6 @@ const OFFLINE_CRYPTO: ChatCryptoApi = {
   rememberPlaintext: () => undefined,
   encryptOutgoing: async (plaintext) => ({ body: plaintext, e2ee: false }),
   retry: () => undefined,
-  exportBackupCode: async () => null,
-  importBackupCode: async () => undefined,
 };
 
 const initialsFor = (label: string): string =>
@@ -690,11 +688,19 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
    * and 'bootstrap' send plaintext too (the first open mints and shares the key,
    * which takes a moment), and 'off' means this browser has no WebCrypto at all
    * — all three used to send in the clear with nothing on screen saying so.
+   *
+   * §12.14: there is no key to paste anywhere any more (the backup dialog is
+   * gone), so the keyless wording states what actually happens — the device
+   * unlocks itself once another member's open chat shares the trip key.
    */
   const sendNotice =
     cryptoApi.status !== 'ready' ? (
       <div className="flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground">
-        <span>Messages you send here aren&apos;t protected yet.</span>
+        <span>
+          {cryptoApi.status === 'keyless'
+            ? "Chat is unlocking on this device — messages you send now aren't protected yet."
+            : "Messages you send here aren't protected yet."}
+        </span>
         <button
           type="button"
           onClick={cryptoApi.retry}

@@ -12,8 +12,8 @@
  * receives: a public ECDH half (`pubKey`), an *envelope* (the per-trip
  * conversation key wrapped pairwise to one member's public key, opaque base64),
  * and message bodies as AES-GCM ciphertext, `<b64(iv)>.<b64(ct)>`. The private
- * identity key never leaves this browser except as a backup code the user
- * copies by hand, and the conversation key only ever travels inside envelopes.
+ * identity key never leaves this browser at all, and the conversation key only
+ * ever travels inside envelopes.
  *
  * The limit that must not be papered over: the server *routes* keys, so a
  * malicious or compromised server can hand a member the wrong public key and
@@ -42,7 +42,6 @@ const MEMBER_KEYS_CACHE = (tripId: string) => `chatai.trip.${tripId}.memberkeys.
 const HKDF_INFO = new TextEncoder().encode('travelai-chat-key-v1');
 /** v2 envelopes bind their slot into the AEAD (see the header). */
 const ENVELOPE_AAD_PREFIX = 'travelai-chat-envelope-v2';
-export const BACKUP_CODE_PREFIX = 'TAI1.';
 /** base64 chunks fed to `String.fromCharCode` — keeps big buffers off the stack. */
 const B64_CHUNK = 0x8000;
 
@@ -76,11 +75,11 @@ export function isCryptoAvailable(): boolean {
 
 export interface ChatIdentity {
   /**
-   * ECDH private half (for `deriveBits`). Extractable, deliberately: the key is
-   * imported from the JWK snapshot this browser already stores for the backup
-   * code, so extractability adds nothing an XSS could not already reach — and a
-   * key that cannot be re-exported cannot be re-wrapped, which would break
-   * self-healing for everyone but the device that minted it (F10e).
+   * ECDH private half (for `deriveBits`). Extractable, deliberately: it is
+   * imported from the JWK snapshot this browser stores in `localStorage`, so
+   * extractability adds nothing an XSS could not already reach — and a key that
+   * cannot be re-exported cannot be re-wrapped, which would break self-healing
+   * for everyone but the device that minted it (F10e).
    */
   priv: CryptoKey;
   /** Base64 SPKI — the only half that goes to the server. */
@@ -117,7 +116,10 @@ export async function loadStoredIdentity(): Promise<ChatIdentity | null> {
   }
 }
 
-/** Stores an identity's JWK snapshot; the only copy that can be re-exported. */
+/**
+ * Stores an identity's JWK snapshot. This is the reload path only — a CryptoKey
+ * handle cannot survive a page load — and it never leaves the browser.
+ */
 export async function persistIdentityFromPrivJwk(
   privJwk: JsonWebKey,
   pubKey: string
@@ -144,88 +146,12 @@ export async function mintAndStoreIdentity(): Promise<ChatIdentity> {
 }
 
 /**
- * F10e: proves that a private JWK really is the private half of `pubB64`.
- *
- * EC JWKs carry the public point (`x`, `y`), so the check needs no crypto
- * beyond one import/export round trip — and it is the only thing standing
- * between the user and a device that publishes a key it cannot use (which would
- * leave this browser permanently keyless AND shadow the account's real device
- * key at the top of its capped list).
+ * The identity is NOT portable and never leaves the browser: no export, no
+ * import, no user-visible code (user call, §12.14). A new browser or a cleared
+ * profile mints a fresh device key and is unlocked by the trip's healing flow
+ * like any other second device — the conversation key is what the history needs,
+ * and that arrives on its own.
  */
-export async function assertKeyPairMatches(privJwk: JsonWebKey, pubB64: string): Promise<void> {
-  if (!privJwk?.x || !privJwk?.y || privJwk.crv !== 'P-256') {
-    throw new Error('That chat key backup is not a P-256 key.');
-  }
-  let pub: JsonWebKey | null = null;
-  try {
-    const imported = await subtle!.importKey(
-      'spki',
-      unb64(pubB64),
-      { name: 'ECDH', namedCurve: 'P-256' },
-      true,
-      []
-    );
-    pub = await subtle!.exportKey('jwk', imported);
-  } catch {
-    pub = null;
-  }
-  if (!pub || pub.crv !== 'P-256' || pub.x !== privJwk.x || pub.y !== privJwk.y) {
-    throw new Error(
-      'That code does not match its own public key — copy a fresh one from the device where chat already works.'
-    );
-  }
-}
-
-/* -------------------------------------------------------------------------- */
-/*  Backup codes                                                               */
-/* -------------------------------------------------------------------------- */
-
-/** Backup code — base64(JSON { v, priv: JWK, pub }) with a readable prefix. */
-function backupPayloadToCode(payload: unknown): string {
-  return BACKUP_CODE_PREFIX + b64(new TextEncoder().encode(JSON.stringify(payload)));
-}
-
-function backupCodeToPayload(code: string): unknown | null {
-  if (!code.startsWith(BACKUP_CODE_PREFIX)) return null;
-  try {
-    const decoded = new TextDecoder().decode(
-      unb64(code.slice(BACKUP_CODE_PREFIX.length))
-    );
-    return JSON.parse(decoded);
-  } catch {
-    return null;
-  }
-}
-
-/** The code for the identity already stored in this browser (null when none). */
-export function storedBackupCode(): string | null {
-  try {
-    const raw = localStorage.getItem(IDENTITY_STORE);
-    if (!raw) return null;
-    const stored = JSON.parse(raw) as IdentityJwk;
-    if (!stored?.priv || !stored?.pubKey) return null;
-    return backupPayloadToCode({ v: 1, priv: stored.priv, pub: stored.pubKey });
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Validates a backup code and adopts it as this browser's identity. Pure
- * storage work — publishing the restored public half is the shell's job.
- * Throws on a malformed code or one whose halves do not match.
- */
-export async function adoptBackupCode(code: string): Promise<ChatIdentity> {
-  if (!isCryptoAvailable()) throw new Error('Web crypto is unavailable in this browser.');
-  const payload = backupCodeToPayload(code.trim()) as
-    | { v?: number; priv?: JsonWebKey; pub?: string }
-    | null;
-  if (!payload || payload.v !== 1 || !payload.priv || !payload.pub) {
-    throw new Error('That does not look like a TravelAI chat key backup.');
-  }
-  await assertKeyPairMatches(payload.priv, payload.pub);
-  return persistIdentityFromPrivJwk(payload.priv, payload.pub);
-}
 
 /* -------------------------------------------------------------------------- */
 /*  Per-trip public-key cache (wrappers can leave the trip)                    */
