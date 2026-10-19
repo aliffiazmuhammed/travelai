@@ -26,6 +26,7 @@ import {
   SlidersHorizontal,
   Loader2,
   Wand2,
+  MessageCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ActivityEditor } from "./ActivityEditor";
@@ -60,6 +61,12 @@ interface DayTimelineProps {
   onSuggestAlternative?: (dayNumber: number) => void;
   /** Day whose alternative is currently being generated (shows a spinner). */
   alternativeLoadingDay?: number | null;
+  /**
+   * Live comment counts per day number (F6b2). Days carrying a discussion show
+   * a small "how many comments" chip on their pill and header card; read-only
+   * — clicking is left to the Discuss tab.
+   */
+  commentCounts?: Record<string, number>;
 }
 
 const TIME_OF_DAY = [
@@ -93,7 +100,11 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
   weatherByDay,
   onSuggestAlternative,
   alternativeLoadingDay,
+  commentCounts,
 }) => {
+  // F6b2: day chips read `dayCounts`, whose keys are strings — normalize here.
+  const commentCount = (day: number): number =>
+    commentCounts?.[String(day)] ?? 0;
   const [selectedDay, setSelectedDay] = useState<number | "all">("all");
   const [editingDayIndex, setEditingDayIndex] = useState<number | null>(null);
   const [editingActivityIndex, setEditingActivityIndex] = useState<number | null>(null);
@@ -236,6 +247,20 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
             )}
           >
             <span>Day {d.day}</span>
+            {commentCount(d.day) > 0 && (
+              <span
+                title={`${commentCount(d.day)} comment${commentCount(d.day) === 1 ? "" : "s"} on this day`}
+                className={cn(
+                  "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0 text-[10px] font-black leading-4",
+                  selectedDay === d.day
+                    ? "bg-primary-foreground/25 text-primary-foreground"
+                    : "bg-primary/10 text-primary"
+                )}
+              >
+                <MessageCircle className="w-2.5 h-2.5" />
+                {commentCount(d.day)}
+              </span>
+            )}
             {d.permit_required && (
               <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
             )}
@@ -288,6 +313,19 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
                     <span className="text-xs font-extrabold uppercase tracking-wider text-primary">
                       Day {dayData.day}
                     </span>
+                    {commentCount(dayData.day) > 0 && (
+                      <Badge
+                        title={`${commentCount(dayData.day)} comment${commentCount(dayData.day) === 1 ? "" : "s"} on this day`}
+                        variant="outline"
+                        className="text-[10px] font-semibold gap-1 border-border/60 text-muted-foreground"
+                      >
+                        <MessageCircle className="w-3 h-3" />
+                        <span>
+                          {commentCount(dayData.day)} comment
+                          {commentCount(dayData.day) === 1 ? "" : "s"}
+                        </span>
+                      </Badge>
+                    )}
                     {dayData.permit_required && (
                       <Badge className="bg-amber-500/10 text-amber-600 border-amber-300 dark:border-amber-700 text-[10px] font-semibold gap-1">
                         <Ticket className="w-3 h-3" />

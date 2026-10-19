@@ -692,6 +692,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
             weatherByDay={weatherByDay}
             onSuggestAlternative={isRealTrip && Boolean(onSave) ? openDayAlternative : undefined}
             alternativeLoadingDay={alternativeLoading ? alternativeDay : null}
+            commentCounts={showCommentsTab ? commentsController.state.dayCounts : undefined}
           />
         </TabsContent>
 

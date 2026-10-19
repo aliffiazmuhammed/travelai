@@ -994,11 +994,11 @@ components/dashboard/CommentsTab.tsx    list, composer, day filter chips, tombst
 ### 21.3 Post-ship fix (2026-10-19) — production ReferenceError + the false-green checker
 
 - **The crash:** the first F6b bundle shipped `const ref = useRef(onCommentEvent)` inside `useTripEvents` without destructuring `onCommentEvent` from `options` → every real-trip open died with `ReferenceError: onCommentEvent is not defined`. Fixed (plus two latent type errors the same check then surfaced: the undeclared `canRate` prop and Dashboard's `navigate({...location, state})`).
-- **Why every earlier "tsc clean" claim was hollow:** the root `frontend/tsconfig.json` has `"files": []` + project references, so plain `npx tsc --noEmit` checks ZERO files and always exits 0. The verification command for the frontend is **`npx tsc -p tsconfig.app.json`** (exit 0 = actually checked). `vite build` never type-checks (esbuild strips types), so it is not a substitute.
+- **Why every earlier "tsc clean" claim was hollow:** the root `frontend/tsconfig.json` has `"files": []` + project references, so plain `npx tsc --noEmit` checks ZERO files and always exits 0. The verification command for the frontend is **`npm run typecheck`** (= `tsc -p tsconfig.app.json`; exit 0 = actually checked). `vite build` never type-checks (esbuild strips types), so it is not a substitute.
 - Bundle-level assertion used as the regression guard: the shipped `ItineraryDisplay-*.js` must contain the destructured `{ onTripUpdated, onCommentEvent }` and no free `useRef(onCommentEvent)`.
 
 ### 21.4 Honest limits
 
-- **Stretch F6b2 (per-day badges in `DayTimeline`) is not shipped** — the tab's day chips are the cut that made the sprint; the badges need `dayCounts` threaded into the timeline component.
+- ~~**Stretch F6b2 (per-day badges in `DayTimeline`) is not shipped**~~ → **shipped 2026-10-19** (one extra commit): `DayTimeline` takes `commentCounts` and shows a `MessageCircle`-count chip on pills whose day has comments plus a "N comments" badge in the desktop day header; read-only navigation (clicking stays in the Discuss tab). Wired from `useTripComments.state.dayCounts` only when the comments feature is on.
 - **Unread counts are not shipped** — that is the F10 notification-center work (a `TripReadState` collection, never embedded in `Trip`).
 - **Frames during the initial load** prepend ahead of the pending page read; the page read replaces the list wholesale, which is correct (server truth) but can transiently hide a frame-arrived row until the reader catches up — invisible in practice (the reader and the sheet land within one round-trip).
