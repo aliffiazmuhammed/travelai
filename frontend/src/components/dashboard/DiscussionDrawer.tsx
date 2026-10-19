@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -69,23 +70,31 @@ export const DiscussionDrawer: React.FC<DiscussionDrawerProps> = ({
 
   return (
     <>
-      {!hidden && (
-        <Button
-          type="button"
-          size="icon"
-          onClick={() => handleOpenChange(true)}
-          title="Trip discussion"
-          aria-label={`Trip discussion${unread > 0 ? `, ${unread} unread` : ""}`}
-          className="fixed z-40 bottom-20 right-4 sm:bottom-6 sm:right-6 w-12 h-12 rounded-full shadow-lg"
-        >
-          <MessageCircle className="w-5 h-5" />
-          {unread > 0 && (
-            <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-destructive text-destructive-foreground text-[10px] font-black grid place-items-center shadow">
-              {unread > 9 ? "9+" : unread}
-            </span>
-          )}
-        </Button>
-      )}
+      {!hidden &&
+        createPortal(
+          /* The FAB lives in a portal on <body>: any ancestor with a
+             transform/filter turns `position: fixed` into a viewport of that
+             ancestor, which pinned it to the document's bottom-right and let
+             it scroll away. Portaled + fixed, it stays on screen everywhere.
+             Keep z-40: below the Sheet's own z-50 overlay so the open drawer
+             covers it. */
+          <Button
+            type="button"
+            size="icon"
+            onClick={() => handleOpenChange(true)}
+            title="Trip discussion"
+            aria-label={`Trip discussion${unread > 0 ? `, ${unread} unread` : ""}`}
+            className="fixed z-40 bottom-20 right-4 sm:bottom-6 sm:right-6 w-12 h-12 rounded-full shadow-lg"
+          >
+            <MessageCircle className="w-5 h-5" />
+            {unread > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-destructive text-destructive-foreground text-[10px] font-black grid place-items-center shadow">
+                {unread > 9 ? "9+" : unread}
+              </span>
+            )}
+          </Button>,
+          document.body
+        )}
 
       <Sheet open={open} onOpenChange={handleOpenChange}>
         <SheetContent

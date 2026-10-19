@@ -9,7 +9,6 @@ import {
   ShieldCheck,
   Sparkles,
   Camera,
-  History,
   Receipt,
   Users,
   MessageCircle,
@@ -27,7 +26,6 @@ import { TripMap } from "./dashboard/TripMap";
 import { BudgetVisualizer } from "./dashboard/BudgetVisualizer";
 import { StayAndCuisine } from "./dashboard/StayAndCuisine";
 import { TravelGuideSafety } from "./dashboard/TravelGuideSafety";
-import { TripVersions } from "./dashboard/TripVersions";
 import { TripFeedback } from "./dashboard/TripFeedback";
 import { ExpenseTracker } from "./dashboard/ExpenseTracker";
 import { NearbyExplorer } from "./dashboard/NearbyExplorer";
@@ -165,7 +163,6 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
 
   // Milestone 6 — cosmetic role gates (server enforces the real rules).
   const isOwner = role ? role === "owner" : Boolean(onSave);
-  const canRestore = role ? role === "owner" || role === "editor" : true;
   // The People tab appears only for real trips with a Milestone 6 payload.
   const showPeopleTab = Boolean(isRealTrip && role);
   // Same gate for the discussion tab (F6b) — the server decides who may write.
@@ -545,12 +542,6 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
     );
   };
 
-  const handleVersionRestored = (trip: Trip) => {
-    setItinerary(trip.tripDetails.day_by_day_itinerary);
-    setHasUnsavedChanges(false);
-    onTripUpdated?.(trip);
-  };
-
   return (
     <div className="space-y-8 animate-fade-in max-w-6xl mx-auto pb-16">
       {/* 1. Enhanced Hero Header with Quick Stats & Share Actions */}
@@ -670,15 +661,6 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
             >
               <Receipt className="w-3.5 h-3.5" />
               <span className="hidden lg:inline">Expenses</span>
-            </TabsTrigger>
-
-            <TabsTrigger
-              value="history"
-              title="History"
-              className="py-2.5 px-3 rounded-xl text-xs font-bold gap-2 shrink-0 data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
-            >
-              <History className="w-3.5 h-3.5" />
-              <span className="hidden lg:inline">History</span>
             </TabsTrigger>
 
             {showPeopleTab && (
@@ -802,18 +784,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
           />
         </TabsContent>
 
-        {/* TAB 7: Version History View */}
-        <TabsContent value="history" className="outline-hidden animate-fade-in">
-          <TripVersions
-            tripId={tripId}
-            currentVersion={version}
-            hasEdited={hasEdited}
-            canRestore={canRestore}
-            onRestored={handleVersionRestored}
-          />
-        </TabsContent>
-
-        {/* TAB 8: People & sharing view (Milestone 6 §3.8) */}
+        {/* People & sharing view (Milestone 6 §3.8) */}
         {showPeopleTab && (
           <TabsContent value="people" className="outline-hidden animate-fade-in">
             <TripMembers tripId={tripId!} myRole={role!} />
