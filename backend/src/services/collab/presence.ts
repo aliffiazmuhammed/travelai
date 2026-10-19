@@ -41,7 +41,14 @@ export type TripEvent =
    * ~5s after the last frame and expires it itself. Same rule as presence:
    * decoration, never authorization, never durable.
    */
-  | { type: 'typing'; tripId: string; userId: string; label: string };
+  | { type: 'typing'; tripId: string; userId: string; label: string }
+  /**
+   * Decision frames (Milestone 7, F9). `decision` is an already-projected
+   * `DecisionRow` (a snapshot of a comment promoted to "what we agreed").
+   * Like comments: never touches `Trip`, so no 409s ride these frames.
+   */
+  | { type: 'decision:new'; tripId: string; decision: unknown }
+  | { type: 'decision:update'; tripId: string; decision: unknown };
 
 const presenceByTrip = new Map<string, Map<string, PresenceEntry>>();
 const listeners = new Set<Listener>();
@@ -148,6 +155,18 @@ export function emitTypingFrame(
 ): void {
   if (!tripId) return;
   emit(tripId, { type: 'typing', tripId, userId: user.userId, label: user.label });
+}
+
+/**
+ * Fan-out for a comment promoted into (or retired from) a decision (F9).
+ * Same contract as `emitCommentEvent` — a pure broadcast beside `Trip`.
+ */
+export function emitDecisionEvent(
+  tripId: string,
+  frame: { type: 'decision:new' | 'decision:update'; decision: unknown }
+): void {
+  if (!tripId) return;
+  emit(tripId, { ...frame, tripId } as TripEvent);
 }
 
 function emit(tripId: string, event: TripEvent): void {

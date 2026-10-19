@@ -39,6 +39,9 @@ import {
   getDiscussionReadState,
   markDiscussionRead,
   sendTypingPing,
+  getTripDecisions,
+  postTripCommentDecision,
+  deleteTripDecision,
 } from '../controllers/collab.controller.js';
 import {
   getTripExpenses,
@@ -383,6 +386,24 @@ router.post(
   requireTripRole('viewer'),
   typingPingLimiter,
   sendTypingPing
+);
+
+// Decisions (Milestone 7, F9). Snapshot records — never on the Trip document,
+// so promote/unmark can never 409 an open edit. `viewer` is the rank floor;
+// the authorship rules (comment author-or-owner to promote, promoter-or-owner
+// to unmark) live in the service, like comment edit/delete.
+router.get('/:id/decisions', protect, requireTripRole('viewer'), getTripDecisions);
+router.post(
+  '/:id/comments/:commentId/decision',
+  protect,
+  requireTripRole('viewer'),
+  postTripCommentDecision
+);
+router.delete(
+  '/:id/decisions/:decisionId',
+  protect,
+  requireTripRole('viewer'),
+  deleteTripDecision
 );
 
 export default router;

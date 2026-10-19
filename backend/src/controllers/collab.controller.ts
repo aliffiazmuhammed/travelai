@@ -38,6 +38,11 @@ import {
   removeTripComment,
 } from '../services/collab/comments.js';
 import { markTripRead, resolveReadState } from '../services/collab/discussion.js';
+import {
+  listTripDecisions,
+  promoteToDecision,
+  removeTripDecision,
+} from '../services/collab/decisions.js';
 
 /**
  * Collaboration endpoints (Milestone 6, sprint E2).
@@ -301,6 +306,56 @@ export const sendTypingPing = catchAsync(
       label: (user?.email || String(req.userId)).split('@')[0] || 'Traveler',
     });
     res.status(204).end();
+  }
+);
+
+/* -------------------------------------------------------------------------- */
+/*  Decisions (F9) — comments promoted into durable "what we agreed" cards     */
+/* -------------------------------------------------------------------------- */
+
+/** GET /:id/decisions — every active decision, newest first. */
+export const getTripDecisions = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { trip } = tripContext(req);
+    const decisions = await listTripDecisions(String((trip as any)._id), String(req.userId));
+    res.status(200).json({ success: true, decisions });
+  }
+);
+
+/**
+ * POST /:id/comments/:commentId/decision — promote a comment into a
+ * decision (a body snapshot; the thread can keep moving afterwards).
+ * Rank floor is `viewer`; author-or-owner is asserted inside the service,
+ * exactly like comment removal.
+ */
+export const postTripCommentDecision = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { trip, role } = tripContext(req);
+    const comment = await loadTripComment(
+      String((trip as any)._id),
+      String(req.params.commentId)
+    );
+    const decision = await promoteToDecision(
+      String((trip as any)._id),
+      comment,
+      String(req.userId),
+      role
+    );
+    res.status(201).json({ success: true, decision });
+  }
+);
+
+/** DELETE /:id/decisions/:decisionId — unmark (soft); promoter or owner. */
+export const deleteTripDecision = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { trip, role } = tripContext(req);
+    const decision = await removeTripDecision(
+      String((trip as any)._id),
+      String(req.params.decisionId),
+      String(req.userId),
+      role
+    );
+    res.status(200).json({ success: true, decision });
   }
 );
 

@@ -163,6 +163,12 @@ test('guards declare the expected minimum roles (spot checks)', () => {
   assert.equal(minimumFor('GET', '/:id/comments/read-state'), 'viewer');
   assert.equal(minimumFor('POST', '/:id/comments/read'), 'viewer');
   assert.equal(minimumFor('POST', '/:id/events/typing'), 'viewer');
+  // Milestone 7 / F9 — decisions are snapshot records beside the Trip: all
+  // three routes bottom out at `viewer` because authorship (not rank) rules:
+  // comment author-or-owner promotes, promoter-or-owner unmarks.
+  assert.equal(minimumFor('GET', '/:id/decisions'), 'viewer');
+  assert.equal(minimumFor('POST', '/:id/comments/:commentId/decision'), 'viewer');
+  assert.equal(minimumFor('DELETE', '/:id/decisions/:decisionId'), 'viewer');
 });
 
 test('version-cap routes expose history only with the versions field loaded', () => {
