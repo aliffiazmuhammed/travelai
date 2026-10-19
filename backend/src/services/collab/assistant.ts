@@ -13,8 +13,8 @@ import {
  * THE F10 SHAPE OF THIS SERVICE: end-to-end chat means the server cannot read
  * message bodies, so all chat grounding arrives CLIENT-FED (`context` = the
  * asker's decrypted recent messages). What the server adds for free is the
- * trip document itself (title, days, budget, day titles) — the itinerary the
- * group is planning IS visible to the server by design.
+ * trip document itself (title, days, budget, day titles, activity labels) —
+ * the itinerary the group is planning IS visible to the server by design.
  *
  * Reply handling (user-confirmed): the answer comes back to the asker's
  * browser, which ENCRYPTS it with the trip conversation key and posts it as a
@@ -42,6 +42,10 @@ export const ASSISTANT_RULES = {
   REPLY_MAX: 800,
   /** Hard cap on the total plaintext an ask may ship to the provider. */
   WIRE_BUDGET: 6000,
+  /** F12d: itinerary shape shown to the model (bounded like every section). */
+  DAY_PLANS_MAX: 20,
+  ACTIVITIES_PER_DAY_MAX: 6,
+  ACTIVITY_LABEL_MAX: 60,
 } as const;
 
 export interface AssistantContextItem {
@@ -57,6 +61,12 @@ export interface TripFacts {
   groupType?: string;
   /** "Day N: title" lines — server-owned itinerary titles, capped. */
   dayTitles: string[];
+  /**
+   * F12d: the activity labels per day with stable 0-based positions. This is
+   * what lets the model aim `move_activity` / `update_activity` — and what
+   * `proposalFitsTrip` validates `expect` against before a card ever ships.
+   */
+  dayPlans: Array<{ day: number; activities: string[] }>;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -156,6 +166,23 @@ export function tripFactsFrom(trip: any): TripFacts {
       .slice(0, 20)
       .map((d: any) => `Day ${d?.day ?? '?'}: ${String(d?.title || '').slice(0, 80)}`)
       .filter((line: string) => /: .+/.test(line)),
+    // F12d: `title` is what the timeline renders first, then `name` (legacy).
+    // Activities are handed to the model with their POSITION, and a day with
+    // no activities still gets a plan line so "swap days" can be validated.
+    dayPlans: itinerary
+      .slice(0, ASSISTANT_RULES.DAY_PLANS_MAX)
+      .map((d: any) => ({
+        day: Number(d?.day),
+        activities: (Array.isArray(d?.activities) ? d.activities : [])
+          .slice(0, ASSISTANT_RULES.ACTIVITIES_PER_DAY_MAX)
+          .map((a: any) =>
+            String(typeof a === 'string' ? a : a?.title || a?.name || '')
+              .trim()
+              .slice(0, ASSISTANT_RULES.ACTIVITY_LABEL_MAX)
+          )
+          .filter(Boolean),
+      }))
+      .filter((plan: { day: number }) => Number.isInteger(plan.day) && plan.day >= 1),
   };
 }
 
@@ -184,7 +211,12 @@ export function buildAssistantPrompt(
     '- {"kind":"budget","value":<positive number, budget per person in the trip currency>}',
     '- {"kind":"day_title","day":<an existing day number>,"value":"<new title for that day, max 120 chars>"}',
     '- {"kind":"day_tip","day":<an existing day number>,"value":"<one practical tip for that day, max 200 chars>"}',
-    'Use "day" ONLY for day numbers listed in the planned days below. Otherwise null.',
+    '- {"kind":"swap_days","from_day":<an existing day>,"to_day":<another existing day>}',
+    '- {"kind":"move_activity","day":<source day>,"index":<0-based position>,"to_day":<destination day>,"to_index":<final 0-based position>,"expect":"<source activity label>"}',
+    '- {"kind":"update_activity","day":<day>,"index":<0-based position>,"value":"<new activity title, max 120 chars>","expect":"<old activity label>"}',
+    'Use day numbers ONLY from the planned days below, and indices ONLY against the activities listed for that day. Otherwise null.',
+    '"to_index" is the FINAL position after the move. Copy "expect" VERBATIM from the activity list — the app refuses the change when the itinerary has moved on.',
+    'You never edit the trip yourself. Never say you will do something, that you have done it, or that something is arranged unless the facts above already show it. A proposal is the ONLY way a change can happen, and a human applies it — describe it as a suggestion the group can apply, never as something you are doing or will do. If the ask needs a change you cannot express with exactly these shapes, say plainly that you cannot do that yet — never promise to do it later.',
   ];
   const factsBlock: string[] = [];
   if (facts.title) factsBlock.push(`Trip: ${facts.title}`);
@@ -193,6 +225,17 @@ export function buildAssistantPrompt(
   if (facts.season) factsBlock.push(`Season: ${facts.season}`);
   if (facts.groupType) factsBlock.push(`Group: ${facts.groupType}`);
   if (facts.dayTitles.length) factsBlock.push(`Planned days: ${facts.dayTitles.join(' | ')}`);
+  // F12d: the activity lists the model may aim an edit at. Positions are the
+  // 0-based indices the proposal schema expects; only days that have some.
+  const activityLines = (facts.dayPlans || [])
+    .filter((plan) => plan.activities.length > 0)
+    .map(
+      (plan) =>
+        `Day ${plan.day} activities: ${plan.activities
+          .map((label, index) => `[${index}] ${label}`)
+          .join(' | ')}`
+    );
+  if (activityLines.length) factsBlock.push(activityLines.join('\n'));
   // F12c: the asker's day anchor — only added when the trip actually describes
   // that day, so it never invents structure.
   if (opts.dayAnchor) {
@@ -242,8 +285,48 @@ export function validateAssistantProposal(raw: unknown): AssistantProposal | nul
   return result.data;
 }
 
-/** A day-anchored proposal must point at a day the trip actually has. */
+/**
+ * Drift guard shared by the server (ask-time facts) and the client's copy
+ * (`frontend/src/lib/proposalApply.ts`): true when `expected` is a
+ * case/space-insensitive prefix of `actual`. Empty expectations never match.
+ */
+export function labelMatches(actual: unknown, expected: unknown): boolean {
+  const normalize = (value: unknown) =>
+    String(value ?? '')
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .replace(/^["'“”]+|["'“”]+$/g, '')
+      .trim();
+  const want = normalize(expected);
+  const have = normalize(actual);
+  return Boolean(want) && (have === want || have.startsWith(want));
+}
+
+/** The server-owned plan line for one day (activity labels + positions). */
+function planFor(facts: TripFacts, day: number) {
+  return (facts.dayPlans || []).find((plan) => plan.day === Number(day));
+}
+
+/**
+ * Every proposal must point at shape the server actually has: a real day, a
+ * real activity position, and — for structural edits — the label the model
+ * promised to touch. Anything else is dropped rather than handed to the
+ * browser as a card that could edit the wrong row.
+ */
 export function proposalFitsTrip(proposal: AssistantProposal, facts: TripFacts): boolean {
+  if (proposal.kind === 'swap_days') {
+    if (proposal.from_day === proposal.to_day) return false;
+    return Boolean(planFor(facts, proposal.from_day) && planFor(facts, proposal.to_day));
+  }
+  if (proposal.kind === 'move_activity' || proposal.kind === 'update_activity') {
+    const source = planFor(facts, proposal.day);
+    if (!source || proposal.index >= source.activities.length) return false;
+    if (!labelMatches(source.activities[proposal.index], proposal.expect)) return false;
+    if (proposal.kind === 'update_activity') return true;
+    const target = planFor(facts, proposal.to_day);
+    if (!target || proposal.to_index > target.activities.length) return false;
+    return !(proposal.day === proposal.to_day && proposal.index === proposal.to_index);
+  }
   if (!('day' in proposal)) return true;
   if (!facts.days) return false; // no duration anchored → no day is safe
   return proposal.day >= 1 && proposal.day <= facts.days;

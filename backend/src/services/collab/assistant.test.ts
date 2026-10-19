@@ -9,6 +9,7 @@ import {
   consumeDailyQuota,
   dayKeyFor,
   assistantTaskFrom,
+  labelMatches,
   parseAssistantAnswer,
   proposalFitsTrip,
   quotaKey,
@@ -290,7 +291,10 @@ test('proposalFitsTrip: day-anchored proposals need a day the trip actually has'
   assert.equal(proposalFitsTrip({ kind: 'day_title', day: 2, value: 'x' }, facts), true);
   assert.equal(proposalFitsTrip({ kind: 'day_title', day: 3, value: 'x' }, facts), false);
   assert.equal(proposalFitsTrip({ kind: 'title', value: 'x' }, facts), true);
-  assert.equal(proposalFitsTrip({ kind: 'day_tip', day: 1, value: 'x' }, { title: 'No day count' }), false);
+  assert.equal(
+    proposalFitsTrip({ kind: 'day_tip', day: 1, value: 'x' }, { title: 'No day count', dayTitles: [], dayPlans: [] }),
+    false
+  );
 });
 
 test('buildAssistantPrompt: the JSON protocol is compiled into the prompt', () => {
@@ -298,7 +302,182 @@ test('buildAssistantPrompt: the JSON protocol is compiled into the prompt', () =
   const composed = buildAssistantPrompt(facts, 'q', []);
   assert.ok(composed.includes('"proposal"'));
   assert.ok(composed.includes('"day_title"'));
-  assert.ok(composed.includes('day numbers listed in the planned days'));
+  assert.ok(composed.includes('day numbers ONLY from the planned days'));
+});
+
+/* ------------------------ F12d: activity-level edits ------------------------ */
+
+const planFacts = () =>
+  tripFactsFrom({
+    tripDetails: {
+      trip_title: 'T',
+      duration_days: 3,
+      day_by_day_itinerary: [
+        {
+          day: 1,
+          title: 'Arrive',
+          activities: [{ title: 'Beach walk', time: '9am' }, { name: 'Night market' }],
+        },
+        { day: 2, title: 'Scooters', activities: ['Temple run'] },
+        { day: 3, title: 'Fly home', activities: [] },
+      ],
+    },
+  });
+
+test('tripFactsFrom: activity labels become positional server facts', () => {
+  // `title` wins over `name` (the timeline's own display order); string
+  // activities (legacy payloads) pass through; empty days keep their line.
+  assert.deepEqual(planFacts().dayPlans, [
+    { day: 1, activities: ['Beach walk', 'Night market'] },
+    { day: 2, activities: ['Temple run'] },
+    { day: 3, activities: [] },
+  ]);
+});
+
+test('tripFactsFrom: activity facts cap per day and per label', () => {
+  const facts = tripFactsFrom({
+    tripDetails: {
+      day_by_day_itinerary: [
+        { day: 1, activities: Array.from({ length: 10 }, () => ({ title: 'L'.repeat(200) })) },
+      ],
+    },
+  });
+  assert.equal(facts.dayPlans[0].activities.length, ASSISTANT_RULES.ACTIVITIES_PER_DAY_MAX);
+  assert.equal(facts.dayPlans[0].activities[0].length, ASSISTANT_RULES.ACTIVITY_LABEL_MAX);
+});
+
+test('validateAssistantProposal: swap/move/update shapes coerce numbers, reject junk', () => {
+  assert.deepEqual(validateAssistantProposal({ kind: 'swap_days', from_day: '1', to_day: 2 }), {
+    kind: 'swap_days',
+    from_day: 1,
+    to_day: 2,
+  });
+  assert.deepEqual(
+    validateAssistantProposal({
+      kind: 'move_activity',
+      day: '1',
+      index: '0',
+      to_day: 2,
+      to_index: '1',
+      expect: 'Beach walk',
+    }),
+    { kind: 'move_activity', day: 1, index: 0, to_day: 2, to_index: 1, expect: 'Beach walk' }
+  );
+  assert.equal(
+    validateAssistantProposal({ kind: 'move_activity', day: 1, index: -1, to_day: 2, to_index: 0, expect: 'x' }),
+    null,
+    'negative positions are rejected'
+  );
+  assert.equal(
+    validateAssistantProposal({ kind: 'update_activity', day: 1, index: 0, value: 'x' }),
+    null,
+    'the drift guard is mandatory on an update'
+  );
+  assert.equal(validateAssistantProposal({ kind: 'swap_days', from_day: 0, to_day: 2 }), null);
+});
+
+test('proposalFitsTrip: swap_days needs two distinct days the itinerary has', () => {
+  const facts = planFacts();
+  assert.equal(proposalFitsTrip({ kind: 'swap_days', from_day: 1, to_day: 2 }, facts), true);
+  assert.equal(proposalFitsTrip({ kind: 'swap_days', from_day: 1, to_day: 9 }, facts), false);
+  assert.equal(proposalFitsTrip({ kind: 'swap_days', from_day: 2, to_day: 2 }, facts), false);
+  assert.equal(
+    proposalFitsTrip(
+      { kind: 'swap_days', from_day: 1, to_day: 2 },
+      { title: 'T', dayTitles: [], dayPlans: [] }
+    ),
+    false,
+    'no itinerary → nothing to swap'
+  );
+});
+
+test('proposalFitsTrip: move_activity checks the source label, destination and final position', () => {
+  const facts = planFacts();
+  const move = (patch: Record<string, unknown> = {}) => ({
+    kind: 'move_activity' as const,
+    day: 1,
+    index: 0,
+    to_day: 2,
+    to_index: 1,
+    expect: 'Beach walk',
+    ...patch,
+  });
+  assert.equal(proposalFitsTrip(move(), facts), true);
+  assert.equal(proposalFitsTrip(move({ expect: 'Museum' }), facts), false, 'wrong label');
+  assert.equal(proposalFitsTrip(move({ expect: 'beach WALK' }), facts), true, 'case/space tolerant');
+  assert.equal(proposalFitsTrip(move({ to_day: 9 }), facts), false, 'no such destination');
+  assert.equal(proposalFitsTrip(move({ to_index: 5 }), facts), false, 'destination too short');
+  assert.equal(proposalFitsTrip(move({ to_index: 1 }), facts), true, 'the append position is legal');
+  assert.equal(proposalFitsTrip(move({ index: 2 }), facts), false, 'no such source activity');
+  assert.equal(proposalFitsTrip(move({ to_day: 1, to_index: 0 }), facts), false, 'a no-op move is not a card');
+  assert.equal(proposalFitsTrip(move({ to_day: 1, to_index: 1 }), facts), true, 'reorder within a day');
+});
+
+test('proposalFitsTrip: update_activity refuses a stale label', () => {
+  const facts = planFacts();
+  assert.equal(
+    proposalFitsTrip(
+      { kind: 'update_activity', day: 2, index: 0, value: 'Temple at dawn', expect: 'Temple run' },
+      facts
+    ),
+    true
+  );
+  assert.equal(
+    proposalFitsTrip(
+      { kind: 'update_activity', day: 2, index: 0, value: 'X', expect: 'Old label' },
+      facts
+    ),
+    false
+  );
+  assert.equal(
+    proposalFitsTrip({ kind: 'update_activity', day: 3, index: 0, value: 'X', expect: 'X' }, facts),
+    false,
+    'an empty day has no position 0'
+  );
+});
+
+test('buildAssistantPrompt: activity facts and the F12d protocol render together', () => {
+  const composed = buildAssistantPrompt(planFacts(), 'move the beach walk to day 2', []);
+  assert.ok(composed.includes('Day 1 activities: [0] Beach walk | [1] Night market'));
+  assert.ok(composed.includes('"swap_days"'));
+  assert.ok(composed.includes('"move_activity"'));
+  assert.ok(composed.includes('"update_activity"'));
+  assert.ok(composed.includes('Copy "expect" VERBATIM'));
+  assert.ok(composed.includes('never promise to do it later'), 'the no-promises rule ships');
+  assert.ok(!composed.includes('Day 3 activities:'), 'days without activities add no line');
+});
+
+test('parseAssistantAnswer: an activity-edit envelope keeps its drift guard', () => {
+  const parsed = parseAssistantAnswer(
+    JSON.stringify({
+      text: 'Moved it to Day 2.',
+      proposal: {
+        kind: 'move_activity',
+        day: 1,
+        index: 0,
+        to_day: 2,
+        to_index: 1,
+        expect: 'Beach walk',
+      },
+    })
+  );
+  assert.equal(parsed.text, 'Moved it to Day 2.');
+  assert.deepEqual(parsed.proposal, {
+    kind: 'move_activity',
+    day: 1,
+    index: 0,
+    to_day: 2,
+    to_index: 1,
+    expect: 'Beach walk',
+  });
+});
+
+test('labelMatches: prefix, case and quote tolerant — but never empty', () => {
+  assert.equal(labelMatches('Beach walk', 'beach'), true);
+  assert.equal(labelMatches('"Beach walk"', 'Beach walk'), true);
+  assert.equal(labelMatches('Beach  walk', 'BEACH WALK'), true);
+  assert.equal(labelMatches('Beach walk', ''), false);
+  assert.equal(labelMatches('Beach walk', 'Museum'), false);
 });
 
 /* ------------------------------ F12c task + day ----------------------------- */

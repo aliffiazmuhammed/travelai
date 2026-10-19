@@ -47,9 +47,16 @@ export const ASSISTANT_WIRE_BUDGET = 6000;
  * to the asker's browser, gets encrypted into the thread as part of the bot
  * bubble, and a human contributor taps Apply — which goes through the normal
  * `PUT /:id` update endpoint (editor floor, required `baseRev`, snapshotted
- * like any other edit). Kinds are deliberately bounded to fields the client
- * can patch non-destructively; structural reshuffles (move/add/remove days,
- * destination swaps) stay future work.
+ * like any other edit).
+ *
+ * F12b shipped whole-field replacements (title / budget / day title / tip).
+ * F12d adds the first structural edits — exchange two days' plans, move one
+ * activity, rename one activity — each aimed by a day number and a 0-based
+ * position in the server-owned activity list. The risky ones carry `expect`:
+ * the label exactly as the model saw it. The service rejects a mismatch
+ * against its own snapshot and the CLIENT re-checks against the live itinerary
+ * before applying, so a card that outlived a reshuffle can never edit the
+ * wrong row. Structural day insertion/removal stays future work.
  */
 export const assistantProposalSchema = z.discriminatedUnion('kind', [
   z.object({
@@ -73,6 +80,32 @@ export const assistantProposalSchema = z.discriminatedUnion('kind', [
     day: z.coerce.number().int().min(1).max(999),
     /** Adds one entry to that day's `pro_tip` list. */
     value: z.string().trim().min(1).max(200),
+  }),
+  z.object({
+    kind: z.literal('swap_days'),
+    /** The two existing day numbers whose plans exchange places. */
+    from_day: z.coerce.number().int().min(1).max(999),
+    to_day: z.coerce.number().int().min(1).max(999),
+  }),
+  z.object({
+    kind: z.literal('move_activity'),
+    /** Source day and 0-based position in that day's activity list. */
+    day: z.coerce.number().int().min(1).max(999),
+    index: z.coerce.number().int().min(0).max(199),
+    /** Destination day and the FINAL 0-based position there. */
+    to_day: z.coerce.number().int().min(1).max(999),
+    to_index: z.coerce.number().int().min(0).max(199),
+    /** Drift guard: the activity label exactly as the facts listed it. */
+    expect: z.string().trim().min(1).max(120),
+  }),
+  z.object({
+    kind: z.literal('update_activity'),
+    day: z.coerce.number().int().min(1).max(999),
+    index: z.coerce.number().int().min(0).max(199),
+    /** New activity title (the app displays `title` before `name`). */
+    value: z.string().trim().min(1).max(120),
+    /** Drift guard: the old label exactly as the facts listed it. */
+    expect: z.string().trim().min(1).max(120),
   }),
 ]);
 

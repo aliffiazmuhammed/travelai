@@ -1,7 +1,8 @@
 /**
- * Live smoke test for Milestone 7 sprints F12a–F12c (@TravelAI assistant +
- * proposal cards + summary/day-anchor tasks). Run with the API server up —
- * IDEALLY with a tight daily budget so the cap is exercised live:
+ * Live smoke test for Milestone 7 sprints F12a–F12d (@TravelAI assistant +
+ * proposal cards + summary/day-anchor tasks + activity-level edits). Run with
+ * the API server up — IDEALLY with a tight daily budget so the cap is
+ * exercised live:
  *   $env:BOT_DAILY_LIMIT='3'; npm start        (respects SMOKE_PORT=5059)
  *   npx tsx scripts/smoke-f12a.mts
  *
@@ -10,10 +11,11 @@
  *
  * Covers: the mention gate (missing mention → 400), shape walls (over-cap
  * prompt, >8 context lines, >500-char context line), a non-member 404, the
- * viewer rank floor, FIVE real provider calls (per-user daily buckets: alice
+ * viewer rank floor, FOUR real provider calls (per-user daily buckets: alice
  * burns the limit of 3 — answer, proposal, summarize — her fourth ask 429s,
- * bob's own bucket still works), the F12b answer envelope, the F12c summary
- * task, day-anchored asks, and bot-flagged comment rows round-tripping.
+ * bob's own bucket still works for an activity-level ask), the F12b answer
+ * envelope, the F12c summary task, day-anchored asks, the F12d activity edit
+ * with its drift guard, and bot-flagged comment rows round-tripping.
  */
 import 'dotenv/config';
 import mongoose from 'mongoose';
@@ -104,8 +106,12 @@ async function main() {
       group_type: 'friends',
       season: 'summer',
       day_by_day_itinerary: [
-        { day: 1, title: 'Arrive & seafood' },
-        { day: 2, title: 'Scooters day' },
+        {
+          day: 1,
+          title: 'Arrive & seafood',
+          activities: [{ title: 'Airport pickup' }, { title: 'Beach walk' }],
+        },
+        { day: 2, title: 'Scooters day', activities: [{ title: 'Temple run' }] },
       ],
     },
     title: 'F12 Assistant Smoke',
@@ -166,8 +172,12 @@ async function main() {
     const proposal = proposalAsk.body?.proposal;
     check('the proposal ask returns a clamped text answer (200)', proposalAsk.status === 200 && typeof proposalAsk.body?.reply === 'string' && proposalAsk.body.reply.length > 0, proposalAsk.body);
     check(
-      'the proposal (if any) is one of the four typed kinds',
-      proposal === null || proposal === undefined || ['title', 'budget', 'day_title', 'day_tip'].includes(proposal?.kind),
+      'the proposal (if any) is one of the seven typed kinds',
+      proposal === null ||
+        proposal === undefined ||
+        ['title', 'budget', 'day_title', 'day_tip', 'swap_days', 'move_activity', 'update_activity'].includes(
+          proposal?.kind
+        ),
       proposal
     );
     check(
@@ -191,10 +201,39 @@ async function main() {
     const fourthMsg = String(fourth.body?.error || fourth.body?.message || '');
     check('a fourth ask same user+trip+day hits the DAILY budget (429 with the quota wording)', fourth.status === 429 && fourthMsg.includes('ask limit'), fourthMsg);
 
+    // F12d: bob's ask doubles as the activity-level check — a viewer's own
+    // bucket still works AND the card must aim at a real position in the
+    // server's own itinerary snapshot, carrying the drift guard the client
+    // re-checks before saving. (One request, not two: bob has already spent
+    // four burst-limiter slots on the walls above.)
     const bobAsk = await ask(BOB_EMAIL, {
-      prompt: '@travelai any cheap breakfast near the hotel?',
+      prompt: '@travelai move the beach walk to day 2',
+      context: [{ label: 'alice', text: 'day 2 needs one more thing to do' }],
     });
+    const edit = bobAsk.body?.proposal;
     check('another user has their OWN bucket (bob, a viewer, asks fine)', bobAsk.status === 200, bobAsk.body);
+    check(
+      'the activity ask returns a clamped text answer (200)',
+      bobAsk.status === 200 && typeof bobAsk.body?.reply === 'string' && bobAsk.body.reply.length > 0,
+      bobAsk.body
+    );
+    check(
+      'an aimed edit carries a 0-based position and the verbatim drift guard',
+      edit === null ||
+        edit === undefined ||
+        (['move_activity', 'update_activity', 'swap_days'].includes(edit?.kind) &&
+          (edit.kind === 'swap_days' ||
+            (Number.isInteger(edit.index) &&
+              edit.index >= 0 &&
+              typeof edit.expect === 'string' &&
+              edit.expect.length > 0))),
+      edit
+    );
+    check(
+      'a moved activity is a real position in the server snapshot',
+      edit?.kind !== 'move_activity' || (edit.day >= 1 && edit.day <= 2 && edit.to_day >= 1 && edit.to_day <= 2),
+      edit
+    );
   } else {
     check(`daily budget not set to 3 (got ${dailyLimit || 'default'}) — budgeted scenarios SKIPPED (unit-covered)`, true);
   }

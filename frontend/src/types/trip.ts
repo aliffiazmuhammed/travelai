@@ -459,7 +459,17 @@ export type AssistantProposal =
   | { kind: "title"; value: string }
   | { kind: "budget"; value: number }
   | { kind: "day_title"; day: number; value: string }
-  | { kind: "day_tip"; day: number; value: string };
+  | { kind: "day_tip"; day: number; value: string }
+  | { kind: "swap_days"; from_day: number; to_day: number }
+  | {
+      kind: "move_activity";
+      day: number;
+      index: number;
+      to_day: number;
+      to_index: number;
+      expect: string;
+    }
+  | { kind: "update_activity"; day: number; index: number; value: string; expect: string };
 
 /** F12b: the JSON envelope encrypted into a bot row when the answer proposes a change. */
 export interface BotBubblePayload {

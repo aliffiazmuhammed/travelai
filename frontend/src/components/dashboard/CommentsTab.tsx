@@ -97,7 +97,7 @@ const BOT_SUMMARY_RE =
   /(summari[sz]e|recap|catch (me|us) up|what (did|have) we (decide[ds]?|agree[ds]?|settle[ds]?)|bring (me|us) up to speed)/i;
 
 /**
- * F12b: parse a TravelAI proposal envelope out of a decrypted bot row. The
+ * F12b/F12d: parse a TravelAI proposal envelope out of a decrypted bot row. The
  * envelope is written by our own ask flow; this parses defensively because a
  * malicious client can flag any of its own rows `bot: true` — anything that
  * does not validate renders as plain text and stays harmless.
@@ -110,21 +110,52 @@ function parseBotCard(
   try {
     const parsed = JSON.parse(body) as BotBubblePayload | null;
     if (!parsed || parsed.v !== 1 || typeof parsed.text !== "string") return null;
-    const proposal = parsed.proposal as AssistantProposal | null | undefined;
-    if (
-      !proposal ||
-      typeof proposal !== "object" ||
-      !["title", "budget", "day_title", "day_tip"].includes(proposal.kind) ||
-      !["string", "number"].includes(typeof proposal.value) ||
-      (proposal.kind === "budget" && typeof proposal.value !== "number") ||
-      (proposal.kind !== "budget" && typeof proposal.value !== "string") ||
-      (("day" in proposal) && (!Number.isInteger(proposal.day) || (proposal as { day: number }).day < 1))
-    ) {
-      return null;
-    }
-    return { text: parsed.text, proposal };
+    const proposal = parsed.proposal;
+    return looksLikeProposal(proposal) ? { text: parsed.text, proposal } : null;
   } catch {
     return null;
+  }
+}
+
+const isText = (value: unknown): value is string =>
+  typeof value === "string" && value.trim().length > 0;
+
+const isPosition = (value: unknown): value is number =>
+  Number.isInteger(value) && (value as number) >= 0;
+
+const isDayNumber = (value: unknown): value is number =>
+  Number.isInteger(value) && (value as number) >= 1;
+
+/**
+ * Client-side backstop mirroring the server's zod union. Structural kinds
+ * additionally carry `expect` (the drift guard `lib/proposalApply` checks
+ * against the live itinerary before saving) and 0-based positions.
+ */
+function looksLikeProposal(proposal: unknown): proposal is AssistantProposal {
+  if (!proposal || typeof proposal !== "object") return false;
+  const p = proposal as Record<string, unknown>;
+  switch (p.kind) {
+    case "title":
+      return isText(p.value);
+    case "budget":
+      return typeof p.value === "number" && p.value > 0;
+    case "day_title":
+    case "day_tip":
+      return isDayNumber(p.day) && isText(p.value);
+    case "swap_days":
+      return isDayNumber(p.from_day) && isDayNumber(p.to_day) && p.from_day !== p.to_day;
+    case "move_activity":
+      return (
+        isDayNumber(p.day) &&
+        isPosition(p.index) &&
+        isDayNumber(p.to_day) &&
+        isPosition(p.to_index) &&
+        isText(p.expect)
+      );
+    case "update_activity":
+      return isDayNumber(p.day) && isPosition(p.index) && isText(p.value) && isText(p.expect);
+    default:
+      return false;
   }
 }
 
@@ -137,16 +168,31 @@ function proposalLabel(proposal: AssistantProposal): string {
       return "Budget per person";
     case "day_title":
       return `Day ${proposal.day} — title`;
-    default:
+    case "day_tip":
       return `Day ${proposal.day} — add a tip`;
+    case "swap_days":
+      return `Day ${proposal.from_day} ↔ Day ${proposal.to_day}`;
+    case "move_activity":
+      return `Day ${proposal.day} → Day ${proposal.to_day} — move an activity`;
+    default:
+      return `Day ${proposal.day} — rename an activity`;
   }
 }
 
 /** The proposal's value side of the diff, shown after the "→". */
 function formatProposalValue(proposal: AssistantProposal): string {
-  return proposal.kind === "budget"
-    ? proposal.value.toLocaleString()
-    : proposal.value;
+  switch (proposal.kind) {
+    case "budget":
+      return proposal.value.toLocaleString();
+    case "swap_days":
+      return "Exchange these two days' plans";
+    case "move_activity":
+      return `“${proposal.expect}” moves to Day ${proposal.to_day}`;
+    case "update_activity":
+      return `“${proposal.value}”`;
+    default:
+      return proposal.value;
+  }
 }
 
 /**

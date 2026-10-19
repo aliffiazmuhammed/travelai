@@ -39,6 +39,7 @@ import { useTripChatCrypto } from "@/hooks/useTripChatCrypto";
 import { useTripEvents, type PresenceUser } from "@/hooks/useTripEvents";
 import { endDateFromStart, itineraryAnchor, zipWeatherToDays } from "@/lib/weather";
 import { swapDayPlans } from "@/lib/weatherRouting";
+import { applyActivityEdit } from "@/lib/proposalApply";
 import type {
   ActivityItem,
   CustomRoute,
@@ -157,17 +158,42 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
 
   /**
-   * F12b: compose a TravelAI proposal into the itinerary snapshot and save it
-   * through the SAME path manual editing uses (`onSave` → PUT with required
+   * F12b/F12d: compose a TravelAI proposal into the itinerary snapshot and save
+   * it through the SAME path manual editing uses (`onSave` → PUT with required
    * `baseRev`, versioned). The bot never writes; this only types what a
-   * contributor typed by hand. Unsaved local day edits ride along, exactly
-   * like `persistGranular`'s "save pending changes first" rule.
+   * contributor typed by hand. Structural kinds carry the drift guard: the
+   * activity label the model saw must still be exactly where it said it was.
    */
   const applyAssistantProposal = useCallback(
     async (proposal: AssistantProposal): Promise<void> => {
       if (!onSave) throw new Error("Applying needs edit access for this trip.");
       const findDay = (dayNumber: number) =>
         itinerary.find((day) => day.day === dayNumber);
+
+      if (proposal.kind === "swap_days") {
+        // Same operation as the weather-routing suggestion: the two plans
+        // exchange places and days stay contiguous (1..n display order).
+        if (proposal.from_day === proposal.to_day) {
+          throw new Error("Pick two different days to exchange.");
+        }
+        const swapped = swapDayPlans(itinerary, proposal.from_day, proposal.to_day);
+        if (swapped === itinerary) {
+          throw new Error(
+            "This trip no longer has both days — reload the trip and ask again."
+          );
+        }
+        await onSave({ ...safeData, day_by_day_itinerary: swapped });
+        return;
+      }
+
+      if (proposal.kind === "move_activity" || proposal.kind === "update_activity") {
+        await onSave({
+          ...safeData,
+          day_by_day_itinerary: applyActivityEdit(itinerary, proposal),
+        });
+        return;
+      }
+
       if (proposal.kind !== "title" && proposal.kind !== "budget" && !findDay(proposal.day)) {
         throw new Error("This trip no longer has that day — reload the trip and ask again.");
       }
