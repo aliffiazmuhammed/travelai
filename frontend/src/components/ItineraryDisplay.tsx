@@ -677,11 +677,11 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
             {showCommentsTab && (
               <TabsTrigger
                 value="comments"
-                title="Discussion"
+                title="Chat"
                 className="py-2.5 px-3 rounded-xl text-xs font-bold gap-2 shrink-0 data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
               >
                 <MessageCircle className="w-3.5 h-3.5" />
-                <span className="hidden lg:inline">Discuss</span>
+                <span className="hidden lg:inline">Chat</span>
                 {commentsController.state.unread > 0 && (
                   <span
                     className="min-w-4 h-4 px-1 rounded-full bg-destructive text-destructive-foreground text-[9px] font-black grid place-items-center"

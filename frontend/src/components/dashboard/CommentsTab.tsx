@@ -68,22 +68,33 @@ const COMMENT_MAX_LEN = 2000; // mirrors COMMENT_MAX_LEN (server default)
 const initialsFor = (label: string): string =>
   (label || "T").trim().slice(0, 2).toUpperCase();
 
-/** Compact relative time — "3m", "2h", "5d", else a short date. */
+/**
+ * Chat-style timestamp (WhatsApp convention): clock time for today,
+ * "Yesterday" for the day before, else a short date. Same function serves
+ * bubbles and the decisions strip so the whole surface reads like a chat.
+ */
 function relativeTime(iso: string): string {
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return "";
-  const seconds = Math.max(0, Math.floor((Date.now() - then) / 1000));
-  if (seconds < 60) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  return new Date(iso).toLocaleDateString(undefined, {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const time = date.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  const now = new Date();
+  if (date.toDateString() === now.toDateString()) return time;
+
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString()) return `Yesterday ${time}`;
+
+  const days = Math.floor((now.getTime() - date.getTime()) / 86400000);
+  if (days < 7) {
+    return `${date.toLocaleDateString(undefined, { weekday: "short" })} ${time}`;
+  }
+  return `${date.toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
-  });
+  })} ${time}`;
 }
 
 export const CommentsTab: React.FC<CommentsTabProps> = ({
@@ -173,9 +184,10 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
     try {
       await controller.addComment(body, anchorDay ?? undefined);
       setDraft("");
-      toast.success("Comment added");
+      autosizeComposer();
+      toast.success("Message sent");
     } catch (err: any) {
-      toast.error(err?.message || "Could not post your comment. Please try again.");
+      toast.error(err?.message || "Could not send your message. Please try again.");
     }
   };
 
@@ -238,9 +250,9 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
     setBusyId(target._id);
     try {
       await controller.removeComment(target);
-      toast.success(target.isYou ? "Your comment was removed" : "Comment removed");
+      toast.success(target.isYou ? "Your message was removed" : "Message removed");
     } catch (err: any) {
-      toast.error(err?.message || "Could not remove the comment.");
+      toast.error(err?.message || "Could not remove the message.");
     } finally {
       setBusyId(null);
     }
@@ -249,6 +261,15 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
   const retry = () => {
     controller.ensureLoaded();
     // ensureLoaded is idempotent per open; force a fresh attempt by reloading state
+  };
+
+  /** Auto-grow — the WhatsApp trick: the input is one line until it isn't. */
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  const autosizeComposer = () => {
+    const el = composerRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 112)}px`;
   };
 
   /* ----------------------------------------------------------------------- */
@@ -285,81 +306,123 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
         className="rounded-xl text-xs font-bold gap-1.5 h-8 px-3 text-muted-foreground"
       >
         {state.loadingEarlier ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-        <span>Load earlier comments</span>
+        <span>Load earlier messages</span>
       </Button>
     </div>
   ) : null;
 
   const composerBlock = canWrite ? (
-    <div
-      className={cn(
-        "space-y-2",
-        isChat &&
-          "rounded-2xl border border-border/70 bg-card p-2 shadow-xs focus-within:border-primary/40 transition-colors"
-      )}
-    >
-      <Textarea
-        value={draft}
-        onChange={(event) => {
-          setDraft(event.target.value);
-          onTyping?.(); // throttled upstream; a 2.5s-silent composer stops pinging
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-            event.preventDefault();
-            void submit();
+    isChat ? (
+      /* WhatsApp-style dock: one bar holding [day▾] [input…] (►).
+         Enter sends, Shift+Enter is a newline; the input auto-grows. */
+      <div className="flex items-end gap-1.5 rounded-3xl border border-border/70 bg-card p-1.5 pl-2 shadow-xs focus-within:border-primary/40 transition-colors">
+        <select
+          value={anchorDay ?? ""}
+          onChange={(event) =>
+            setAnchorDay(event.target.value ? Number(event.target.value) : null)
           }
-        }}
-        placeholder={
-          anchorDay
-            ? `Message about Day ${anchorDay}…`
-            : isChat
-              ? "Message the trip…"
-              : "Share a thought about this trip…"
-        }
-        rows={2}
-        maxLength={COMMENT_MAX_LEN}
-        disabled={state.submitting}
-        className={cn(
-          isChat
-            ? "min-h-9 resize-none bg-transparent border-0 p-1.5 text-sm focus-visible:ring-0 shadow-none"
-            : "rounded-2xl text-sm resize-none"
-        )}
-      />
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <button
-            type="button"
-            onClick={() => setAnchorDay(null)}
-            className={cn(
-              "px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors",
-              anchorDay === null
-                ? "bg-primary/10 text-primary border-primary/30"
-                : "border-border/60 text-muted-foreground hover:text-foreground"
-            )}
-          >
-            Whole trip
-          </button>
+          title="Anchor this message to a trip day"
+          className="h-9 shrink-0 cursor-pointer self-center rounded-full border border-border/60 bg-muted/40 px-2.5 text-[11px] font-bold text-muted-foreground outline-none"
+        >
+          <option value="">Trip</option>
           {anchoredDays.slice(0, 12).map((day) => (
+            <option key={day} value={day}>
+              Day {day}
+            </option>
+          ))}
+        </select>
+        <Textarea
+          ref={composerRef}
+          value={draft}
+          onChange={(event) => {
+            setDraft(event.target.value);
+            autosizeComposer();
+            onTyping?.();
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              void submit();
+            }
+          }}
+          placeholder={
+            anchorDay ? `Message about Day ${anchorDay}…` : "Message the trip…"
+          }
+          rows={1}
+          maxLength={COMMENT_MAX_LEN}
+          disabled={state.submitting}
+          className="max-h-28 min-h-0 flex-1 resize-none overflow-y-auto border-0 bg-transparent px-1 py-2 text-sm shadow-none focus-visible:ring-0"
+        />
+        <Button
+          type="button"
+          size="icon"
+          onClick={() => void submit()}
+          disabled={!draft.trim() || state.submitting}
+          title="Send"
+          aria-label="Send message"
+          className="h-9 w-9 shrink-0 self-end rounded-full gap-0"
+        >
+          {state.submitting ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Send className="w-4 h-4" />
+          )}
+        </Button>
+      </div>
+    ) : (
+      <div className="space-y-2">
+        <Textarea
+          value={draft}
+          onChange={(event) => {
+            setDraft(event.target.value);
+            onTyping?.(); // throttled upstream; a 2.5s-silent composer stops pinging
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+              event.preventDefault();
+              void submit();
+            }
+          }}
+          placeholder={
+            anchorDay
+              ? `Message about Day ${anchorDay}…`
+              : "Message the trip…"
+          }
+          rows={2}
+          maxLength={COMMENT_MAX_LEN}
+          disabled={state.submitting}
+          className="rounded-2xl text-sm resize-none"
+        />
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5 flex-wrap">
             <button
-              key={day}
               type="button"
-              onClick={() => setAnchorDay(anchorDay === day ? null : day)}
+              onClick={() => setAnchorDay(null)}
               className={cn(
                 "px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors",
-                anchorDay === day
+                anchorDay === null
                   ? "bg-primary/10 text-primary border-primary/30"
                   : "border-border/60 text-muted-foreground hover:text-foreground"
               )}
             >
-              {day}
+              Whole trip
             </button>
-          ))}
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] text-muted-foreground hidden sm:inline">
-            ⌘/Ctrl + Enter
-          </span>
+            {anchoredDays.slice(0, 12).map((day) => (
+              <button
+                key={day}
+                type="button"
+                onClick={() => setAnchorDay(anchorDay === day ? null : day)}
+                className={cn(
+                  "px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors",
+                  anchorDay === day
+                    ? "bg-primary/10 text-primary border-primary/30"
+                    : "border-border/60 text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {day}
+              </button>
+            ))}
+          </div>
           <Button
             type="button"
             size="sm"
@@ -373,15 +436,15 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
             ) : (
               <Send className="w-3.5 h-3.5" />
             )}
-            <span>Post</span>
+            <span>Send</span>
           </Button>
         </div>
       </div>
-    </div>
+    )
   ) : (
     <div className="rounded-2xl border border-dashed border-border/70 bg-muted/40 p-3 text-xs text-muted-foreground">
-      You're viewing this trip, so the discussion is read-only — ask the
-      owner to change your role to comment.
+      You're viewing this trip, so the chat is read-only — ask the owner to
+      change your role to comment.
     </div>
   );
 
@@ -392,7 +455,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
       </div>
     ) : state.status === "error" ? (
       <div className="flex flex-col items-center gap-2 py-8 text-muted-foreground">
-        <p className="text-xs">Could not load the discussion.</p>
+        <p className="text-xs">Could not load the chat.</p>
         <Button
           type="button"
           size="sm"
@@ -409,7 +472,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
         {dayFilter === null
           ? isChat
             ? "No messages yet — say hi 👋"
-            : "No comments yet — start the conversation above."
+            : "No messages yet — start the conversation above."
           : "Nothing on this day yet."}
       </div>
     ) : (
@@ -476,7 +539,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
               <div className="flex items-center gap-2">
                 <MessageCircle className="w-4 h-4 text-primary" />
                 <h3 className="font-extrabold text-foreground text-sm uppercase tracking-wider">
-                  Trip discussion
+                  Trip chat
                 </h3>
                 <Badge variant="outline" className="text-[10px]">
                   {dayFilter === null ? comments.length : visible.length}
@@ -544,10 +607,10 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove this comment?</AlertDialogTitle>
+            <AlertDialogTitle>Remove this message?</AlertDialogTitle>
             <AlertDialogDescription>
               {pendingDelete?.isYou
-                ? "Your comment disappears for everyone, but a removal record is kept."
+                ? "Your message disappears for everyone, but a removal record is kept."
                 : "It disappears for everyone — but the removal keeps its author and time for the audit trail."}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -689,7 +752,7 @@ const CommentRow: React.FC<CommentRowProps> = ({
     return (
       <div className="flex items-center justify-center py-1.5">
         <span className="text-[11px] text-muted-foreground/70 italic">
-          {row.isYou ? "Your comment was removed" : "A comment was removed"}
+          {row.isYou ? "Your message was removed" : "A message was removed"}
         </span>
       </div>
     );
@@ -698,48 +761,39 @@ const CommentRow: React.FC<CommentRowProps> = ({
   const isMine = row.isYou;
 
   return (
-    <div className={cn("flex gap-2", isMine ? "flex-row-reverse" : "flex-row")}>
-      <Avatar className="h-7 w-7 shrink-0">
-        <AvatarFallback
-          className={cn(
-            "text-[10px] font-bold",
-            isMine ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"
-          )}
-        >
-          {initialsFor(row.label)}
-        </AvatarFallback>
-      </Avatar>
+    <div className={cn("group flex gap-2", isMine ? "flex-row-reverse" : "flex-row")}>
+      {/* WhatsApp convention: avatar only on incoming; your own bubbles sit
+          against the right edge, self-evident by color and side. */}
+      {!isMine && (
+        <Avatar className="h-7 w-7 shrink-0 self-end">
+          <AvatarFallback className="text-[10px] font-bold bg-primary/10 text-primary">
+            {initialsFor(row.label)}
+          </AvatarFallback>
+        </Avatar>
+      )}
 
       <div
         className={cn(
-          "min-w-0 max-w-[85%] sm:max-w-[75%] rounded-2xl border px-3 py-2",
+          "min-w-0 max-w-[85%] sm:max-w-[75%] rounded-2xl px-3 py-2",
           isMine
-            ? "bg-primary/5 border-primary/20 rounded-tr-sm"
-            : "bg-background/60 border-border/60 rounded-tl-sm"
+            ? "bg-primary text-primary-foreground rounded-br-sm"
+            : "bg-muted text-foreground rounded-bl-sm"
         )}
       >
-        <div
-          className={cn(
-            "flex items-center gap-1.5 flex-wrap text-[11px]",
-            isMine ? "justify-end" : "justify-start"
-          )}
-        >
-          <span className="font-bold text-foreground">
-            {isMine ? "You" : row.label}
-          </span>
-          {row.day !== undefined && (
-            <Badge
-              variant="outline"
-              className="text-[9px] px-1 py-0 h-3.5 border-border/60 text-muted-foreground"
-            >
-              Day {row.day}
-            </Badge>
-          )}
-          <span className="text-muted-foreground/70">{relativeTime(row.createdAt)}</span>
-          {row.editedAt && (
-            <span className="text-muted-foreground/60 italic">(edited)</span>
-          )}
-        </div>
+        {/* Group-chat sender name — only on incoming (your own need no label) */}
+        {!isMine && (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[11px] font-bold text-primary">{row.label}</span>
+            {row.day !== undefined && (
+              <Badge
+                variant="outline"
+                className="text-[9px] px-1 py-0 h-3.5 border-border/60 text-muted-foreground"
+              >
+                Day {row.day}
+              </Badge>
+            )}
+          </div>
+        )}
 
         {editing ? (
           <div className="mt-1.5 space-y-1.5">
@@ -757,7 +811,7 @@ const CommentRow: React.FC<CommentRowProps> = ({
               maxLength={COMMENT_MAX_LEN}
               autoFocus
               disabled={isBusy}
-              className="rounded-xl text-sm resize-none"
+              className="rounded-xl text-sm resize-none bg-card text-foreground"
             />
             <div className="flex items-center justify-end gap-1">
               <Button
@@ -785,75 +839,93 @@ const CommentRow: React.FC<CommentRowProps> = ({
             </div>
           </div>
         ) : (
-          <p className="text-sm text-foreground whitespace-pre-wrap break-words mt-0.5">
+          <p
+            className={cn(
+              "text-sm whitespace-pre-wrap break-words",
+              !isMine && "mt-0.5"
+            )}
+          >
             {row.body}
           </p>
         )}
 
-        {canModerate && !editing && (
-          <div
-            className={cn(
-              "flex items-center gap-0.5 mt-1.5",
-              isMine ? "justify-end" : "justify-start"
-            )}
-          >
-            {isMine && (
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                onClick={onStartEdit}
-                disabled={isBusy}
-                title="Edit your comment"
-                className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-foreground gap-1"
-              >
-                <Pencil className="w-3 h-3" />
-                <span className="hidden sm:inline">Edit</span>
-              </Button>
-            )}
-            {/* F9: promote author-or-owner; server enforces the real rule */}
-            {canModerate &&
-              (decided ? (
-                <span
-                  className="flex items-center gap-1 h-6 px-1.5 text-[10px] font-bold text-primary"
-                  title="This comment is pinned as a decision"
-                >
-                  <Pin className="w-3 h-3" />
-                  <span className="hidden sm:inline">Decided</span>
-                </span>
-              ) : (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  onClick={onDecide}
-                  disabled={isBusy}
-                  title={isMine ? "Record your comment as a decision" : "Owner — record this as a decision"}
-                  className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-primary gap-1"
-                >
-                  <Pin className="w-3 h-3" />
-                  <span className="hidden sm:inline">Decide</span>
-                </Button>
-              ))}
+        {/* Time lives INSIDE the bubble, tail-right — the chat-app signature. */}
+        <div
+          className={cn(
+            "flex items-center gap-1 justify-end text-[9px] leading-none opacity-70",
+            !isMine && !editing && "mt-1"
+          )}
+        >
+          {row.editedAt && <span className="italic">(edited)</span>}
+          <span>{relativeTime(row.createdAt)}</span>
+        </div>
+      </div>
+
+      {/* Row actions stay whisper-quiet in chat: reveal on hover (desktop);
+          touch users keep them visible since hover isn't reliable there. */}
+      {canModerate && !editing && (
+        <div
+          className={cn(
+            "flex flex-col items-center gap-0.5 self-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100 transition-opacity",
+            isMine && "flex-row"
+          )}
+        >
+          {isMine && (
             <Button
               type="button"
               size="sm"
               variant="ghost"
-              onClick={onAskDelete}
+              onClick={onStartEdit}
               disabled={isBusy}
-              title={isMine ? "Remove your comment" : "Moderate — remove this comment"}
-              className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-destructive gap-1"
+              title="Edit your message"
+              className="h-6 px-1.5 text-muted-foreground hover:text-foreground gap-0"
             >
               {isBusy ? (
                 <Loader2 className="w-3 h-3 animate-spin" />
               ) : (
-                <Trash2 className="w-3 h-3" />
+                <Pencil className="w-3 h-3" />
               )}
-              <span className="hidden sm:inline">{isMine ? "Delete" : "Remove"}</span>
             </Button>
-          </div>
-        )}
-      </div>
+          )}
+          {/* F9: promote author-or-owner; server enforces the real rule */}
+          {canModerate &&
+            (decided ? (
+              <span
+                className="flex h-6 items-center px-1 text-primary"
+                title="This message is pinned as a decision"
+              >
+                <Pin className="w-3 h-3" />
+              </span>
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={onDecide}
+                disabled={isBusy}
+                title={
+                  isMine
+                    ? "Record your message as a decision"
+                    : "Owner — record this as a decision"
+                }
+                className="h-6 px-1.5 text-muted-foreground hover:text-primary gap-0"
+              >
+                <Pin className="w-3 h-3" />
+              </Button>
+            ))}
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={onAskDelete}
+            disabled={isBusy}
+            title={isMine ? "Delete your message" : "Moderate — remove this message"}
+            className="h-6 px-1.5 text-muted-foreground hover:text-destructive gap-0"
+          >
+            <Trash2 className="w-3 h-3" />
+          </Button>
+        </div>
+      )}
     </div>
   );
 };

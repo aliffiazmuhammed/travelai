@@ -82,8 +82,8 @@ export const DiscussionDrawer: React.FC<DiscussionDrawerProps> = ({
             type="button"
             size="icon"
             onClick={() => handleOpenChange(true)}
-            title="Trip discussion"
-            aria-label={`Trip discussion${unread > 0 ? `, ${unread} unread` : ""}`}
+            title="Trip chat"
+            aria-label={`Trip chat${unread > 0 ? `, ${unread} unread` : ""}`}
             className="fixed z-40 bottom-20 right-4 sm:bottom-6 sm:right-6 w-12 h-12 rounded-full shadow-lg"
           >
             <MessageCircle className="w-5 h-5" />
@@ -106,7 +106,7 @@ export const DiscussionDrawer: React.FC<DiscussionDrawerProps> = ({
           <SheetHeader className="flex-row items-center justify-between gap-3 px-4 py-3 border-b border-border/70">
             <SheetTitle className="flex items-center gap-2 text-sm font-extrabold">
               <MessageCircle className="w-4 h-4 text-primary" />
-              Trip discussion
+              Trip chat
             </SheetTitle>
             {roster.length > 0 && (
               <div
