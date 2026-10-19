@@ -59,7 +59,8 @@ export interface UseTripComments {
     body: string,
     day?: number,
     e2ee?: boolean,
-    plaintextHint?: string
+    plaintextHint?: string,
+    bot?: boolean
   ) => Promise<TripComment | null>;
   /** Author-only edit; `e2ee` marks the body as freshly encrypted (F10). */
   editComment: (commentId: string, body: string, e2ee?: boolean) => Promise<boolean>;
@@ -314,17 +315,20 @@ export function useTripComments(
       body: string,
       day?: number,
       e2ee?: boolean,
-      plaintextHint?: string
+      plaintextHint?: string,
+      bot?: boolean
     ): Promise<TripComment | null> => {
       if (!tripId) return null;
       const tempId = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const optimistic: TripComment = {
         _id: tempId,
         tripId,
-        label: 'You',
         // The optimistic preview is the plaintext (the wire body is opaque,
         // and a human should never watch their own words turn into base64).
+        label: bot ? 'TravelAI' : 'You',
         body: plaintextHint ?? body,
+        // F12a: bot rows render as the TravelAI participant immediately.
+        ...(bot ? { bot: true } : {}),
         isYou: true,
         createdAt: new Date().toISOString(),
         ...(day !== undefined ? { day } : {}),
@@ -342,6 +346,7 @@ export function useTripComments(
           body,
           ...(day !== undefined ? { day } : {}),
           ...(e2ee ? { e2ee: true } : {}),
+          ...(bot ? { bot: true } : {}),
         });
         // The authoritative row is OURS by construction (§20.2): record the id
         // so a racing frame can never count our own words as unread.

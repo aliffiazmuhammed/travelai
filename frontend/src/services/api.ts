@@ -517,7 +517,7 @@ class ApiClient {
 
   async addTripComment(
     id: string,
-    payload: { body: string; day?: number; e2ee?: boolean }
+    payload: { body: string; day?: number; e2ee?: boolean; bot?: boolean }
   ): Promise<{ success: boolean; comment: TripComment }> {
     return this.request(`/api/itinerary/${id}/comments`, {
       method: 'POST',
@@ -621,6 +621,22 @@ class ApiClient {
     return this.request(`/api/itinerary/${tripId}/chat/envelopes`, {
       method: 'POST',
       body: JSON.stringify({ envelopes }),
+    });
+  }
+
+  /**
+   * POST /:id/chat/assistant (F12a) — one @TravelAI ask with client-fed
+   * grounding. The reply comes back PLAINTEXT to this caller's browser ONLY;
+   * the caller then encrypts it with the trip conversation key and posts it
+   * through addTripComment as a bot:true row (the server stores no plaintext).
+   */
+  async askTravelAI(
+    tripId: string,
+    payload: { prompt: string; context?: Array<{ label: string; text: string }> }
+  ): Promise<{ success: boolean; reply: string; provider: string; cached: boolean }> {
+    return this.request(`/api/itinerary/${tripId}/chat/assistant`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
     });
   }
 

@@ -468,6 +468,12 @@ export interface TripComment {
    * format renders verbatim (no migration: old rows stay plaintext).
    */
   e2ee?: boolean;
+  /**
+   * F12a: persona flag — this row is a @TravelAI answer the asker's browser
+   * encrypted and posted. Rendered as the "TravelAI" participant regardless
+   * of the row's actual author.
+   */
+  bot?: boolean;
   /** Optional day anchor (1..day count); absent = about the trip in general. */
   day?: number;
   /** True on rows authored by the caller (reliable in HTTP responses only). */

@@ -14,7 +14,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { toast } from "sonner";import {
+import { toast } from "sonner";
+import {
+  Bot,
   Loader2,
   Lock,
   MessageCircle,
@@ -22,9 +24,11 @@ import { toast } from "sonner";import {
   Pin,
   RotateCcw,
   Send,
+  Sparkles,
   Trash2,
   X,
 } from "lucide-react";
+import { api } from "@/services/api";
 import { cn } from "@/lib/utils";
 import type { TripComment, TripDecision, TripRole } from "@/types/trip";
 import type { UseTripComments } from "@/hooks/useTripComments";
@@ -68,6 +72,9 @@ interface CommentsTabProps {
 }
 
 const COMMENT_MAX_LEN = 2000; // mirrors COMMENT_MAX_LEN (server default)
+
+/** F12a: the mention token that turns a message into a TravelAI ask. */
+const BOT_MENTION_RE = /@travelai/i;
 
 /**
  * The plaintext fallback layer (F10): when no crypto hook is wired (or the
@@ -154,6 +161,8 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
   const actionsOpenedAtRef = useRef(0);
   // F9: which decision card is mid-unmark (one at a time, like row removals).
   const [busyDecisionId, setBusyDecisionId] = useState<string | null>(null);
+  // F12a: a @TravelAI ask is in flight — "TravelAI is typing…" placeholder.
+  const [botThinking, setBotThinking] = useState(false);
   const { decidedCommentIds } = controller;
   const decisions = state.decisions;
 
@@ -250,9 +259,48 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
     el.scrollTop = el.scrollHeight;
   }, [isChat, chronological.length, state.status, decisions.length]);
 
+  /**
+   * F12a: a @TravelAI ask is live while the draft mentions the bot (any
+   * casing — the server re-checks the gate authoritatively).
+   */
+  const botAskActive = canWrite && BOT_MENTION_RE.test(draft);
+
+  /**
+   * The client-fed grounding (user-confirmed: ask + last 8). Counts the last
+   * 8 messages readable through the crypto layer — which transparently covers
+   * e2ee rows AND legacy plaintext. Undecryptable rows (no key yet) are
+   * skipped honestly rather than shipped, tombstones never.
+   */
+  const botContextCount = useMemo(() => {
+    let count = 0;
+    for (let i = chronological.length - 1; i >= 0 && count < 8; i -= 1) {
+      const row = chronological[i];
+      if (row.deletedAt) continue;
+      if (cryptoApi.isEncrypted(row) && !cryptoApi.plaintextOf(row)) continue;
+      if (!row.body) continue;
+      count += 1;
+    }
+    return count;
+  }, [chronological, cryptoApi]);
+
+  /** Ships the grounding: the last 8 readable rows, most recent first. */
+  const buildBotContext = (): Array<{ label: string; text: string }> => {
+    const lines: Array<{ label: string; text: string }> = [];
+    for (let i = chronological.length - 1; i >= 0 && lines.length < 8; i -= 1) {
+      const row = chronological[i];
+      if (row.deletedAt) continue;
+      if (!row.body && !cryptoApi.isEncrypted(row)) continue;
+      if (cryptoApi.isEncrypted(row) && !cryptoApi.plaintextOf(row)) continue;
+      lines.push({ label: row.isYou ? "You" : row.label, text: bodyOf(row) });
+    }
+    return lines; // chronological → reversed server-side into the prompt
+  };
+
   const submit = async () => {
     const plain = draft.trim();
     if (!plain || state.submitting) return;
+    // Capture BEFORE the draft clears — the mention decides the F12a branch.
+    const botAsk = BOT_MENTION_RE.test(plain);
     try {
       // F10: encrypt before it leaves the browser (falls back to plaintext,
       // flagged honestly, when encryption is unavailable).
@@ -267,6 +315,35 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
       setDraft("");
       autosizeComposer();
       toast.success("Message sent");
+
+      if (!botAsk) return;
+      // F12a: ground with the last 8 messages BEFORE the question row lands,
+      // ask the server (THIS message + context go to the provider as
+      // plaintext — disclosed in the composer), then encrypt the answer into
+      // the thread as a bot:true row. Question already sent stays sent even
+      // if the ask fails — honest provenance, retriable ask.
+      const context = buildBotContext();
+      setBotThinking(true);
+      try {
+        const answer = await api.askTravelAI(tripId, { prompt: plain, context });
+        const replyPayload = await cryptoApi.encryptOutgoing(answer.reply);
+        const replyRow = await controller.addComment(
+          replyPayload.body,
+          anchorDay ?? undefined,
+          replyPayload.e2ee,
+          answer.reply, // optimistic bubble shows the words, persona and all
+          true // bot flag → renders as the TravelAI participant
+        );
+        if (replyRow && replyPayload.e2ee) {
+          cryptoApi.rememberPlaintext(replyRow._id, answer.reply);
+        }
+      } catch (err: any) {
+        toast.error(
+          err?.message || "TravelAI could not answer right now — try again in a moment."
+        );
+      } finally {
+        setBotThinking(false);
+      }
     } catch (err: any) {
       toast.error(err?.message || "Could not send your message. Please try again.");
     }
@@ -374,6 +451,33 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
                   ? ` and ${typingLabels.length - 2} more`
                   : ""
               } are typing…`}
+        </span>
+      </div>
+    ) : null;
+
+  const botThinkingLine = botThinking ? (
+    <div className="flex items-center gap-2 px-1 text-[11px] font-semibold text-violet-600 dark:text-violet-400">
+      <Bot className="h-3.5 w-3.5 shrink-0" />
+      <span>TravelAI is thinking…</span>
+    </div>
+  ) : null;
+
+  /**
+   * F12a disclosure (user-confirmed design): while the draft mentions
+   * @TravelAI, the composer states exactly what will leave the group's
+   * end-to-end envelope — THIS message plus the N most recent readable ones.
+   * Everyone else's rows never leave the trip unencrypted, and the answer
+   * comes back encrypted into the thread like any other message.
+   */
+  const botDisclosure =
+    botAskActive && !botThinking ? (
+      <div className="flex items-start gap-1.5 rounded-xl border border-violet-300/50 bg-violet-500/5 px-2.5 py-1.5 text-[11px] font-semibold leading-snug text-violet-700 dark:border-violet-500/30 dark:text-violet-300">
+        <Sparkles className="mt-px h-3.5 w-3.5 shrink-0" />
+        <span>
+          Asking TravelAI — sends this message plus{" "}
+          {botContextCount === 0 ? "no" : botContextCount} recent chat message
+          {botContextCount === 1 ? "" : "s"} (decrypted) to the AI provider. The
+          answer is encrypted into the thread like any other message.
         </span>
       </div>
     ) : null;
@@ -634,6 +738,8 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
           {/* Pinned composer — the chat's floor; typing line just above it */}
           <div className="shrink-0 space-y-1.5 border-t border-border/60 pt-3">
             {typingLine}
+            {botThinkingLine}
+            {botDisclosure}
             {composerBlock}
           </div>
         </>
@@ -713,6 +819,10 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
             )}
 
             {typingLine}
+
+            {botThinkingLine}
+
+            {botDisclosure}
 
             {composerBlock}
 
@@ -915,7 +1025,11 @@ const CommentRow: React.FC<CommentRowProps> = ({
     );
   }
 
-  const isMine = row.isYou;
+  // F12a: a bot row ALWAYS renders as the TravelAI participant — even for the
+  // asker who technically posted it. The persona is the product, not the
+  // authorship; that's why it sits on the incoming side with the AI avatar.
+  const isBot = Boolean(row.bot);
+  const isMine = row.isYou && !isBot;
 
   return (
     <div
@@ -938,9 +1052,15 @@ const CommentRow: React.FC<CommentRowProps> = ({
           against the right edge, self-evident by color and side. */}
       {!isMine && (
         <Avatar className="h-7 w-7 shrink-0 self-end">
-          <AvatarFallback className="text-[10px] font-bold bg-primary/10 text-primary">
-            {initialsFor(row.label)}
-          </AvatarFallback>
+          {isBot ? (
+            <AvatarFallback className="bg-violet-500/15 text-violet-600 dark:text-violet-300">
+              <Bot className="h-4 w-4" />
+            </AvatarFallback>
+          ) : (
+            <AvatarFallback className="text-[10px] font-bold bg-primary/10 text-primary">
+              {initialsFor(row.label)}
+            </AvatarFallback>
+          )}
         </Avatar>
       )}
 
@@ -949,14 +1069,31 @@ const CommentRow: React.FC<CommentRowProps> = ({
           "min-w-0 max-w-[85%] sm:max-w-[75%] rounded-2xl px-3 py-2 transition-shadow",
           isMine
             ? "bg-primary text-primary-foreground rounded-br-sm"
-            : "bg-muted text-foreground rounded-bl-sm",
+            : isBot
+              ? "bg-violet-500/10 text-foreground rounded-bl-sm"
+              : "bg-muted text-foreground rounded-bl-sm",
           actionsOpen && "ring-2 ring-primary/40"
         )}
       >
         {/* Group-chat sender name — only on incoming (your own need no label) */}
         {!isMine && (
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-[11px] font-bold text-primary">{row.label}</span>
+            <span
+              className={cn(
+                "text-[11px] font-bold",
+                isBot && "text-violet-600 dark:text-violet-300"
+              )}
+            >
+              {isBot ? "TravelAI" : row.label}
+            </span>
+            {isBot && (
+              <Badge
+                variant="outline"
+                className="text-[9px] px-1 py-0 h-3.5 gap-0.5 border-violet-400/50 text-violet-600 dark:text-violet-300"
+              >
+                <Sparkles className="h-2 w-2" /> AI
+              </Badge>
+            )}
             {row.day !== undefined && (
               <Badge
                 variant="outline"
