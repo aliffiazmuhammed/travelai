@@ -36,6 +36,9 @@ import {
   postTripComment,
   patchTripComment,
   deleteTripComment,
+  getDiscussionReadState,
+  markDiscussionRead,
+  sendTypingPing,
 } from '../controllers/collab.controller.js';
 import {
   getTripExpenses,
@@ -82,6 +85,7 @@ import {
   generateLimiter,
   inviteManageLimiter,
   publicShareLimiter,
+  typingPingLimiter,
 } from '../middleware/rateLimiter.middleware.js';
 import { handleReceiptUpload } from '../middleware/upload.middleware.js';
 
@@ -362,5 +366,23 @@ router.patch(
   patchTripComment
 );
 router.delete('/:id/comments/:commentId', protect, requireTripRole('viewer'), deleteTripComment);
+
+// Discussion extras (Milestone 7, F8a). Read state is its own collection —
+// marking read must never touch Trip.rev (§F8a). Typing is viewer-ranked like
+// the rest of the live tier and entirely stateless server-side.
+router.get(
+  '/:id/comments/read-state',
+  protect,
+  requireTripRole('viewer'),
+  getDiscussionReadState
+);
+router.post('/:id/comments/read', protect, requireTripRole('viewer'), markDiscussionRead);
+router.post(
+  '/:id/events/typing',
+  protect,
+  requireTripRole('viewer'),
+  typingPingLimiter,
+  sendTypingPing
+);
 
 export default router;

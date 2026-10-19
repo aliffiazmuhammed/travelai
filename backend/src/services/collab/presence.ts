@@ -34,7 +34,14 @@ export type TripEvent =
    * member (see the note in services/collab/comments.ts).
    */
   | { type: 'comment:new'; tripId: string; comment: unknown }
-  | { type: 'comment:update'; tripId: string; comment: unknown };
+  | { type: 'comment:update'; tripId: string; comment: unknown }
+  /**
+   * Typing signal (Milestone 7, F8a). STATELESS by design: nothing is stored
+   * server-side — the writer pings, everyone's client shows the indicator for
+   * ~5s after the last frame and expires it itself. Same rule as presence:
+   * decoration, never authorization, never durable.
+   */
+  | { type: 'typing'; tripId: string; userId: string; label: string };
 
 const presenceByTrip = new Map<string, Map<string, PresenceEntry>>();
 const listeners = new Set<Listener>();
@@ -127,6 +134,20 @@ export function emitCommentEvent(
 ): void {
   if (!tripId) return;
   emit(tripId, { ...frame, tripId } as TripEvent);
+}
+
+/**
+ * Fan-out for a "I'm composing" ping (Milestone 7, F8a). Deliberately
+ * stateless: no map, no TTL sweep, no roster — the client itself expires the
+ * indicator ~5s after the last received frame, so a dropped ping costs nothing
+ * and a spammy client is bounded by its route limiter alone.
+ */
+export function emitTypingFrame(
+  tripId: string,
+  user: { userId: string; label: string }
+): void {
+  if (!tripId) return;
+  emit(tripId, { type: 'typing', tripId, userId: user.userId, label: user.label });
 }
 
 function emit(tripId: string, event: TripEvent): void {

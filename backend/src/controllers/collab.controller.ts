@@ -25,6 +25,7 @@ import {
 } from '../services/collab/members.js';
 import {
   broadcastPresence,
+  emitTypingFrame,
   heartbeat,
   removePresence,
   subscribe,
@@ -36,6 +37,7 @@ import {
   loadTripComment,
   removeTripComment,
 } from '../services/collab/comments.js';
+import { markTripRead, resolveReadState } from '../services/collab/discussion.js';
 
 /**
  * Collaboration endpoints (Milestone 6, sprint E2).
@@ -259,6 +261,46 @@ export const deleteTripComment = catchAsync(
     );
     const comment = await removeTripComment(row, String(req.userId), role);
     res.status(200).json({ success: true, comment });
+  }
+);
+
+/* -------------------------------------------------------------------------- */
+/*  Discussion extras (F8a) — read state + typing                              */
+/* -------------------------------------------------------------------------- */
+
+/** GET /:id/comments/read-state — the caller's marker + unread count. */
+export const getDiscussionReadState = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { trip } = tripContext(req);
+    const state = await resolveReadState(String((trip as any)._id), String(req.userId));
+    res.status(200).json({ success: true, ...state });
+  }
+);
+
+/** POST /:id/comments/read — marks the whole stream read up to now. */
+export const markDiscussionRead = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { trip } = tripContext(req);
+    const state = await markTripRead(String((trip as any)._id), String(req.userId));
+    res.status(200).json({ success: true, ...state });
+  }
+);
+
+/**
+ * POST /:id/events/typing — "I'm composing" fan-out. Stateless (no server
+ * storage): every open client shows the indicator and expires it itself
+ * ~5s after the last frame. Deemed presence-adjacent decoration, which is
+ * why it shares the viewer rank with the rest of the live tier.
+ */
+export const sendTypingPing = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { trip } = tripContext(req);
+    const user = await User.findOne({ _id: req.userId }).select('email');
+    emitTypingFrame(String((trip as any)._id), {
+      userId: String(req.userId),
+      label: (user?.email || String(req.userId)).split('@')[0] || 'Traveler',
+    });
+    res.status(204).end();
   }
 );
 

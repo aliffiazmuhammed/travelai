@@ -158,6 +158,11 @@ test('guards declare the expected minimum roles (spot checks)', () => {
   // ex-editor still owns their words).
   assert.equal(minimumFor('PATCH', '/:id/comments/:commentId'), 'viewer');
   assert.equal(minimumFor('DELETE', '/:id/comments/:commentId'), 'viewer');
+  // Milestone 7 / F8a — read state + typing. Both viewer-ranked: live tier
+  // reads, never writes that touch the trip document.
+  assert.equal(minimumFor('GET', '/:id/comments/read-state'), 'viewer');
+  assert.equal(minimumFor('POST', '/:id/comments/read'), 'viewer');
+  assert.equal(minimumFor('POST', '/:id/events/typing'), 'viewer');
 });
 
 test('version-cap routes expose history only with the versions field loaded', () => {

@@ -96,6 +96,24 @@ export const commentCreateLimiter = rateLimit({
 });
 
 /**
+ * Typing pings (F8a): client sends at most one per ~2.5s while composing; the
+ * cap leaves comfortable headroom for normal use while bounding a stuck tab.
+ */
+export const typingPingLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 400,
+  keyGenerator: userOrIpKey,
+  validate: false,
+  message: {
+    success: false,
+    error: 'Too many typing signals. Please wait a moment.',
+    message: 'Too many typing signals. Please wait a moment.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
  * Public, unauthenticated endpoint — keyed on IP (F11, E5): the shared-trip
  * read needs an abuse brake because guessing share ids is exactly the model
  * of the attack. 120 reads / 15 min / IP comfortably covers a human opening
