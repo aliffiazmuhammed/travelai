@@ -1,6 +1,11 @@
 import { AppError } from '../../utils/AppError.js';
 import { env } from '../../config/env.js';
 import { generateWithFallback, type AIProvider } from '../ai/index.js';
+import {
+  ASSISTANT_PROPOSAL_JSON_MAX,
+  assistantProposalSchema,
+  type AssistantProposal,
+} from '../../schemas/assistant.schema.js';
 
 /**
  * The @TravelAI participant (Milestone 7, F12a) — answer-only assistant.
@@ -145,8 +150,15 @@ export function tripFactsFrom(trip: any): TripFacts {
  */
 export function buildAssistantPrompt(facts: TripFacts, question: string, context: AssistantContextItem[]): string {
   const sections: string[] = [
-    'You are TravelAI, a friendly trip-planning assistant participating in a group chat for one trip.',
-    'Answer in 1-4 short, plain sentences for a chat bubble. No markdown, no lists longer than 3 items. Be concrete about the trip below.',
+    'You are TravelAI, a trip-planning assistant participating in a group chat for one trip.',
+    'ALWAYS answer with ONLY one JSON object: {"text": "...", "proposal": null} or {"text": "...", "proposal": {...}}. No markdown, no code fences, no words outside the JSON. Numbers stay numbers.',
+    '"text" is your chat reply: 1-4 short, plain sentences for a chat bubble, no list longer than 3 items, concrete about the trip below.',
+    '"proposal" is either null, or ONE concrete itinerary change you suggest. It must be EXACTLY one of:',
+    '- {"kind":"title","value":"<new trip title, max 120 chars>"}',
+    '- {"kind":"budget","value":<positive number, budget per person in the trip currency>}',
+    '- {"kind":"day_title","day":<an existing day number>,"value":"<new title for that day, max 120 chars>"}',
+    '- {"kind":"day_tip","day":<an existing day number>,"value":"<one practical tip for that day, max 200 chars>"}',
+    'Use "day" ONLY for day numbers listed in the planned days below. Propose only when the ask clearly wants a change or an obvious improvement is worth offering — otherwise null.',
   ];
   const factsBlock: string[] = [];
   if (facts.title) factsBlock.push(`Trip: ${facts.title}`);
@@ -174,6 +186,60 @@ export function clampReply(raw: unknown): string {
   const clean = text.replace(/^```[a-z]*\n?|```$/gm, '').trim();
   if (!clean) throw new AppError('The assistant returned nothing. Try again.', 502);
   return clean.slice(0, ASSISTANT_RULES.REPLY_MAX);
+}
+
+/* -------------------------------------------------------------------------- */
+/*  F12b: the answer envelope (text + optional proposal)                       */
+/* -------------------------------------------------------------------------- */
+
+/** Wipes a single leading/trailing markdown fence pair around a JSON blob. */
+function stripOuterFences(raw: string): string {
+  return raw
+    .replace(/^```[a-z]*\s*/i, '')
+    .replace(/```\s*$/, '')
+    .trim();
+}
+
+/** Zod-guarded import of the model's proposal — anything malformed is null. */
+export function validateAssistantProposal(raw: unknown): AssistantProposal | null {
+  const result = assistantProposalSchema.safeParse(raw);
+  if (!result.success) return null;
+  // Serialized size backstop: reply + proposal must fit inside ONE encrypted
+  // comment (the meaning cap is COMMENT_MAX_LEN = 2000; see decisions doc).
+  if (JSON.stringify(result.data).length > ASSISTANT_PROPOSAL_JSON_MAX) return null;
+  return result.data;
+}
+
+/** A day-anchored proposal must point at a day the trip actually has. */
+export function proposalFitsTrip(proposal: AssistantProposal, facts: TripFacts): boolean {
+  if (!('day' in proposal)) return true;
+  if (!facts.days) return false; // no duration anchored → no day is safe
+  return proposal.day >= 1 && proposal.day <= facts.days;
+}
+
+/**
+ * Answers arrive as a strict JSON envelope (see buildAssistantPrompt) — but
+ * models drift, so EVERY failure degrades to a plain text bubble, never a
+ * 5xx: an unparseable reply is prose, a bad proposal is dropped, a missing
+ * text with a valid proposal gets a template line.
+ */
+export function parseAssistantAnswer(raw: unknown): { text: string; proposal: AssistantProposal | null } {
+  const source = String(raw || '').trim();
+  const unwrapped = stripOuterFences(source);
+  if (unwrapped.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(unwrapped);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const proposal = validateAssistantProposal((parsed as any).proposal);
+        let text = String((parsed as any).text || '').trim();
+        if (!text && proposal) text = 'Here is a proposed change for the trip.';
+        return { text: clampReply(text), proposal };
+      }
+    } catch {
+      /* the wrapper was prose that merely looked like JSON — fall through */
+    }
+  }
+  return { text: clampReply(source), proposal: null };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -233,7 +299,7 @@ export async function answerTravelAI(
   contextItems: unknown,
   memberLabels?: Set<string>,
   quotas: QuotaMap = dailyQuotas
-): Promise<{ reply: string; provider: AIProvider; cached: boolean }> {
+): Promise<{ reply: string; provider: AIProvider; cached: boolean; proposal: AssistantProposal | null }> {
   const tripId = String((trip as any)._id);
 
   // Shape first (a rejected ask costs the provider nothing, so it also costs
@@ -244,11 +310,14 @@ export async function answerTravelAI(
   const composed = buildAssistantPrompt(facts, question, context);
 
   const result = await generateWithFallback(composed); // Gemini → GROQ → cache
-  const reply = clampReply(result.text);
+  const { text, proposal } = parseAssistantAnswer(result.text);
+  // A proposal pointing past the itinerary is as good as malformed — drop it
+  // rather than hand the client a card that cannot apply.
+  const fits = proposal && proposalFitsTrip(proposal, facts) ? proposal : null;
 
   // Day anchoring of the answer bubble is the client's call (it posts the
   // reply row itself, encrypted); the server stays out of chat layout.
-  return { reply, provider: result.provider, cached: result.cached };
+  return { reply: text, proposal: fits, provider: result.provider, cached: result.cached };
 }
 
 /** Process-wide budget buckets — restart resets them by design. */

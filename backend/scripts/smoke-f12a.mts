@@ -1,8 +1,8 @@
 /**
- * Live smoke test for Milestone 7 sprint F12a (@TravelAI assistant).
- * Run with the API server up — IDEALLY with a tight daily budget so the cap
- * is exercised live without provider spend:
- *   $env:BOT_DAILY_LIMIT='1'; npm start        (respects SMOKE_PORT=5059)
+ * Live smoke test for Milestone 7 sprints F12a–F12b (@TravelAI assistant +
+ * proposal cards). Run with the API server up — IDEALLY with a tight daily
+ * budget so the cap is exercised live without provider spend:
+ *   $env:BOT_DAILY_LIMIT='2'; npm start        (respects SMOKE_PORT=5059)
  *   npx tsx scripts/smoke-f12a.mts
  *
  * NOTE: the auth limiter is 10 signins / 15 min / IP and lives IN MEMORY —
@@ -10,9 +10,11 @@
  *
  * Covers: the mention gate (missing mention → 400), shape walls (over-cap
  * prompt, >8 context lines, >500-char context line), a non-member 404, the
- * viewer rank floor, TWO real provider calls (per-user daily buckets: alice
- * burns the limit of 1, her second ask 429s, bob's own bucket still works),
- * and bot-flagged comment rows round-tripping (post → GET → projected).
+ * viewer rank floor, FOUR real provider calls (per-user daily buckets: alice
+ * burns the limit of 2 — one text ask + one proposal ask — her third ask
+ * 429s, bob's own bucket still works), the F12b answer envelope (a proposal
+ * is null or one of the four typed kinds), and bot-flagged comment rows
+ * round-tripping (post → GET → projected).
  */
 import 'dotenv/config';
 import mongoose from 'mongoose';
@@ -123,26 +125,31 @@ async function main() {
   await signin(BOB_EMAIL);
   await signin(EVE_EMAIL);
 
-  /* ------------------------------- walls ---------------------------------- */
+  /* ------------------------------- walls ---------------------------------- *
+   * Assigned to BOB so ALICE's limiter window stays free for the budgeted
+   * asks below — the burst limiter counts REJECTED asks too (unlike the daily
+   * quota, which deliberately costs nothing for a shape-rejected ask), five
+   * fast probes would otherwise trip `assistantAskLimiter`.
+   * ------------------------------------------------------------------------ */
   const stranger = await ask(EVE_EMAIL, { prompt: '@TravelAI hi' });
   check('a stranger cannot ask (404)', stranger.status === 404, stranger.status);
 
-  const noMention = await ask(ALICE_EMAIL, { prompt: 'eat where?' });
+  const noMention = await ask(BOB_EMAIL, { prompt: 'eat where?' });
   check('asking WITHOUT the @TravelAI mention is a 400 (primary brake)', noMention.status === 400, noMention.body);
 
-  const longPrompt = await ask(ALICE_EMAIL, { prompt: `@TravelAI ${'x'.repeat(500)}` });
+  const longPrompt = await ask(BOB_EMAIL, { prompt: `@TravelAI ${'x'.repeat(500)}` });
   check('a prompt over 500 chars is a 400', longPrompt.status === 400, longPrompt.status);
 
   const nineLines = Array.from({ length: 9 }, (_, i) => ({ label: `m${i}`, text: 'hi' }));
-  const tooManyLines = await ask(ALICE_EMAIL, { prompt: '@TravelAI hi', context: nineLines });
+  const tooManyLines = await ask(BOB_EMAIL, { prompt: '@TravelAI hi', context: nineLines });
   check('more than 8 context lines is a 400', tooManyLines.status === 400, tooManyLines.status);
 
-  const longLine = await ask(ALICE_EMAIL, { prompt: '@TravelAI hi', context: [{ label: 'bob', text: 'x'.repeat(501) }] });
+  const longLine = await ask(BOB_EMAIL, { prompt: '@TravelAI hi', context: [{ label: 'bob', text: 'x'.repeat(501) }] });
   check('a context line over 500 chars is a 400', longLine.status === 400, longLine.status);
 
   /* --------------------- live provider calls (budgeted) -------------------- */
   const dailyLimit = Number(process.env.BOT_DAILY_LIMIT || 0);
-  if (dailyLimit === 1) {
+  if (dailyLimit === 2) {
     const good = await ask(ALICE_EMAIL, {
       prompt: '@TravelAI what should we eat on day 1?',
       context: [{ label: 'bob', text: 'I love seafood but not too spicy' }],
@@ -151,15 +158,34 @@ async function main() {
     check('the answer fits the reply cap (≤800)', typeof good.body?.reply === 'string' && good.body.reply.length <= 800, good.body?.reply?.length);
     check('the provider is named', ['gemini', 'groq', 'cache'].includes(good.body?.provider), good.body?.provider);
 
-    const second = await ask(ALICE_EMAIL, { prompt: '@TravelAI again?' });
-    check('a second ask same user+trip+day hits the daily budget (429)', second.status === 429, second.status);
+    // F12b: an explicit change request — the answer may carry ONE typed proposal.
+    const proposalAsk = await ask(ALICE_EMAIL, {
+      prompt: '@TravelAI propose a better title for day 1',
+      context: [{ label: 'bob', text: 'day 1 should start with sunrise views at the beach' }],
+    });
+    const proposal = proposalAsk.body?.proposal;
+    check('the proposal ask returns a clamped text answer (200)', proposalAsk.status === 200 && typeof proposalAsk.body?.reply === 'string' && proposalAsk.body.reply.length > 0, proposalAsk.body);
+    check(
+      'the proposal (if any) is one of the four typed kinds',
+      proposal === null || proposal === undefined || ['title', 'budget', 'day_title', 'day_tip'].includes(proposal?.kind),
+      proposal
+    );
+    check(
+      'a day-anchored proposal points inside the trip (server fact check)',
+      proposal?.kind !== 'day_title' && proposal?.kind !== 'day_tip' || (proposal.day >= 1 && proposal.day <= 2),
+      proposal
+    );
+
+    const third = await ask(ALICE_EMAIL, { prompt: '@TravelAI again?' });
+    const thirdMsg = String(third.body?.error || third.body?.message || '');
+    check('a third ask same user+trip+day hits the DAILY budget (429 with the quota wording, not the burst limiter)', third.status === 429 && thirdMsg.includes('ask limit'), thirdMsg);
 
     const bobAsk = await ask(BOB_EMAIL, {
       prompt: '@travelai any cheap breakfast near the hotel?',
     });
     check('another user has their OWN bucket (bob, a viewer, asks fine)', bobAsk.status === 200, bobAsk.body);
   } else {
-    check(`daily budget not set to 1 (got ${dailyLimit || 'default'}) — cap scenario SKIPPED (unit-covered)`, true);
+    check(`daily budget not set to 2 (got ${dailyLimit || 'default'}) — cap + proposal scenarios SKIPPED (unit-covered)`, true);
   }
 
   /* ----------------- bot-flagged comment rows (persona flag) ---------------- */

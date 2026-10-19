@@ -8,9 +8,12 @@ import {
   clampReply,
   consumeDailyQuota,
   dayKeyFor,
+  parseAssistantAnswer,
+  proposalFitsTrip,
   quotaKey,
   stripMention,
   tripFactsFrom,
+  validateAssistantProposal,
   type QuotaMap,
 } from './assistant.js';
 import { AppError } from '../../utils/AppError.js';
@@ -206,3 +209,93 @@ function rewrite(fn: () => unknown): unknown {
     return error;
   }
 }
+
+/* ---------------------------- F12b answer envelope -------------------------- */
+
+test('parseAssistantAnswer: plain prose degrades to a text-only answer (F12a replies stay valid)', () => {
+  const { text, proposal } = parseAssistantAnswer('Seafood at the night market, hands down.');
+  assert.equal(text, 'Seafood at the night market, hands down.');
+  assert.equal(proposal, null);
+});
+
+test('parseAssistantAnswer: the JSON envelope parses with or without fences', () => {
+  const envelope = '{"text":"Day 2 could breathe more.","proposal":{"kind":"day_title","day":2,"value":"Free afternoon"}}';
+  const fenced = '```json\n' + envelope + '\n```';
+  for (const raw of [envelope, fenced]) {
+    const parsed = parseAssistantAnswer(raw);
+    assert.equal(parsed.text, 'Day 2 could breathe more.');
+    assert.deepEqual(parsed.proposal, { kind: 'day_title', day: 2, value: 'Free afternoon' });
+  }
+});
+
+test('parseAssistantAnswer: prose that merely looks like JSON stays prose', () => {
+  const raw = '{Hello, this is not JSON';
+  const parsed = parseAssistantAnswer(raw);
+  assert.equal(parsed.text, raw);
+  assert.equal(parsed.proposal, null);
+});
+
+test('parseAssistantAnswer: a malformed proposal is dropped, the text survives', () => {
+  const parsed = parseAssistantAnswer(
+    '{"text":"Maybe this?","proposal":{"kind":"explode_everything","boom":true}}'
+  );
+  assert.equal(parsed.text, 'Maybe this?');
+  assert.equal(parsed.proposal, null);
+});
+
+test('parseAssistantAnswer: an empty text with a valid proposal gets a template line', () => {
+  const parsed = parseAssistantAnswer('{"text":"","proposal":{"kind":"title","value":"Goa Sunrise"}}');
+  assert.ok(parsed.text.length > 0, 'a proposal-only answer still shows something');
+  assert.deepEqual(parsed.proposal, { kind: 'title', value: 'Goa Sunrise' });
+});
+
+test('parseAssistantAnswer: a truncated JSON envelope degrades to prose, not a crash', () => {
+  const truncated = '{"text":"","proposal":{"kind":"title","value":"Goa Sunrise"}';
+  const parsed = parseAssistantAnswer(truncated);
+  assert.equal(parsed.proposal, null);
+  assert.ok(parsed.text.length > 0);
+});
+
+test('validateAssistantProposal: caps and shape — junk drops', () => {
+  assert.equal(validateAssistantProposal(null), null);
+  assert.equal(validateAssistantProposal('title'), null);
+  assert.equal(validateAssistantProposal({ kind: 'unkind' }), null);
+  assert.equal(validateAssistantProposal({ kind: 'day_title', day: 99, value: '' }), null); // empty value
+});
+
+test('validateAssistantProposal: budget accepts numeric strings through coerce', () => {
+  assert.deepEqual(validateAssistantProposal({ kind: 'budget', value: '15000' }), {
+    kind: 'budget',
+    value: 15000,
+  });
+  assert.equal(validateAssistantProposal({ kind: 'budget', value: 0 }), null);
+  assert.equal(validateAssistantProposal({ kind: 'budget', value: -5 }), null);
+});
+
+test('validateAssistantProposal: the serialized backstop keeps proposals inside one comment', () => {
+  // 200 code points fit; ~800 chars of JSON do not.
+  assert.ok(validateAssistantProposal({ kind: 'day_tip', day: 3, value: 't'.repeat(200) }));
+  assert.equal(
+    validateAssistantProposal({ kind: 'title', value: 'a'.repeat(400) }),
+    null,
+    'an over-cap title is rejected by zod before the size backstop'
+  );
+});
+
+test('proposalFitsTrip: day-anchored proposals need a day the trip actually has', () => {
+  const facts = tripFactsFrom({
+    tripDetails: { trip_title: 'T', duration_days: 2 },
+  });
+  assert.equal(proposalFitsTrip({ kind: 'day_title', day: 2, value: 'x' }, facts), true);
+  assert.equal(proposalFitsTrip({ kind: 'day_title', day: 3, value: 'x' }, facts), false);
+  assert.equal(proposalFitsTrip({ kind: 'title', value: 'x' }, facts), true);
+  assert.equal(proposalFitsTrip({ kind: 'day_tip', day: 1, value: 'x' }, { title: 'No day count' }), false);
+});
+
+test('buildAssistantPrompt: the JSON protocol is compiled into the prompt', () => {
+  const facts = tripFactsFrom({ tripDetails: { trip_title: 'T', duration_days: 2 } });
+  const composed = buildAssistantPrompt(facts, 'q', []);
+  assert.ok(composed.includes('"proposal"'));
+  assert.ok(composed.includes('"day_title"'));
+  assert.ok(composed.includes('day numbers listed in the planned days'));
+});

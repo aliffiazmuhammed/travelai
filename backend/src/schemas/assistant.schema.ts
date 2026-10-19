@@ -35,3 +35,47 @@ export const assistantRequestSchema = z.object({
 
 /** Wire budget: the total plaintext the provider ever sees from one ask. */
 export const ASSISTANT_WIRE_BUDGET = 6000;
+
+/* -------------------------------------------------------------------------- */
+/*  F12b proposals — ONE typed itinerary change the assistant may suggest      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A proposal is the model's SUGGESTION, never an applied edit: it rides back
+ * to the asker's browser, gets encrypted into the thread as part of the bot
+ * bubble, and a human contributor taps Apply — which goes through the normal
+ * `PUT /:id` update endpoint (editor floor, required `baseRev`, snapshotted
+ * like any other edit). Kinds are deliberately bounded to fields the client
+ * can patch non-destructively; structural reshuffles (move/add/remove days,
+ * destination swaps) stay future work.
+ */
+export const assistantProposalSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('title'),
+    /** New `tripDetails.trip_title`. */
+    value: z.string().trim().min(1).max(120),
+  }),
+  z.object({
+    kind: z.literal('budget'),
+    /** New `tripDetails.budget_per_person`. */
+    value: z.coerce.number().positive().max(99999999),
+  }),
+  z.object({
+    kind: z.literal('day_title'),
+    /** Existing day number (checked against the trip's duration before use). */
+    day: z.coerce.number().int().min(1).max(999),
+    value: z.string().trim().min(1).max(120),
+  }),
+  z.object({
+    kind: z.literal('day_tip'),
+    day: z.coerce.number().int().min(1).max(999),
+    /** Adds one entry to that day's `pro_tip` list. */
+    value: z.string().trim().min(1).max(200),
+  }),
+]);
+
+export type AssistantProposal = z.infer<typeof assistantProposalSchema>;
+
+/** Serialized-proposal backstop: reply (≤800) + proposal must fit one comment. */
+export const ASSISTANT_PROPOSAL_JSON_MAX = 800;
+
