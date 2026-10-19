@@ -35,6 +35,7 @@ import { WeatherRoutingCard } from "./dashboard/WeatherRoutingCard";
 import { DayAlternativeDialog } from "./dashboard/DayAlternativeDialog";
 import { TripMembers } from "./dashboard/TripMembers";
 import { CommentsTab } from "./dashboard/CommentsTab";
+import { DiscussionDrawer } from "./dashboard/DiscussionDrawer";
 import { useTripComments } from "@/hooks/useTripComments";
 import { useTripEvents, type PresenceUser } from "@/hooks/useTripEvents";
 import { endDateFromStart, itineraryAnchor, zipWeatherToDays } from "@/lib/weather";
@@ -190,16 +191,33 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
   // F6b: the comment state is owned HERE (next to the single EventSource) and
   // handed down to CommentsTab — frames land in it no matter which tab the
   // user is on, and duplicates are impossible because dedupe happens by `_id`.
-  const commentsController = useTripComments(showCommentsTab ? tripId : undefined);
+  // The Discuss tab is reachable two ways since F8b: as a tab and as the
+  // floating drawer. `activeTab` is the single controlled source, so the FAB
+  // hides while the tab is open and the read marker flushes on either entry.
+  const [activeTab, setActiveTab] = useState<string>("timeline");
+
+  const commentsController = useTripComments(
+    showCommentsTab ? tripId : undefined,
+    currentUserId
+  );
   const commentsIngestRef = useRef(commentsController.ingest);
   commentsIngestRef.current = commentsController.ingest;
+  const commentsTypingRef = useRef(commentsController.ingestTyping);
+  commentsTypingRef.current = commentsController.ingestTyping;
 
   const livePresence = useTripEvents(isRealTrip ? tripId : undefined, {
     onTripUpdated: () => {
       void liveRefresh();
     },
     onCommentEvent: (frame) => commentsIngestRef.current(frame),
+    onTypingEvent: (frame) => commentsTypingRef.current(frame),
   });
+
+  /** Tab switch; a move INTO/OUT OF the Discuss tab is a surface open/close. */
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    if (showCommentsTab) commentsController.setOpen(tab === "comments");
+  };
 
   // --- Weather advisories (Milestone 4.4) ---
   const [weatherByDay, setWeatherByDay] = useState<Record<number, DailyWeather>>({});
@@ -582,7 +600,11 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
       )}
 
       {/* 2. Main Multi-View Tabs Navigation */}
-      <Tabs defaultValue="timeline" className="w-full space-y-6">
+      <Tabs
+        value={activeTab}
+        onValueChange={handleTabChange}
+        className="w-full space-y-6"
+      >
         <div className="sticky top-16 z-30 bg-background/85 backdrop-blur-md py-2 -mx-2 px-2">
           <TabsList
             className={cn(
@@ -675,6 +697,14 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
               >
                 <MessageCircle className="w-3.5 h-3.5" />
                 <span className="hidden lg:inline">Discuss</span>
+                {commentsController.state.unread > 0 && (
+                  <span
+                    className="min-w-4 h-4 px-1 rounded-full bg-destructive text-destructive-foreground text-[9px] font-black grid place-items-center"
+                    title={`${commentsController.state.unread} unread`}
+                  >
+                    {commentsController.state.unread > 9 ? "9+" : commentsController.state.unread}
+                  </span>
+                )}
               </TabsTrigger>
             )}
           </TabsList>
@@ -795,10 +825,24 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
               myRole={role!}
               days={safeData.duration_days}
               controller={commentsController}
+              typingLabels={commentsController.typingLabels}
+              onTyping={commentsController.notifyTyping}
             />
           </TabsContent>
         )}
       </Tabs>
+
+      {/* Floating discussion drawer (Milestone 7, F8b) — reachable from every
+          tab; hidden while the Discuss tab itself is showing. */}
+      {showCommentsTab && tripId && role && (
+        <DiscussionDrawer
+          tripId={tripId}
+          myRole={role}
+          days={safeData.duration_days}
+          controller={commentsController}
+          hidden={activeTab === "comments"}
+        />
+      )}
 
       {/* Weather-aware day alternative (Milestone 4.4) */}
       <DayAlternativeDialog

@@ -1,7 +1,7 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '@/services/api';
 import type { TripComment } from '@/types';
-import type { CommentFrame } from '@/hooks/useTripEvents';
+import type { CommentFrame, TypingFrame } from '@/hooks/useTripEvents';
 
 /**
  * Trip comments state (Milestone 6 §19.7 / §20, sprint F6b).
@@ -33,6 +33,17 @@ export interface TripCommentsState {
   status: 'idle' | 'loading' | 'ready' | 'error';
   loadingEarlier: boolean;
   submitting: boolean;
+  /** Unread count (Milestone 7 F8b): server-seeded, frame-bumped, flush-on-open. */
+  unread: number;
+  /** Other members currently "typing" (F8b), freshest first, ≤3 entries. */
+  typing: TypingEntry[];
+}
+
+export interface TypingEntry {
+  userId: string;
+  label: string;
+  /** Injection instant; consumers expire entries older than TYPING_TTL_MS. */
+  at: number;
 }
 
 export interface UseTripComments {
@@ -46,7 +57,22 @@ export interface UseTripComments {
   removeComment: (comment: TripComment) => Promise<void>;
   /** Live ingest — wired to `useTripEvents.onCommentEvent`. */
   ingest: (frame: CommentFrame) => void;
+  /**
+   * Marks a chat surface open/closed (F8b). Opening flushes the read marker
+   * (`POST /comments/read`) and zeroes the badge; while closed, unknown
+   * foreign rows arriving by frame tick the badge instead.
+   */
+  setOpen: (open: boolean) => void;
+  /** Throttled "I'm composing" ping — call from the composer keystrokes. */
+  notifyTyping: () => void;
+  /** Live ingest for typing pings — wired to `useTripEvents.onTypingEvent`. */
+  ingestTyping: (frame: TypingFrame) => void;
+  /** Labels on screen right now, derived from `state.typing`. */
+  typingLabels: string[];
 }
+
+const TYPING_TTL_MS = 5000; // mirrors the F8a contract (client-side expiry)
+const TYPING_PING_INTERVAL_MS = 2500; // client throttle; well under the 400/15min cap
 
 /** Merges one row into the newest-first list by `_id`: patch in place, else prepend. */
 function mergeRow(list: TripComment[], row: TripComment, markMine: boolean): TripComment[] {
@@ -58,7 +84,10 @@ function mergeRow(list: TripComment[], row: TripComment, markMine: boolean): Tri
   return next;
 }
 
-export function useTripComments(tripId?: string): UseTripComments {
+export function useTripComments(
+  tripId?: string,
+  currentUserId?: string
+): UseTripComments {
   const [state, setState] = useState<TripCommentsState>({
     comments: [],
     dayCounts: {},
@@ -66,6 +95,8 @@ export function useTripComments(tripId?: string): UseTripComments {
     status: 'idle',
     loadingEarlier: false,
     submitting: false,
+    unread: 0,
+    typing: [],
   });
 
   // Ref mirrors so event handlers never read state inside a setState updater
@@ -73,6 +104,11 @@ export function useTripComments(tripId?: string): UseTripComments {
   const bootstrapped = useRef(false); // guards a double first fetch
   const cursorRef = useRef<string | null>(null);
   const loadingEarlierRef = useRef(false);
+  // F8b mirrors: is a chat surface open? which rows did THIS client author?
+  const openRef = useRef(false);
+  const mineRef = useRef<Set<string>>(new Set());
+  const currentUserIdRef = useRef(currentUserId);
+  currentUserIdRef.current = currentUserId;
 
   /** Applies one server-shaped comment and marks it ours only when ours. */
   const applyRow = useCallback((row: TripComment, mine: boolean) => {
@@ -88,6 +124,28 @@ export function useTripComments(tripId?: string): UseTripComments {
       return { ...prev, dayCounts: { ...prev.dayCounts, [key]: next } };
     });
   }, []);
+
+  /* ------------------------------------------------------------------ */
+  /*  Unread badge (Milestone 7, F8b)                                    */
+  /* ------------------------------------------------------------------ */
+
+  // Seed from server truth once per trip open. The first GET also stamps the
+  // marker (the backend's baseline rule), so a brand-new viewer starts at 0.
+  useEffect(() => {
+    if (!tripId) return;
+    let alive = true;
+    void (async () => {
+      try {
+        const result = await api.getTripReadState(tripId);
+        if (alive) setState((prev) => ({ ...prev, unread: result.unread || 0 }));
+      } catch {
+        /* no badge is better than a wrong badge — leave the seed at 0 */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [tripId]);
 
   const ensureLoaded = useCallback(() => {
     if (!tripId || bootstrapped.current) return;
@@ -171,6 +229,9 @@ export function useTripComments(tripId?: string): UseTripComments {
           body,
           ...(day !== undefined ? { day } : {}),
         });
+        // The authoritative row is OURS by construction (§20.2): record the id
+        // so a racing frame can never count our own words as unread.
+        mineRef.current.add(result.comment._id);
         setState((prev) => ({
           ...prev,
           // Drop the placeholder AND any same-_id row a frame may have raced
@@ -235,13 +296,28 @@ export function useTripComments(tripId?: string): UseTripComments {
   );
 
   /**
-   * Live ingest — pure dedupe, no refetch, no dayCounts guessing: an unknown
-   * row's chip count only becomes exact on the next `ensureLoaded`.
+   * Live ingest — pure dedupe, no refetch. F8b additions: an UNKNOWN foreign
+   * row bumps the unread badge when no chat surface is open (our own rows via
+   * POST responses are pre-registered in `mineRef`, so they never count), and
+   * both directions nudge the day-chip counts so the F6b2 badges stay honest
+   * between server reads.
    */
   const ingest = useCallback((frame: CommentFrame) => {
     if (!frame?.comment?._id) return;
+    const row = frame.comment;
+    const tombstoned = Boolean(row.deletedAt);
+    if (tombstoned) {
+      bumpDayCount(row.day, -1);
+    } else if (!mineRef.current.has(row._id)) {
+      bumpDayCount(row.day, +1);
+      // Accepted F8b limit (documented in §2.2): the projection carries no
+      // userId, so a comment you posted from ANOTHER device can tick this
+      // device's badge until the next server re-sync.
+      if (!openRef.current) {
+        setState((prev) => ({ ...prev, unread: prev.unread + 1 }));
+      }
+    }
     setState((prev) => {
-      const row = frame.comment;
       const had = prev.comments.some((existing) => existing._id === row._id);
       return {
         ...prev,
@@ -250,7 +326,68 @@ export function useTripComments(tripId?: string): UseTripComments {
           : [row, ...prev.comments],
       };
     });
+  }, [bumpDayCount]);
+
+  /** Marks a chat surface open/closed; opening flushes the read marker. */
+  const setOpen = useCallback(
+    (open: boolean) => {
+      openRef.current = open;
+      if (!open || !tripId) return;
+      setState((prev) => (prev.unread === 0 ? prev : { ...prev, unread: 0 }));
+      void api.markTripRead(tripId).catch(() => {
+        /* the badge is already at 0 locally; the next seed/load re-syncs */
+      });
+    },
+    [tripId]
+  );
+
+  /* ------------------------------------------------------------------ */
+  /*  Typing indicator (F8b)                                             */
+  /* ------------------------------------------------------------------ */
+
+  const lastTypingPing = useRef(0);
+  const typingRef = useRef<TypingEntry[]>([]);
+  const [typing, setTyping] = useState<TypingEntry[]>([]);
+
+  /** Throttled outbound ping — decoration, dropped silently on failures. */
+  const notifyTyping = useCallback(() => {
+    if (!tripId) return;
+    const now = Date.now();
+    if (now - lastTypingPing.current < TYPING_PING_INTERVAL_MS) return;
+    lastTypingPing.current = now;
+    void api.sendTypingPing(tripId);
+  }, [tripId]);
+
+  /** Ingests one `typing` frame; own echo filtered, one entry per author. */
+  const ingestTyping = useCallback((frame: TypingFrame) => {
+    if (!frame?.userId) return;
+    if (currentUserIdRef.current && frame.userId === currentUserIdRef.current) return;
+    const entry: TypingEntry = { userId: frame.userId, label: frame.label, at: Date.now() };
+    typingRef.current = [
+      entry,
+      ...typingRef.current.filter((existing) => existing.userId !== frame.userId),
+    ].slice(0, 3);
+    setTyping(typingRef.current);
   }, []);
+
+  // The prune interval runs only while something is on screen; each client
+  // expires the indicator TYPING_TTL_MS after that author's last frame — the
+  // stateless half of the F8a contract (no server roster, no disconnect ping).
+  useEffect(() => {
+    if (state.typing.length === 0) return;
+    const timer = window.setInterval(() => {
+      const cutoff = Date.now() - TYPING_TTL_MS;
+      const expiredNow = typingRef.current.some((entry) => entry.at <= cutoff);
+      typingRef.current = typingRef.current.filter((entry) => entry.at > cutoff);
+      if (expiredNow) setTyping(typingRef.current);
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [state.typing.length]);
+
+  const typingLabels = useMemo(
+    () => state.typing.map((entry) => entry.label),
+    [state.typing]
+  );
 
   return {
     state,
@@ -260,5 +397,9 @@ export function useTripComments(tripId?: string): UseTripComments {
     editComment,
     removeComment,
     ingest,
+    setOpen,
+    notifyTyping,
+    ingestTyping,
+    typingLabels,
   };
 }

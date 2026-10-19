@@ -48,6 +48,10 @@ interface CommentsTabProps {
   days?: number;
   /** The shared comment state owned by ItineraryDisplay / useTripComments. */
   controller: UseTripComments;
+  /** Other members currently "typing…" (F8b) — auto-expired upstream. */
+  typingLabels?: string[];
+  /** Composer keystroke hook for the throttled "I'm composing" ping (F8b). */
+  onTyping?: () => void;
 }
 
 const COMMENT_MAX_LEN = 2000; // mirrors COMMENT_MAX_LEN (server default)
@@ -78,6 +82,8 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
   myRole,
   days,
   controller,
+  typingLabels = [],
+  onTyping,
 }) => {
   const { state } = controller;
   const { comments, dayCounts } = state;
@@ -225,12 +231,32 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
             </div>
           )}
 
-          {/* Composer — rank-aware (§19.7) */}
+          {/* Composer — rank-aware (§19.7); typing line sits just above it */}
+          {typingLabels.length > 0 && (
+            <div className="flex items-center gap-2 px-1 text-[11px] font-semibold text-primary">
+              <span className="relative flex h-2 w-2 shrink-0">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-60" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+              </span>
+              <span className="truncate">
+                {typingLabels.length === 1
+                  ? `${typingLabels[0]} is typing…`
+                  : `${typingLabels.slice(0, 2).join(", ")}${
+                      typingLabels.length > 2
+                        ? ` and ${typingLabels.length - 2} more`
+                        : ""
+                    } are typing…`}
+              </span>
+            </div>
+          )}
           {canWrite ? (
             <div className="space-y-2">
               <Textarea
                 value={draft}
-                onChange={(event) => setDraft(event.target.value)}
+                onChange={(event) => {
+                  setDraft(event.target.value);
+                  onTyping?.(); // throttled upstream; a 2.5s-silent composer stops pinging
+                }}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
                     event.preventDefault();
@@ -341,7 +367,10 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
                   isBusy={busyId === row._id}
                   editing={editingId === row._id}
                   editDraft={editDraft}
-                  onEditDraftChange={setEditDraft}
+                  onEditDraftChange={(value) => {
+                    setEditDraft(value);
+                    onTyping?.(); // editing is composition too
+                  }}
                   onStartEdit={() => startEdit(row)}
                   onSaveEdit={() => void saveEdit()}
                   onCancelEdit={cancelEdit}

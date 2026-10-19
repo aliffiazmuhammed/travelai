@@ -531,6 +531,28 @@ class ApiClient {
     return this.request(`/api/itinerary/${id}/comments/${commentId}`, { method: 'DELETE' });
   }
 
+  // Discussion extras (Milestone 7, F8a/F8b).
+  /** The caller's read marker + unread count (server truth; seeds the FAB badge). */
+  async getTripReadState(
+    id: string
+  ): Promise<{ success: boolean; lastReadAt: string; unread: number }> {
+    return this.request(`/api/itinerary/${id}/comments/read-state`);
+  }
+
+  /** Marks the whole stream read up to now (flushed when a chat surface opens). */
+  async markTripRead(id: string): Promise<{ success: boolean; lastReadAt: string; unread: number }> {
+    return this.request(`/api/itinerary/${id}/comments/read`, { method: 'POST' });
+  }
+
+  /** F8a — best-effort "I'm composing" ping (decoration; errors swallowed). */
+  async sendTypingPing(id: string): Promise<void> {
+    try {
+      await this.request(`/api/itinerary/${id}/events/typing`, { method: 'POST' });
+    } catch {
+      /* a dropped ping only skips one indicator blink — never worth surfacing */
+    }
+  }
+
   /** E4b — keep the SSE presence entry alive (decoration only; errors ignored). */
   async sendPresenceHeartbeat(id: string): Promise<void> {
     try {

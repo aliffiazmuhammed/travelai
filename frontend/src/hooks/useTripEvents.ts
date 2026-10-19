@@ -50,6 +50,8 @@ interface UseTripEventsOptions {
   onTripUpdated?: () => void;
   /** Called for every `comment:new` / `comment:update` frame (F6a/F6b). */
   onCommentEvent?: (frame: CommentFrame) => void;
+  /** Called for every `typing` frame (F8a/F8b) — stateless, client self-expired. */
+  onTypingEvent?: (frame: TypingFrame) => void;
   /** Heartbeat cadence; must stay below the server TTL (30s default). */
   heartbeatMs?: number;
 }
@@ -64,6 +66,19 @@ export type CommentFrame =
   | { type: 'comment:update'; tripId: string; comment: import('@/types').TripComment };
 
 /**
+ * A typing ping (Milestone 7 F8a). Stateless on both ends: there is no server
+ * roster and no reliable-delivery promise — the RECIPENT's client shows the
+ * indicator and expires it ~5s after the last frame for that author. `userId`
+ * lets consumers drop their own echo; `label` is display-only.
+ */
+export interface TypingFrame {
+  type: 'typing';
+  tripId: string;
+  userId: string;
+  label: string;
+}
+
+/**
  * mount an SSE stream + heartbeat loop for a trip. Returns the live roster
  * (empty when the tier is off or the stream could not open).
  */
@@ -71,7 +86,7 @@ export function useTripEvents(
   tripId?: string,
   options: UseTripEventsOptions = {}
 ): PresenceUser[] {
-  const { onTripUpdated, onCommentEvent, heartbeatMs = 10000 } = options;
+  const { onTripUpdated, onCommentEvent, onTypingEvent, heartbeatMs = 10000 } = options;
   const [presence, setPresence] = useState<PresenceUser[]>([]);
 
   // Latest callback without resubscribing the EventSource on re-render.
@@ -79,6 +94,8 @@ export function useTripEvents(
   onTripUpdatedRef.current = onTripUpdated;
   const onCommentEventRef = useRef(onCommentEvent);
   onCommentEventRef.current = onCommentEvent;
+  const onTypingEventRef = useRef(onTypingEvent);
+  onTypingEventRef.current = onTypingEvent;
 
   // Coalesce bursts of trip:updated into one refetch (a save touches many
   // routes; the UI needs one fresh read, not N).
@@ -118,6 +135,8 @@ export function useTripEvents(
               notifyUpdate();
             } else if (event?.type === 'comment:new' || event?.type === 'comment:update') {
               onCommentEventRef.current?.(event as CommentFrame);
+            } else if (event?.type === 'typing') {
+              onTypingEventRef.current?.(event as TypingFrame);
             }
           } catch {
             /* malformed frame — ignore, keep-alives stay as comments */
