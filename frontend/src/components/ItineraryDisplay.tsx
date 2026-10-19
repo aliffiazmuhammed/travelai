@@ -843,6 +843,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
           myRole={role}
           days={safeData.duration_days}
           controller={commentsController}
+          presence={livePresence}
           hidden={activeTab === "comments"}
         />
       )}

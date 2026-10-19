@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -53,6 +53,14 @@ interface CommentsTabProps {
   typingLabels?: string[];
   /** Composer keystroke hook for the throttled "I'm composing" ping (F8b). */
   onTyping?: () => void;
+  /**
+   * Surface shape (F8b §11): **'feed'** — the Discuss tab, newest-first with
+   * day filters; **'chat'** — the drawer, a real chat: chronological order
+   * with the newest message at the BOTTOM, composer pinned to the bottom
+   * edge, auto-scroll, no inner card/header (the drawer owns the header).
+   * One logic core, two shapes — the same controller drives both.
+   */
+  variant?: "feed" | "chat";
 }
 
 const COMMENT_MAX_LEN = 2000; // mirrors COMMENT_MAX_LEN (server default)
@@ -85,10 +93,12 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
   controller,
   typingLabels = [],
   onTyping,
+  variant = "feed",
 }) => {
   const { state } = controller;
   const { comments, dayCounts } = state;
   const canWrite = myRole !== "viewer";
+  const isChat = variant === "chat";
 
   const [dayFilter, setDayFilter] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
@@ -128,6 +138,34 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
     const max = Math.max(days || 0, ...dayChips, 0);
     return Array.from({ length: Math.max(0, max) }, (_, index) => index + 1);
   }, [days, dayChips]);
+
+  /* --- Chat shape (variant='chat') -------------------------------------- */
+
+  // The chat reads CREATION order — the reverse of the newest-first stream —
+  // with fresh messages at the bottom and "load earlier" at the top.
+  const chronological = useMemo(
+    () => (isChat ? [...visible].reverse() : visible),
+    [isChat, visible]
+  );
+
+  const chatScrollRef = useRef<HTMLDivElement | null>(null);
+  // True while the reader hugs the newest message; scrolling up releases the
+  // pin so reading history is not yanked back down by a live arrival.
+  const nearBottomRef = useRef(true);
+
+  const handleChatScroll = (event: React.UIEvent<HTMLDivElement>) => {
+    const el = event.currentTarget;
+    nearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 90;
+  };
+
+  // Follow the tail: on mount (drawer opens with history), on every new row,
+  // and on decisions/strip changes — but only while the pin holds.
+  useEffect(() => {
+    if (!isChat) return;
+    const el = chatScrollRef.current;
+    if (!el || !nearBottomRef.current) return;
+    el.scrollTop = el.scrollHeight;
+  }, [isChat, chronological.length, state.status, decisions.length]);
 
   const submit = async () => {
     const body = draft.trim();
@@ -213,232 +251,289 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
     // ensureLoaded is idempotent per open; force a fresh attempt by reloading state
   };
 
+  /* ----------------------------------------------------------------------- */
+  /*  Shared fragments — one logic core, two surface shapes                   */
+  /* ----------------------------------------------------------------------- */
+
+  const typingLine =
+    typingLabels.length > 0 ? (
+      <div className="flex items-center gap-2 px-1 text-[11px] font-semibold text-primary">
+        <span className="relative flex h-2 w-2 shrink-0">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-60" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+        </span>
+        <span className="truncate">
+          {typingLabels.length === 1
+            ? `${typingLabels[0]} is typing…`
+            : `${typingLabels.slice(0, 2).join(", ")}${
+                typingLabels.length > 2
+                  ? ` and ${typingLabels.length - 2} more`
+                  : ""
+              } are typing…`}
+        </span>
+      </div>
+    ) : null;
+
+  const loadEarlierButton = state.nextCursor ? (
+    <div className="text-center">
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        disabled={state.loadingEarlier}
+        onClick={() => void controller.loadEarlier()}
+        className="rounded-xl text-xs font-bold gap-1.5 h-8 px-3 text-muted-foreground"
+      >
+        {state.loadingEarlier ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+        <span>Load earlier comments</span>
+      </Button>
+    </div>
+  ) : null;
+
+  const composerBlock = canWrite ? (
+    <div
+      className={cn(
+        "space-y-2",
+        isChat &&
+          "rounded-2xl border border-border/70 bg-card p-2 shadow-xs focus-within:border-primary/40 transition-colors"
+      )}
+    >
+      <Textarea
+        value={draft}
+        onChange={(event) => {
+          setDraft(event.target.value);
+          onTyping?.(); // throttled upstream; a 2.5s-silent composer stops pinging
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+            event.preventDefault();
+            void submit();
+          }
+        }}
+        placeholder={
+          anchorDay
+            ? `Message about Day ${anchorDay}…`
+            : isChat
+              ? "Message the trip…"
+              : "Share a thought about this trip…"
+        }
+        rows={2}
+        maxLength={COMMENT_MAX_LEN}
+        disabled={state.submitting}
+        className={cn(
+          isChat
+            ? "min-h-9 resize-none bg-transparent border-0 p-1.5 text-sm focus-visible:ring-0 shadow-none"
+            : "rounded-2xl text-sm resize-none"
+        )}
+      />
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setAnchorDay(null)}
+            className={cn(
+              "px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors",
+              anchorDay === null
+                ? "bg-primary/10 text-primary border-primary/30"
+                : "border-border/60 text-muted-foreground hover:text-foreground"
+            )}
+          >
+            Whole trip
+          </button>
+          {anchoredDays.slice(0, 12).map((day) => (
+            <button
+              key={day}
+              type="button"
+              onClick={() => setAnchorDay(anchorDay === day ? null : day)}
+              className={cn(
+                "px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors",
+                anchorDay === day
+                  ? "bg-primary/10 text-primary border-primary/30"
+                  : "border-border/60 text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {day}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-muted-foreground hidden sm:inline">
+            ⌘/Ctrl + Enter
+          </span>
+          <Button
+            type="button"
+            size="sm"
+            variant="hero"
+            onClick={() => void submit()}
+            disabled={!draft.trim() || state.submitting}
+            className="rounded-xl text-xs font-bold gap-1.5 h-9 px-3"
+          >
+            {state.submitting ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Send className="w-3.5 h-3.5" />
+            )}
+            <span>Post</span>
+          </Button>
+        </div>
+      </div>
+    </div>
+  ) : (
+    <div className="rounded-2xl border border-dashed border-border/70 bg-muted/40 p-3 text-xs text-muted-foreground">
+      You're viewing this trip, so the discussion is read-only — ask the
+      owner to change your role to comment.
+    </div>
+  );
+
+  const streamBody =
+    state.status === "idle" || state.status === "loading" ? (
+      <div className="flex items-center justify-center py-8 text-muted-foreground">
+        <Loader2 className="w-5 h-5 animate-spin" />
+      </div>
+    ) : state.status === "error" ? (
+      <div className="flex flex-col items-center gap-2 py-8 text-muted-foreground">
+        <p className="text-xs">Could not load the discussion.</p>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={retry}
+          className="rounded-xl text-xs font-bold gap-1.5 h-8 px-3"
+        >
+          <RotateCcw className="w-3.5 h-3.5" />
+          <span>Retry</span>
+        </Button>
+      </div>
+    ) : chronological.length === 0 ? (
+      <div className="py-8 text-center text-xs text-muted-foreground">
+        {dayFilter === null
+          ? isChat
+            ? "No messages yet — say hi 👋"
+            : "No comments yet — start the conversation above."
+          : "Nothing on this day yet."}
+      </div>
+    ) : (
+      <div className="space-y-2">
+        {chronological.map((row) => (
+          <CommentRow
+            key={row._id}
+            row={row}
+            canModerate={myRole === "owner" || Boolean(row.isYou)}
+            isBusy={busyId === row._id}
+            decided={decidedCommentIds.has(row._id)}
+            onDecide={() => void markDecision(row)}
+            editing={editingId === row._id}
+            editDraft={editDraft}
+            onEditDraftChange={(value) => {
+              setEditDraft(value);
+              onTyping?.(); // editing is composition too
+            }}
+            onStartEdit={() => startEdit(row)}
+            onSaveEdit={() => void saveEdit()}
+            onCancelEdit={cancelEdit}
+            onAskDelete={() => setPendingDelete(row)}
+          />
+        ))}
+      </div>
+    );
+
   return (
-    <div className="space-y-4 max-w-3xl mx-auto">
-      <Card className="rounded-3xl border-border/70 bg-card shadow-xs overflow-hidden">
-        <CardContent className="p-5 sm:p-6 space-y-4">
-          {/* Header + day filter chips */}
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-2">
-              <MessageCircle className="w-4 h-4 text-primary" />
-              <h3 className="font-extrabold text-foreground text-sm uppercase tracking-wider">
-                Trip discussion
-              </h3>
-              <Badge variant="outline" className="text-[10px]">
-                {dayFilter === null ? comments.length : visible.length}
-              </Badge>
-            </div>
+    <div
+      className={
+        isChat ? "flex h-full min-h-0 flex-col gap-3" : "space-y-4 max-w-3xl mx-auto"
+      }
+    >
+      {isChat ? (
+        <>
+          {/* Chat scroll area — decisions pinned at the very top (history),
+              then older pages, then the tail. Auto-scroll holds the bottom. */}
+          <div
+            ref={chatScrollRef}
+            onScroll={handleChatScroll}
+            className="flex-1 min-h-0 space-y-2 overflow-y-auto px-0.5"
+          >
+            <DecisionsStrip
+              decisions={decisions}
+              myRole={myRole}
+              busyId={busyDecisionId}
+              onUnmark={(row) => void unmarkDecision(row)}
+            />
+            {loadEarlierButton}
+            {streamBody}
           </div>
 
-          {/* Pinned decisions (F9) — the "what we agreed" strip, newest first */}
-          <DecisionsStrip
-            decisions={decisions}
-            myRole={myRole}
-            busyId={busyDecisionId}
-            onUnmark={(row) => void unmarkDecision(row)}
-          />
+          {/* Pinned composer — the chat's floor; typing line just above it */}
+          <div className="shrink-0 space-y-1.5 border-t border-border/60 pt-3">
+            {typingLine}
+            {composerBlock}
+          </div>
+        </>
+      ) : (
+        <Card className="rounded-3xl border-border/70 bg-card shadow-xs overflow-hidden">
+          <CardContent className="p-5 sm:p-6 space-y-4">
+            {/* Header + count */}
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2">
+                <MessageCircle className="w-4 h-4 text-primary" />
+                <h3 className="font-extrabold text-foreground text-sm uppercase tracking-wider">
+                  Trip discussion
+                </h3>
+                <Badge variant="outline" className="text-[10px]">
+                  {dayFilter === null ? comments.length : visible.length}
+                </Badge>
+              </div>
+            </div>
 
-          {dayChips.length > 0 && (
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <button
-                type="button"
-                onClick={() => setDayFilter(null)}
-                className={cn(
-                  "px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors",
-                  dayFilter === null
-                    ? "bg-primary/10 text-primary border-primary/30"
-                    : "border-border/60 text-muted-foreground hover:text-foreground"
-                )}
-              >
-                All
-              </button>
-              {dayChips.map((day) => (
+            {/* Pinned decisions (F9) — the "what we agreed" strip, newest first */}
+            <DecisionsStrip
+              decisions={decisions}
+              myRole={myRole}
+              busyId={busyDecisionId}
+              onUnmark={(row) => void unmarkDecision(row)}
+            />
+
+            {dayChips.length > 0 && (
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <button
-                  key={day}
                   type="button"
-                  onClick={() => setDayFilter(dayFilter === day ? null : day)}
+                  onClick={() => setDayFilter(null)}
                   className={cn(
                     "px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors",
-                    dayFilter === day
+                    dayFilter === null
                       ? "bg-primary/10 text-primary border-primary/30"
                       : "border-border/60 text-muted-foreground hover:text-foreground"
                   )}
                 >
-                  Day {day} · {dayCounts[String(day)]}
+                  All
                 </button>
-              ))}
-            </div>
-          )}
-
-          {/* Composer — rank-aware (§19.7); typing line sits just above it */}
-          {typingLabels.length > 0 && (
-            <div className="flex items-center gap-2 px-1 text-[11px] font-semibold text-primary">
-              <span className="relative flex h-2 w-2 shrink-0">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-60" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-              </span>
-              <span className="truncate">
-                {typingLabels.length === 1
-                  ? `${typingLabels[0]} is typing…`
-                  : `${typingLabels.slice(0, 2).join(", ")}${
-                      typingLabels.length > 2
-                        ? ` and ${typingLabels.length - 2} more`
-                        : ""
-                    } are typing…`}
-              </span>
-            </div>
-          )}
-          {canWrite ? (
-            <div className="space-y-2">
-              <Textarea
-                value={draft}
-                onChange={(event) => {
-                  setDraft(event.target.value);
-                  onTyping?.(); // throttled upstream; a 2.5s-silent composer stops pinging
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-                    event.preventDefault();
-                    void submit();
-                  }
-                }}
-                placeholder={
-                  anchorDay
-                    ? `Ask or suggest something about Day ${anchorDay}…`
-                    : "Share a thought about this trip…"
-                }
-                rows={2}
-                maxLength={COMMENT_MAX_LEN}
-                disabled={state.submitting}
-                className="rounded-2xl text-sm resize-none"
-              />
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div className="flex items-center gap-1.5 flex-wrap">
+                {dayChips.map((day) => (
                   <button
+                    key={day}
                     type="button"
-                    onClick={() => setAnchorDay(null)}
+                    onClick={() => setDayFilter(dayFilter === day ? null : day)}
                     className={cn(
                       "px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors",
-                      anchorDay === null
+                      dayFilter === day
                         ? "bg-primary/10 text-primary border-primary/30"
                         : "border-border/60 text-muted-foreground hover:text-foreground"
                     )}
                   >
-                    Whole trip
+                    Day {day} · {dayCounts[String(day)]}
                   </button>
-                  {anchoredDays.slice(0, 12).map((day) => (
-                    <button
-                      key={day}
-                      type="button"
-                      onClick={() => setAnchorDay(anchorDay === day ? null : day)}
-                      className={cn(
-                        "px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors",
-                        anchorDay === day
-                          ? "bg-primary/10 text-primary border-primary/30"
-                          : "border-border/60 text-muted-foreground hover:text-foreground"
-                      )}
-                    >
-                      {day}
-                    </button>
-                  ))}
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] text-muted-foreground hidden sm:inline">
-                    ⌘/Ctrl + Enter
-                  </span>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="hero"
-                    onClick={() => void submit()}
-                    disabled={!draft.trim() || state.submitting}
-                    className="rounded-xl text-xs font-bold gap-1.5 h-9 px-3"
-                  >
-                    {state.submitting ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <Send className="w-3.5 h-3.5" />
-                    )}
-                    <span>Post</span>
-                  </Button>
-                </div>
+                ))}
               </div>
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-dashed border-border/70 bg-muted/40 p-3 text-xs text-muted-foreground">
-              You're viewing this trip, so the discussion is read-only — ask the
-              owner to change your role to comment.
-            </div>
-          )}
+            )}
 
-          {/* Stream */}
-          {state.status === "idle" || state.status === "loading" ? (
-            <div className="flex items-center justify-center py-8 text-muted-foreground">
-              <Loader2 className="w-5 h-5 animate-spin" />
-            </div>
-          ) : state.status === "error" ? (
-            <div className="flex flex-col items-center gap-2 py-8 text-muted-foreground">
-              <p className="text-xs">Could not load the discussion.</p>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={retry}
-                className="rounded-xl text-xs font-bold gap-1.5 h-8 px-3"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Retry</span>
-              </Button>
-            </div>
-          ) : visible.length === 0 ? (
-            <div className="py-8 text-center text-xs text-muted-foreground">
-              {dayFilter === null
-                ? "No comments yet — start the conversation above."
-                : "Nothing on this day yet."}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {visible.map((row) => (
-                <CommentRow
-                  key={row._id}
-                  row={row}
-                  canModerate={myRole === "owner" || Boolean(row.isYou)}
-                  isBusy={busyId === row._id}
-                  decided={decidedCommentIds.has(row._id)}
-                  onDecide={() => void markDecision(row)}
-                  editing={editingId === row._id}
-                  editDraft={editDraft}
-                  onEditDraftChange={(value) => {
-                    setEditDraft(value);
-                    onTyping?.(); // editing is composition too
-                  }}
-                  onStartEdit={() => startEdit(row)}
-                  onSaveEdit={() => void saveEdit()}
-                  onCancelEdit={cancelEdit}
-                  onAskDelete={() => setPendingDelete(row)}
-                />
-              ))}
-              {state.nextCursor && (
-                <div className="pt-1 text-center">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    disabled={state.loadingEarlier}
-                    onClick={() => void controller.loadEarlier()}
-                    className="rounded-xl text-xs font-bold gap-1.5 h-8 px-3 text-muted-foreground"
-                  >
-                    {state.loadingEarlier ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : null}
-                    <span>Load earlier comments</span>
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            {typingLine}
+
+            {composerBlock}
+
+            {streamBody}
+
+            {loadEarlierButton}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Moderation / self-removal confirm (§19.7) */}
       <AlertDialog
