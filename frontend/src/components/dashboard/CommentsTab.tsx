@@ -161,6 +161,7 @@ const OFFLINE_CRYPTO: ChatCryptoApi = {
   syncRows: () => undefined,
   rememberPlaintext: () => undefined,
   encryptOutgoing: async (plaintext) => ({ body: plaintext, e2ee: false }),
+  retry: () => undefined,
   exportBackupCode: async () => null,
   importBackupCode: async () => undefined,
 };
@@ -218,7 +219,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
   const bodyOf = (row: { _id: string; body: string; e2ee?: boolean }) => {
     if (!cryptoApi.isEncrypted(row)) return row.body;
     const plain = cryptoApi.plaintextOf(row);
-    return plain || "🔒 This message is end-to-end encrypted — key not unlocked yet.";
+    return plain || "Encrypted message — can't be decrypted on this device yet.";
   };
 
   const [dayFilter, setDayFilter] = useState<number | null>(null);
@@ -847,21 +848,32 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
             className="flex-1 min-h-0 space-y-2 overflow-y-auto px-0.5"
           >
             {cryptoApi.status === 'keyless' ? (
-              <div className="rounded-xl border border-border/60 bg-muted/50 px-3 py-2 text-[11px] text-muted-foreground flex items-start gap-2">
-                <Lock className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                <span>
-                  Messages are end-to-end encrypted. Your chat key is being
-                  shared by another member — stay on this trip a moment and
-                  your messages will unlock.
+              <div
+                className="rounded-xl border border-border/60 bg-muted/50 px-3 py-2 text-[11px] text-muted-foreground flex items-center gap-2"
+                title="End-to-end encryption: waiting for another member's open client to share the chat key."
+              >
+                <span className="min-w-0 flex-1">
+                  Your chat key is syncing — messages will unlock shortly.
                 </span>
               </div>
             ) : cryptoApi.status === 'error' ? (
-              <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-[11px] text-destructive flex items-start gap-2">
-                <Lock className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                <span>
-                  Encryption is unavailable ({cryptoApi.error || 'keys could not load'}) —
-                  new messages send in plain text until you reopen the chat.
+              /* One quiet fact + one tap to fix; the raw cause is tooltip-only. */
+              <div
+                className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-300 flex items-center gap-2"
+                title={cryptoApi.error || 'Chat encryption keys could not load.'}
+              >
+                <span className="min-w-0 flex-1">
+                  Encryption is off in this session — new messages send unencrypted.
                 </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={cryptoApi.retry}
+                  className="h-6 shrink-0 rounded-full border-amber-500/40 px-2.5 text-[10px] font-bold text-amber-700 hover:bg-amber-500/10 dark:text-amber-300"
+                >
+                  Retry
+                </Button>
               </div>
             ) : null}
             <DecisionsStrip

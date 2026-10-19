@@ -61,6 +61,8 @@ export interface ChatCryptoApi {
   encryptOutgoing: (
     plaintext: string
   ) => Promise<{ body: string; e2ee: boolean }>;
+  /** Re-runs the key flow in place (the fallback banner's Retry action). */
+  retry: () => void;
   /** Key backup code (null = nothing to export yet). */
   exportBackupCode: () => Promise<string | null>;
   /** Imports a backup code; re-runs the key flow with the restored identity. */
@@ -176,9 +178,19 @@ export function useTripChatCrypto(
 
       setStatus('keyless');
     } catch (err: any) {
-      markError(err?.message || 'Chat encryption is unavailable right now.');
+      // Capture the real cause for the diagnostics tooltip — thrown strings
+      // and exotic rejections used to fall through to the generic message,
+      // which made field reports like "why did this happen?" unanswerable.
+      const message =
+        err?.message || (typeof err === 'string' && err) || String(err) || 'Chat encryption is unavailable right now.';
+      markError(message);
     }
   }, [tripId, currentUserId, markError]);
+
+  /** Re-runs the whole key flow in place — the banner's Retry medicine. */
+  const retry = useCallback(() => {
+    void runKeyFlow();
+  }, [runKeyFlow]);
 
   useEffect(() => {
     if (!enabled || !tripId) return;
@@ -282,6 +294,7 @@ export function useTripChatCrypto(
     syncRows,
     rememberPlaintext,
     encryptOutgoing,
+    retry,
     exportBackupCode: exportCode,
     importBackupCode: importCode,
   };

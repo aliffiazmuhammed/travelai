@@ -170,3 +170,10 @@ Backend error alphabet: 403 non-author promote, 409 duplicate / no-content / rem
 - **`smoke-f10.mts`** re-cut to the SPA envelope format (JSON `{v,w,iv,d}`) — wrapper resolution verified live: Carol opens Alice's re-share via `w`.
 
 Re-verified after the format change: 223/223 backend tests; smoke-f10 ALL PASS (31 checks); typecheck + build pass; SPA mirror refreshed.
+
+### 12.7 Fallback-UX softening (user-reviewed, 2026-10-19)
+
+- **The banner stays, the alarm goes.** The error state keeps the ONE fact that cannot be withheld ("Encryption is off in this session — new messages send unencrypted." — silently regressing to plaintext is the one disclosure that must never be dropped), but the raw technical cause moved OUT of the headline into a tooltip, the red alarm became amber, and the lock icon was removed (a convention, not a requirement — user call).
+- **Retry is the medicine, not "reopen the chat"**: the banner carries a Retry button that re-runs the whole key flow in the open chat; on success the decrypt pass re-runs over the already-loaded rows and the 🔒 bubbles unlock in place (the sync-rows effects re-run per render via the fresh api object).
+- **Honest cause capture**: the catch now records thrown strings/objects too (previously a message-less throw fell through to the generic text, making field reports unanswerable).
+- **Calm placeholders**: the keyless banner is a single quiet line ("Your chat key is syncing — messages will unlock shortly."), and the locked-bubble copy lost its emoji — "Encrypted message — can't be decrypted on this device yet."
