@@ -25,6 +25,7 @@ import type {
   TripInviteInfo,
   InvitePreview,
   TripComment,
+  TripDecision,
 } from '@/types';
 
 export interface StreamProgressEvent {
@@ -551,6 +552,29 @@ class ApiClient {
     } catch {
       /* a dropped ping only skips one indicator blink — never worth surfacing */
     }
+  }
+
+  // Decisions (Milestone 7, F9). Snapshot records — no baseRev, like comments:
+  // promote/unmark never touches the Trip document. Rank notes: PROMOTE is
+  // author-or-owner (403 otherwise), UNMARK is promoter-or-owner.
+  async getTripDecisions(id: string): Promise<{ success: boolean; decisions: TripDecision[] }> {
+    return this.request(`/api/itinerary/${id}/decisions`);
+  }
+
+  async markCommentDecision(
+    id: string,
+    commentId: string
+  ): Promise<{ success: boolean; decision: TripDecision }> {
+    return this.request(`/api/itinerary/${id}/comments/${commentId}/decision`, {
+      method: 'POST',
+    });
+  }
+
+  async removeTripDecision(
+    id: string,
+    decisionId: string
+  ): Promise<{ success: boolean; decision: TripDecision }> {
+    return this.request(`/api/itinerary/${id}/decisions/${decisionId}`, { method: 'DELETE' });
   }
 
   /** E4b — keep the SSE presence entry alive (decoration only; errors ignored). */

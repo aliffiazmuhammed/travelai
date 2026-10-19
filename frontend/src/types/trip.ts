@@ -471,6 +471,32 @@ export interface TripComment {
   deletedAt?: string;
 }
 
+/**
+ * A logged decision (Milestone 7, F9) — a comment promoted into a durable
+ * "what we agreed" card. The server freezes `body` (a snapshot taken at
+ * promotion), so it deliberately SURVIVES the comment being edited or even
+ * tombstoned afterwards: decisions are history, not live thread state.
+ *
+ * `label` is the comment author (whose words are on record);
+ * `markedByLabel` is whoever promoted it. On SSE frames `isYou` is the
+ * promoter's view — same untrusted-on-frames rule as comments.
+ */
+export interface TripDecision {
+  _id: string;
+  tripId: string;
+  /** The source comment; keeps the card linkable back to the thread. */
+  commentId: string;
+  label: string;
+  markedByLabel: string;
+  /** Snapshot of the comment body at promotion time. */
+  body: string;
+  day?: number;
+  /** True when the caller promoted it (reliable in HTTP responses only). */
+  isYou: boolean;
+  createdAt: string;
+  deletedAt?: string;
+}
+
 /** What a signed-in user sees before accepting an invite. */
 export interface InvitePreview {
   trip: { title: string; destination?: string };

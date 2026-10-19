@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '@/services/api';
-import type { TripComment } from '@/types';
-import type { CommentFrame, TypingFrame } from '@/hooks/useTripEvents';
+import type { TripComment, TripDecision } from '@/types';
+import type { CommentFrame, DecisionFrame, TypingFrame } from '@/hooks/useTripEvents';
 
 /**
  * Trip comments state (Milestone 6 §19.7 / §20, sprint F6b).
@@ -37,6 +37,8 @@ export interface TripCommentsState {
   unread: number;
   /** Other members currently "typing" (F8b), freshest first, ≤3 entries. */
   typing: TypingEntry[];
+  /** Active decisions (F9), newest first — the pinned "what we agreed" cards. */
+  decisions: TripDecision[];
 }
 
 export interface TypingEntry {
@@ -69,6 +71,18 @@ export interface UseTripComments {
   ingestTyping: (frame: TypingFrame) => void;
   /** Labels on screen right now, derived from `state.typing`. */
   typingLabels: string[];
+  /**
+   * Promotes a comment into a decision (F9). Resolves the created snapshot
+   * row; throws with the server message on failure (403 non-author, 409
+   * duplicate/empty/tombstoned). The caller still owns the toast.
+   */
+  promoteComment: (commentId: string) => Promise<TripDecision>;
+  /** Unmarks a decision (promoter-or-owner; the server soft-tombstones). */
+  removeDecision: (decisionId: string) => Promise<void>;
+  /** Live ingest for decision frames — wired to `useTripEvents.onDecisionEvent`. */
+  ingestDecision: (frame: DecisionFrame) => void;
+  /** Comment ids that already have an active decision (drives row buttons). */
+  decidedCommentIds: Set<string>;
 }
 
 const TYPING_TTL_MS = 5000; // mirrors the F8a contract (client-side expiry)
@@ -84,6 +98,18 @@ function mergeRow(list: TripComment[], row: TripComment, markMine: boolean): Tri
   return next;
 }
 
+/**
+ * Merges one decision row (F9), dedupe by `_id`. A tombstoned row leaves the
+ * list entirely — unmarking means the card is closed history, and the client
+ * mirrors the server's active-rows-only `GET /decisions` view.
+ */
+function mergeDecision(list: TripDecision[], row: TripDecision, markMine: boolean): TripDecision[] {
+  const normalized: TripDecision = markMine ? { ...row, isYou: true } : row;
+  const rest = list.filter((existing) => existing._id !== normalized._id);
+  if (normalized.deletedAt) return rest;
+  return [normalized, ...rest];
+}
+
 export function useTripComments(
   tripId?: string,
   currentUserId?: string
@@ -97,6 +123,7 @@ export function useTripComments(
     submitting: false,
     unread: 0,
     typing: [],
+    decisions: [],
   });
 
   // Ref mirrors so event handlers never read state inside a setState updater
@@ -146,6 +173,76 @@ export function useTripComments(
       alive = false;
     };
   }, [tripId]);
+
+  /* ------------------------------------------------------------------ */
+  /*  Decisions (Milestone 7, F9)                                        */
+  /* ------------------------------------------------------------------ */
+
+  // Seed the pinned strip server-side per trip open (the list is bounded by
+  // DECISION_MAX_PER_TRIP, so a full fetch is cheap by construction).
+  useEffect(() => {
+    if (!tripId) return;
+    let alive = true;
+    void (async () => {
+      try {
+        const result = await api.getTripDecisions(tripId);
+        if (alive) setState((prev) => ({ ...prev, decisions: result.decisions || [] }));
+      } catch (err: any) {
+        console.error('decisions: initial load failed', err?.message || err);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [tripId]);
+
+  // Latest decisions without re-creating the rollback closures below.
+  const decisionsRef = useRef<TripDecision[]>([]);
+  decisionsRef.current = state.decisions;
+
+  /** Applies one server-shaped decision; `isYou` trusted only from our calls. */
+  const applyDecisionRow = useCallback((row: TripDecision, mine: boolean) => {
+    setState((prev) => ({ ...prev, decisions: mergeDecision(prev.decisions, row, mine) }));
+  }, []);
+
+  /** Promotes a comment; the created snapshot row lands in the strip. */
+  const promoteComment = useCallback(
+    async (commentId: string): Promise<TripDecision> => {
+      if (!tripId) throw new Error('No trip is open.');
+      const result = await api.markCommentDecision(tripId, commentId);
+      applyDecisionRow(result.decision, true);
+      return result.decision;
+    },
+    [tripId, applyDecisionRow]
+  );
+
+  /** Optimistic unmark: the card leaves the strip now; 404/403 rolls it back. */
+  const removeDecision = useCallback(
+    async (decisionId: string): Promise<void> => {
+      if (!tripId) return;
+      const snapshot = decisionsRef.current.find((row) => row._id === decisionId);
+      setState((prev) => ({
+        ...prev,
+        decisions: prev.decisions.filter((row) => row._id !== decisionId),
+      }));
+      try {
+        await api.removeTripDecision(tripId, decisionId);
+      } catch (err) {
+        if (snapshot) applyDecisionRow(snapshot, snapshot.isYou);
+        throw err;
+      }
+    },
+    [tripId, applyDecisionRow]
+  );
+
+  /** Live ingest for decision frames — frames are patches, never `isYou`. */
+  const ingestDecision = useCallback(
+    (frame: DecisionFrame) => {
+      if (!frame?.decision?._id) return;
+      applyDecisionRow(frame.decision, false);
+    },
+    [applyDecisionRow]
+  );
 
   const ensureLoaded = useCallback(() => {
     if (!tripId || bootstrapped.current) return;
@@ -389,6 +486,12 @@ export function useTripComments(
     [state.typing]
   );
 
+  /** Which comments already carry an active decision (row-button state). */
+  const decidedCommentIds = useMemo(
+    () => new Set(state.decisions.map((row) => row.commentId)),
+    [state.decisions]
+  );
+
   return {
     state,
     ensureLoaded,
@@ -401,5 +504,9 @@ export function useTripComments(
     notifyTyping,
     ingestTyping,
     typingLabels,
+    promoteComment,
+    removeDecision,
+    ingestDecision,
+    decidedCommentIds,
   };
 }

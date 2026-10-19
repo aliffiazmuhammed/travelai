@@ -52,6 +52,8 @@ interface UseTripEventsOptions {
   onCommentEvent?: (frame: CommentFrame) => void;
   /** Called for every `typing` frame (F8a/F8b) — stateless, client self-expired. */
   onTypingEvent?: (frame: TypingFrame) => void;
+  /** Called for every `decision:new` / `decision:update` frame (F9). */
+  onDecisionEvent?: (frame: DecisionFrame) => void;
   /** Heartbeat cadence; must stay below the server TTL (30s default). */
   heartbeatMs?: number;
 }
@@ -79,6 +81,15 @@ export interface TypingFrame {
 }
 
 /**
+ * A decision frame (Milestone 7 F9). `decision` is the server's projected
+ * snapshot row; `isYou` on a fan-out frame is the PROMOTER's view — dedupe by
+ * `_id` and trust your own HTTP responses (same rule as comments).
+ */
+export type DecisionFrame =
+  | { type: 'decision:new'; tripId: string; decision: import('@/types').TripDecision }
+  | { type: 'decision:update'; tripId: string; decision: import('@/types').TripDecision };
+
+/**
  * mount an SSE stream + heartbeat loop for a trip. Returns the live roster
  * (empty when the tier is off or the stream could not open).
  */
@@ -86,7 +97,7 @@ export function useTripEvents(
   tripId?: string,
   options: UseTripEventsOptions = {}
 ): PresenceUser[] {
-  const { onTripUpdated, onCommentEvent, onTypingEvent, heartbeatMs = 10000 } = options;
+  const { onTripUpdated, onCommentEvent, onTypingEvent, onDecisionEvent, heartbeatMs = 10000 } = options;
   const [presence, setPresence] = useState<PresenceUser[]>([]);
 
   // Latest callback without resubscribing the EventSource on re-render.
@@ -96,6 +107,8 @@ export function useTripEvents(
   onCommentEventRef.current = onCommentEvent;
   const onTypingEventRef = useRef(onTypingEvent);
   onTypingEventRef.current = onTypingEvent;
+  const onDecisionEventRef = useRef(onDecisionEvent);
+  onDecisionEventRef.current = onDecisionEvent;
 
   // Coalesce bursts of trip:updated into one refetch (a save touches many
   // routes; the UI needs one fresh read, not N).
@@ -137,6 +150,8 @@ export function useTripEvents(
               onCommentEventRef.current?.(event as CommentFrame);
             } else if (event?.type === 'typing') {
               onTypingEventRef.current?.(event as TypingFrame);
+            } else if (event?.type === 'decision:new' || event?.type === 'decision:update') {
+              onDecisionEventRef.current?.(event as DecisionFrame);
             }
           } catch {
             /* malformed frame — ignore, keep-alives stay as comments */

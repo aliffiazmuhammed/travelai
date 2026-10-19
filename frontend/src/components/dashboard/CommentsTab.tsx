@@ -18,13 +18,14 @@ import { toast } from "sonner";import {
   Loader2,
   MessageCircle,
   Pencil,
+  Pin,
   RotateCcw,
   Send,
   Trash2,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { TripComment, TripRole } from "@/types/trip";
+import type { TripComment, TripDecision, TripRole } from "@/types/trip";
 import type { UseTripComments } from "@/hooks/useTripComments";
 
 /**
@@ -96,6 +97,10 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
   const [editDraft, setEditDraft] = useState("");
   const [pendingDelete, setPendingDelete] = useState<TripComment | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // F9: which decision card is mid-unmark (one at a time, like row removals).
+  const [busyDecisionId, setBusyDecisionId] = useState<string | null>(null);
+  const { decidedCommentIds } = controller;
+  const decisions = state.decisions;
 
   // Load the first page when the tab is opened (TabsContent mounts lazily).
   useEffect(() => {
@@ -162,6 +167,32 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
     setEditDraft("");
   };
 
+  /** F9: promotes a remark into the pinned decisions strip. */
+  const markDecision = async (row: TripComment) => {
+    setBusyId(row._id);
+    try {
+      await controller.promoteComment(row._id);
+      toast.success("Marked as a decision");
+    } catch (err: any) {
+      toast.error(err?.message || "Could not mark this as a decision.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  /** F9: unmarks a decision card (promoter-or-owner; re-promotable). */
+  const unmarkDecision = async (row: TripDecision) => {
+    setBusyDecisionId(row._id);
+    try {
+      await controller.removeDecision(row._id);
+      toast.success("Decision unmarked");
+    } catch (err: any) {
+      toast.error(err?.message || "Could not unmark this decision.");
+    } finally {
+      setBusyDecisionId(null);
+    }
+  };
+
   const confirmDelete = async () => {
     if (!pendingDelete) return;
     const target = pendingDelete;
@@ -198,6 +229,14 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
               </Badge>
             </div>
           </div>
+
+          {/* Pinned decisions (F9) — the "what we agreed" strip, newest first */}
+          <DecisionsStrip
+            decisions={decisions}
+            myRole={myRole}
+            busyId={busyDecisionId}
+            onUnmark={(row) => void unmarkDecision(row)}
+          />
 
           {dayChips.length > 0 && (
             <div className="flex items-center gap-1.5 flex-wrap">
@@ -365,6 +404,8 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
                   row={row}
                   canModerate={myRole === "owner" || Boolean(row.isYou)}
                   isBusy={busyId === row._id}
+                  decided={decidedCommentIds.has(row._id)}
+                  onDecide={() => void markDecision(row)}
                   editing={editingId === row._id}
                   editDraft={editDraft}
                   onEditDraftChange={(value) => {
@@ -427,12 +468,104 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
   );
 };
 
+interface DecisionCardProps {
+  row: TripDecision;
+  canUnmark: boolean;
+  isBusy: boolean;
+  onUnmark: () => void;
+}
+
+/**
+ * One pinned decision card (F9). The body is the promotion-time snapshot —
+ * it stays even if the source comment is edited or removed later, which is
+ * exactly the point of the record.
+ */
+const DecisionCard: React.FC<DecisionCardProps> = ({ row, canUnmark, isBusy, onUnmark }) => (
+  <div className="flex items-start gap-2 rounded-xl border border-primary/25 bg-primary/5 px-3 py-2">
+    <Pin className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+    <div className="min-w-0 flex-1">
+      <p className="text-xs font-semibold text-foreground whitespace-pre-wrap break-words">
+        {row.body}
+      </p>
+      <div className="flex items-center gap-1.5 flex-wrap mt-0.5 text-[10px] text-muted-foreground">
+        <span className="font-bold">{row.label}</span>
+        <span aria-hidden>·</span>
+        <span>{relativeTime(row.createdAt)}</span>
+        {row.day !== undefined && (
+          <Badge
+            variant="outline"
+            className="text-[9px] px-1 py-0 h-3.5 border-border/60 text-muted-foreground"
+          >
+            Day {row.day}
+          </Badge>
+        )}
+        {!row.isYou && (
+          <span className="text-muted-foreground/60 italic">
+            pinned by {row.markedByLabel}
+          </span>
+        )}
+      </div>
+    </div>
+    {canUnmark && (
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        onClick={onUnmark}
+        disabled={isBusy}
+        title={row.isYou ? "Unmark your decision" : "Moderate — unmark this decision"}
+        className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-foreground gap-1 shrink-0"
+      >
+        {isBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
+        <span className="hidden sm:inline">Unmark</span>
+      </Button>
+    )}
+  </div>
+);
+
+interface DecisionsStripProps {
+  decisions: TripDecision[];
+  myRole: TripRole;
+  busyId: string | null;
+  onUnmark: (row: TripDecision) => void;
+}
+
+/** The pinned strip above the stream; hidden entirely when nothing is pinned. */
+const DecisionsStrip: React.FC<DecisionsStripProps> = ({ decisions, myRole, busyId, onUnmark }) => {
+  if (decisions.length === 0) return null;
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-1.5">
+        <Pin className="w-3.5 h-3.5 text-primary" />
+        <span className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">
+          Decisions
+        </span>
+        <Badge variant="outline" className="text-[10px]">
+          {decisions.length}
+        </Badge>
+      </div>
+      {decisions.map((row) => (
+        <DecisionCard
+          key={row._id}
+          row={row}
+          canUnmark={row.isYou || myRole === "owner"}
+          isBusy={busyId === row._id}
+          onUnmark={() => onUnmark(row)}
+        />
+      ))}
+    </div>
+  );
+};
+
 /* -------------------------------------------------------------------------- */
 
 interface CommentRowProps {
   row: TripComment;
   canModerate: boolean;
   isBusy: boolean;
+  /** True when this comment already carries an active decision (F9). */
+  decided: boolean;
+  onDecide: () => void;
   editing: boolean;
   editDraft: string;
   onEditDraftChange: (value: string) => void;
@@ -447,6 +580,8 @@ const CommentRow: React.FC<CommentRowProps> = ({
   row,
   canModerate,
   isBusy,
+  decided,
+  onDecide,
   editing,
   editDraft,
   onEditDraftChange,
@@ -581,6 +716,30 @@ const CommentRow: React.FC<CommentRowProps> = ({
                 <span className="hidden sm:inline">Edit</span>
               </Button>
             )}
+            {/* F9: promote author-or-owner; server enforces the real rule */}
+            {canModerate &&
+              (decided ? (
+                <span
+                  className="flex items-center gap-1 h-6 px-1.5 text-[10px] font-bold text-primary"
+                  title="This comment is pinned as a decision"
+                >
+                  <Pin className="w-3 h-3" />
+                  <span className="hidden sm:inline">Decided</span>
+                </span>
+              ) : (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={onDecide}
+                  disabled={isBusy}
+                  title={isMine ? "Record your comment as a decision" : "Owner — record this as a decision"}
+                  className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-primary gap-1"
+                >
+                  <Pin className="w-3 h-3" />
+                  <span className="hidden sm:inline">Decide</span>
+                </Button>
+              ))}
             <Button
               type="button"
               size="sm"
