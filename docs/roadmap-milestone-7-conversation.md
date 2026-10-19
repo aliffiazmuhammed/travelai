@@ -225,3 +225,11 @@ The user is the product owner: **members of a trip do not want to read about enc
 - The key dialog (an explicit settings flow reached from the toolbar key icon, not the message stream) keeps its functional wording, minus the word "encrypted" where it was decorative.
 - Edit is refused on a row this device cannot read (it would have seeded the edit box with the placeholder and overwritten the real message on save).
 
+### 12.11 Invite links — the request origin is the truth (user-reported, 2026-10-19)
+
+The owner-facing group-invite link was minted server-side from `FRONTEND_URL` with a hardcoded `http://localhost:8080` default, so on Render (SPA + API on one origin, no `FRONTEND_URL`, or a leftover dev value) production handed out **localhost** invitations that no invitee could open.
+
+- **Precedence is now explicit and pure** (`pickLinkOrigin`): a non-loopback browser `Origin` header → a non-loopback configured `FRONTEND_URL` → the request's own host (`X-Forwarded-Host`/`Host` + `X-Forwarded-Proto`, proxy-aware via `trust proxy`) → `RENDER_EXTERNAL_URL` → configured value → localhost. A loopback configuration can therefore never leak into a real deployment, and local dev still gets the origin the backend serves.
+- The controller passes `linkOriginHints(req)` into `createTripInvite`; no invite rows or stored links change, because only the shared-once link is computed at mint time.
+- Unit-tested precedence (`invites.test.ts`): the production defect (real browser origin vs localhost env), config-vs-API-host split topology, same-origin Render, platform-URL rescue, and dev loopback behaviour.
+

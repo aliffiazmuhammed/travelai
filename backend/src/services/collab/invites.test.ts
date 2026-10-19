@@ -2,7 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   hashToken,
+  inviteLinkFor,
+  linkOriginHints,
   mintInviteToken,
+  pickLinkOrigin,
   resolveMaxUses,
   resolveTtlHours,
   tokenHint,
@@ -206,6 +209,85 @@ test('member removal unlinks but never deletes the ledger row', () => {
   unlinkParticipant(trip, 'member-9');
   assert.equal(trip.participants.length, 2, 'the row survives');
   assert.equal(trip.participants[0].userId, undefined, 'only the link is cleared');
+});
+
+/* -------------------------------------------------------------------------- */
+/*  Invite link origin (the localhost-in-production defect)                    */
+/* -------------------------------------------------------------------------- */
+
+test('a real browser origin always wins over a localhost config', () => {
+  // This is the production defect: Render serves the SPA itself and the env
+  // still (or again) says localhost — the owner must receive the real URL.
+  assert.equal(
+    pickLinkOrigin({ browserOrigin: 'https://travelai-tjce.onrender.com' }, 'http://localhost:8080'),
+    'https://travelai-tjce.onrender.com'
+  );
+  assert.equal(
+    pickLinkOrigin({ browserOrigin: 'https://travelai-tjce.onrender.com' }, ''),
+    'https://travelai-tjce.onrender.com'
+  );
+  // Even a wrongly configured remote URL loses to the page the owner is on.
+  assert.equal(
+    pickLinkOrigin({ browserOrigin: 'https://travelai-tjce.onrender.com' }, 'https://stale.example.com'),
+    'https://travelai-tjce.onrender.com'
+  );
+});
+
+test('without a browser origin, config wins, then the request host, then Render', () => {
+  assert.equal(
+    pickLinkOrigin({ sameOrigin: 'https://api.example.com' }, 'https://app.example.com'),
+    'https://app.example.com',
+    'explicit config beats the API host when they differ'
+  );
+  assert.equal(
+    pickLinkOrigin({ sameOrigin: 'https://travelai-tjce.onrender.com' }, ''),
+    'https://travelai-tjce.onrender.com',
+    'same-origin deploy needs no configuration'
+  );
+  assert.equal(
+    pickLinkOrigin({ renderUrl: 'https://travelai-tjce.onrender.com' }, 'http://localhost:8080'),
+    'https://travelai-tjce.onrender.com',
+    'platform URL rescues a leftover localhost config'
+  );
+});
+
+test('local development still gets a localhost link, never a broken one', () => {
+  assert.equal(
+    pickLinkOrigin({ browserOrigin: 'http://localhost:5173' }, 'http://localhost:8080'),
+    'http://localhost:8080',
+    'the configured dev origin is the SPA the backend serves'
+  );
+  assert.equal(pickLinkOrigin({}, ''), 'http://localhost:8080');
+  // Loopback values are cleaned but never mangled into an invalid URL.
+  assert.match(pickLinkOrigin({ browserOrigin: 'http://127.0.0.1:5173/' }, ''), /^http:\/\/127\.0\.0\.1:5173$/);
+});
+
+test('the minted link is the origin plus the invite path', () => {
+  assert.equal(
+    inviteLinkFor('tok_en-123', { browserOrigin: 'https://travelai-tjce.onrender.com' }),
+    'https://travelai-tjce.onrender.com/invite/tok_en-123'
+  );
+});
+
+test('the request origin is read proxy-aware, comma lists included', () => {
+  const headers: Record<string, string> = {
+    origin: 'https://travelai-eta.vercel.app',
+    host: 'travelai-tjce.onrender.com',
+    'x-forwarded-host': 'travelai-tjce.onrender.com, proxy.internal',
+    'x-forwarded-proto': 'https, http',
+  };
+  const hints = linkOriginHints({
+    get: (name) => headers[name.toLowerCase()],
+    protocol: 'http',
+  });
+  assert.equal(hints.browserOrigin, 'https://travelai-eta.vercel.app');
+  assert.equal(hints.sameOrigin, 'https://travelai-tjce.onrender.com');
+});
+
+test('a request without forwarding headers resolves to a safe no-hint state', () => {
+  const hints = linkOriginHints({ get: () => undefined });
+  assert.equal(hints.browserOrigin, null);
+  assert.equal(hints.sameOrigin, null);
 });
 
 test('email local-parts can be hint sources', () => {

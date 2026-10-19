@@ -36,11 +36,77 @@ export function tokenHint(rawToken: string): string {
   return String(rawToken || '').slice(0, 6);
 }
 
+/** Where the invitee's browser should land. Derived per request, never guessed. */
+export interface LinkOriginHints {
+  /** The page the owner is actually on (`Origin` header) — strongest signal. */
+  browserOrigin?: string | null;
+  /** `X-Forwarded-Proto` + host of this very request (same-origin deploys). */
+  sameOrigin?: string | null;
+  /** `RENDER_EXTERNAL_URL`, the platform's own public URL, when present. */
+  renderUrl?: string | null;
+}
+
+const LOOPBACK_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
+
+const cleanOrigin = (value?: string | null): string => {
+  const trimmed = String(value || '').trim().replace(/\/+$/, '');
+  return /^https?:\/\//i.test(trimmed) ? trimmed : '';
+};
+
+/**
+ * The single base an invite link may use. **Pure** so the precedence is
+ * testable: a non-loopback browser origin always wins, because that is
+ * literally the page the owner is looking at. Only when no real origin can be
+ * observed do we fall back to configuration, and only then to localhost.
+ *
+ * This is what keeps production from handing out `http://localhost:8080/invite/…`
+ * when `FRONTEND_URL` is unset (or left at its local-dev value) on Render.
+ */
+export function pickLinkOrigin(hints: LinkOriginHints = {}, configuredOrigin?: string): string {
+  const browserOrigin = cleanOrigin(hints.browserOrigin);
+  const sameOrigin = cleanOrigin(hints.sameOrigin);
+  const renderUrl = cleanOrigin(hints.renderUrl);
+  const configured = cleanOrigin(
+    configuredOrigin === undefined ? (env.FRONTEND_URL || '').split(',')[0] : configuredOrigin
+  );
+
+  return (
+    (browserOrigin && !LOOPBACK_ORIGIN.test(browserOrigin) ? browserOrigin : '') ||
+    (configured && !LOOPBACK_ORIGIN.test(configured) ? configured : '') ||
+    (sameOrigin && !LOOPBACK_ORIGIN.test(sameOrigin) ? sameOrigin : '') ||
+    renderUrl ||
+    configured ||
+    browserOrigin ||
+    sameOrigin ||
+    'http://localhost:8080'
+  );
+}
+
 /** The browser URL an invitee opens. Base is the deployed SPA. */
-export function inviteLinkFor(rawToken: string): string {
-  const base = (env.FRONTEND_URL || '').split(',')[0]?.trim().replace(/\/+$/, '');
-  const origin = base || 'http://localhost:8080';
-  return `${origin}/invite/${rawToken}`;
+export function inviteLinkFor(rawToken: string, hints: LinkOriginHints = {}): string {
+  return `${pickLinkOrigin(hints)}/invite/${rawToken}`;
+}
+
+/** The slice of an Express request needed to observe where it came from. */
+export interface OriginCarrier {
+  get(name: string): string | undefined;
+  protocol?: string;
+}
+
+/**
+ * Reads the origins a request exposes. `req.protocol` is proxy-aware because
+ * `app.set('trust proxy', 1)` is on, and Render also sets the forwarding
+ * headers explicitly.
+ */
+export function linkOriginHints(req: OriginCarrier): LinkOriginHints {
+  const first = (value?: string) => String(value || '').split(',')[0].trim();
+  const host = first(req.get('x-forwarded-host') || req.get('host'));
+  const proto = first(req.get('x-forwarded-proto') || req.protocol).toLowerCase();
+  return {
+    browserOrigin: req.get('origin') || null,
+    sameOrigin: host && (proto === 'http' || proto === 'https') ? `${proto}://${host}` : null,
+    renderUrl: process.env.RENDER_EXTERNAL_URL || null,
+  };
 }
 
 export function resolveTtlHours(requested?: unknown): number {
@@ -63,6 +129,8 @@ export interface CreateInviteInput {
   email?: unknown;
   maxUses?: unknown;
   ttlHours?: unknown;
+  /** Where to point the invite link (see {@link pickLinkOrigin}). */
+  linkOrigins?: LinkOriginHints;
 }
 
 export interface CreateInviteResult {
@@ -104,7 +172,7 @@ export async function createTripInvite(input: CreateInviteInput): Promise<Create
     acceptedBy: [],
   });
 
-  return { invite, link: inviteLinkFor(rawToken) };
+  return { invite, link: inviteLinkFor(rawToken, input.linkOrigins) };
 }
 
 /** Owner-facing projection — no raw token ever makes it back out. */

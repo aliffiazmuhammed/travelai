@@ -8,6 +8,7 @@ import { tripContext } from '../middleware/tripAccess.middleware.js';
 import type { TripRole } from '../services/collab/access.js';
 import {
   createTripInvite,
+  linkOriginHints,
   projectInvite,
   previewInvite,
   redeemInvite,
@@ -183,6 +184,9 @@ export const createTripInviteHandler = catchAsync(
       email: req.body?.email,
       maxUses: req.body?.maxUses,
       ttlHours: req.body?.ttlHours,
+      // Build the invite link from the origin the owner's browser is on, so a
+      // Render deployment without `FRONTEND_URL` never hands out localhost.
+      linkOrigins: linkOriginHints(req),
     });
 
     res.status(201).json({ success: true, invite: projectInvite(invite), link });
