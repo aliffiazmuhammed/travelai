@@ -450,6 +450,25 @@ export interface TripInviteInfo {
 }
 
 /**
+ * F12b: ONE typed itinerary change TravelAI may SUGGEST. Never applied by the
+ * bot — a human with edit access taps Apply through the normal save path (PUT
+ * with required baseRev → versioned like any edit). Shape mirrors the server
+ * `assistantProposalSchema` zod union exactly.
+ */
+export type AssistantProposal =
+  | { kind: "title"; value: string }
+  | { kind: "budget"; value: number }
+  | { kind: "day_title"; day: number; value: string }
+  | { kind: "day_tip"; day: number; value: string };
+
+/** F12b: the JSON envelope encrypted into a bot row when the answer proposes a change. */
+export interface BotBubblePayload {
+  v: 1;
+  text: string;
+  proposal: AssistantProposal | null;
+}
+
+/**
  * One comment row as returned by the `/comments` endpoints (Milestone 6 §19.5,
  * F6a). `userId` is deliberately NOT on the wire: identity ships as `label`
  * (email local-part) + `isYou`. A tombstone keeps its slot with an empty body.

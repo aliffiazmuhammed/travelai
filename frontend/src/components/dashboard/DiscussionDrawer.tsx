@@ -24,7 +24,7 @@ import { CommentsTab } from "./CommentsTab";
 import type { PresenceUser } from "@/hooks/useTripEvents";
 import type { UseTripComments } from "@/hooks/useTripComments";
 import type { ChatCryptoApi } from "@/hooks/useTripChatCrypto";
-import type { TripRole } from "@/types/trip";
+import type { TripRole, AssistantProposal } from "@/types/trip";
 
 /**
  * The floating trip discussion (Milestone 7, sprint F8b; chat shape §11) —
@@ -58,6 +58,8 @@ interface DiscussionDrawerProps {
   presence?: PresenceUser[];
   /** Hide the FAB when the drawer is redundant (Discuss tab active, etc.). */
   hidden?: boolean;
+  /** F12b: proposal Apply composition — forwarded to the inner CommentsTab. */
+  onApplyProposal?: (proposal: AssistantProposal) => Promise<void> | void;
 }
 
 const initialsFor = (label: string): string =>
@@ -71,6 +73,7 @@ export const DiscussionDrawer: React.FC<DiscussionDrawerProps> = ({
   crypto,
   presence = [],
   hidden = false,
+  onApplyProposal,
 }) => {
   const [open, setOpen] = useState(false);
   const [keysOpen, setKeysOpen] = useState(false);
@@ -232,6 +235,7 @@ export const DiscussionDrawer: React.FC<DiscussionDrawerProps> = ({
               variant="chat"
               typingLabels={controller.typingLabels}
               onTyping={controller.notifyTyping}
+              onApplyProposal={onApplyProposal}
             />
           </div>
         </SheetContent>

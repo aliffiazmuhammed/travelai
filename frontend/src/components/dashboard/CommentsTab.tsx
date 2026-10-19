@@ -31,8 +31,13 @@ import {
 import { api } from "@/services/api";
 import { cn } from "@/lib/utils";
 import type { TripComment, TripDecision, TripRole } from "@/types/trip";
+import type {
+  AssistantProposal,
+  BotBubblePayload,
+} from "@/types/trip";
 import type { UseTripComments } from "@/hooks/useTripComments";
 import type { ChatCryptoApi } from "@/hooks/useTripChatCrypto";
+import { isRevConflict } from "@/lib/conflicts";
 
 /**
  * The 9th tab (Milestone 6 §19.7 / §20, sprint F6b) — day-anchored discussion
@@ -69,12 +74,72 @@ interface CommentsTabProps {
    * One logic core, two shapes — the same controller drives both.
    */
   variant?: "feed" | "chat";
+  /**
+   * F12b: composes a TravelAI proposal into the open ItineraryData snapshot
+   * and saves it through the SAME path manual editing uses (required baseRev,
+   * versioned). Absent for read-only viewers — their cards render the
+   * suggestion without the Apply controls.
+   */
+  onApplyProposal?: (proposal: AssistantProposal) => Promise<void> | void;
 }
 
 const COMMENT_MAX_LEN = 2000; // mirrors COMMENT_MAX_LEN (server default)
 
 /** F12a: the mention token that turns a message into a TravelAI ask. */
 const BOT_MENTION_RE = /@travelai/i;
+
+/**
+ * F12b: parse a TravelAI proposal envelope out of a decrypted bot row. The
+ * envelope is written by our own ask flow; this parses defensively because a
+ * malicious client can flag any of its own rows `bot: true` — anything that
+ * does not validate renders as plain text and stays harmless.
+ */
+function parseBotCard(
+  plain: string
+): { text: string; proposal: AssistantProposal } | null {
+  const body = plain.trim();
+  if (!body.startsWith("{") || !body.endsWith("}")) return null;
+  try {
+    const parsed = JSON.parse(body) as BotBubblePayload | null;
+    if (!parsed || parsed.v !== 1 || typeof parsed.text !== "string") return null;
+    const proposal = parsed.proposal as AssistantProposal | null | undefined;
+    if (
+      !proposal ||
+      typeof proposal !== "object" ||
+      !["title", "budget", "day_title", "day_tip"].includes(proposal.kind) ||
+      !["string", "number"].includes(typeof proposal.value) ||
+      (proposal.kind === "budget" && typeof proposal.value !== "number") ||
+      (proposal.kind !== "budget" && typeof proposal.value !== "string") ||
+      (("day" in proposal) && (!Number.isInteger(proposal.day) || (proposal as { day: number }).day < 1))
+    ) {
+      return null;
+    }
+    return { text: parsed.text, proposal };
+  } catch {
+    return null;
+  }
+}
+
+/** Human label for the card header (what the change touches). */
+function proposalLabel(proposal: AssistantProposal): string {
+  switch (proposal.kind) {
+    case "title":
+      return "Rename the trip";
+    case "budget":
+      return "Budget per person";
+    case "day_title":
+      return `Day ${proposal.day} — title`;
+    default:
+      return `Day ${proposal.day} — add a tip`;
+  }
+}
+
+/** The proposal's value side of the diff, shown after the "→". */
+function formatProposalValue(proposal: AssistantProposal): string {
+  return proposal.kind === "budget"
+    ? proposal.value.toLocaleString()
+    : proposal.value;
+}
 
 /**
  * The plaintext fallback layer (F10): when no crypto hook is wired (or the
@@ -132,6 +197,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
   typingLabels = [],
   onTyping,
   variant = "feed",
+  onApplyProposal,
 }) => {
   const { state } = controller;
   const { comments, dayCounts } = state;
@@ -163,6 +229,28 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
   const [busyDecisionId, setBusyDecisionId] = useState<string | null>(null);
   // F12a: a @TravelAI ask is in flight — "TravelAI is typing…" placeholder.
   const [botThinking, setBotThinking] = useState(false);
+  // F12b: per-row local decision state for proposal cards (the row itself is
+  // immutable ciphertext — "applied"/"dismissed" survive only this visit).
+  const [appliedProposals, setAppliedProposals] = useState<Set<string>>(new Set());
+  const [dismissedProposals, setDismissedProposals] = useState<Set<string>>(new Set());
+
+  /** Compose the proposal through the parent save path, then mark the card. */
+  const applyProposal = async (row: TripComment) => {
+    const proposal = parseBotCard(bodyOf(row))?.proposal;
+    if (!proposal || !onApplyProposal) return;
+    try {
+      setBusyId(row._id);
+      await onApplyProposal(proposal);
+      setAppliedProposals((prev) => new Set(prev).add(row._id));
+    } catch (err: any) {
+      // A 409 already showed its own conflict medicine upstream — no duet.
+      if (!isRevConflict(err)) {
+        toast.error(err?.message || "Could not apply this proposal. Please try again.");
+      }
+    } finally {
+      setBusyId(null);
+    }
+  };
   const { decidedCommentIds } = controller;
   const decisions = state.decisions;
 
@@ -326,16 +414,25 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
       setBotThinking(true);
       try {
         const answer = await api.askTravelAI(tripId, { prompt: plain, context });
-        const replyPayload = await cryptoApi.encryptOutgoing(answer.reply);
+        // F12b: a proposal rides INSIDE the bubble as a visible JSON envelope
+        // — other members decrypt the same bytes and render the same card.
+        const bubble = answer.proposal
+          ? JSON.stringify({
+              v: 1,
+              text: answer.reply,
+              proposal: answer.proposal,
+            } satisfies BotBubblePayload)
+          : answer.reply;
+        const replyPayload = await cryptoApi.encryptOutgoing(bubble);
         const replyRow = await controller.addComment(
           replyPayload.body,
           anchorDay ?? undefined,
           replyPayload.e2ee,
-          answer.reply, // optimistic bubble shows the words, persona and all
+          bubble, // optimistic bubble carries the envelope too — no card flash
           true // bot flag → renders as the TravelAI participant
         );
         if (replyRow && replyPayload.e2ee) {
-          cryptoApi.rememberPlaintext(replyRow._id, answer.reply);
+          cryptoApi.rememberPlaintext(replyRow._id, bubble);
         }
       } catch (err: any) {
         toast.error(
@@ -664,29 +761,42 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
       </div>
     ) : (
       <div className="space-y-2">
-        {chronological.map((row) => (
-          <CommentRow
-            key={row._id}
-            row={row}
-            displayBody={bodyOf(row)}
-            canModerate={myRole === "owner" || Boolean(row.isYou)}
-            isBusy={busyId === row._id}
-            decided={decidedCommentIds.has(row._id)}
-            actionsOpen={editingId !== row._id && actionsForId === row._id}
-            onOpenActions={openActionsFor}
-            onDecide={() => void markDecision(row)}
-            editing={editingId === row._id}
-            editDraft={editDraft}
-            onEditDraftChange={(value) => {
-              setEditDraft(value);
-              onTyping?.(); // editing is composition too
-            }}
-            onStartEdit={() => startEdit(row)}
-            onSaveEdit={() => void saveEdit()}
-            onCancelEdit={cancelEdit}
-            onAskDelete={() => setPendingDelete(row)}
-          />
-        ))}
+        {chronological.map((row) => {
+          // F12b: bot rows may carry a proposal envelope; the card replaces
+          // the raw JSON in the bubble text.
+          const botCard = Boolean(row.bot) ? parseBotCard(bodyOf(row)) : null;
+          return (
+            <CommentRow
+              key={row._id}
+              row={row}
+              displayBody={botCard ? botCard.text : bodyOf(row)}
+              canModerate={myRole === "owner" || Boolean(row.isYou)}
+              isBusy={busyId === row._id}
+              decided={decidedCommentIds.has(row._id)}
+              actionsOpen={editingId !== row._id && actionsForId === row._id}
+              onOpenActions={openActionsFor}
+              onDecide={() => void markDecision(row)}
+              editing={editingId === row._id}
+              editDraft={editDraft}
+              onEditDraftChange={(value) => {
+                setEditDraft(value);
+                onTyping?.(); // editing is composition too
+              }}
+              onStartEdit={() => startEdit(row)}
+              onSaveEdit={() => void saveEdit()}
+              onCancelEdit={cancelEdit}
+              onAskDelete={() => setPendingDelete(row)}
+              botCard={botCard}
+              proposalApplied={appliedProposals.has(row._id)}
+              proposalDismissed={dismissedProposals.has(row._id)}
+              canApplyProposal={Boolean(onApplyProposal)}
+              onApplyProposal={() => void applyProposal(row)}
+              onDismissProposal={() =>
+                setDismissedProposals((prev) => new Set(prev).add(row._id))
+              }
+            />
+          );
+        })}
       </div>
     );
 
@@ -971,6 +1081,15 @@ interface CommentRowProps {
   onSaveEdit: () => void;
   onCancelEdit: () => void;
   onAskDelete: () => void;
+  /** F12b: a validated proposal envelope parsed from this row (bot rows only). */
+  botCard?: { text: string; proposal: AssistantProposal } | null;
+  /** F12b: local, per-visit card state. */
+  proposalApplied?: boolean;
+  proposalDismissed?: boolean;
+  /** Applying needs edit access on the trip (the parent composes the save). */
+  canApplyProposal?: boolean;
+  onApplyProposal?: () => void;
+  onDismissProposal?: () => void;
 }
 
 /** One bubble — right-aligned when the caller wrote it; tombstones shrink. */
@@ -990,6 +1109,12 @@ const CommentRow: React.FC<CommentRowProps> = ({
   onSaveEdit,
   onCancelEdit,
   onAskDelete,
+  botCard = null,
+  proposalApplied = false,
+  proposalDismissed = false,
+  canApplyProposal = false,
+  onApplyProposal,
+  onDismissProposal,
 }) => {
   // Long-press (mobile hold): a 500ms hold opens the action row; any movement
   // (a scroll, a swipe) cancels it so plain scrolling never pops a menu.
@@ -1157,6 +1282,54 @@ const CommentRow: React.FC<CommentRowProps> = ({
           >
             {displayBody}
           </p>
+        )}
+
+        {/* F12b proposal card: rides inside the bot bubble, dismissed/applied
+            is per-visit local state (the row itself is immutable ciphertext). */}
+        {botCard && !proposalDismissed && (
+          <div className="mt-1.5 rounded-xl border border-violet-300/60 bg-background/85 p-2.5 dark:border-violet-500/30">
+            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-violet-600 dark:text-violet-300">
+              <Bot className="h-3 w-3" />
+              <span>Proposed change</span>
+            </div>
+            <p className="mt-1 text-sm font-bold">{proposalLabel(botCard.proposal)}</p>
+            <p className="text-sm break-words text-foreground/90">
+              <span className="text-muted-foreground">→ </span>
+              {formatProposalValue(botCard.proposal)}
+            </p>
+            {proposalApplied ? (
+              <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-violet-500/15 px-2 py-0.5 text-[10px] font-bold text-violet-700 dark:text-violet-300">
+                <Sparkles className="h-2.5 w-2.5" /> Applied to the itinerary
+              </span>
+            ) : canApplyProposal ? (
+              <div className="mt-2 flex items-center gap-1.5">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={onApplyProposal}
+                  disabled={isBusy}
+                  className="h-7 rounded-full gap-1.5"
+                >
+                  {isBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                  Apply change
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={onDismissProposal}
+                  disabled={isBusy}
+                  className="h-7 rounded-full text-muted-foreground"
+                >
+                  Not now
+                </Button>
+              </div>
+            ) : (
+              <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
+                Members with edit access can apply this from the card.
+              </p>
+            )}
+          </div>
         )}
 
         {/* Time lives INSIDE the bubble, tail-right — the chat-app signature. */}

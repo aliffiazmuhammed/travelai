@@ -27,6 +27,7 @@ import type {
   TripComment,
   TripDecision,
   ChatKeysState,
+  AssistantProposal,
 } from '@/types';
 
 export interface StreamProgressEvent {
@@ -629,11 +630,20 @@ class ApiClient {
    * grounding. The reply comes back PLAINTEXT to this caller's browser ONLY;
    * the caller then encrypts it with the trip conversation key and posts it
    * through addTripComment as a bot:true row (the server stores no plaintext).
+   * F12b: `proposal` carries ONE typed itinerary change (or null); the client
+   * envelope-wraps it into the bubble and a human applies it through the
+   * normal save path.
    */
   async askTravelAI(
     tripId: string,
     payload: { prompt: string; context?: Array<{ label: string; text: string }> }
-  ): Promise<{ success: boolean; reply: string; provider: string; cached: boolean }> {
+  ): Promise<{
+    success: boolean;
+    reply: string;
+    proposal: AssistantProposal | null;
+    provider: string;
+    cached: boolean;
+  }> {
     return this.request(`/api/itinerary/${tripId}/chat/assistant`, {
       method: 'POST',
       body: JSON.stringify(payload),

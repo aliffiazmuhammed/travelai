@@ -45,6 +45,7 @@ import type {
   DailyWeather,
   DayAlternative,
   ItineraryData,
+  AssistantProposal,
   NearbyPlace,
   Trip,
   TripExpense,
@@ -154,6 +155,46 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
     safeData.day_by_day_itinerary
   );
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
+
+  /**
+   * F12b: compose a TravelAI proposal into the itinerary snapshot and save it
+   * through the SAME path manual editing uses (`onSave` → PUT with required
+   * `baseRev`, versioned). The bot never writes; this only types what a
+   * contributor typed by hand. Unsaved local day edits ride along, exactly
+   * like `persistGranular`'s "save pending changes first" rule.
+   */
+  const applyAssistantProposal = useCallback(
+    async (proposal: AssistantProposal): Promise<void> => {
+      if (!onSave) throw new Error("Applying needs edit access for this trip.");
+      const findDay = (dayNumber: number) =>
+        itinerary.find((day) => day.day === dayNumber);
+      if (proposal.kind !== "title" && proposal.kind !== "budget" && !findDay(proposal.day)) {
+        throw new Error("This trip no longer has that day — reload the trip and ask again.");
+      }
+      const next: ItineraryData = {
+        ...safeData,
+        day_by_day_itinerary: itinerary,
+        ...(proposal.kind === "title" ? { trip_title: proposal.value } : {}),
+        ...(proposal.kind === "budget" ? { budget_per_person: proposal.value } : {}),
+      };
+      if (proposal.kind === "day_title" || proposal.kind === "day_tip") {
+        // Pure replacement — never mutate the live state objects in place.
+        next.day_by_day_itinerary = itinerary.map((day) => {
+          if (day.day !== proposal.day) return day;
+          if (proposal.kind === "day_title") return { ...day, title: proposal.value };
+          return {
+            ...day,
+            pro_tip: [
+              ...(Array.isArray(day.pro_tip) ? day.pro_tip : []).slice(-7),
+              proposal.value,
+            ],
+          };
+        });
+      }
+      await onSave(next); // throws on 409 REV_CONFLICT → upstream medicine applies
+    },
+    [onSave, safeData, itinerary]
+  );
   /** Mirror for the live-tier callback (E4b): the SSE hook reads it from a ref. */
   const hasUnsavedChangesRef = useRef<boolean>(false);
   hasUnsavedChangesRef.current = hasUnsavedChanges;
@@ -810,6 +851,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
               crypto={chatCrypto}
               typingLabels={commentsController.typingLabels}
               onTyping={commentsController.notifyTyping}
+              onApplyProposal={onSave ? applyAssistantProposal : undefined}
             />
           </TabsContent>
         )}
@@ -826,6 +868,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
           crypto={chatCrypto}
           presence={livePresence}
           hidden={activeTab === "comments"}
+          onApplyProposal={onSave ? applyAssistantProposal : undefined}
         />
       )}
 
