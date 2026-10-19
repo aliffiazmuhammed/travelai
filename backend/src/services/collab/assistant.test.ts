@@ -8,6 +8,7 @@ import {
   clampReply,
   consumeDailyQuota,
   dayKeyFor,
+  assistantTaskFrom,
   parseAssistantAnswer,
   proposalFitsTrip,
   quotaKey,
@@ -298,4 +299,51 @@ test('buildAssistantPrompt: the JSON protocol is compiled into the prompt', () =
   assert.ok(composed.includes('"proposal"'));
   assert.ok(composed.includes('"day_title"'));
   assert.ok(composed.includes('day numbers listed in the planned days'));
+});
+
+/* ------------------------------ F12c task + day ----------------------------- */
+
+test('assistantTaskFrom: summarize-family asks route to the summary task', () => {
+  for (const askText of [
+    'summarize what we have decided so far',
+    'Summarize the plan, TravelAI', // mention already stripped server-side
+    'can you recap the discussion?',
+    'catch us up on what we agreed',
+    'what did we decide about day 2?',
+    'bring me up to speed please',
+  ]) {
+    assert.equal(assistantTaskFrom(askText), 'summary', askText);
+  }
+  for (const askText of ['eat where?', 'how much is the museum entry?', 'weather in Manali?']) {
+    assert.equal(assistantTaskFrom(askText), 'answer', askText);
+  }
+});
+
+test('buildAssistantPrompt: the summary task swaps in the decided-first instruction', () => {
+  const facts = tripFactsFrom({ tripDetails: { trip_title: 'T', duration_days: 2 } });
+  const composed = buildAssistantPrompt(facts, 'summarize what we agreed', [], { task: 'summary' });
+  assert.ok(composed.includes('summarize the discussion for the group'));
+  assert.ok(composed.includes('DECIDED'));
+  assert.ok(!composed.includes('no list longer than 3 items'));
+  // ...while the answer task keeps its bubble rules
+  const answerComposed = buildAssistantPrompt(facts, 'eat where?', [], { task: 'answer' });
+  assert.ok(answerComposed.includes('no list longer than 3 items'));
+});
+
+test('buildAssistantPrompt: a day anchor is only added when the trip describes that day', () => {
+  const facts = tripFactsFrom({
+    tripDetails: {
+      trip_title: 'T',
+      duration_days: 2,
+      day_by_day_itinerary: [
+        { day: 1, title: 'Arrive & seafood' },
+        { day: 2, title: 'Scooters day' },
+      ],
+    },
+  });
+  const anchored = buildAssistantPrompt(facts, 'q', [], { dayAnchor: 2 });
+  assert.ok(anchored.includes('The asker is asking about Day 2: Scooters day.'));
+  // An out-of-range day adds NO invented structure.
+  const phantom = buildAssistantPrompt(facts, 'q', [], { dayAnchor: 9 });
+  assert.ok(!phantom.includes('asking about'));
 });

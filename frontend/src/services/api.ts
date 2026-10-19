@@ -636,7 +636,7 @@ class ApiClient {
    */
   async askTravelAI(
     tripId: string,
-    payload: { prompt: string; context?: Array<{ label: string; text: string }> }
+    payload: { prompt: string; context?: Array<{ label: string; text: string }>; day?: number }
   ): Promise<{
     success: boolean;
     reply: string;

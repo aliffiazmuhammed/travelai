@@ -65,6 +65,22 @@ export interface TripFacts {
 
 export const MENTION_RE = /@travelai/i;
 
+/**
+ * F12c: the ask's TASK, inferred from the question the asker typed (it is
+ * plaintext to the server by design — the provider call needs it). A summary
+ * ask wants the group's conclusions, not a routing recommendation. The
+ * composer mirrors this regex client-side so the grounding can include the
+ * decrypted decision cards; the two lists stay roughly aligned on purpose.
+ */
+export const BOT_TASK_SUMMARY_RE =
+  /(summari[sz]e|recap|catch (me|us) up|what (did|have) we (decide[ds]?|agree[ds]?|settle[ds]?)|bring (me|us) up to speed)/i;
+
+export type AssistantTask = 'answer' | 'summary';
+
+export function assistantTaskFrom(question: string): AssistantTask {
+  return BOT_TASK_SUMMARY_RE.test(question) ? 'summary' : 'answer';
+}
+
 /** The client passes the mention through as typed; the AI prefers it gone. */
 export function stripMention(prompt: string): string {
   return prompt.replace(MENTION_RE, '').replace(/\s{2,}/g, ' ').trim();
@@ -148,17 +164,27 @@ export function tripFactsFrom(trip: any): TripFacts {
  * client-fed chat context + the question last. NOTHING server-built mentions
  * chat contents — the context block is purely what the client shipped.
  */
-export function buildAssistantPrompt(facts: TripFacts, question: string, context: AssistantContextItem[]): string {
+export function buildAssistantPrompt(
+  facts: TripFacts,
+  question: string,
+  context: AssistantContextItem[],
+  opts: { task?: AssistantTask; dayAnchor?: number } = {}
+): string {
+  const task = opts.task ?? assistantTaskFrom(question);
+  const taskLine =
+    task === 'summary'
+      ? 'Task: summarize the discussion for the group in 2-5 plain sentences. Lead with what the group DECIDED (choices or commitments on record), then what is still open, then a concrete next step. Do not propose a change unless one is clearly pending agreement.'
+      : 'Task: answer the question. 1-4 short, plain sentences for a chat bubble, no list longer than 3 items, concrete about the trip below. Propose a change only when the ask clearly wants one or an obvious improvement is worth offering.';
   const sections: string[] = [
     'You are TravelAI, a trip-planning assistant participating in a group chat for one trip.',
     'ALWAYS answer with ONLY one JSON object: {"text": "...", "proposal": null} or {"text": "...", "proposal": {...}}. No markdown, no code fences, no words outside the JSON. Numbers stay numbers.',
-    '"text" is your chat reply: 1-4 short, plain sentences for a chat bubble, no list longer than 3 items, concrete about the trip below.',
+    `"text" is your chat reply. ${taskLine}`,
     '"proposal" is either null, or ONE concrete itinerary change you suggest. It must be EXACTLY one of:',
     '- {"kind":"title","value":"<new trip title, max 120 chars>"}',
     '- {"kind":"budget","value":<positive number, budget per person in the trip currency>}',
     '- {"kind":"day_title","day":<an existing day number>,"value":"<new title for that day, max 120 chars>"}',
     '- {"kind":"day_tip","day":<an existing day number>,"value":"<one practical tip for that day, max 200 chars>"}',
-    'Use "day" ONLY for day numbers listed in the planned days below. Propose only when the ask clearly wants a change or an obvious improvement is worth offering — otherwise null.',
+    'Use "day" ONLY for day numbers listed in the planned days below. Otherwise null.',
   ];
   const factsBlock: string[] = [];
   if (facts.title) factsBlock.push(`Trip: ${facts.title}`);
@@ -167,6 +193,12 @@ export function buildAssistantPrompt(facts: TripFacts, question: string, context
   if (facts.season) factsBlock.push(`Season: ${facts.season}`);
   if (facts.groupType) factsBlock.push(`Group: ${facts.groupType}`);
   if (facts.dayTitles.length) factsBlock.push(`Planned days: ${facts.dayTitles.join(' | ')}`);
+  // F12c: the asker's day anchor — only added when the trip actually describes
+  // that day, so it never invents structure.
+  if (opts.dayAnchor) {
+    const anchored = facts.dayTitles.find((line) => line.startsWith(`Day ${opts.dayAnchor}: `));
+    if (anchored) factsBlock.push(`The asker is asking about ${anchored}.`);
+  }
   if (factsBlock.length) sections.push(factsBlock.join('\n'));
   if (context.length) {
     sections.push(
@@ -295,8 +327,7 @@ export function consumeDailyQuota(
 export async function answerTravelAI(
   trip: any,
   callerId: string,
-  prompt: unknown,
-  contextItems: unknown,
+  payload: { prompt: unknown; contextItems: unknown; dayAnchor?: number },
   memberLabels?: Set<string>,
   quotas: QuotaMap = dailyQuotas
 ): Promise<{ reply: string; provider: AIProvider; cached: boolean; proposal: AssistantProposal | null }> {
@@ -304,10 +335,13 @@ export async function answerTravelAI(
 
   // Shape first (a rejected ask costs the provider nothing, so it also costs
   // no budget), THEN consume the daily ask.
-  const { prompt: question, context } = assertAssistantInputs(prompt, contextItems, memberLabels);
+  const { prompt: question, context } = assertAssistantInputs(payload.prompt, payload.contextItems, memberLabels);
   consumeDailyQuota(quotas, tripId, callerId);
   const facts = tripFactsFrom(trip);
-  const composed = buildAssistantPrompt(facts, question, context);
+  const composed = buildAssistantPrompt(facts, question, context, {
+    task: assistantTaskFrom(question),
+    dayAnchor: payload.dayAnchor,
+  });
 
   const result = await generateWithFallback(composed); // Gemini → GROQ → cache
   const { text, proposal } = parseAssistantAnswer(result.text);

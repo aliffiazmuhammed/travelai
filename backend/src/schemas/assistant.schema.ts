@@ -31,6 +31,8 @@ export const assistantRequestSchema = z.object({
     .max(500, 'Questions are limited to 500 characters.'),
   /** The decrypted recent messages — most recent FIRST from the client. */
   context: z.array(assistantContextItemSchema).max(8, 'At most 8 context messages.').optional(),
+  /** F12c: the asker's day anchor (1..999) — narrows the assistant's view. */
+  day: z.coerce.number().int().min(1).max(999).optional(),
 });
 
 /** Wire budget: the total plaintext the provider ever sees from one ask. */

@@ -435,12 +435,11 @@ export const postTripChatEnvelopes = catchAsync(
 export const postChatAssistant = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const { trip } = tripContext(req);
-    const result = await answerTravelAI(
-      trip,
-      String(req.userId),
-      req.body?.prompt,
-      req.body?.context
-    );
+    const result = await answerTravelAI(trip, String(req.userId), {
+      prompt: req.body?.prompt,
+      contextItems: req.body?.context,
+      dayAnchor: req.body?.day,
+    });
     // Hygiene: the prompt/context are never logged anywhere in this handler.
     res.status(200).json({ success: true, ...result });
   }

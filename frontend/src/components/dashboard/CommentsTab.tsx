@@ -89,6 +89,15 @@ const COMMENT_MAX_LEN = 2000; // mirrors COMMENT_MAX_LEN (server default)
 const BOT_MENTION_RE = /@travelai/i;
 
 /**
+ * F12c: mirrors the server's task detector — a summary ask feeds the bot the
+ * pinned decision cards as well as recent messages, so the answer leads with
+ * what the group DECIDED. Staying roughly aligned with `assistantTaskFrom`
+ * is deliberate; the server re-infers authoritatively from the question.
+ */
+const BOT_SUMMARY_RE =
+  /(summari[sz]e|recap|catch (me|us) up|what (did|have) we (decide[ds]?|agree[ds]?|settle[ds]?)|bring (me|us) up to speed)/i;
+
+/**
  * F12b: parse a TravelAI proposal envelope out of a decrypted bot row. The
  * envelope is written by our own ask flow; this parses defensively because a
  * malicious client can flag any of its own rows `bot: true` — anything that
@@ -371,17 +380,34 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
     return count;
   }, [chronological, cryptoApi]);
 
-  /** Ships the grounding: the last 8 readable rows, most recent first. */
-  const buildBotContext = (): Array<{ label: string; text: string }> => {
+  /**
+   * Ships the grounding: the last 8 readable rows, most recent first. F12c: a
+   * summary ask leads with the pinned DECISION cards (decrypted snapshots —
+   * the durable conclusions), then messages fill the remaining lines. Labels
+   * clamp to 32 chars — the zod wall rejects longer ones outright.
+   */
+  const buildBotContext = (includeDecisions = false): Array<{ label: string; text: string }> => {
     const lines: Array<{ label: string; text: string }> = [];
+    if (includeDecisions) {
+      for (const decision of decisions.slice(0, 4)) {
+        if (decision.deletedAt) continue;
+        if (cryptoApi.isEncrypted(decision) && !cryptoApi.plaintextOf(decision)) continue;
+        const text = decision.body ? bodyOf(decision) : "";
+        if (!text) continue;
+        lines.push({ label: "Decision", text: text.slice(0, 500) });
+      }
+    }
     for (let i = chronological.length - 1; i >= 0 && lines.length < 8; i -= 1) {
       const row = chronological[i];
       if (row.deletedAt) continue;
       if (!row.body && !cryptoApi.isEncrypted(row)) continue;
       if (cryptoApi.isEncrypted(row) && !cryptoApi.plaintextOf(row)) continue;
-      lines.push({ label: row.isYou ? "You" : row.label, text: bodyOf(row) });
+      lines.push({
+        label: (row.isYou ? "You" : row.label).slice(0, 32),
+        text: bodyOf(row).slice(0, 500),
+      });
     }
-    return lines; // chronological → reversed server-side into the prompt
+    return lines; // most recent first — the server flips it into the prompt
   };
 
   const submit = async () => {
@@ -405,15 +431,18 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
       toast.success("Message sent");
 
       if (!botAsk) return;
-      // F12a: ground with the last 8 messages BEFORE the question row lands,
-      // ask the server (THIS message + context go to the provider as
-      // plaintext — disclosed in the composer), then encrypt the answer into
-      // the thread as a bot:true row. Question already sent stays sent even
-      // if the ask fails — honest provenance, retriable ask.
-      const context = buildBotContext();
+      // F12c: a summary ask feeds the pinned decision cards into the grounding
+      // as well (the durable conclusions), and the asker's day anchor rides
+      // along so the assistant knows which day the question is about.
+      const summarize = BOT_SUMMARY_RE.test(plain);
+      const context = buildBotContext(summarize);
       setBotThinking(true);
       try {
-        const answer = await api.askTravelAI(tripId, { prompt: plain, context });
+        const answer = await api.askTravelAI(tripId, {
+          prompt: plain,
+          context,
+          day: anchorDay ?? undefined,
+        });
         // F12b: a proposal rides INSIDE the bubble as a visible JSON envelope
         // — other members decrypt the same bytes and render the same card.
         const bubble = answer.proposal
@@ -571,10 +600,12 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
       <div className="flex items-start gap-1.5 rounded-xl border border-violet-300/50 bg-violet-500/5 px-2.5 py-1.5 text-[11px] font-semibold leading-snug text-violet-700 dark:border-violet-500/30 dark:text-violet-300">
         <Sparkles className="mt-px h-3.5 w-3.5 shrink-0" />
         <span>
-          Asking TravelAI — sends this message plus{" "}
+          Asking TravelAI{anchorDay ? ` about Day ${anchorDay}` : ""}
+          {BOT_SUMMARY_RE.test(draft) ? " for a recap" : ""} — sends this message plus{" "}
           {botContextCount === 0 ? "no" : botContextCount} recent chat message
-          {botContextCount === 1 ? "" : "s"} (decrypted) to the AI provider. The
-          answer is encrypted into the thread like any other message.
+          {botContextCount === 1 ? "" : "s"}
+          {BOT_SUMMARY_RE.test(draft) ? " and the pinned decision cards" : ""} (decrypted) to the
+          AI provider. The answer is encrypted into the thread like any other message.
         </span>
       </div>
     ) : null;
