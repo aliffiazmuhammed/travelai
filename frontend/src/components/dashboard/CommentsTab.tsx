@@ -18,7 +18,6 @@ import { toast } from "sonner";
 import {
   Bot,
   Loader2,
-  Lock,
   MessageCircle,
   Pencil,
   Pin,
@@ -81,12 +80,6 @@ interface CommentsTabProps {
    * suggestion without the Apply controls.
    */
   onApplyProposal?: (proposal: AssistantProposal) => Promise<void> | void;
-  /**
-   * F10c: opens the chat-key backup dialog (export on a device that works /
-   * import here). Owned by the drawer, so only the chat surface can offer it —
-   * the keyless banner shows the button when this is provided.
-   */
-  onOpenKeyBackup?: () => void;
 }
 
 const COMMENT_MAX_LEN = 2000; // mirrors COMMENT_MAX_LEN (server default)
@@ -214,7 +207,6 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
   onTyping,
   variant = "feed",
   onApplyProposal,
-  onOpenKeyBackup,
 }) => {
   const { state } = controller;
   const { comments, dayCounts } = state;
@@ -222,11 +214,14 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
   const isChat = variant === "chat";
   const cryptoApi = crypto ?? OFFLINE_CRYPTO;
 
-  /** Render text for one row: decrypted plaintext (or a honest 🔒 placeholder). */
+  /**
+   * Render text for one row. Rows this device cannot read yet get the
+   * WhatsApp-style waiting line — no "encrypted/decrypted" jargon in the chat.
+   */
   const bodyOf = (row: { _id: string; body: string; e2ee?: boolean }) => {
     if (!cryptoApi.isEncrypted(row)) return row.body;
     const plain = cryptoApi.plaintextOf(row);
-    return plain || "Encrypted message — can't be decrypted on this device yet.";
+    return plain || "Waiting for this message…";
   };
 
   const [dayFilter, setDayFilter] = useState<number | null>(null);
@@ -484,6 +479,12 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
   };
 
   const startEdit = (row: TripComment) => {
+    // Never seed the edit box from a row this device cannot read yet: saving
+    // would overwrite the real message with the waiting line.
+    if (cryptoApi.isEncrypted(row) && !cryptoApi.plaintextOf(row)) {
+      toast.error("This message isn't ready on this device yet.");
+      return;
+    }
     setEditingId(row._id);
     setEditDraft(bodyOf(row)); // never open a base64 blob in the edit box
   };
@@ -612,8 +613,8 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
           {BOT_SUMMARY_RE.test(draft) ? " for a recap" : ""} — sends this message plus{" "}
           {botContextCount === 0 ? "no" : botContextCount} recent chat message
           {botContextCount === 1 ? "" : "s"}
-          {BOT_SUMMARY_RE.test(draft) ? " and the pinned decision cards" : ""} (decrypted) to the
-          AI provider. The answer is encrypted into the thread like any other message.
+          {BOT_SUMMARY_RE.test(draft) ? " and the pinned decision cards" : ""} to the AI
+          provider. The reply appears in this chat.
         </span>
       </div>
     ) : null;
@@ -633,6 +634,25 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
       </Button>
     </div>
   ) : null;
+
+  /**
+   * Honest but plain-language: while this device cannot use the chat's secure
+   * channel, a message sent from here is not protected. No crypto vocabulary,
+   * no icons — one quiet line and a way to try again.
+   */
+  const sendNotice =
+    cryptoApi.status === 'error' || cryptoApi.status === 'keyless' ? (
+      <div className="flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground">
+        <span>Messages you send here aren&apos;t protected yet.</span>
+        <button
+          type="button"
+          onClick={cryptoApi.retry}
+          className="font-bold underline underline-offset-2 hover:text-foreground"
+        >
+          Reconnect
+        </button>
+      </div>
+    ) : null;
 
   const composerBlock = canWrite ? (
     isChat ? (
@@ -854,55 +874,11 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
             onScroll={handleChatScroll}
             className="flex-1 min-h-0 space-y-2 overflow-y-auto px-0.5"
           >
-            {cryptoApi.status === 'keyless' ? (
-              /* Two flavors of "no key on this device": (a) the account's
-                 envelope was wrapped for ANOTHER device's key (the ordinary
-                 second-browser case — Retry can never fix it) or (b) no
-                 envelope exists for this account yet. Both are answered by the
-                 backup code, so that is the one action offered. */
-              <div
-                className="rounded-xl border border-border/60 bg-muted/50 px-3 py-2 text-[11px] text-muted-foreground flex items-center gap-2"
-                title={
-                  cryptoApi.keylessReason === 'mismatch'
-                    ? 'This browser holds a different chat key than the one the trip is encrypted with.'
-                    : "This account has no chat key envelope yet; it arrives when another member's chat is open."
-                }
-              >
-                <span className="min-w-0 flex-1">
-                  {cryptoApi.keylessReason === 'mismatch'
-                    ? 'Chat unlocks automatically once another device of this account opens chat \u2014 or paste a backup code now.'
-                    : 'Waiting for the chat key to reach this device \u2014 or paste a backup code from another device.'}
-                </span>
-                {onOpenKeyBackup ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={onOpenKeyBackup}
-                    className="h-6 shrink-0 rounded-full px-2.5 text-[10px] font-bold"
-                  >
-                    Backup code
-                  </Button>
-                ) : null}
-              </div>
-            ) : cryptoApi.status === 'error' ? (
-              /* One quiet fact + one tap to fix; the raw cause is tooltip-only. */
-              <div
-                className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-300 flex items-center gap-2"
-                title={cryptoApi.error || 'Chat encryption keys could not load.'}
-              >
-                <span className="min-w-0 flex-1">
-                  Encryption is off in this session — new messages send unencrypted.
-                </span>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={cryptoApi.retry}
-                  className="h-6 shrink-0 rounded-full border-amber-500/40 px-2.5 text-[10px] font-bold text-amber-700 hover:bg-amber-500/10 dark:text-amber-300"
-                >
-                  Retry
-                </Button>
+            {cryptoApi.status === 'ready' ? (
+              /* WhatsApp-style: one quiet line at the top of the chat, no
+                 technical detail, no icons, nothing to act on. */
+              <div className="py-1 text-center text-[11px] text-muted-foreground">
+                Messages are end-to-end encrypted.
               </div>
             ) : null}
             <DecisionsStrip
@@ -922,6 +898,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
             {typingLine}
             {botThinkingLine}
             {botDisclosure}
+            {sendNotice}
             {composerBlock}
           </div>
         </>
@@ -938,25 +915,15 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
                 <Badge variant="outline" className="text-[10px]">
                   {dayFilter === null ? comments.length : visible.length}
                 </Badge>
-                {/* F10 honesty marker: what the reader's browser is actually doing */}
-                {cryptoApi.status === "ready" && (
-                  <Badge
-                    variant="outline"
-                    className="text-[10px] gap-1 text-emerald-600 border-emerald-500/40"
-                  >
-                    <Lock className="w-2.5 h-2.5" /> E2EE
-                  </Badge>
-                )}
-                {cryptoApi.status === "error" && (
-                  <Badge
-                    variant="outline"
-                    className="text-[10px] gap-1 text-destructive border-destructive/40"
-                  >
-                    Plain text
-                  </Badge>
-                )}
               </div>
             </div>
+
+            {cryptoApi.status === "ready" && (
+              /* WhatsApp-style: the single, plain statement about the chat. */
+              <p className="text-[11px] text-muted-foreground">
+                Messages are end-to-end encrypted.
+              </p>
+            )}
 
             {/* Pinned decisions (F9) — the "what we agreed" strip, newest first */}
             <DecisionsStrip
@@ -1005,6 +972,8 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
             {botThinkingLine}
 
             {botDisclosure}
+
+            {sendNotice}
 
             {composerBlock}
 

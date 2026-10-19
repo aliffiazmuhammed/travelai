@@ -162,16 +162,16 @@ export const DiscussionDrawer: React.FC<DiscussionDrawerProps> = ({
                 <MessageCircle className="w-4 h-4 text-primary" />
                 Trip chat
               </SheetTitle>
-              {/* F10 status dot: green = unlocked & encrypted, amber = syncing,
-                  red = encryption unavailable (honest plain-text fallback). */}
+              {/* Quiet status dot: green = protected, amber = connecting,
+                  red = messages here aren't protected (honest fallback). */}
               {crypto && (
                 <span
                   title={
                     cryptoStatus === "ready"
                       ? "End-to-end encrypted"
                       : cryptoStatus === "error"
-                        ? "Encryption unavailable — sending in plain text"
-                        : "Syncing chat keys…"
+                        ? "Messages you send now aren't protected"
+                        : "Connecting…"
                   }
                   className={cn(
                     "w-2 h-2 rounded-full shrink-0",
@@ -236,7 +236,6 @@ export const DiscussionDrawer: React.FC<DiscussionDrawerProps> = ({
               typingLabels={controller.typingLabels}
               onTyping={controller.notifyTyping}
               onApplyProposal={onApplyProposal}
-              onOpenKeyBackup={() => void openKeysDialog()}
             />
           </div>
         </SheetContent>
@@ -254,7 +253,7 @@ export const DiscussionDrawer: React.FC<DiscussionDrawerProps> = ({
               Messages are end-to-end encrypted and the unlocking half lives in
               the browser that created it. On a device where chat already works,
               tap the key icon there, copy its code, and paste it below — this
-              device then reads and writes the same encrypted chat.
+              device then reads and writes the same chat.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">

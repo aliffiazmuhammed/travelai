@@ -213,3 +213,15 @@ Re-verified after the format change: 223/223 backend tests; smoke-f10 ALL PASS (
 **Result:** keyless on a second device is now a transient, self-resolving state (the banner's "unlocks automatically once another device opens chat" wording); the backup code remains as an offline fallback.
 
 **Verified:** backend `tsc` + **261/261** tests (new pure rules: `mergePubKeyList` cap/dedupe, `memberDeviceKeys`, device-slot targeting walls, multi-device projection incl. legacy envelopes); live `smoke-f10.mts` extended with a **real second-device case** (second identity published → no slot → device opens nothing → holder heals the slot → same conversation key, cross-decrypts, `envelopedPubKeys` reaches 2) and a non-member DEVICE-key wall.
+
+### 12.10 Chat copy — WhatsApp convention, no crypto vocabulary (user call)
+
+The user is the product owner: **members of a trip do not want to read about encryption**. The chat now speaks the WhatsApp dialect instead of explaining the machinery.
+
+- **One line at the top, ever:** "Messages are end-to-end encrypted." — rendered as a quiet centered system line in the drawer (and a muted line under the Discuss header) and only while the channel is actually usable. No lock icons, no badges, no "E2EE"/"Plain text" chips (both badge variants and the `Lock` import are gone).
+- **Unreadable rows** say "Waiting for this message…" (WhatsApp's wording) — the old "Encrypted message — can't be decrypted on this device yet." is gone.
+- **Degraded sending is still disclosed**, because silent plaintext would be a trust bug — but in plain words, once, just above the composer: "Messages you send here aren't protected yet." with a quiet **Reconnect** link (runs the key flow). No cause text, no banner, no amber box.
+- **Assistant disclosure** lost its crypto clauses: it now says the reply appears in this chat instead of "(decrypted)… the answer is encrypted into the thread".
+- The key dialog (an explicit settings flow reached from the toolbar key icon, not the message stream) keeps its functional wording, minus the word "encrypted" where it was decorative.
+- Edit is refused on a row this device cannot read (it would have seeded the edit box with the placeholder and overwritten the real message on save).
+
