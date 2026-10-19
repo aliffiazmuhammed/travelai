@@ -870,7 +870,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
               >
                 <span className="min-w-0 flex-1">
                   {cryptoApi.keylessReason === 'mismatch'
-                    ? 'Chat here is locked with another device\u2019s key. Copy that device\u2019s backup code to read and send encrypted messages on this one.'
+                    ? 'Chat unlocks automatically once another device of this account opens chat \u2014 or paste a backup code now.'
                     : 'Waiting for the chat key to reach this device \u2014 or paste a backup code from another device.'}
                 </span>
                 {onOpenKeyBackup ? (

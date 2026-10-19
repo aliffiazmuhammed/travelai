@@ -534,8 +534,12 @@ export interface TripDecision {
 export interface ChatKeyMember {
   userId: string;
   label: string;
-  /** Base64 SPKI when this member has published a chat identity. */
+  /** Base64 SPKI when this member has published a chat identity (newest). */
   pubKey?: string;
+  /** Every device (browser) this member published from — F10d slots. */
+  pubKeys?: string[];
+  /** Which device keys already have an envelope for the current epoch. */
+  envelopedPubKeys?: string[];
   /** Whether the CURRENT epoch already has an envelope for this member. */
   hasEnvelope: boolean;
 }
@@ -543,8 +547,10 @@ export interface ChatKeyMember {
 export interface ChatKeysState {
   /** Current conversation-key epoch; absent until the first bootstrap. */
   epoch?: number;
-  /** The caller's own envelope (base64), present when they hold the key. */
+  /** The caller's first envelope (base64) — kept for older clients. */
   mine?: string;
+  /** Every envelope addressed to this caller (any of their devices). */
+  mineAll?: string[];
   members: ChatKeyMember[];
 }
 

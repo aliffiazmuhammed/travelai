@@ -30,10 +30,20 @@ const base64Field = (max: number) =>
     .regex(BASE64_RE, 'Expected base64.')
     .max(max, `Must be at most ${max} base64 characters.`);
 
-/** One envelope entry: a member id → the conversation key wrapped for them. */
+/**
+ * One envelope entry: a recipient slot → the conversation key wrapped for it.
+ *
+ * F10d keys are **device public keys** (base64 SPKI, so every browser of an
+ * account gets its own slot); plain member ids remain valid for envelopes minted
+ * before multi-device support (both alphabets are base64-safe).
+ */
 export const envelopesField = z
   .record(
-    z.string().regex(CHAT_OBJECT_ID_RE, 'Envelope keys must be user ids.'),
+    z
+      .string()
+      .min(1, 'Envelope keys must not be empty.')
+      .max(PUBKEY_MAX, `Envelope keys must be at most ${PUBKEY_MAX} characters.`)
+      .regex(/^[A-Za-z0-9+/=]+$/, 'Envelope keys must be member ids or public keys.'),
     base64Field(WRAPPED_KEY_MAX)
   )
   .refine((entries) => Object.keys(entries).length > 0, 'Send at least one envelope.')

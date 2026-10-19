@@ -12,7 +12,8 @@ import {
   unwrapMyEnvelope,
   wrapEnvelope,
 } from '@/lib/chatCrypto';
-import type { ChatIdentity, MemberKeyMap } from '@/lib/chatCrypto';
+import type { ChatIdentity, MemberKeyMap, MemberKeyMapMulti } from '@/lib/chatCrypto';
+import type { ChatKeysState } from '@/types/trip';
 
 /**
  * The per-trip E2EE session (Milestone 7, F10 — frontend half).
@@ -102,41 +103,117 @@ export function useTripChatCrypto(
 
   /* ------------------------------ key biography ----------------------------- */
 
+  /** userId → every published device key (the wrapper may be any of them). */
+  const devicePubsOf = (state: ChatKeysState): MemberKeyMapMulti => {
+    const map: MemberKeyMapMulti = {};
+    for (const member of state.members || []) {
+      const keys = member.pubKeys?.length
+        ? member.pubKeys
+        : member.pubKey
+          ? [member.pubKey]
+          : [];
+      if (keys.length) map[member.userId] = keys;
+    }
+    return map;
+  };
+
+  /** userId → newest key (the shape `mergeMemberKeys`/legacy lookups use). */
+  const livePubsOf = (state: ChatKeysState): MemberKeyMap => {
+    const map: MemberKeyMap = {};
+    for (const member of state.members || []) {
+      if (member.pubKey) map[member.userId] = member.pubKey;
+      else if (member.pubKeys?.length) map[member.userId] = member.pubKeys[0];
+    }
+    return map;
+  };
+
+  /** Every envelope addressed to this account (any device), legacy shape included. */
+  const mineCandidates = (state: ChatKeysState): string[] =>
+    state.mineAll?.length ? state.mineAll : state.mine ? [state.mine] : [];
+
   /**
-   * Tries to open MY envelope with THIS browser's identity. A failure here is
-   * NOT an error: it is the ordinary "second browser" case — the account has
-   * an envelope, but it was wrapped to the OTHER device's public key, so this
-   * device can never decrypt it (Retry is deterministic and useless). Reported
-   * as `keyless` so the UI can point at the backup-code door instead.
+   * Tries to open MY envelopes with THIS browser's identity, one per device of
+   * this account (the server hands all of them over; only the slot wrapped to
+   * THIS device's key can be opened). No slot opening at all is NOT an error:
+   * it is either "no key for this account yet" or "wrapped for another device"
+   * — both `keyless`, healed by another open client or the backup code.
    */
   const adoptEnvelope = useCallback(
     async (
       identity: ChatIdentity,
-      mine: string | undefined,
+      candidates: string[],
       livePubs: MemberKeyMap,
-      cachedPubs: MemberKeyMap
+      cachedPubs: MemberKeyMap,
+      devicePubs: MemberKeyMapMulti
     ): Promise<boolean> => {
-      if (!mine) {
+      if (!candidates.length) {
         setKeylessReason('missing');
         setStatus('keyless');
         return false;
       }
-      try {
-        convKeyRef.current = await unwrapMyEnvelope(mine, identity, livePubs, cachedPubs);
-        setKeylessReason(undefined);
-        setStatus('ready');
-        return true;
-      } catch (err) {
-        console.warn('chatCrypto: this device cannot open the chat key envelope', err);
-        // A missing wrapper pubkey (the member who wrapped it left the trip and
-        // we have no cache) is a RE-SHARE wait, not a wrong-device key.
-        const reason = /wrapper/i.test(String((err as any)?.message || '')) ? 'missing' : 'mismatch';
-        setKeylessReason(reason);
-        setStatus('keyless');
-        return false;
+      let lastError: unknown = null;
+      let sawWrapperGap = false;
+      for (const envelope of candidates) {
+        try {
+          convKeyRef.current = await unwrapMyEnvelope(
+            envelope,
+            identity,
+            livePubs,
+            cachedPubs,
+            devicePubs
+          );
+          setKeylessReason(undefined);
+          setStatus('ready');
+          return true;
+        } catch (err) {
+          lastError = err;
+          if (/wrapper/i.test(String((err as any)?.message || ''))) sawWrapperGap = true;
+        }
       }
+      console.warn('chatCrypto: this device cannot open any envelope for the account', lastError);
+      // A missing wrapper pubkey (the member who wrapped it left the trip and
+      // we have no cache) is a RE-SHARE wait, not a wrong-device key.
+      setKeylessReason(sawWrapperGap ? 'missing' : 'mismatch');
+      setStatus('keyless');
+      return false;
     },
     []
+  );
+
+  /**
+   * F10d self-heal: a client that HOLDS the conversation key wraps it for every
+   * device slot that is still empty — a second browser of this account, or a
+   * member who joined after the epoch was minted. Idempotent: only gaps are
+   * sent, and the server merges them into the current epoch.
+   */
+  const healSlots = useCallback(
+    async (identity: ChatIdentity, state: ChatKeysState) => {
+      if (!tripId || !currentUserId || !convKeyRef.current) return;
+      const pending: Record<string, string> = {};
+      for (const member of state.members || []) {
+        const keys = member.pubKeys?.length
+          ? member.pubKeys
+          : member.pubKey
+            ? [member.pubKey]
+            : [];
+        const filled = new Set(member.envelopedPubKeys || []);
+        for (const pub of keys) {
+          if (filled.has(pub)) continue;
+          try {
+            pending[pub] = await wrapEnvelope(currentUserId, identity, pub, convKeyRef.current);
+          } catch {
+            /* one device failing to wrap never blocks the rest */
+          }
+        }
+      }
+      if (!Object.keys(pending).length) return;
+      try {
+        await api.addTripChatEnvelopes(tripId, pending);
+      } catch {
+        /* the poll retries */
+      }
+    },
+    [tripId, currentUserId]
   );
 
   const runKeyFlow = useCallback(async () => {
@@ -158,28 +235,31 @@ export function useTripChatCrypto(
       }
 
       const state = await api.getTripChatKeys(tripId);
-      const livePubs: MemberKeyMap = {};
-      for (const member of state.members || []) {
-        if (member.pubKey) livePubs[member.userId] = member.pubKey;
-      }
+      const livePubs = livePubsOf(state);
+      const devicePubs = devicePubsOf(state);
       mergeMemberKeys(tripId, livePubs);
       const cachedPubs = cachedMemberKeys(tripId);
 
       if (!state.epoch) {
         // Nobody has minted a conversation key yet: bootstrap epoch 1 and
-        // envelope EVERY member that already has a published public key.
-        // Members we cannot wrap for are self-healed by later holders.
+        // envelope EVERY published device key of EVERY member (F10d: one slot
+        // per browser). Members we cannot wrap for are self-healed later.
         setStatus('bootstrap');
         if (!currentUserId) throw new Error('Missing the current user id for key bootstrapping.');
         const conversationKey = await generateConversationKey();
         const envelopes: Record<string, string> = {};
         for (const member of state.members || []) {
-          if (member.pubKey) {
+          const keys = member.pubKeys?.length
+            ? member.pubKeys
+            : member.pubKey
+              ? [member.pubKey]
+              : [];
+          for (const pub of keys) {
             try {
-              envelopes[member.userId] = await wrapEnvelope(
+              envelopes[pub] = await wrapEnvelope(
                 currentUserId, // the wrapper id: recipients derive against MY pub
                 identity,
-                member.pubKey,
+                pub,
                 conversationKey
               );
             } catch {
@@ -187,7 +267,7 @@ export function useTripChatCrypto(
             }
           }
         }
-        if (!envelopes[currentUserId]) {
+        if (!envelopes[identity.pubKey]) {
           throw new Error('Could not wrap the chat key for yourself — try reopening.');
         }
         try {
@@ -199,21 +279,30 @@ export function useTripChatCrypto(
           // so we recover as an ordinary keyholder: unwrap and move on.
           if (err?.status !== 409) throw err;
           const fresh = await api.getTripChatKeys(tripId);
-          await adoptEnvelope(identity, fresh.mine, livePubs, cachedPubs);
+          const opened = await adoptEnvelope(
+            identity,
+            mineCandidates(fresh),
+            livePubsOf(fresh),
+            cachedPubs,
+            devicePubsOf(fresh)
+          );
+          if (opened) await healSlots(identity, fresh);
           return;
         }
         convKeyRef.current = conversationKey;
         setStatus('ready');
+        await healSlots(identity, state);
         return;
       }
 
-      if (state.mine) {
-        await adoptEnvelope(identity, state.mine, livePubs, cachedPubs);
-        return;
-      }
-
-      setKeylessReason('missing');
-      setStatus('keyless');
+      const opened = await adoptEnvelope(
+        identity,
+        mineCandidates(state),
+        livePubs,
+        cachedPubs,
+        devicePubs
+      );
+      if (opened) await healSlots(identity, state);
     } catch (err: any) {
       // Capture the real cause for the diagnostics tooltip — thrown strings
       // and exotic rejections used to fall through to the generic message,
@@ -222,7 +311,7 @@ export function useTripChatCrypto(
         err?.message || (typeof err === 'string' && err) || String(err) || 'Chat encryption is unavailable right now.';
       markError(message);
     }
-  }, [tripId, currentUserId, markError, adoptEnvelope]);
+  }, [tripId, currentUserId, markError, adoptEnvelope, healSlots]);
 
   /** Re-runs the whole key flow in place — the banner's Retry medicine. */
   const retry = useCallback(() => {
@@ -230,10 +319,10 @@ export function useTripChatCrypto(
   }, [runKeyFlow]);
 
   /**
-   * Quiet re-check used while `keyless`: fetches the current key state and
-   * tries to open my envelope again WITHOUT flickering through 'starting'.
-   * Polled (plus on window focus) so a freshly shared envelope — or one added
-   * for this account's second device — lands without a page reload.
+   * Quiet re-check (never flickers through 'starting'): while keyless it tries
+   * to open my envelopes; while ready it heals slots that appeared since (a
+   * second browser of this account, or a fresh member) so the OTHER device
+   * unlocks itself without any user action.
    */
   const refreshKey = useCallback(async () => {
     if (!tripId) return;
@@ -242,21 +331,32 @@ export function useTripChatCrypto(
       if (!identity) return;
       const state = await api.getTripChatKeys(tripId);
       if (!state.epoch) return;
-      const livePubs: MemberKeyMap = {};
-      for (const member of state.members || []) {
-        if (member.pubKey) livePubs[member.userId] = member.pubKey;
-      }
+      const livePubs = livePubsOf(state);
       mergeMemberKeys(tripId, livePubs);
-      await adoptEnvelope(identity, state.mine, livePubs, cachedMemberKeys(tripId));
+      if (convKeyRef.current) {
+        await healSlots(identity, state);
+        return;
+      }
+      const opened = await adoptEnvelope(
+        identity,
+        mineCandidates(state),
+        livePubs,
+        cachedMemberKeys(tripId),
+        devicePubsOf(state)
+      );
+      if (opened) await healSlots(identity, state);
     } catch {
-      /* stays keyless; the next poll retries */
+      /* the next poll retries */
     }
-  }, [tripId, adoptEnvelope]);
+  }, [tripId, adoptEnvelope, healSlots]);
 
   useEffect(() => {
-    if (!enabled || !tripId || status !== 'keyless') return;
+    if (!enabled || !tripId) return;
+    // Fast when locked (waiting for a share), slow when ready (slot healing).
+    const delay = status === 'keyless' ? 6000 : status === 'ready' ? 15000 : 0;
+    if (!delay) return;
     const tick = () => void refreshKey();
-    const timer = window.setInterval(tick, 6000);
+    const timer = window.setInterval(tick, delay);
     window.addEventListener('focus', tick);
     return () => {
       window.clearInterval(timer);

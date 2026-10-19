@@ -203,6 +203,8 @@ export async function importBackupCode(code: string): Promise<ChatIdentity> {
 /* -------------------------------------------------------------------------- */
 
 export type MemberKeyMap = Record<string, string>;
+/** F10d: every device key of a member (userId → published device keys). */
+export type MemberKeyMapMulti = Record<string, string[]>;
 
 export function mergeMemberKeys(tripId: string, incoming: MemberKeyMap): void {
   try {
@@ -280,20 +282,36 @@ export async function wrapEnvelope(
 }
 
 /** Resolves the wrapper's public key: live member list first, cache second. */
-function wrapperPubKeyFor(
+function wrapperPubKeysFor(
   envelope: EnvelopeV1,
   memberPubs: MemberKeyMap,
-  cachedPubs: MemberKeyMap
-): string | undefined {
-  return memberPubs[envelope.w] || cachedPubs[envelope.w];
+  cachedPubs: MemberKeyMap,
+  devicePubs?: MemberKeyMapMulti
+): string[] {
+  const keys: string[] = [];
+  const add = (value?: string) => {
+    if (value && !keys.includes(value)) keys.push(value);
+  };
+  add(memberPubs[envelope.w]);
+  add(cachedPubs[envelope.w]);
+  for (const key of devicePubs?.[envelope.w] || []) add(key);
+  return keys;
 }
 
-/** Unwraps MY envelope back into the conversation key (see EnvelopeV1). */
+/**
+ * Unwraps MY envelope back into the conversation key (see EnvelopeV1).
+ *
+ * F10d: a wrapper may have wrapped from ANY of their devices, and the envelope
+ * only records their USER id — so every published key of that user is tried
+ * until one derives the right wrap key (only the actual wrapper's device key
+ * can open it).
+ */
 export async function unwrapMyEnvelope(
   envelopeB64: string,
   myIdentity: ChatIdentity,
   memberPubs: MemberKeyMap,
-  cachedPubs: MemberKeyMap
+  cachedPubs: MemberKeyMap,
+  devicePubs?: MemberKeyMapMulti
 ): Promise<CryptoKey> {
   let envelope: EnvelopeV1;
   try {
@@ -304,15 +322,25 @@ export async function unwrapMyEnvelope(
   if (!envelope || envelope.v !== 1 || !envelope.w || !envelope.iv || !envelope.d) {
     throw new Error('Unsupported envelope version.');
   }
-  const theirPubB64 = wrapperPubKeyFor(envelope, memberPubs, cachedPubs);
-  if (!theirPubB64) {
+  const candidates = wrapperPubKeysFor(envelope, memberPubs, cachedPubs, devicePubs);
+  if (!candidates.length) {
     throw new Error('The key wrapper is no longer a member; wait for another member to re-share.');
   }
-  const wrapKey = await deriveWrapKey(myIdentity.priv, theirPubB64);
-  const raw = new Uint8Array(
-    await subtle!.decrypt({ name: 'AES-GCM', iv: unb64(envelope.iv) }, wrapKey, unb64(envelope.d))
-  );
-  return subtle!.importKey('raw', raw, 'AES-GCM', false, ['encrypt', 'decrypt']);
+  let lastError: unknown = null;
+  for (const theirPubB64 of candidates) {
+    try {
+      const wrapKey = await deriveWrapKey(myIdentity.priv, theirPubB64);
+      const raw = new Uint8Array(
+        await subtle!.decrypt({ name: 'AES-GCM', iv: unb64(envelope.iv) }, wrapKey, unb64(envelope.d))
+      );
+      return subtle!.importKey('raw', raw, 'AES-GCM', false, ['encrypt', 'decrypt']);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error('This device cannot open the chat key envelope.');
 }
 
 /* -------------------------------------------------------------------------- */

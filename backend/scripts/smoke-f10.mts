@@ -13,9 +13,10 @@
  * public half; the trip's conversation key is generated client-side and
  * enveloped pairwise (ECDH → HKDF → AES-GCM). The server must behave like a
  * blind carrier end to end:
- *   shape walls (base64, member-only envelope targets, epoch monotonicity),
- *   bootstrap → decrypt roundtrip → ciphertext-on-the-wire → full-history
- *   self-heal for a late joiner → rotation rules.
+ *   shape walls (base64, member/device-only envelope targets, epoch
+ *   monotonicity), bootstrap → decrypt roundtrip → ciphertext-on-the-wire →
+ *   full-history self-heal for a late joiner → multi-device slots (F10d) →
+ *   rotation rules.
  */
 import 'dotenv/config';
 import mongoose from 'mongoose';
@@ -113,39 +114,75 @@ async function unwrapEnvelope(mine: Identity, envelope: string): Promise<CryptoK
   // pessimist's helper below exists only so the smoke states that explicitly.
   void mine;
   void envelope;
-  throw new Error('unused — recipients use decryptWithPair(senderPubB64, …)');
+  throw new Error('unused — recipients use openEnvelopeAs(senderDeviceKeys, …)');
 }
 
-/** Opens an envelope the way the SPA does: wrapper id inside, pubKey map outside. */
+/** Opens one envelope with ONE candidate sender device key (null = cannot). */
+async function openEnvelopeAs(
+  recipient: Identity,
+  senderKeyB64: string,
+  envelope: string
+): Promise<CryptoKey | null> {
+  try {
+    const env = JSON.parse(new TextDecoder().decode(unb64(envelope))) as {
+      v: number;
+      w: string;
+      iv: string;
+      d: string;
+    };
+    const senderPub = await subtle.importKey(
+      'spki',
+      unb64(senderKeyB64),
+      { name: 'ECDH', namedCurve: 'P-256' },
+      false,
+      []
+    );
+    const shared = await subtle.deriveBits({ name: 'ECDH', public: senderPub }, recipient.priv, 256);
+    const hkdfSeed = await subtle.importKey('raw', shared, 'HKDF', false, ['deriveBits']);
+    const wrapKeyBytes = await subtle.deriveBits(
+      { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(0), info: HKDF_INFO },
+      hkdfSeed,
+      256
+    );
+    const wrapKey = await subtle.importKey('raw', wrapKeyBytes, 'AES-GCM', false, ['decrypt']);
+    const raw = await subtle.decrypt({ name: 'AES-GCM', iv: unb64(env.iv) }, wrapKey, unb64(env.d));
+    return await subtle.importKey('raw', raw, 'AES-GCM', false, ['encrypt', 'decrypt']);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The SPA's F10d rule: try EVERY envelope the server handed over (this account
+ * may have several devices) against every device key of the wrapper until one
+ * opens — exactly what `unwrapMyEnvelope` does in the browser.
+ */
+async function openAny(
+  recipient: Identity,
+  senderDeviceKeys: string[],
+  envelopes: string[]
+): Promise<CryptoKey | null> {
+  for (const envelope of envelopes) {
+    for (const key of senderDeviceKeys) {
+      const opened = await openEnvelopeAs(recipient, key, envelope);
+      if (opened) return opened;
+    }
+  }
+  return null;
+}
+
+/** Opens an envelope the way the SPA used to: wrapper id inside, pubKey map outside. */
 async function decryptWithPair(
   recipient: Identity,
   memberPubs: Map<string, string>,
   envelope: string
 ): Promise<CryptoKey> {
-  const env = JSON.parse(
-    new TextDecoder().decode(unb64(envelope))
-  ) as { v: number; w: string; iv: string; d: string };
+  const env = JSON.parse(new TextDecoder().decode(unb64(envelope))) as { w: string };
   const senderPubB64 = memberPubs.get(env.w);
   if (!senderPubB64) throw new Error(`no pubkey for wrapper ${env.w}`);
-  const iv = unb64(env.iv);
-  const ct = unb64(env.d);
-  const senderPub = await subtle.importKey(
-    'spki',
-    unb64(senderPubB64),
-    { name: 'ECDH', namedCurve: 'P-256' },
-    false,
-    []
-  );
-  const shared = await subtle.deriveBits({ name: 'ECDH', public: senderPub }, recipient.priv, 256);
-  const hkdfSeed = await subtle.importKey('raw', shared, 'HKDF', false, ['deriveBits']);
-  const wrapKeyBytes = await subtle.deriveBits(
-    { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(0), info: HKDF_INFO },
-    hkdfSeed,
-    256
-  );
-  const wrapKey = await subtle.importKey('raw', wrapKeyBytes, 'AES-GCM', false, ['decrypt']);
-  const raw = await subtle.decrypt({ name: 'AES-GCM', iv }, wrapKey, ct);
-  return subtle.importKey('raw', raw, 'AES-GCM', false, ['encrypt', 'decrypt']);
+  const opened = await openEnvelopeAs(recipient, senderPubB64, envelope);
+  if (!opened) throw new Error('envelope did not open with the given sender key');
+  return opened;
 }
 
 async function encryptBody(conv: CryptoKey, plaintext: string): Promise<string> {
@@ -313,9 +350,11 @@ async function main() {
     email: ALICE_EMAIL,
     body: {
       epoch: 1,
+      // F10d: one slot per DEVICE public key (a plain member id is the legacy
+      // form and stays valid — see the 409 race below).
       envelopes: {
-        [String(alice._id)]: aliceEnvelope,
-        [String(bob._id)]: bobEnvelope,
+        [alicePub!]: aliceEnvelope,
+        [bobPub!]: bobEnvelope,
       },
     },
   });
@@ -329,18 +368,76 @@ async function main() {
 
   /* --------------------------- decrypt roundtrip ---------------------------- */
   const bobKeys = await api('GET', `/itinerary/${tripId}/chat/keys`, { email: BOB_EMAIL });
-  check('bob sees epoch 1 and HIS OWN envelope (never alice\u2019s)', bobKeys.body?.epoch === 1 && typeof bobKeys.body?.mine === 'string', { mine: bobKeys.body?.mine });
+  check('bob sees epoch 1 and HIS OWN envelope (never alice\u2019s)', bobKeys.body?.epoch === 1 && typeof bobKeys.body?.mine === 'string', { mine: String(bobKeys.body?.mine).slice(0, 16) });
   check(
-    'the served envelope is byte-identical to what was sent',
-    bobKeys.body.mine === bobEnvelope,
-    { sent: bobEnvelope.slice(0, 24), got: String(bobKeys.body?.mine || '').slice(0, 24) }
+    'bob\u2019s candidate list is exactly his own slots',
+    Array.isArray(bobKeys.body?.mineAll) && bobKeys.body.mineAll.length === 1 && bobKeys.body.mineAll[0] === bobEnvelope,
+    { count: bobKeys.body?.mineAll?.length }
   );
 
-  const bobConv = await decryptWithPair(
-    bobId,
-    pubsMap({ [String(alice._id)]: alicePub! }),
-    bobKeys.body.mine
+  const bobConv = await openAny(bobId, [alicePub!], bobKeys.body.mineAll || []);
+  check('bob opens the envelope addressed to HIS device key', Boolean(bobConv));
+  if (!bobConv) throw new Error('cannot continue without bob\u2019s conversation key');
+
+  /* ------------- F10d: a SECOND device of the same account unlocks ---------- */
+  // The second browser mints its own identity and publishes it: the envelope
+  // wrapped for the FIRST browser cannot open on it — it must wait for a slot.
+  const aliceLaptop = await mintIdentity();
+  const laptopPublish = await api('PUT', '/auth/chat-key', {
+    email: ALICE_EMAIL,
+    body: { pubKey: aliceLaptop.pubB64 },
+  });
+  check(
+    'the second device published its key (200)',
+    laptopPublish.status === 200,
+    { status: laptopPublish.status, body: laptopPublish.body, tail: aliceLaptop.pubB64.slice(-8) }
   );
+  const laptopState0 = await api('GET', `/itinerary/${tripId}/chat/keys`, { email: ALICE_EMAIL });
+  const laptopRow = laptopState0.body.members.find((m: any) => m.userId === String(alice._id));
+  const aliceDeviceKeys = [laptopRow?.pubKey, aliceId.pubB64].filter(Boolean);
+  check(
+    'the second device is listed as its own envelope slot',
+    Array.isArray(laptopRow?.pubKeys) && laptopRow.pubKeys.includes(aliceLaptop.pubB64),
+    { pubKeys: laptopRow?.pubKeys, laptopTail: aliceLaptop.pubB64.slice(-8), desktopTail: aliceId.pubB64.slice(-8) }
+  );
+  check(
+    'the second device is a visible heal gap (no slot yet)',
+    !(laptopRow?.envelopedPubKeys || []).includes(aliceLaptop.pubB64),
+    laptopRow?.envelopedPubKeys
+  );
+  const laptopBefore = await openAny(
+    aliceLaptop,
+    [aliceId.pubB64, aliceLaptop.pubB64],
+    laptopState0.body.mineAll || []
+  );
+  check('without a slot the new device opens NOTHING (honest keyless)', laptopBefore === null);
+
+  // The holder (alice\u2019s first browser) heals the gap — exactly what the SPA's
+  // ready-state poll does. No user action, no backup code.
+  const laptopHeal = await api('POST', `/itinerary/${tripId}/chat/envelopes`, {
+    email: ALICE_EMAIL,
+    body: {
+      envelopes: {
+        [aliceLaptop.pubB64]: await wrapEnvelope(String(alice._id), aliceId, aliceLaptop.pubB64, conv),
+      },
+    },
+  });
+  check('the holder heals the second device\u2019s slot (200)', laptopHeal.status === 200, laptopHeal.body);
+  const laptopState1 = await api('GET', `/itinerary/${tripId}/chat/keys`, { email: ALICE_EMAIL });
+  check(
+    'both of the account\u2019s devices are now covered',
+    (laptopState1.body.members.find((m: any) => m.userId === String(alice._id))?.envelopedPubKeys || []).length === 2,
+    laptopState1.body.members.find((m: any) => m.userId === String(alice._id))?.envelopedPubKeys
+  );
+  const laptopConv = await openAny(aliceLaptop, aliceDeviceKeys, laptopState1.body.mineAll || []);
+  check('the second device opens the SAME conversation key (multi-device)', Boolean(laptopConv));
+  if (laptopConv) {
+    const laptopPlain = 'Laptop screen works too \u2014 same key, no backup code.';
+    const laptopRead = await decryptBody(laptopConv, await encryptBody(bobConv, laptopPlain));
+    check('and it decrypts what the first device\u2019s key produced', laptopRead === laptopPlain, laptopRead);
+  }
+
+
   // The message wire format: "<b64 iv>.<b64 ct>" — Bob encrypts a Day-2 note.
   const bobPlain = 'Rent scooters for Day 2 \u2014 meet 9am at Juhu beach.';
   const ciphertext = await encryptBody(bobConv, bobPlain);
@@ -355,12 +452,9 @@ async function main() {
 
   const aliceCommentView = await api('GET', `/itinerary/${tripId}/comments`, { email: ALICE_EMAIL });
   const row = aliceCommentView.body?.comments?.find((c: any) => String(c._id) === String(posted.body.comment._id));
-  const aliceConv = await decryptWithPair(
-    aliceId,
-    pubsMap({ [String(alice._id)]: alicePub! }),
-    bootstrap.body.mine
-  );
-  const roundtrip = row ? await decryptBody(aliceConv, row.body) : null;
+  const aliceConv = await openAny(aliceId, [aliceId.pubB64, aliceLaptop.pubB64], bootstrap.body.mineAll || []);
+  check('alice opens her own device envelope', Boolean(aliceConv));
+  const roundtrip = row && aliceConv ? await decryptBody(aliceConv, row.body) : null;
   check('alice decrypts bob\u2019s message to the exact plaintext', roundtrip === bobPlain, roundtrip);
 
   const bodyBounds = await api('POST', `/itinerary/${tripId}/comments`, {
@@ -392,19 +486,17 @@ async function main() {
     email: ALICE_EMAIL,
     body: {
       envelopes: {
-        [String(carol._id)]: await wrapEnvelope(String(alice._id), aliceId, carolPubFromState, conv),
+        // F10d: the slot is carol\u2019s DEVICE key, not her member id.
+        [carolPubFromState!]: await wrapEnvelope(String(alice._id), aliceId, carolPubFromState, conv),
       },
     },
   });
   check('alice self-heals an envelope for carol into epoch 1 (200)', heal.status === 200, heal.body);
 
   const carolKeys = await api('GET', `/itinerary/${tripId}/chat/keys`, { email: CAROL_EMAIL });
-  const carolConv = await decryptWithPair(
-    carolId,
-    pubsMap({ [String(alice._id)]: alicePub! }),
-    carolKeys.body.mine
-  );
-  const carolReads = await decryptBody(carolConv, ciphertext);
+  const carolConv = await openAny(carolId, [aliceId.pubB64, aliceLaptop.pubB64], carolKeys.body.mineAll || []);
+  check('carol opens her device envelope', Boolean(carolConv));
+  const carolReads = carolConv ? await decryptBody(carolConv, ciphertext) : null;
   check('carol decrypts the HISTORICAL message (full-history decision)', carolReads === bobPlain, carolReads);
 
   /* ------------------------ envelope + epoch walls --------------------------- */
@@ -414,15 +506,21 @@ async function main() {
   });
   check('envelope to a NON-MEMBER is rejected', foreignTarget.status === 400, foreignTarget.status);
 
+  const eveDeviceKey = await api('POST', `/itinerary/${tripId}/chat/envelopes`, {
+    email: ALICE_EMAIL,
+    body: { envelopes: { 'STRANGER-DEVICE-KEY=': validB64Envelope() } },
+  });
+  check('envelope to a non-member DEVICE key is rejected (F10d wall)', eveDeviceKey.status === 400, eveDeviceKey.status);
+
   const junkPayload = await api('POST', `/itinerary/${tripId}/chat/envelopes`, {
     email: ALICE_EMAIL,
-    body: { envelopes: { [String(bob._id)]: '!!! junk !!!' } },
+    body: { envelopes: { [bobPub!]: '!!! junk !!!' } },
   });
   check('a non-base64 envelope payload is a 400', junkPayload.status === 400, junkPayload.status);
 
   const eveEnvelope = await api('POST', `/itinerary/${tripId}/chat/envelopes`, {
     email: EVE_EMAIL,
-    body: { envelopes: { [String(bob._id)]: validB64Envelope() } },
+    body: { envelopes: { [bobPub!]: validB64Envelope() } },
   });
   check('a stranger cannot inject envelopes (404)', eveEnvelope.status === 404, eveEnvelope.status);
 
@@ -431,9 +529,9 @@ async function main() {
     body: {
       epoch: 2,
       envelopes: {
-        [String(alice._id)]: validB64Envelope(),
-        [String(bob._id)]: validB64Envelope(),
-        [String(carol._id)]: validB64Envelope(),
+        [alicePub!]: validB64Envelope(),
+        [bobPub!]: validB64Envelope(),
+        [carolPubFromState!]: validB64Envelope(),
       },
     },
   });

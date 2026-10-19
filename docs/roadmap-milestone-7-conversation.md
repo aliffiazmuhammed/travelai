@@ -195,4 +195,21 @@ Re-verified after the format change: 223/223 backend tests; smoke-f10 ALL PASS (
 - The import button is never disabled by crypto state, and `importBackupCode` now replaces the identity memo, so the post-import key flow uses the restored key immediately (no reload).
 - A quiet poll (6s + window focus) runs while `keyless`: if an envelope for this account appears, it unwraps in place.
 
-**Known limit (deliberate, next increment):** envelopes are stored one-per-USER, so two devices of the same account cannot both hold the key at once; the second device is unlocked by importing the backup code from the first. Automatic cross-device sharing needs per-DEVICE envelope slots (envelopes keyed by recipient pubkey + a bounded pubkey list per user), which also finally wires the already-written `POST /:id/chat/envelopes` self-heal route that no client calls today.
+**Known limit (RESOLVED in 12.9):** envelopes used to be stored one-per-USER, so two devices of the same account were unlocked by importing the backup code from the first.
+
+### 12.9 F10d — multi-device keys (same day, user-approved)
+
+**Goal:** signing in on a second browser/device must unlock encrypted chat with no backup-code copying.
+
+**Design — one envelope slot per DEVICE:**
+
+- Envelope keys are now the **recipient's public key** (base64 SPKI) instead of the member id, so every browser of an account owns its own slot. Plain member ids remain valid and readable: envelopes minted before F10d keep working (legacy compatibility, verified by a smoke check).
+- `User.chatPubKeys` keeps the account's device keys, newest first, capped at `CHAT_PUB_KEYS_MAX = 5` (`mergePubKeyList`, pure + unit-tested); `chatPubKey` stays as the newest key for roster/legacy reads. `PUT /api/auth/chat-key` now appends (idempotent for the same key).
+- `GET /:id/chat/keys` returns `mineAll` (EVERY envelope addressed to this account — the client tries them until one opens on the device in front of the user) plus, per member, `pubKeys` and `envelopedPubKeys` (which device slots are filled). `mine` is still the first candidate, so older clients keep working.
+- A wrapper may have wrapped from any of their devices while the envelope only records their user id, so `unwrapMyEnvelope` now tries **every published key of the wrapper** (`devicePubs`) and returns the first that opens.
+- **Self-heal is finally wired** (the `POST /:id/chat/envelopes` route existed since F10 but no client ever called it): a client that holds the key wraps it for every EMPTY device slot it can see — `healSlots`. `ready` clients re-check every 15s while chat is open (plus window focus); `keyless` clients poll every 6s. So: open chat on the working device → the second device unlocks itself within seconds, no user action. Late joiners get full history the same way.
+- Bootstrap (epoch 1) envelopes every published device key of every member.
+
+**Result:** keyless on a second device is now a transient, self-resolving state (the banner's "unlocks automatically once another device opens chat" wording); the backup code remains as an offline fallback.
+
+**Verified:** backend `tsc` + **261/261** tests (new pure rules: `mergePubKeyList` cap/dedupe, `memberDeviceKeys`, device-slot targeting walls, multi-device projection incl. legacy envelopes); live `smoke-f10.mts` extended with a **real second-device case** (second identity published → no slot → device opens nothing → holder heals the slot → same conversation key, cross-decrypts, `envelopedPubKeys` reaches 2) and a non-member DEVICE-key wall.

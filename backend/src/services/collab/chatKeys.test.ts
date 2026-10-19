@@ -6,6 +6,9 @@ import {
   assertEnvelopeInputs,
   assertEpochTransition,
   projectKeyState,
+  mergePubKeyList,
+  memberDeviceKeys,
+  CHAT_PUB_KEYS_MAX,
 } from './chatKeys.js';
 import { AppError } from '../../utils/AppError.js';
 import { env } from '../../config/env.js';
@@ -40,9 +43,26 @@ test("isBase64: rejects junk, oversized blobs and empties", () => {
 
 /* -------------------------- envelope targeting ---------------------------- */
 
-test('assertEnvelopeInputs: envelopes to current members pass', () => {
+test('assertEnvelopeInputs: legacy member-id envelopes still pass', () => {
   assert.doesNotThrow(() =>
     assertEnvelopeInputs({ [ID_A]: validWrapped, [ID_B]: validWrapped2 }, [ID_A, ID_B])
+  );
+});
+
+test('assertEnvelopeInputs: device-key envelopes for current members pass', () => {
+  assert.doesNotThrow(() =>
+    assertEnvelopeInputs(
+      { 'PUBA=': validWrapped, 'PUBB=': validWrapped2 },
+      [ID_A, ID_B],
+      ['PUBA=', 'PUBB=']
+    )
+  );
+});
+
+test('assertEnvelopeInputs: a stranger device key is a 400', () => {
+  assert.throws(
+    () => assertEnvelopeInputs({ 'STRANGER=': validWrapped }, [ID_A], ['PUBA=']),
+    (error: unknown) => error instanceof AppError && error.statusCode === 400
   );
 });
 
@@ -100,6 +120,24 @@ test('assertEpochTransition: zero/negative/NaN epochs are 400s', () => {
   }
 });
 
+/* ------------------------- multi-device key slots -------------------------- */
+
+test('mergePubKeyList: newest first, de-duplicated, capped', () => {
+  assert.deepEqual(mergePubKeyList([], 'A='), ['A=']);
+  assert.deepEqual(mergePubKeyList(['A=', 'B='], 'A='), ['A=', 'B=']);
+  assert.deepEqual(mergePubKeyList(['A=', 'B='], 'C='), ['C=', 'A=', 'B=']);
+  const many = Array.from({ length: CHAT_PUB_KEYS_MAX + 3 }, (_, i) => `K${i}=`);
+  const capped = mergePubKeyList(many, 'NEW=');
+  assert.equal(capped.length, CHAT_PUB_KEYS_MAX);
+  assert.equal(capped[0], 'NEW=');
+});
+
+test('memberDeviceKeys: primary first, de-duplicated, junk skipped', () => {
+  assert.deepEqual(memberDeviceKeys({ chatPubKey: 'A=', chatPubKeys: ['B=', 'A=', ''] }), ['A=', 'B=']);
+  assert.deepEqual(memberDeviceKeys({}), []);
+  assert.deepEqual(memberDeviceKeys({ chatPubKey: null, chatPubKeys: ['B='] }), ['B=']);
+});
+
 /* ------------------------------- projection -------------------------------- */
 
 test('projectKeyState: each member sees their own envelope, never others', () => {
@@ -139,8 +177,71 @@ test('projectKeyState: a trip with no key yet reports no epoch, bare roster', ()
   const state = projectKeyState(null, [{ _id: ID_A, email: 'a@example.com' }], ID_A);
   assert.equal(state.epoch, undefined);
   assert.equal(state.mine, undefined);
+  assert.equal(state.mineAll, undefined);
   assert.equal(state.members.length, 1);
   assert.equal(state.members[0].hasEnvelope, false);
+});
+
+/* --------------- F10d: one envelope slot per device (browser) -------------- */
+
+test('projectKeyState: an account with TWO devices gets both envelopes, members see slots', () => {
+  const desk = 'DESKTOP=';
+  const laptop = 'LAPTOP=';
+  const envelopes = new Map<string, string>([
+    [desk, validWrapped],
+    [laptop, validWrapped2],
+  ]);
+  const state = projectKeyState(
+    { epoch: 1, envelopes },
+    [{ _id: ID_A, email: 'a@example.com', chatPubKey: laptop, chatPubKeys: [laptop, desk] }],
+    ID_A
+  );
+  assert.deepEqual(state.mineAll, [validWrapped2, validWrapped]);
+  assert.equal(state.mine, validWrapped2);
+  assert.deepEqual(state.members[0].pubKeys, [laptop, desk]);
+  assert.deepEqual(state.members[0].envelopedPubKeys, [laptop, desk]);
+  assert.equal(state.members[0].hasEnvelope, true);
+});
+
+test('projectKeyState: only the viewer’s own slots land in mineAll, never a teammate’s', () => {
+  const envelopes = new Map<string, string>([
+    ['ALA=', validWrapped],
+    ['BOB=', validWrapped2],
+  ]);
+  const state = projectKeyState(
+    { epoch: 1, envelopes },
+    [
+      { _id: ID_A, email: 'a@example.com', chatPubKeys: ['ALA='] },
+      { _id: ID_B, email: 'b@example.com', chatPubKeys: ['BOB='] },
+    ],
+    ID_A
+  );
+  assert.deepEqual(state.mineAll, [validWrapped]);
+  const bob = state.members.find((m) => m.userId === ID_B)!;
+  assert.deepEqual(bob.envelopedPubKeys, ['BOB=']);
+  assert.equal(bob.hasEnvelope, true);
+});
+
+test('projectKeyState: a device with no slot is visible as a self-heal gap', () => {
+  const state = projectKeyState(
+    { epoch: 1, envelopes: new Map([['DESKTOP=', validWrapped]]) },
+    [{ _id: ID_A, email: 'a@example.com', chatPubKey: 'LAPTOP=', chatPubKeys: ['LAPTOP=', 'DESKTOP='] }],
+    ID_A
+  );
+  assert.deepEqual(state.members[0].envelopedPubKeys, ['DESKTOP=']);
+  assert.equal(state.members[0].hasEnvelope, true);
+  assert.deepEqual(state.mineAll, [validWrapped]);
+});
+
+test('projectKeyState: a legacy member-id envelope still unlocks (backwards compatible)', () => {
+  const state = projectKeyState(
+    { epoch: 1, envelopes: new Map([[ID_A, validWrapped]]) },
+    [{ _id: ID_A, email: 'a@example.com', chatPubKey: 'DEVICE=' }],
+    ID_A
+  );
+  assert.deepEqual(state.mineAll, [validWrapped]);
+  assert.equal(state.members[0].hasEnvelope, true);
+  assert.deepEqual(state.members[0].envelopedPubKeys, []);
 });
 
 test('projectKeyState: a missing pubKey simply hasEnvelope=false without pubKey', () => {

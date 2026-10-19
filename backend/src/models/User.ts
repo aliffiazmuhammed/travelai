@@ -10,8 +10,14 @@ export interface IUser extends Document {
    * private key NEVER leaves the device (localStorage + a backup code). The
    * server only ever sees this half, which is what lets any member's browser
    * envelope the conversation key for every member.
+   *
+   * This is the NEWEST published device key (roster display + compatibility);
+   * `chatPubKeys` keeps the rest so a second browser of the same account keeps
+   * its own envelope slot (F10d multi-device).
    */
   chatPubKey?: string;
+  /** Every device this account has published from, newest first, capped. */
+  chatPubKeys?: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -34,6 +40,11 @@ const userSchema = new Schema<IUser>(
     // Filled by PUT /api/auth/chat-key; validated there (base64, ≤512 chars).
     chatPubKey: {
       type: String,
+    },
+    // F10d: one slot per device (browser) of this account, newest first.
+    chatPubKeys: {
+      type: [String],
+      default: undefined,
     },
   },
   { timestamps: true }

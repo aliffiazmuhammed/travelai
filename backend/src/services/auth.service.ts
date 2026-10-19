@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import { env } from '../config/env.js';
 import { AppError } from '../utils/AppError.js';
+import { mergePubKeyList } from './collab/chatKeys.js';
 
 export const signup = async (email: string, password: string) => {
   const normalizedEmail = email.trim().toLowerCase();
@@ -46,13 +47,16 @@ export const getUserById = async (userId: string) => {
 };
 
 /**
- * Publishes the browser's chat public key (Milestone 7, F10). Idempotent and
- * last-write-wins: the private half never reaches this service, so there is
- * nothing secret to protect beyond what the zod layer already validated.
+ * Publishes the browser's chat public key (Milestone 7, F10; multi-device
+ * F10d). Idempotent: re-publishing the same key just moves it to the front.
+ * The private half never reaches this service, so there is nothing secret to
+ * protect beyond what the zod layer already validated. Each browser keeps its
+ * own slot in `chatPubKeys` (newest first, capped) so two devices of one
+ * account can BOTH hold the conversation key.
  */
 export const setChatPubKey = async (userId: string, pubKey: string) => {
-  await User.updateOne(
-    { _id: userId },
-    { $set: { chatPubKey: String(pubKey || '').trim() } }
-  );
+  const key = String(pubKey || '').trim();
+  const user = await User.findById(userId).select('chatPubKeys').lean();
+  const chatPubKeys = mergePubKeyList((user as any)?.chatPubKeys, key);
+  await User.updateOne({ _id: userId }, { $set: { chatPubKey: key, chatPubKeys } });
 };

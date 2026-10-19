@@ -31,13 +31,28 @@ import { isObjectId, emailLabel } from './comments.js';
 export interface ChatKeyState {
   /** Current epoch (absent when the trip has no key yet). */
   epoch?: number;
-  /** This caller's envelope, base64 — absent when they have none yet. */
+  /**
+   * The caller's FIRST envelope (base64) — legacy clients read exactly this.
+   * Absent when they have none yet.
+   */
   mine?: string;
-  /** One entry per current member: their published public key + envelope state. */
+  /**
+   * F10d: EVERY envelope addressed to this caller (any of their devices), the
+   * device-keyed ones first. A client tries them until one opens with the
+   * private key of the device in front of the user.
+   */
+  mineAll?: string[];
+  /** One entry per current member: their published public keys + envelope state. */
   members: Array<{
     userId: string;
     label: string;
+    /** Newest published device key (compat/roster). */
     pubKey?: string;
+    /** Every device key of this member (F10d). */
+    pubKeys: string[];
+    /** Which of those device keys already have an envelope slot. */
+    envelopedPubKeys: string[];
+    /** True when ANY slot exists (legacy member-id envelope or a device slot). */
     hasEnvelope: boolean;
   }>;
 }
@@ -48,27 +63,68 @@ export interface ChatKeyState {
 
 export const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
 
+/** How many devices one account may keep a key slot for, newest first. */
+export const CHAT_PUB_KEYS_MAX = 5;
+
+/**
+ * The per-account device-key list (F10d): newest first, de-duplicated, capped.
+ * Pure so the cap rule is testable without a database — the auth service owns
+ * only the persistence around it.
+ */
+export function mergePubKeyList(
+  existing: unknown,
+  incoming: string,
+  max: number = CHAT_PUB_KEYS_MAX
+): string[] {
+  const key = String(incoming || '').trim();
+  if (!key) return Array.isArray(existing) ? existing.map(String).slice(0, max) : [];
+  const rest = (Array.isArray(existing) ? existing : [])
+    .map(String)
+    .filter((value) => value && value !== key);
+  return [key, ...rest].slice(0, max);
+}
+
+/** Every device key of one member, newest first, primary pubKey included. */
+export function memberDeviceKeys(row: {
+  chatPubKey?: string | null;
+  chatPubKeys?: string[] | null;
+}): string[] {
+  const keys: string[] = [];
+  const primary = row?.chatPubKey ? String(row.chatPubKey) : '';
+  if (primary) keys.push(primary);
+  for (const key of row?.chatPubKeys || []) {
+    const value = String(key || '');
+    if (value && !keys.includes(value)) keys.push(value);
+  }
+  return keys;
+}
+
 export function isBase64(value: unknown, max: number): boolean {
   return typeof value === 'string' && value.length > 0 && value.length <= max && BASE64_RE.test(value);
 }
 
 /**
- * Envelope targeting: every recipient must be a **current member**, ids must be
- * well-formed ObjectIds, and the values must be sane base64. Duplicates are
- * natural (last write wins); unknown recipients are a client bug → 400 shape,
- * but since the check is pure the tests iterate it directly.
+ * Envelope targeting: every envelope slot must belong to a **current member** —
+ * either their device public key (F10d) or, for envelopes minted before
+ * multi-device support, the member id itself. Values must be sane base64.
+ * Duplicates are natural (last write wins); unknown targets are a client bug →
+ * 400. Pure, so the tests iterate it directly.
  */
 export function assertEnvelopeInputs(
   entries: Record<string, unknown>,
-  memberIds: Array<string | { toString(): string }>
+  memberIds: Array<string | { toString(): string }>,
+  memberPubKeys: Array<string | null | undefined> = []
 ): void {
   const members = new Set(memberIds.map(String));
-  for (const [userId, wrapped] of Object.entries(entries)) {
-    if (!isObjectId(userId)) {
-      throw new AppError('Envelope targets must be user ids.', 400);
-    }
-    if (!members.has(userId)) {
-      throw new AppError('Envelopes may only be addressed to current members.', 400);
+  const devices = new Set(memberPubKeys.filter(Boolean).map(String));
+  for (const [target, wrapped] of Object.entries(entries)) {
+    const isMemberId = isObjectId(target) && members.has(target);
+    const isDeviceKey = devices.has(target);
+    if (!isMemberId && !isDeviceKey) {
+      throw new AppError(
+        'Envelopes may only be addressed to current members or their published devices.',
+        400
+      );
     }
     if (!isBase64(wrapped, 1024)) {
       throw new AppError('Envelope payloads must be base64 up to 1024 characters.', 400);
@@ -104,26 +160,48 @@ export function assertEpochTransition(
 /** Shapes the GET response. Public keys are published server-side by design. */
 export function projectKeyState(
   doc: { epoch: number; envelopes: Map<string, string> } | null,
-  memberRows: Array<{ _id: unknown; email?: string; chatPubKey?: string | null }>,
+  memberRows: Array<{
+    _id: unknown;
+    email?: string;
+    chatPubKey?: string | null;
+    chatPubKeys?: string[] | null;
+  }>,
   viewerId: string
 ): ChatKeyState {
   const envelopes = doc?.envelopes instanceof Map ? doc.envelopes : new Map<string, string>();
+  const deviceKeys = new Map<string, string[]>();
   const state: ChatKeyState = {
     members: memberRows.map((row) => {
       const userId = String(row._id);
+      const pubKeys = memberDeviceKeys(row);
+      deviceKeys.set(userId, pubKeys);
+      const envelopedPubKeys = pubKeys.filter((key) => envelopes.has(key));
       const member: ChatKeyState['members'][number] = {
         userId,
         label: emailLabel(row.email),
-        hasEnvelope: envelopes.has(userId),
+        pubKeys,
+        envelopedPubKeys,
+        hasEnvelope: envelopedPubKeys.length > 0 || envelopes.has(userId),
       };
-      if (row.chatPubKey) member.pubKey = row.chatPubKey;
+      if (row.chatPubKey) member.pubKey = String(row.chatPubKey);
       return member;
     }),
   };
   if (doc) {
     state.epoch = doc.epoch;
-    const mine = envelopes.get(String(viewerId));
-    if (mine) state.mine = mine;
+    // Every envelope addressed to this caller — any device they published from,
+    // plus the legacy member-id slot minted before multi-device support.
+    const own: string[] = [];
+    const legacy = envelopes.get(String(viewerId));
+    if (legacy) own.push(legacy);
+    for (const key of deviceKeys.get(String(viewerId)) || []) {
+      const wrapped = envelopes.get(key);
+      if (wrapped && !own.includes(wrapped)) own.push(wrapped);
+    }
+    if (own.length) {
+      state.mineAll = own;
+      state.mine = own[0];
+    }
   }
   return state;
 }
@@ -134,6 +212,15 @@ export function projectKeyState(
 
 async function loadCurrentDoc(tripId: string): Promise<any> {
   return TripChatKey.findOne({ tripId: new Types.ObjectId(tripId) }).sort({ epoch: -1 });
+}
+
+/** The published device keys of the given members — the envelope-slot allowlist. */
+async function loadMemberPubKeys(memberIds: string[]): Promise<string[]> {
+  if (!memberIds.length) return [];
+  const users = await User.find({ _id: { $in: memberIds.map((id) => new Types.ObjectId(id)) } })
+    .select('chatPubKey chatPubKeys')
+    .lean();
+  return (users as any[]).flatMap((row) => memberDeviceKeys(row));
 }
 
 /**
@@ -152,7 +239,7 @@ export async function getTripChatKeyState(
     loadCurrentDoc(tripId),
     memberIds.length
       ? User.find({ _id: { $in: memberIds.map((id: string) => new Types.ObjectId(id)) } })
-          .select('_id email chatPubKey')
+          .select('_id email chatPubKey chatPubKeys')
           .lean()
       : Promise.resolve([]),
   ]);
@@ -175,7 +262,7 @@ export async function setTripChatKeys(
   const tripId = String((trip as any)._id);
   const memberIds = ((trip as any).members || []).map((m: any) => String(m.userId));
 
-  assertEnvelopeInputs(input.envelopes, memberIds);
+  assertEnvelopeInputs(input.envelopes, memberIds, await loadMemberPubKeys(memberIds));
 
   const current = await loadCurrentDoc(tripId);
   assertEpochTransition(input.epoch, current ? current.epoch : null);
@@ -214,7 +301,7 @@ export async function addTripChatEnvelopes(
   const tripId = String((trip as any)._id);
   const memberIds = ((trip as any).members || []).map((m: any) => String(m.userId));
 
-  assertEnvelopeInputs(entries, memberIds);
+  assertEnvelopeInputs(entries, memberIds, await loadMemberPubKeys(memberIds));
 
   const doc = await loadCurrentDoc(tripId);
   if (!doc) {
