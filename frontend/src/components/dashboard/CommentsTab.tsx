@@ -118,6 +118,12 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
   const [editDraft, setEditDraft] = useState("");
   const [pendingDelete, setPendingDelete] = useState<TripComment | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // Context actions (edit/pin/delete) open on right-click or long-press —
+  // Telegram style — so bubbles stay clean. Which one is open, if any.
+  const [actionsForId, setActionsForId] = useState<string | null>(null);
+  // Guards against the click that mobile fires right after a long-press
+  // instantly closing the menu it just opened.
+  const actionsOpenedAtRef = useRef(0);
   // F9: which decision card is mid-unmark (one at a time, like row removals).
   const [busyDecisionId, setBusyDecisionId] = useState<string | null>(null);
   const { decidedCommentIds } = controller;
@@ -127,6 +133,34 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
   useEffect(() => {
     controller.ensureLoaded();
   }, [controller]);
+
+  // Dismiss the context actions on anything but the bubble that opened them:
+  // a click elsewhere, Escape, or any scroll (capture — the chat surface is a
+  // scroll container). The openedAt guard swallows the phantom click that
+  // touchend produces right after a long-press opens the menu.
+  useEffect(() => {
+    if (!actionsForId) return;
+    const dismiss = (event?: Event) => {
+      if (event?.type === "click" && Date.now() - actionsOpenedAtRef.current < 350) return;
+      setActionsForId(null);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setActionsForId(null);
+    };
+    window.addEventListener("click", dismiss);
+    window.addEventListener("scroll", dismiss, true);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("click", dismiss);
+      window.removeEventListener("scroll", dismiss, true);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [actionsForId]);
+
+  const openActionsFor = (id: string) => {
+    actionsOpenedAtRef.current = Date.now();
+    setActionsForId(id);
+  };
 
   const dayChips = useMemo(
     () =>
@@ -484,6 +518,8 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
             canModerate={myRole === "owner" || Boolean(row.isYou)}
             isBusy={busyId === row._id}
             decided={decidedCommentIds.has(row._id)}
+            actionsOpen={editingId !== row._id && actionsForId === row._id}
+            onOpenActions={openActionsFor}
             onDecide={() => void markDecision(row)}
             editing={editingId === row._id}
             editDraft={editDraft}
@@ -723,6 +759,9 @@ interface CommentRowProps {
   isBusy: boolean;
   /** True when this comment already carries an active decision (F9). */
   decided: boolean;
+  /** Context actions (edit/pin/delete) are open for THIS row (right-click / long-press). */
+  actionsOpen: boolean;
+  onOpenActions: (id: string) => void;
   onDecide: () => void;
   editing: boolean;
   editDraft: string;
@@ -739,6 +778,8 @@ const CommentRow: React.FC<CommentRowProps> = ({
   canModerate,
   isBusy,
   decided,
+  actionsOpen,
+  onOpenActions,
   onDecide,
   editing,
   editDraft,
@@ -748,6 +789,30 @@ const CommentRow: React.FC<CommentRowProps> = ({
   onCancelEdit,
   onAskDelete,
 }) => {
+  // Long-press (mobile hold): a 500ms hold opens the action row; any movement
+  // (a scroll, a swipe) cancels it so plain scrolling never pops a menu.
+  const pressTimerRef = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (pressTimerRef.current !== null) window.clearTimeout(pressTimerRef.current);
+    },
+    []
+  );
+  const startPress = () => {
+    if (editing) return; // selecting text inside the edit box is not a menu request
+    if (pressTimerRef.current !== null) window.clearTimeout(pressTimerRef.current);
+    pressTimerRef.current = window.setTimeout(() => {
+      pressTimerRef.current = null;
+      onOpenActions(row._id);
+    }, 500);
+  };
+  const cancelPress = () => {
+    if (pressTimerRef.current !== null) {
+      window.clearTimeout(pressTimerRef.current);
+      pressTimerRef.current = null;
+    }
+  };
+
   if (row.deletedAt) {
     return (
       <div className="flex items-center justify-center py-1.5">
@@ -761,7 +826,22 @@ const CommentRow: React.FC<CommentRowProps> = ({
   const isMine = row.isYou;
 
   return (
-    <div className={cn("group flex gap-2", isMine ? "flex-row-reverse" : "flex-row")}>
+    <div
+      className={cn("group flex gap-2", isMine ? "flex-row-reverse" : "flex-row")}
+      onContextMenu={(event) => {
+        // Right-click opens the Telegram-style action row instead of the
+        // browser menu — the desktop twin of the mobile long-press. While
+        // editing, the native cut/copy/paste menu stays.
+        if (editing) return;
+        event.preventDefault();
+        onOpenActions(row._id);
+      }}
+      onTouchStart={startPress}
+      onTouchMove={cancelPress}
+      onTouchEnd={cancelPress}
+      onTouchCancel={cancelPress}
+      style={{ WebkitTouchCallout: "none" } as React.CSSProperties}
+    >
       {/* WhatsApp convention: avatar only on incoming; your own bubbles sit
           against the right edge, self-evident by color and side. */}
       {!isMine && (
@@ -774,10 +854,11 @@ const CommentRow: React.FC<CommentRowProps> = ({
 
       <div
         className={cn(
-          "min-w-0 max-w-[85%] sm:max-w-[75%] rounded-2xl px-3 py-2",
+          "min-w-0 max-w-[85%] sm:max-w-[75%] rounded-2xl px-3 py-2 transition-shadow",
           isMine
             ? "bg-primary text-primary-foreground rounded-br-sm"
-            : "bg-muted text-foreground rounded-bl-sm"
+            : "bg-muted text-foreground rounded-bl-sm",
+          actionsOpen && "ring-2 ring-primary/40"
         )}
       >
         {/* Group-chat sender name — only on incoming (your own need no label) */}
@@ -861,13 +942,17 @@ const CommentRow: React.FC<CommentRowProps> = ({
         </div>
       </div>
 
-      {/* Row actions stay whisper-quiet in chat: reveal on hover (desktop);
-          touch users keep them visible since hover isn't reliable there. */}
+      {/* Row actions are invisible until summoned: right-click or long-press
+          the bubble (onOpenActions). Keyboard users reveal them by simply
+          tabbing onto the hidden buttons (focus-within). */}
       {canModerate && !editing && (
         <div
           className={cn(
-            "flex flex-col items-center gap-0.5 self-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100 transition-opacity",
-            isMine && "flex-row"
+            "flex flex-col items-center gap-0.5 self-center transition-opacity duration-150",
+            isMine && "flex-row",
+            actionsOpen
+              ? "opacity-100"
+              : "pointer-events-none opacity-0 sm:focus-within:pointer-events-auto sm:focus-within:opacity-100"
           )}
         >
           {isMine && (
