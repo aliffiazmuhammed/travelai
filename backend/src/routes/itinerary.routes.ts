@@ -42,6 +42,9 @@ import {
   getTripDecisions,
   postTripCommentDecision,
   deleteTripDecision,
+  getTripChatKeys,
+  putTripChatKeys,
+  postTripChatEnvelopes,
 } from '../controllers/collab.controller.js';
 import {
   getTripExpenses,
@@ -83,6 +86,10 @@ import {
   transferOwnershipSchema,
 } from '../schemas/collab.schema.js';
 import { createCommentSchema, updateCommentSchema } from '../schemas/comments.schema.js';
+import {
+  setTripChatKeysSchema,
+  addChatEnvelopesSchema,
+} from '../schemas/chatKey.schema.js';
 import {
   commentCreateLimiter,
   generateLimiter,
@@ -404,6 +411,21 @@ router.delete(
   protect,
   requireTripRole('viewer'),
   deleteTripDecision
+);
+
+// Chat keys (Milestone 7, F10) — the blind-carrier plumbing of end-to-end
+// chat. All three routes sit at the `viewer` floor like the live tier: the
+// server stores nothing it can read, so key *distribution* is membership +
+// shape, enforced by the service (envelope recipients must be current
+// members; epochs may only go forward).
+router.get('/:id/chat/keys', protect, requireTripRole('viewer'), getTripChatKeys);
+router.put('/:id/chat/keys', protect, requireTripRole('viewer'), validate(setTripChatKeysSchema), putTripChatKeys);
+router.post(
+  '/:id/chat/envelopes',
+  protect,
+  requireTripRole('viewer'),
+  validate(addChatEnvelopesSchema),
+  postTripChatEnvelopes
 );
 
 export default router;

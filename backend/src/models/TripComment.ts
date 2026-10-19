@@ -16,16 +16,24 @@ import mongoose, { Document, Schema, Types } from 'mongoose';
  *   open edit to fail with a 409 (see §19.2).
  * - `deletedAt` marks a soft-delete tombstone (owner moderation): the row and
  *   its `userId` survive as an audit trail; only `body` is emptied.
- * - `body` is plain text. There is no HTML or markdown anywhere in the write or
- *   read path, which is what makes the SPA rendering XSS-safe by construction.
+ * - `body` carries NO markup — plain text (or, since F10, base64 ciphertext)
+ *   rendered as text in the SPA, which is what makes rendering XSS-safe by
+ *   construction.
+ * - F10 end-to-end encryption: when `e2ee` is true, `body` is
+ *   `"<base64 iv>.<base64 AES-GCM ciphertext>"` — the conversation key is
+ *   held only by members (enveloped per public key in `TripChatKey`), so the
+ *   server stores it exactly as opaque bytes. Rows without the flag are the
+ *   legacy plaintext format and keep rendering unchanged.
  */
 
 export interface ITripComment extends Document {
   tripId: Types.ObjectId;
   /** Author of record — never denormalized away; binds edit/moderation rights. */
   userId: Types.ObjectId;
-  /** Plain-text body; emptied when `deletedAt` is set. */
+  /** Plain-text body, or `iv.ct` ciphertext when `e2ee`; emptied on tombstones. */
   body: string;
+  /** F10: true when `body` is end-to-end ciphertext rather than plain text. */
+  e2ee: boolean;
   /** Optional day anchor (1..999); absent means "about the trip in general". */
   day?: number;
   /** Set when the author edits the body (renders "(edited)" in the SPA). */
@@ -59,6 +67,7 @@ const tripCommentSchema = new Schema<ITripComment>(
       },
     },
     day: { type: Number, min: 1, max: 999 },
+    e2ee: { type: Boolean, default: false },
     editedAt: { type: Date },
     deletedAt: { type: Date },
   },

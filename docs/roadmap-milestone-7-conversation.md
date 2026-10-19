@@ -110,3 +110,46 @@ Still one state, one EventSource, one read marker — the shared fragments (typi
 | UI | Pinned "Decisions" strip above the day chips in BOTH surfaces (tab + drawer); rows gain Decide/Decided state driven by `decidedCommentIds`; unmark is optimistic with rollback; "pinned by X" attribution on other people's promotions. No unread interplay — a promotion is bookkeeping, not a remark. |
 
 Backend error alphabet: 403 non-author promote, 409 duplicate / no-content / removed-comment promote, 404 missing-scoped rows and already-tombstoned decisions. `DECISION_MAX_PER_TRIP=50` env caps the strip.
+
+## 12. Appendix — F10 (end-to-end chat encryption) — backend SHIPPED
+
+> 2026-10-19, backend increment. 223/223 backend tests (12 new in `chatKeys.test.ts`), live smoke `smoke-f10.mts` — 31 checks **ALL PASS** (real Node-WebCrypto client simulation: ECDH P-256 → HKDF-SHA-256 → AES-256-GCM). Frontend (key bootstrap UI, envelope flow, decrypt-on-render, backup codes) is the next commit.
+
+**The F10 idea, confirmed with the user:** the only thing the server can never see is the *message text*. Day anchors, timestamps, read state and authorship stay server-visible (the WhatsApp/Signal metadata trade-off — day chips, unread badges and typing keep working). What IS hidden: bodies only.
+
+### 12.1 Crypto architecture (the browser owns every secret)
+
+| Piece | Where it lives | Who can read it |
+|---|---|---|
+| Identity keypair | ECDH P-256, minted in the browser; private half in `localStorage` (portable via a backup code), public half published to `PUT /api/auth/chat-key` | The private half: one browser only |
+| Conversation key | AES-256-GCM, generated **client-side** per trip (epoch); NEVER sent to the server | Every member, via envelopes |
+| Envelope | The conversation key wrapped pairwise for one member: ECDH → HKDF(info=`travelai-chat-key-v1`) → AES-GCM; wire format = ONE base64 blob of `iv ‖ ciphertext` (12-byte nonce prefix) | Exactly that member |
+| Message body | AES-GCM(`iv, plaintext`), wire format `"<b64 iv>.<b64 ct>"` under a `e2ee: true` flag | Every current member |
+
+### 12.2 Server model + routes (all blind-carrier by construction)
+
+- `TripChatKey { tripId, epoch, envelopes: Map<userId, base64>, createdBy }` — unique `(tripId, epoch)`; the **current epoch is the highest document that exists**. Writes never touch `Trip.rev` (same rule as comments/read-state).
+- `User.chatPubKey` — the published SPKI half.
+- Routes (trip guard choke point; `viewer` floor like the live tier; covered by `routerCoverage.test.ts`):
+  - `GET /:id/chat/keys` — current epoch + the CALLER's envelope + per-member `{ pubKey, hasEnvelope }`.
+  - `PUT /:id/chat/keys` — bootstrap (any epoch when none exists) or **rotation** (only strictly-higher epochs; equal/stale → 409 with a pointer to re-fetch + self-heal). The unique index arbitrates bootstrap races.
+  - `POST /:id/chat/envelopes` — **self-healing distribution** (see 12.3).
+- Shape walls: zod base64 regexes (`PUBKEY_MAX=512`, `WRAPPED_KEY_MAX=1024`, envelope targets must be 24-char hex AND current members, ≤50 per request). `routerCoverage.test.ts` proves no trip-scoped route escapes the guard.
+
+### 12.3 Product decisions (user-confirmed)
+
+1. **Full history for new members.** ANY member who already holds the conversation key may wrap it for any member/invitee missing an envelope (`POST /chat/envelopes`). A fresh invitee reads the *entire* chat the next time some other member opens theirs — no server-side history gate, no message re-encryption. Smoke-verified: Carol joins last, receives an envelope from Alice's open client, decrypts the *historical* Bob message.
+2. **Backup code for a second device.** The private key lives in `localStorage`; exporting/importing it is the only way to light up chat on another browser (frontend work).
+3. **Metadata honesty.** Only bodies encrypt; anchors/timestamps/read-state/authorship stay plaintext so day chips, unread badges and typing keep working. Enforced server-side *by what we don't encrypt*.
+
+### 12.4 Changes threading through the write path
+
+- `TripComment.e2ee` flag; `body` doubles its cap for encrypted rows (`COMMENT_MAX_LEN × 2` — the encoding overhead; the *plaintext meaning cap* is unchanged). Plaintext rows remain first-class (legacy + disabled-crypto fallback), so no migration: old messages render as-is, marked "not encrypted".
+- Decision snapshots (`F9`) learn the doubling: `decisionBodyFrom(body, e2ee)` clamps at ×2 for encrypted rows — slicing ciphertext at the flat cap would have corrupted it into an undecryptable blob. The snapshot copies the ciphertext as-is; readers decrypt it with the same conversation key.
+- SSE comment frames carry the (already-projected) ciphertext row; receivers decrypt locally. Zero frame-format changes.
+
+### 12.5 Honest limits (v1)
+
+- The wall between the conversation key and the server rests on client crypto in a browser — a malicious server that serves a doctored JS bundle could exfiltrate keys (WhatsApp-Web-class trust model, standard for browser E2EE).
+- Rotation is accepted server-side but **not exposed in the UI yet** (no member-removal re-keying in v1; a removed member's cached key still opens the ciphertexts they saw before removal). The epoch/rotation plumbing exists precisely to wire that later.
+- Plaintext-era messages are not retroactively encrypted — rendering marks them honestly instead of pretending.

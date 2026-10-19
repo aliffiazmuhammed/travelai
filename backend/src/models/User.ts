@@ -4,6 +4,14 @@ export interface IUser extends Document {
   email: string;
   password: string;
   googleId?: string;
+  /**
+   * Chat identity public key (base64 SPKI, ECDH P-256) — Milestone 7, F10.
+   * Published by the browser right after it mints the keypair; the matching
+   * private key NEVER leaves the device (localStorage + a backup code). The
+   * server only ever sees this half, which is what lets any member's browser
+   * envelope the conversation key for every member.
+   */
+  chatPubKey?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -21,6 +29,10 @@ const userSchema = new Schema<IUser>(
       required: true,
     },
     googleId: {
+      type: String,
+    },
+    // Filled by PUT /api/auth/chat-key; validated there (base64, ≤512 chars).
+    chatPubKey: {
       type: String,
     },
   },

@@ -34,6 +34,8 @@ export interface DecisionRow {
   markedByLabel: string;
   /** Snapshot of the comment body at promotion time. */
   body: string;
+  /** F10: true → the snapshot body is end-to-end ciphertext. */
+  e2ee?: boolean;
   day?: number;
   /** True for the caller's own promotion; computed per viewer. */
   isYou: boolean;
@@ -95,11 +97,17 @@ export function assertDecisionRemoval(
   }
 }
 
-/** Clamps the snapshot through the same cap a live comment body carries. */
-export function decisionBodyFrom(commentBody: unknown): string {
+/**
+ * Clamps the snapshot through the same cap a live comment body carries.
+ * F10: an encrypted body is base64 (`iv.ct`), so the *encoding* cap doubles —
+ * the plaintext meaning cap is still COMMENT_MAX_LEN, but slicing ciphertext
+ * at the flat cap would corrupt it into an undecryptable blob.
+ */
+export function decisionBodyFrom(commentBody: unknown, e2ee?: boolean): string {
+  const cap = e2ee ? env.COMMENT_MAX_LEN * 2 : env.COMMENT_MAX_LEN;
   return String(commentBody || '')
     .trim()
-    .slice(0, env.COMMENT_MAX_LEN);
+    .slice(0, cap);
 }
 
 /** Shapes one row for the client — mirrors `projectComment`'s rules. */
@@ -120,6 +128,7 @@ export function projectDecision(
     isYou: String(row.createdBy) === String(viewerId),
     createdAt: row.createdAt,
   };
+  if (!deleted && row.e2ee) projected.e2ee = true;
   if (row.day !== undefined && row.day !== null) projected.day = Number(row.day);
   if (row.deletedAt) projected.deletedAt = row.deletedAt;
   return projected;
@@ -180,7 +189,7 @@ export async function promoteToDecision(
 ): Promise<DecisionRow> {
   assertDecisionPromotion(comment, promoterId, role);
 
-  const body = decisionBodyFrom(comment.body);
+  const body = decisionBodyFrom(comment.body, Boolean(comment.e2ee));
   if (!body) {
     throw new AppError('That comment has no content to record as a decision.', 409);
   }

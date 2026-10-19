@@ -44,3 +44,15 @@ export const getUserById = async (userId: string) => {
   }
   return user;
 };
+
+/**
+ * Publishes the browser's chat public key (Milestone 7, F10). Idempotent and
+ * last-write-wins: the private half never reaches this service, so there is
+ * nothing secret to protect beyond what the zod layer already validated.
+ */
+export const setChatPubKey = async (userId: string, pubKey: string) => {
+  await User.updateOne(
+    { _id: userId },
+    { $set: { chatPubKey: String(pubKey || '').trim() } }
+  );
+};

@@ -28,8 +28,10 @@ export interface CommentRow {
   tripId: string;
   /** Display label (email local-part, the E2 pattern). */
   label: string;
-  /** Empty string on a tombstone. */
+  /** Empty string on a tombstone; base64 `iv.ct` ciphertext when `e2ee` (F10). */
   body: string;
+  /** F10: true → `body` is end-to-end ciphertext only members can decrypt. */
+  e2ee?: boolean;
   day?: number;
   /** True for the caller's own comments; computed per viewer. */
   isYou: boolean;
@@ -170,6 +172,8 @@ export function projectComment(
     isYou: String(row.userId) === String(viewerId),
     createdAt: row.createdAt,
   };
+  // F10: the flag travels with the ciphertext (legacy rows simply omit it).
+  if (!deleted && row.e2ee) projected.e2ee = true;
   if (row.day !== undefined && row.day !== null) projected.day = Number(row.day);
   if (row.editedAt) projected.editedAt = row.editedAt;
   if (row.deletedAt) projected.deletedAt = row.deletedAt;
@@ -263,7 +267,7 @@ export async function listTripComments(
 export async function createTripComment(
   trip: any,
   userId: string,
-  input: { body: string; day?: number }
+  input: { body: string; day?: number; e2ee?: boolean }
 ): Promise<CommentRow> {
   const tripId = String(trip._id);
 
@@ -278,6 +282,8 @@ export async function createTripComment(
     userId: new Types.ObjectId(userId),
     body: input.body,
     day: input.day,
+    // F10: the server stores ciphertext as-is — it cannot read it, ever.
+    e2ee: Boolean(input.e2ee),
   });
 
   const user = await User.findOne({ _id: userId }).select('email');
@@ -303,10 +309,18 @@ export async function loadTripComment(tripId: string, commentId: string): Promis
 }
 
 /** Author-only edit; stamps `editedAt` and broadcasts the patched row. */
-export async function editTripComment(row: any, userId: string, body: string): Promise<CommentRow> {
+export async function editTripComment(
+  row: any,
+  userId: string,
+  body: string,
+  e2ee?: boolean
+): Promise<CommentRow> {
   assertCommentAuthor(row, userId);
 
   row.body = body;
+  // F10: each edit carries its own scheme (an author may re-encrypt a legacy
+  // row; the flag is authoritative with the body it arrived alongside).
+  if (e2ee !== undefined) row.e2ee = Boolean(e2ee);
   row.editedAt = new Date();
   await row.save();
 

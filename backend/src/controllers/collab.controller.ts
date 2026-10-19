@@ -43,6 +43,11 @@ import {
   promoteToDecision,
   removeTripDecision,
 } from '../services/collab/decisions.js';
+import {
+  getTripChatKeyState,
+  setTripChatKeys,
+  addTripChatEnvelopes,
+} from '../services/collab/chatKeys.js';
 
 /**
  * Collaboration endpoints (Milestone 6, sprint E2).
@@ -238,6 +243,7 @@ export const postTripComment = catchAsync(
     const comment = await createTripComment(trip, String(req.userId), {
       body: req.body?.body,
       day: req.body?.day,
+      e2ee: req.body?.e2ee,
     });
     res.status(201).json({ success: true, comment });
   }
@@ -251,7 +257,12 @@ export const patchTripComment = catchAsync(
       String((trip as any)._id),
       String(req.params.commentId)
     );
-    const comment = await editTripComment(row, String(req.userId), req.body?.body);
+    const comment = await editTripComment(
+      row,
+      String(req.userId),
+      req.body?.body,
+      req.body?.e2ee
+    );
     res.status(200).json({ success: true, comment });
   }
 );
@@ -356,6 +367,54 @@ export const deleteTripDecision = catchAsync(
       role
     );
     res.status(200).json({ success: true, decision });
+  }
+);
+
+/* -------------------------------------------------------------------------- */
+/*  Chat keys (F10) — blind-carrier key distribution for end-to-end chat       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * GET /:id/chat/keys — the current epoch, the caller's envelope (if any),
+ * and per-member public keys + envelope coverage. `viewer` floor like the
+ * rest of the live tier: reading key material is conditionally harmless,
+ * since envelopes only unwrap to their intended recipient.
+ */
+export const getTripChatKeys = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { trip } = tripContext(req);
+    const state = await getTripChatKeyState(trip, String(req.userId));
+    res.status(200).json({ success: true, ...state });
+  }
+);
+
+/**
+ * PUT /:id/chat/keys — bootstrap (epoch 1, no doc yet) or rotate (higher
+ * epoch). Any current member may wire keys (the self-healing F10 design);
+ * the envelope targets are asserted against the member list, and the
+ * unique (tripId, epoch) index arbitrates bootstrap races with a 409.
+ */
+export const putTripChatKeys = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { trip } = tripContext(req);
+    const state = await setTripChatKeys(trip, String(req.userId), {
+      epoch: req.body?.epoch,
+      envelopes: req.body?.envelopes,
+    });
+    res.status(200).json({ success: true, ...state });
+  }
+);
+
+/**
+ * POST /:id/chat/envelopes — self-healing distribution into the CURRENT
+ * epoch: a member who holds the conversation key wraps it for everybody
+ * missing an envelope (fresh invitees get full history this way).
+ */
+export const postTripChatEnvelopes = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { trip } = tripContext(req);
+    const state = await addTripChatEnvelopes(trip, String(req.userId), req.body?.envelopes);
+    res.status(200).json({ success: true, ...state });
   }
 );
 
