@@ -141,7 +141,23 @@ export function useTripChatCrypto(
         if (!envelopes[currentUserId]) {
           throw new Error('Could not wrap the chat key for yourself — try reopening.');
         }
-        await api.putTripChatKeys(tripId, 1, envelopes);
+        try {
+          await api.putTripChatKeys(tripId, 1, envelopes);
+        } catch (err: any) {
+          // Bootstrap race: another member minted epoch 1 a beat before us and
+          // the unique (trip, epoch) index kept THEIR write. Their envelopes
+          // covered us too (our pubKey was published just before the fetch),
+          // so we recover as an ordinary keyholder: unwrap and move on.
+          if (err?.status !== 409) throw err;
+          const fresh = await api.getTripChatKeys(tripId);
+          if (fresh.mine) {
+            convKeyRef.current = await unwrapMyEnvelope(fresh.mine, identity, livePubs, cachedPubs);
+            setStatus('ready');
+            return;
+          }
+          setStatus('keyless');
+          return;
+        }
         convKeyRef.current = conversationKey;
         setStatus('ready');
         return;
