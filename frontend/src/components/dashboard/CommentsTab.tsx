@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";import {
   Loader2,
+  Lock,
   MessageCircle,
   Pencil,
   Pin,
@@ -27,6 +28,7 @@ import { toast } from "sonner";import {
 import { cn } from "@/lib/utils";
 import type { TripComment, TripDecision, TripRole } from "@/types/trip";
 import type { UseTripComments } from "@/hooks/useTripComments";
+import type { ChatCryptoApi } from "@/hooks/useTripChatCrypto";
 
 /**
  * The 9th tab (Milestone 6 §19.7 / §20, sprint F6b) — day-anchored discussion
@@ -49,6 +51,8 @@ interface CommentsTabProps {
   days?: number;
   /** The shared comment state owned by ItineraryDisplay / useTripComments. */
   controller: UseTripComments;
+  /** The E2EE layer (F10) — thoughtfully optional for a plain-text fallback. */
+  crypto?: ChatCryptoApi;
   /** Other members currently "typing…" (F8b) — auto-expired upstream. */
   typingLabels?: string[];
   /** Composer keystroke hook for the throttled "I'm composing" ping (F8b). */
@@ -64,6 +68,21 @@ interface CommentsTabProps {
 }
 
 const COMMENT_MAX_LEN = 2000; // mirrors COMMENT_MAX_LEN (server default)
+
+/**
+ * The plaintext fallback layer (F10): when no crypto hook is wired (or the
+ * browser lacks WebCrypto), chat runs honestly unencrypted. Never pretends.
+ */
+const OFFLINE_CRYPTO: ChatCryptoApi = {
+  status: "off",
+  isEncrypted: () => false,
+  plaintextOf: (row) => row?.body ?? "",
+  syncRows: () => undefined,
+  rememberPlaintext: () => undefined,
+  encryptOutgoing: async (plaintext) => ({ body: plaintext, e2ee: false }),
+  exportBackupCode: async () => null,
+  importBackupCode: async () => undefined,
+};
 
 const initialsFor = (label: string): string =>
   (label || "T").trim().slice(0, 2).toUpperCase();
@@ -102,6 +121,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
   myRole,
   days,
   controller,
+  crypto,
   typingLabels = [],
   onTyping,
   variant = "feed",
@@ -110,6 +130,14 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
   const { comments, dayCounts } = state;
   const canWrite = myRole !== "viewer";
   const isChat = variant === "chat";
+  const cryptoApi = crypto ?? OFFLINE_CRYPTO;
+
+  /** Render text for one row: decrypted plaintext (or a honest 🔒 placeholder). */
+  const bodyOf = (row: { _id: string; body: string; e2ee?: boolean }) => {
+    if (!cryptoApi.isEncrypted(row)) return row.body;
+    const plain = cryptoApi.plaintextOf(row);
+    return plain || "🔒 This message is end-to-end encrypted — key not unlocked yet.";
+  };
 
   const [dayFilter, setDayFilter] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
@@ -133,6 +161,16 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
   useEffect(() => {
     controller.ensureLoaded();
   }, [controller]);
+
+  // F10: run the decrypt pass whenever rows change (initial page, frames,
+  // edits, earlier pages) and the decisions strip too. syncRows is empty
+  // unless the crypto layer is ready — a no-op otherwise.
+  useEffect(() => {
+    cryptoApi.syncRows(comments);
+  }, [comments, cryptoApi]);
+  useEffect(() => {
+    cryptoApi.syncRows(decisions);
+  }, [decisions, cryptoApi]);
 
   // Dismiss the context actions on anything but the bubble that opened them:
   // a click elsewhere, Escape, or any scroll (capture — the chat surface is a
@@ -213,10 +251,19 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
   }, [isChat, chronological.length, state.status, decisions.length]);
 
   const submit = async () => {
-    const body = draft.trim();
-    if (!body || state.submitting) return;
+    const plain = draft.trim();
+    if (!plain || state.submitting) return;
     try {
-      await controller.addComment(body, anchorDay ?? undefined);
+      // F10: encrypt before it leaves the browser (falls back to plaintext,
+      // flagged honestly, when encryption is unavailable).
+      const payload = await cryptoApi.encryptOutgoing(plain);
+      const row = await controller.addComment(
+        payload.body,
+        anchorDay ?? undefined,
+        payload.e2ee,
+        plain // optimistic bubble shows the words, never the base64
+      );
+      if (row && payload.e2ee) cryptoApi.rememberPlaintext(row._id, plain);
       setDraft("");
       autosizeComposer();
       toast.success("Message sent");
@@ -227,16 +274,18 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
 
   const startEdit = (row: TripComment) => {
     setEditingId(row._id);
-    setEditDraft(row.body);
+    setEditDraft(bodyOf(row)); // never open a base64 blob in the edit box
   };
 
   const saveEdit = async () => {
     if (!editingId) return;
-    const body = editDraft.trim();
-    if (!body) return;
+    const plain = editDraft.trim();
+    if (!plain) return;
     setBusyId(editingId);
     try {
-      await controller.editComment(editingId, body);
+      const payload = await cryptoApi.encryptOutgoing(plain);
+      await controller.editComment(editingId, payload.body, payload.e2ee);
+      if (payload.e2ee) cryptoApi.rememberPlaintext(editingId, plain);
       setEditingId(null);
       setEditDraft("");
     } catch (err: any) {
@@ -515,6 +564,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
           <CommentRow
             key={row._id}
             row={row}
+            displayBody={bodyOf(row)}
             canModerate={myRole === "owner" || Boolean(row.isYou)}
             isBusy={busyId === row._id}
             decided={decidedCommentIds.has(row._id)}
@@ -551,8 +601,28 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
             onScroll={handleChatScroll}
             className="flex-1 min-h-0 space-y-2 overflow-y-auto px-0.5"
           >
+            {cryptoApi.status === 'keyless' ? (
+              <div className="rounded-xl border border-border/60 bg-muted/50 px-3 py-2 text-[11px] text-muted-foreground flex items-start gap-2">
+                <Lock className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                <span>
+                  Messages are end-to-end encrypted. Your chat key is being
+                  shared by another member — stay on this trip a moment and
+                  your messages will unlock.
+                </span>
+              </div>
+            ) : cryptoApi.status === 'error' ? (
+              <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-[11px] text-destructive flex items-start gap-2">
+                <Lock className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                <span>
+                  Encryption is unavailable ({cryptoApi.error || 'keys could not load'}) —
+                  new messages send in plain text until you reopen the chat.
+                </span>
+              </div>
+            ) : null}
             <DecisionsStrip
-              decisions={decisions}
+              decisions={decisions.map((row) =>
+                cryptoApi.isEncrypted(row) ? { ...row, body: bodyOf(row) } : row
+              )}
               myRole={myRole}
               busyId={busyDecisionId}
               onUnmark={(row) => void unmarkDecision(row)}
@@ -580,12 +650,31 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
                 <Badge variant="outline" className="text-[10px]">
                   {dayFilter === null ? comments.length : visible.length}
                 </Badge>
+                {/* F10 honesty marker: what the reader's browser is actually doing */}
+                {cryptoApi.status === "ready" && (
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] gap-1 text-emerald-600 border-emerald-500/40"
+                  >
+                    <Lock className="w-2.5 h-2.5" /> E2EE
+                  </Badge>
+                )}
+                {cryptoApi.status === "error" && (
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] gap-1 text-destructive border-destructive/40"
+                  >
+                    Plain text
+                  </Badge>
+                )}
               </div>
             </div>
 
             {/* Pinned decisions (F9) — the "what we agreed" strip, newest first */}
             <DecisionsStrip
-              decisions={decisions}
+              decisions={decisions.map((row) =>
+                cryptoApi.isEncrypted(row) ? { ...row, body: bodyOf(row) } : row
+              )}
               myRole={myRole}
               busyId={busyDecisionId}
               onUnmark={(row) => void unmarkDecision(row)}
@@ -755,6 +844,8 @@ const DecisionsStrip: React.FC<DecisionsStripProps> = ({ decisions, myRole, busy
 
 interface CommentRowProps {
   row: TripComment;
+  /** The render text — plaintext for legacy rows, decrypted for e2ee rows. */
+  displayBody: string;
   canModerate: boolean;
   isBusy: boolean;
   /** True when this comment already carries an active decision (F9). */
@@ -775,6 +866,7 @@ interface CommentRowProps {
 /** One bubble — right-aligned when the caller wrote it; tombstones shrink. */
 const CommentRow: React.FC<CommentRowProps> = ({
   row,
+  displayBody,
   canModerate,
   isBusy,
   decided,
@@ -926,7 +1018,7 @@ const CommentRow: React.FC<CommentRowProps> = ({
               !isMine && "mt-0.5"
             )}
           >
-            {row.body}
+            {displayBody}
           </p>
         )}
 

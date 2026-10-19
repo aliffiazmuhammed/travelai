@@ -2,16 +2,28 @@ import React, { useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { MessageCircle } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { KeyRound, Loader2, MessageCircle } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import { CommentsTab } from "./CommentsTab";
 import type { PresenceUser } from "@/hooks/useTripEvents";
 import type { UseTripComments } from "@/hooks/useTripComments";
+import type { ChatCryptoApi } from "@/hooks/useTripChatCrypto";
 import type { TripRole } from "@/types/trip";
 
 /**
@@ -40,6 +52,8 @@ interface DiscussionDrawerProps {
   days?: number;
   /** The shared comment state owned by ItineraryDisplay / useTripComments. */
   controller: UseTripComments;
+  /** The E2EE session (F10) — powers the key-backup dialog + status dot. */
+  crypto?: ChatCryptoApi;
   /** The live SSE roster — shown as a mini avatar stack in the header. */
   presence?: PresenceUser[];
   /** Hide the FAB when the drawer is redundant (Discuss tab active, etc.). */
@@ -54,13 +68,49 @@ export const DiscussionDrawer: React.FC<DiscussionDrawerProps> = ({
   myRole,
   days,
   controller,
+  crypto,
   presence = [],
   hidden = false,
 }) => {
   const [open, setOpen] = useState(false);
+  const [keysOpen, setKeysOpen] = useState(false);
+  const [backupCode, setBackupCode] = useState<string | null>(null);
+  const [importDraft, setImportDraft] = useState("");
+  const [keysBusy, setKeysBusy] = useState(false);
   const unread = controller.state.unread;
+  const cryptoStatus = crypto?.status ?? "off";
   const roster = presence.slice(0, 4);
   const extraCount = Math.max(0, presence.length - roster.length);
+
+  /**
+   * The key dialog (F10): export = show THIS browser's backup code; import =
+   * paste a code from another device to unlock chat here. Any member may use
+   * it — keys are per-browser, per-account awareness is not required.
+   */
+  const openKeysDialog = async () => {
+    setKeysOpen(true);
+    setBackupCode(null);
+    setImportDraft("");
+    try {
+      setBackupCode((await crypto?.exportBackupCode()) ?? null);
+    } catch {
+      setBackupCode(null);
+    }
+  };
+
+  const confirmImport = async () => {
+    if (!crypto || !importDraft.trim() || keysBusy) return;
+    setKeysBusy(true);
+    try {
+      await crypto.importBackupCode(importDraft.trim());
+      toast.success("Chat key imported — messages will unlock now");
+      setKeysOpen(false);
+    } catch (err: any) {
+      toast.error(err?.message || "That backup code could not be imported.");
+    } finally {
+      setKeysBusy(false);
+    }
+  };
 
   /** Opening/closing the Sheet is exactly the surface-open signal upstream. */
   const handleOpenChange = (next: boolean) => {
@@ -104,10 +154,49 @@ export const DiscussionDrawer: React.FC<DiscussionDrawerProps> = ({
           {/* Slim chat header — title + live roster; the logic core supplies
               everything else (no nested card, no duplicate title). */}
           <SheetHeader className="flex-row items-center justify-between gap-3 px-4 py-3 border-b border-border/70">
-            <SheetTitle className="flex items-center gap-2 text-sm font-extrabold">
-              <MessageCircle className="w-4 h-4 text-primary" />
-              Trip chat
-            </SheetTitle>
+            <div className="flex items-center gap-2 min-w-0">
+              <SheetTitle className="flex items-center gap-2 text-sm font-extrabold">
+                <MessageCircle className="w-4 h-4 text-primary" />
+                Trip chat
+              </SheetTitle>
+              {/* F10 status dot: green = unlocked & encrypted, amber = syncing,
+                  red = encryption unavailable (honest plain-text fallback). */}
+              {crypto && (
+                <span
+                  title={
+                    cryptoStatus === "ready"
+                      ? "End-to-end encrypted"
+                      : cryptoStatus === "error"
+                        ? "Encryption unavailable — sending in plain text"
+                        : "Syncing chat keys…"
+                  }
+                  className={cn(
+                    "w-2 h-2 rounded-full shrink-0",
+                    cryptoStatus === "ready" && "bg-emerald-500",
+                    (cryptoStatus === "starting" ||
+                      cryptoStatus === "bootstrap" ||
+                      cryptoStatus === "keyless") &&
+                      "bg-amber-400 animate-pulse",
+                    (cryptoStatus === "off" || cryptoStatus === "error") &&
+                      "bg-red-400"
+                  )}
+                />
+              )}
+            </div>
+            <div className="flex items-center gap-1.5">
+              {crypto && (
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => void openKeysDialog()}
+                  title="Chat key backup"
+                  aria-label="Chat key backup"
+                  className="w-7 h-7 rounded-full text-muted-foreground hover:text-foreground"
+                >
+                  <KeyRound className="w-3.5 h-3.5" />
+                </Button>
+              )}
             {roster.length > 0 && (
               <div
                 className="flex items-center -space-x-1.5"
@@ -129,6 +218,7 @@ export const DiscussionDrawer: React.FC<DiscussionDrawerProps> = ({
                 )}
               </div>
             )}
+            </div>
           </SheetHeader>
 
           {/* Full-height chat (variant='chat' owns scroll + floor composer). */}
@@ -138,6 +228,7 @@ export const DiscussionDrawer: React.FC<DiscussionDrawerProps> = ({
               myRole={myRole}
               days={days}
               controller={controller}
+              crypto={crypto}
               variant="chat"
               typingLabels={controller.typingLabels}
               onTyping={controller.notifyTyping}
@@ -145,6 +236,84 @@ export const DiscussionDrawer: React.FC<DiscussionDrawerProps> = ({
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* Key backup (F10): the only way to light up chat on a NEW browser. */}
+      <Dialog open={keysOpen} onOpenChange={setKeysOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-sm font-extrabold">
+              <KeyRound className="w-4 h-4 text-primary" />
+              Chat key backup
+            </DialogTitle>
+            <DialogDescription>
+              Messages are end-to-end encrypted. This browser holds the key
+              half that unlocks them — guard it (it is stored in this browser)
+              and use a backup code to open chat on a new device.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+                Export this device&apos;s key
+              </p>
+              {backupCode ? (
+                <Textarea
+                  readOnly
+                  value={backupCode}
+                  rows={3}
+                  onFocus={(event) => event.currentTarget.select()}
+                  className="font-mono text-[10px] resize-none"
+                />
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  {cryptoStatus === "error"
+                    ? "No key to export — encryption is unavailable on this device."
+                    : "Generating a backup code…"}
+                </p>
+              )}
+              {backupCode && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="hero"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(backupCode);
+                    toast.success("Backup code copied");
+                  }}
+                >
+                  Copy code
+                </Button>
+              )}
+            </div>
+            <div className="border-t border-border/60" />
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+                Import a key from another device
+              </p>
+              <Textarea
+                value={importDraft}
+                onChange={(event) => setImportDraft(event.target.value)}
+                placeholder="TAI1.…"
+                rows={3}
+                className="font-mono text-[10px] resize-none"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="ghost" onClick={() => setKeysOpen(false)}>
+              Close
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void confirmImport()}
+              disabled={!importDraft.trim() || keysBusy || cryptoStatus === "error"}
+            >
+              {keysBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+              Unlock this device
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };

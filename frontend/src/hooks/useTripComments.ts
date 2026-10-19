@@ -53,9 +53,16 @@ export interface UseTripComments {
   /** First-page fetch — called when the tab is first opened. Idempotent. */
   ensureLoaded: () => void;
   loadEarlier: () => Promise<void>;
-  /** Resolves true on success; throws with the server message on failure. */
-  addComment: (body: string, day?: number) => Promise<boolean>;
-  editComment: (commentId: string, body: string) => Promise<boolean>;
+  /** Resolves the created row (comment type) on 201 — the caller uses it to
+   *  pin just-written plaintext for the crypto layer. */
+  addComment: (
+    body: string,
+    day?: number,
+    e2ee?: boolean,
+    plaintextHint?: string
+  ) => Promise<TripComment | null>;
+  /** Author-only edit; `e2ee` marks the body as freshly encrypted (F10). */
+  editComment: (commentId: string, body: string, e2ee?: boolean) => Promise<boolean>;
   removeComment: (comment: TripComment) => Promise<void>;
   /** Live ingest — wired to `useTripEvents.onCommentEvent`. */
   ingest: (frame: CommentFrame) => void;
@@ -298,17 +305,26 @@ export function useTripComments(
   /**
    * Optimistic add (§19.7): an in-flight row renders immediately and either
    * becomes the server truth on 201, or rolls back on any failure (limiter
-   * 429, per-trip cap 409, network).
+   * 429, per-trip cap 409, network). F10: when `e2ee` is set, `body` is the
+   * ciphertext while `plaintextHint` is what the optimistic bubble shows and
+   * what the caller pins via the crypto hook (no 🔒 flash on just-sent).
    */
   const addComment = useCallback(
-    async (body: string, day?: number): Promise<boolean> => {
-      if (!tripId) return false;
+    async (
+      body: string,
+      day?: number,
+      e2ee?: boolean,
+      plaintextHint?: string
+    ): Promise<TripComment | null> => {
+      if (!tripId) return null;
       const tempId = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const optimistic: TripComment = {
         _id: tempId,
         tripId,
         label: 'You',
-        body,
+        // The optimistic preview is the plaintext (the wire body is opaque,
+        // and a human should never watch their own words turn into base64).
+        body: plaintextHint ?? body,
         isYou: true,
         createdAt: new Date().toISOString(),
         ...(day !== undefined ? { day } : {}),
@@ -325,6 +341,7 @@ export function useTripComments(
         const result = await api.addTripComment(tripId, {
           body,
           ...(day !== undefined ? { day } : {}),
+          ...(e2ee ? { e2ee: true } : {}),
         });
         // The authoritative row is OURS by construction (§20.2): record the id
         // so a racing frame can never count our own words as unread.
@@ -339,7 +356,7 @@ export function useTripComments(
           submitting: false,
         }));
         applyRow(result.comment, true);
-        return true;
+        return result.comment;
       } catch (err) {
         setState((prev) => ({
           ...prev,
@@ -354,9 +371,9 @@ export function useTripComments(
   );
 
   const editComment = useCallback(
-    async (commentId: string, body: string): Promise<boolean> => {
+    async (commentId: string, body: string, e2ee?: boolean): Promise<boolean> => {
       if (!tripId) return false;
-      const result = await api.editTripComment(tripId, commentId, body);
+      const result = await api.editTripComment(tripId, commentId, body, e2ee);
       applyRow(result.comment, true);
       return true;
     },

@@ -26,6 +26,7 @@ import type {
   InvitePreview,
   TripComment,
   TripDecision,
+  ChatKeysState,
 } from '@/types';
 
 export interface StreamProgressEvent {
@@ -514,17 +515,25 @@ class ApiClient {
     return this.request(`/api/itinerary/${id}/comments${query ? `?${query}` : ''}`);
   }
 
-  async addTripComment(id: string, payload: { body: string; day?: number }): Promise<{ success: boolean; comment: TripComment }> {
+  async addTripComment(
+    id: string,
+    payload: { body: string; day?: number; e2ee?: boolean }
+  ): Promise<{ success: boolean; comment: TripComment }> {
     return this.request(`/api/itinerary/${id}/comments`, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
   }
 
-  async editTripComment(id: string, commentId: string, body: string): Promise<{ success: boolean; comment: TripComment }> {
+  async editTripComment(
+    id: string,
+    commentId: string,
+    body: string,
+    e2ee?: boolean
+  ): Promise<{ success: boolean; comment: TripComment }> {
     return this.request(`/api/itinerary/${id}/comments/${commentId}`, {
       method: 'PATCH',
-      body: JSON.stringify({ body }),
+      body: JSON.stringify({ body, e2ee }),
     });
   }
 
@@ -575,6 +584,44 @@ class ApiClient {
     decisionId: string
   ): Promise<{ success: boolean; decision: TripDecision }> {
     return this.request(`/api/itinerary/${id}/decisions/${decisionId}`, { method: 'DELETE' });
+  }
+
+  /* ------------------------------------------------------------------------ */
+  /*  Chat keys (Milestone 7, F10) — the blind-carrier plumbing. Everything    */
+  /*  here is opaque base64 the server stores verbatim.                        */
+  /* ------------------------------------------------------------------------ */
+
+  /** PUT /api/auth/chat-key — publish this browser's public key (idempotent). */
+  async setMyChatKey(pubKey: string): Promise<{ success: boolean }> {
+    return this.request('/api/auth/chat-key', {
+      method: 'PUT',
+      body: JSON.stringify({ pubKey }),
+    });
+  }
+
+  async getTripChatKeys(tripId: string): Promise<ChatKeysState> {
+    return this.request(`/api/itinerary/${tripId}/chat/keys`, { method: 'GET' });
+  }
+
+  async putTripChatKeys(
+    tripId: string,
+    epoch: number,
+    envelopes: Record<string, string>
+  ): Promise<ChatKeysState> {
+    return this.request(`/api/itinerary/${tripId}/chat/keys`, {
+      method: 'PUT',
+      body: JSON.stringify({ epoch, envelopes }),
+    });
+  }
+
+  async addTripChatEnvelopes(
+    tripId: string,
+    envelopes: Record<string, string>
+  ): Promise<ChatKeysState> {
+    return this.request(`/api/itinerary/${tripId}/chat/envelopes`, {
+      method: 'POST',
+      body: JSON.stringify({ envelopes }),
+    });
   }
 
   /** E4b — keep the SSE presence entry alive (decoration only; errors ignored). */

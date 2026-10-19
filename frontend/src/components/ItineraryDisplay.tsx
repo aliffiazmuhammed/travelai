@@ -35,6 +35,7 @@ import { TripMembers } from "./dashboard/TripMembers";
 import { CommentsTab } from "./dashboard/CommentsTab";
 import { DiscussionDrawer } from "./dashboard/DiscussionDrawer";
 import { useTripComments } from "@/hooks/useTripComments";
+import { useTripChatCrypto } from "@/hooks/useTripChatCrypto";
 import { useTripEvents, type PresenceUser } from "@/hooks/useTripEvents";
 import { endDateFromStart, itineraryAnchor, zipWeatherToDays } from "@/lib/weather";
 import { swapDayPlans } from "@/lib/weatherRouting";
@@ -196,6 +197,13 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
   const commentsController = useTripComments(
     showCommentsTab ? tripId : undefined,
     currentUserId
+  );
+  // F10: the E2EE session lives next to the discussion hub so both surfaces
+  // (tab + drawer) share one key biography and one decrypt cache.
+  const chatCrypto = useTripChatCrypto(
+    showCommentsTab ? tripId : undefined,
+    currentUserId,
+    showCommentsTab
   );
   const commentsIngestRef = useRef(commentsController.ingest);
   commentsIngestRef.current = commentsController.ingest;
@@ -799,6 +807,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
               myRole={role!}
               days={safeData.duration_days}
               controller={commentsController}
+              crypto={chatCrypto}
               typingLabels={commentsController.typingLabels}
               onTyping={commentsController.notifyTyping}
             />
@@ -814,6 +823,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
           myRole={role}
           days={safeData.duration_days}
           controller={commentsController}
+          crypto={chatCrypto}
           presence={livePresence}
           hidden={activeTab === "comments"}
         />

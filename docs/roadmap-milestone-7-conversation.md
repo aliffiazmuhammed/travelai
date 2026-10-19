@@ -153,3 +153,14 @@ Backend error alphabet: 403 non-author promote, 409 duplicate / no-content / rem
 - The wall between the conversation key and the server rests on client crypto in a browser — a malicious server that serves a doctored JS bundle could exfiltrate keys (WhatsApp-Web-class trust model, standard for browser E2EE).
 - Rotation is accepted server-side but **not exposed in the UI yet** (no member-removal re-keying in v1; a removed member's cached key still opens the ciphertexts they saw before removal). The epoch/rotation plumbing exists precisely to wire that later.
 - Plaintext-era messages are not retroactively encrypted — rendering marks them honestly instead of pretending.
+
+### 12.6 Frontend (F10b) — SHIPPED same day
+
+- **`lib/chatCrypto.ts`** — browser-side crypto module: identity mint/load/publish (ECDH P-256, private half NEVER leaves the device), backup-code export (`TAI1.<base64 JSON JWK>`) + import, per-trip member-pubkey cache (localStorage — survives a wrapper LEAVING the trip), envelope wrap/unwrap (`base64(JSON {v,w,iv,d})` — the wrapper id rides inside so recipients can resolve any member who re-shared), message encrypt/decrypt (`<b64 iv>.<b64 ct>`).
+- **`hooks/useTripChatCrypto.ts`** — the per-trip session: identity publish → keys fetch → bootstrap (mint epoch 1, envelope every member with a published key; races lose gracefully to 409 + retry) → unwrap (my envelope) → ready; `keyless` until another member's open client self-heals; `off`/`error` fall back to HONEST plaintext. Owns the decrypt pass (`syncRows`) and a just-written plaintext cache so own bubbles never blink into base64.
+- **`useTripComments`** — `addComment(body, day, e2ee, plaintextHint)`, `editComment(..., e2ee)`; the optimistic bubble always shows the words, never the ciphertext.
+- **`CommentsTab`** — `bodyOf(row)` renders decrypted text (🔒 placeholder when the key isn't unlocked yet), composer encrypts on send, edit box never opens a base64 blob, feed header gains an honest E2EE / Plain-text badge, chat surface shows a keyless banner.
+- **`DiscussionDrawer`** — header gains an E2EE status dot (green ready / amber syncing / red unavailable) + a key-backup dialog (export code / import code) and hands the crypto api down.
+- **`smoke-f10.mts`** re-cut to the SPA envelope format (JSON `{v,w,iv,d}`) — wrapper resolution verified live: Carol opens Alice's re-share via `w`.
+
+Re-verified after the format change: 223/223 backend tests; smoke-f10 ALL PASS (31 checks); typecheck + build pass; SPA mirror refreshed.

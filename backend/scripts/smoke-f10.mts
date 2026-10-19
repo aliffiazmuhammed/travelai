@@ -70,7 +70,12 @@ async function mintIdentity(): Promise<Identity> {
 
 const ids = new Map<string, Map<string, CryptoKey>>(); // email → (epoch → conv key)
 
-async function wrapEnvelope(from: Identity, toPubB64: string, conv: CryptoKey): Promise<string> {
+async function wrapEnvelope(
+  wrapperId: string,
+  from: Identity,
+  toPubB64: string,
+  conv: CryptoKey
+): Promise<string> {
   const toPub = await subtle.importKey(
     'spki',
     unb64(toPubB64),
@@ -90,12 +95,16 @@ async function wrapEnvelope(from: Identity, toPubB64: string, conv: CryptoKey): 
   globalThis.crypto.getRandomValues(iv);
   const raw = await subtle.exportKey('raw', conv);
   const ct = await subtle.encrypt({ name: 'AES-GCM', iv }, wrapKey, raw);
-  // Envelope wire format (the SPA owns the same convention): ONE base64 blob
-  // of `iv ‖ ciphertext` — recipients split at the fixed 12-byte nonce.
-  const blob = new Uint8Array(12 + ct.byteLength);
-  blob.set(iv, 0);
-  blob.set(new Uint8Array(ct), 12);
-  return b64(blob);
+  // Envelope wire format — THE SPA's contract (chatCrypto.ts): base64 of a
+  // compact JSON `{ v, w, iv, d }`. The wrapper id rides inside because a
+  // recipient may need a member's public key who has since LEFT the trip.
+  const envelope = {
+    v: 1,
+    w: wrapperId,
+    iv: Buffer.from(iv).toString('base64'),
+    d: b64(ct),
+  };
+  return b64(new TextEncoder().encode(JSON.stringify(envelope)));
 }
 
 async function unwrapEnvelope(mine: Identity, envelope: string): Promise<CryptoKey> {
@@ -107,15 +116,19 @@ async function unwrapEnvelope(mine: Identity, envelope: string): Promise<CryptoK
   throw new Error('unused — recipients use decryptWithPair(senderPubB64, …)');
 }
 
-/** Wraps symmetrically: sender priv × recipient pub. */
+/** Opens an envelope the way the SPA does: wrapper id inside, pubKey map outside. */
 async function decryptWithPair(
   recipient: Identity,
-  senderPubB64: string,
+  memberPubs: Map<string, string>,
   envelope: string
 ): Promise<CryptoKey> {
-  const blob = unb64(envelope);
-  const iv = blob.slice(0, 12); // the fixed nonce prefix (see wrapEnvelope)
-  const ct = blob.slice(12);
+  const env = JSON.parse(
+    new TextDecoder().decode(unb64(envelope))
+  ) as { v: number; w: string; iv: string; d: string };
+  const senderPubB64 = memberPubs.get(env.w);
+  if (!senderPubB64) throw new Error(`no pubkey for wrapper ${env.w}`);
+  const iv = unb64(env.iv);
+  const ct = unb64(env.d);
   const senderPub = await subtle.importKey(
     'spki',
     unb64(senderPubB64),
@@ -284,14 +297,18 @@ async function main() {
   // Helpers self-test: wrap from alice → bob and open it with bob, entirely
   // offline; isolates smoke-crypto bugs from server-side envelope corruption.
   try {
-    const selfRound = await decryptWithPair(bobId, aliceId.pubB64, await wrapEnvelope(aliceId, bobId.pubB64, conv));
+    const selfRound = await decryptWithPair(
+      bobId,
+      pubsMap({ [String(alice._id)]: aliceId.pubB64 }),
+      await wrapEnvelope(String(alice._id), aliceId, bobId.pubB64, conv)
+    );
     check('smoke crypto self-test: wrap(alice→bob) opens as bob', Boolean(selfRound), null);
   } catch (error) {
     check('smoke crypto self-test: wrap(alice→bob) opens as bob', false, String(error));
   }
 
-  const aliceEnvelope = await wrapEnvelope(aliceId, alicePub!, conv);
-  const bobEnvelope = await wrapEnvelope(aliceId, bobPub!, conv);
+  const aliceEnvelope = await wrapEnvelope(String(alice._id), aliceId, alicePub!, conv);
+  const bobEnvelope = await wrapEnvelope(String(alice._id), aliceId, bobPub!, conv);
   const bootstrap = await api('PUT', `/itinerary/${tripId}/chat/keys`, {
     email: ALICE_EMAIL,
     body: {
@@ -319,7 +336,11 @@ async function main() {
     { sent: bobEnvelope.slice(0, 24), got: String(bobKeys.body?.mine || '').slice(0, 24) }
   );
 
-  const bobConv = await decryptWithPair(bobId, alicePub!, bobKeys.body.mine);
+  const bobConv = await decryptWithPair(
+    bobId,
+    pubsMap({ [String(alice._id)]: alicePub! }),
+    bobKeys.body.mine
+  );
   // The message wire format: "<b64 iv>.<b64 ct>" — Bob encrypts a Day-2 note.
   const bobPlain = 'Rent scooters for Day 2 \u2014 meet 9am at Juhu beach.';
   const ciphertext = await encryptBody(bobConv, bobPlain);
@@ -334,7 +355,11 @@ async function main() {
 
   const aliceCommentView = await api('GET', `/itinerary/${tripId}/comments`, { email: ALICE_EMAIL });
   const row = aliceCommentView.body?.comments?.find((c: any) => String(c._id) === String(posted.body.comment._id));
-  const aliceConv = await decryptWithPair(aliceId, alicePub!, (bootstrap.body.mine));
+  const aliceConv = await decryptWithPair(
+    aliceId,
+    pubsMap({ [String(alice._id)]: alicePub! }),
+    bootstrap.body.mine
+  );
   const roundtrip = row ? await decryptBody(aliceConv, row.body) : null;
   check('alice decrypts bob\u2019s message to the exact plaintext', roundtrip === bobPlain, roundtrip);
 
@@ -365,12 +390,20 @@ async function main() {
   check('carol\u2019s public key is visible to members who may self-heal', Boolean(carolPubFromState));
   const heal = await api('POST', `/itinerary/${tripId}/chat/envelopes`, {
     email: ALICE_EMAIL,
-    body: { envelopes: { [String(carol._id)]: await wrapEnvelope(aliceId, carolPubFromState, conv) } },
+    body: {
+      envelopes: {
+        [String(carol._id)]: await wrapEnvelope(String(alice._id), aliceId, carolPubFromState, conv),
+      },
+    },
   });
   check('alice self-heals an envelope for carol into epoch 1 (200)', heal.status === 200, heal.body);
 
   const carolKeys = await api('GET', `/itinerary/${tripId}/chat/keys`, { email: CAROL_EMAIL });
-  const carolConv = await decryptWithPair(carolId, alicePub!, carolKeys.body.mine);
+  const carolConv = await decryptWithPair(
+    carolId,
+    pubsMap({ [String(alice._id)]: alicePub! }),
+    carolKeys.body.mine
+  );
   const carolReads = await decryptBody(carolConv, ciphertext);
   check('carol decrypts the HISTORICAL message (full-history decision)', carolReads === bobPlain, carolReads);
 
@@ -425,9 +458,22 @@ async function main() {
 }
 
 function validB64Envelope(): string {
-  const blob = new Uint8Array(12 + 60); // iv ‖ wrapped-key bytes, the fake shape
-  globalThis.crypto.getRandomValues(blob);
-  return Buffer.from(blob).toString('base64');
+  const iv = new Uint8Array(12);
+  globalThis.crypto.getRandomValues(iv);
+  const d = new Uint8Array(60);
+  globalThis.crypto.getRandomValues(d);
+  const envelope = {
+    v: 1,
+    w: 'ffffffffffffffffffffffff', // opaque fake wrapper id (shape test only)
+    iv: Buffer.from(iv).toString('base64'),
+    d: b64(d),
+  };
+  return b64(new TextEncoder().encode(JSON.stringify(envelope)));
+}
+
+/** Builds the envelope-title→pubkey map decryptWithPair consumes. */
+function pubsMap(pairs: Record<string, string>): Map<string, string> {
+  return new Map(Object.entries(pairs));
 }
 
 main().catch(async (error) => {

@@ -460,8 +460,14 @@ export interface TripComment {
   _id: string;
   tripId: string;
   label: string;
-  /** Empty string on a tombstone. */
+  /** Empty string on a tombstone; `<b64 iv>.<b64 ct>` when `e2ee` (F10). */
   body: string;
+  /**
+   * F10: true → `body` is end-to-end ciphertext ONLY decryptable by members
+   * with the trip's conversation key. Absent/false → the legacy plaintext
+   * format renders verbatim (no migration: old rows stay plaintext).
+   */
+  e2ee?: boolean;
   /** Optional day anchor (1..day count); absent = about the trip in general. */
   day?: number;
   /** True on rows authored by the caller (reliable in HTTP responses only). */
@@ -490,11 +496,31 @@ export interface TripDecision {
   markedByLabel: string;
   /** Snapshot of the comment body at promotion time. */
   body: string;
+  /** F10: true → the snapshot body is end-to-end ciphertext. */
+  e2ee?: boolean;
   day?: number;
   /** True when the caller promoted it (reliable in HTTP responses only). */
   isYou: boolean;
   createdAt: string;
   deletedAt?: string;
+}
+
+/** What the E2EE key state route (F10) returns for `GET /:id/chat/keys`. */
+export interface ChatKeyMember {
+  userId: string;
+  label: string;
+  /** Base64 SPKI when this member has published a chat identity. */
+  pubKey?: string;
+  /** Whether the CURRENT epoch already has an envelope for this member. */
+  hasEnvelope: boolean;
+}
+
+export interface ChatKeysState {
+  /** Current conversation-key epoch; absent until the first bootstrap. */
+  epoch?: number;
+  /** The caller's own envelope (base64), present when they hold the key. */
+  mine?: string;
+  members: ChatKeyMember[];
 }
 
 /** What a signed-in user sees before accepting an invite. */
