@@ -177,3 +177,22 @@ Re-verified after the format change: 223/223 backend tests; smoke-f10 ALL PASS (
 - **Retry is the medicine, not "reopen the chat"**: the banner carries a Retry button that re-runs the whole key flow in the open chat; on success the decrypt pass re-runs over the already-loaded rows and the 🔒 bubbles unlock in place (the sync-rows effects re-run per render via the fresh api object).
 - **Honest cause capture**: the catch now records thrown strings/objects too (previously a message-less throw fell through to the generic text, making field reports unanswerable).
 - **Calm placeholders**: the keyless banner is a single quiet line ("Your chat key is syncing — messages will unlock shortly."), and the locked-bubble copy lost its emoji — "Encrypted message — can't be decrypted on this device yet."
+
+### 12.8 Second-device recovery (user-reported, 2026-10-19)
+
+**Report:** chat opened on a *second browser* showed "Encryption is off in this session" with a Retry that never helped, and every encrypted row (including the user's own, sent from the other device) stayed locked.
+
+**Root cause:** the identity is per-BROWSER (localStorage JWK); a second device mints a fresh keypair and publishes it, but the trip's envelope for that ACCOUNT was wrapped to the FIRST device's public key. `unwrapMyEnvelope` therefore throws deterministically — Retry can only replay the same failing unwrap. Three separate defects turned that into a dead end:
+
+1. the unwrap failure was classified as `error` (a transient-failure state with a Retry), never `keyless`;
+2. the key dialog's "Unlock this device" button was `disabled` when `status === 'error'` — i.e. exactly in the state that needs the backup code;
+3. `importBackupCode()` replaced localStorage but NOT the module-level `identityPromise` memo, so the key flow it re-ran kept using the freshly minted (wrong) identity — the import silently did nothing until a full page reload.
+
+**Fix (F10c, frontend only):**
+
+- `adoptEnvelope` classifies every unwrap outcome: `missing` (no envelope for this account yet, or the wrapper left and is uncached) vs `mismatch` (an envelope exists, wrapped to another device's key). Both are `keyless` — honest, and the banner offers the one action that works: **Backup code**.
+- The banner is actionable again: "Chat here is locked with another device's key. Copy that device's backup code…" + a **Backup code** button that opens the drawer's key dialog (`onOpenKeyBackup` prop; feed variant shows the text only). Keyless devices no longer export their own useless code (the dialog explains why).
+- The import button is never disabled by crypto state, and `importBackupCode` now replaces the identity memo, so the post-import key flow uses the restored key immediately (no reload).
+- A quiet poll (6s + window focus) runs while `keyless`: if an envelope for this account appears, it unwraps in place.
+
+**Known limit (deliberate, next increment):** envelopes are stored one-per-USER, so two devices of the same account cannot both hold the key at once; the second device is unlocked by importing the backup code from the first. Automatic cross-device sharing needs per-DEVICE envelope slots (envelopes keyed by recipient pubkey + a bounded pubkey list per user), which also finally wires the already-written `POST /:id/chat/envelopes` self-heal route that no client calls today.

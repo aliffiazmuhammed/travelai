@@ -81,6 +81,12 @@ interface CommentsTabProps {
    * suggestion without the Apply controls.
    */
   onApplyProposal?: (proposal: AssistantProposal) => Promise<void> | void;
+  /**
+   * F10c: opens the chat-key backup dialog (export on a device that works /
+   * import here). Owned by the drawer, so only the chat surface can offer it —
+   * the keyless banner shows the button when this is provided.
+   */
+  onOpenKeyBackup?: () => void;
 }
 
 const COMMENT_MAX_LEN = 2000; // mirrors COMMENT_MAX_LEN (server default)
@@ -208,6 +214,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
   onTyping,
   variant = "feed",
   onApplyProposal,
+  onOpenKeyBackup,
 }) => {
   const { state } = controller;
   const { comments, dayCounts } = state;
@@ -848,13 +855,35 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
             className="flex-1 min-h-0 space-y-2 overflow-y-auto px-0.5"
           >
             {cryptoApi.status === 'keyless' ? (
+              /* Two flavors of "no key on this device": (a) the account's
+                 envelope was wrapped for ANOTHER device's key (the ordinary
+                 second-browser case — Retry can never fix it) or (b) no
+                 envelope exists for this account yet. Both are answered by the
+                 backup code, so that is the one action offered. */
               <div
                 className="rounded-xl border border-border/60 bg-muted/50 px-3 py-2 text-[11px] text-muted-foreground flex items-center gap-2"
-                title="End-to-end encryption: waiting for another member's open client to share the chat key."
+                title={
+                  cryptoApi.keylessReason === 'mismatch'
+                    ? 'This browser holds a different chat key than the one the trip is encrypted with.'
+                    : "This account has no chat key envelope yet; it arrives when another member's chat is open."
+                }
               >
                 <span className="min-w-0 flex-1">
-                  Your chat key is syncing — messages will unlock shortly.
+                  {cryptoApi.keylessReason === 'mismatch'
+                    ? 'Chat here is locked with another device\u2019s key. Copy that device\u2019s backup code to read and send encrypted messages on this one.'
+                    : 'Waiting for the chat key to reach this device \u2014 or paste a backup code from another device.'}
                 </span>
+                {onOpenKeyBackup ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={onOpenKeyBackup}
+                    className="h-6 shrink-0 rounded-full px-2.5 text-[10px] font-bold"
+                  >
+                    Backup code
+                  </Button>
+                ) : null}
               </div>
             ) : cryptoApi.status === 'error' ? (
               /* One quiet fact + one tap to fix; the raw cause is tooltip-only. */

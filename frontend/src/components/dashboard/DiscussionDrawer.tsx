@@ -236,6 +236,7 @@ export const DiscussionDrawer: React.FC<DiscussionDrawerProps> = ({
               typingLabels={controller.typingLabels}
               onTyping={controller.notifyTyping}
               onApplyProposal={onApplyProposal}
+              onOpenKeyBackup={() => void openKeysDialog()}
             />
           </div>
         </SheetContent>
@@ -250,9 +251,10 @@ export const DiscussionDrawer: React.FC<DiscussionDrawerProps> = ({
               Chat key backup
             </DialogTitle>
             <DialogDescription>
-              Messages are end-to-end encrypted. This browser holds the key
-              half that unlocks them — guard it (it is stored in this browser)
-              and use a backup code to open chat on a new device.
+              Messages are end-to-end encrypted and the unlocking half lives in
+              the browser that created it. On a device where chat already works,
+              tap the key icon there, copy its code, and paste it below — this
+              device then reads and writes the same encrypted chat.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -260,7 +262,7 @@ export const DiscussionDrawer: React.FC<DiscussionDrawerProps> = ({
               <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
                 Export this device&apos;s key
               </p>
-              {backupCode ? (
+              {backupCode && cryptoStatus !== "keyless" ? (
                 <Textarea
                   readOnly
                   value={backupCode}
@@ -268,14 +270,20 @@ export const DiscussionDrawer: React.FC<DiscussionDrawerProps> = ({
                   onFocus={(event) => event.currentTarget.select()}
                   className="font-mono text-[10px] resize-none"
                 />
+              ) : cryptoStatus === "keyless" ? (
+                <p className="text-xs text-muted-foreground">
+                  This device&apos;s key is not the one this trip uses, so there
+                  is nothing useful to export here — import the code from the
+                  device where chat already works.
+                </p>
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  {cryptoStatus === "error"
+                  {cryptoStatus === "off"
                     ? "No key to export — encryption is unavailable on this device."
                     : "Generating a backup code…"}
                 </p>
               )}
-              {backupCode && (
+              {backupCode && cryptoStatus !== "keyless" && (
                 <Button
                   type="button"
                   size="sm"
@@ -310,7 +318,7 @@ export const DiscussionDrawer: React.FC<DiscussionDrawerProps> = ({
             <Button
               type="button"
               onClick={() => void confirmImport()}
-              disabled={!importDraft.trim() || keysBusy || cryptoStatus === "error"}
+              disabled={!importDraft.trim() || keysBusy}
             >
               {keysBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
               Unlock this device

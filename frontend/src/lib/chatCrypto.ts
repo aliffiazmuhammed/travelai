@@ -186,6 +186,10 @@ export async function importBackupCode(code: string): Promise<ChatIdentity> {
   }
   // Prove the private half is usable before replacing the stored identity.
   const identity = await persistIdentityFromPrivJwk(payload.priv, payload.pub);
+  // REPLACE the module memo too: it is captured for the tab's lifetime and
+  // would otherwise keep handing out the freshly minted (wrong) identity, so
+  // the key flow re-ran after an import still failed until a full reload.
+  identityPromise = Promise.resolve(identity);
   try {
     await api.setMyChatKey(identity.pubKey);
   } catch {

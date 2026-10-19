@@ -12,7 +12,7 @@ import {
   unwrapMyEnvelope,
   wrapEnvelope,
 } from '@/lib/chatCrypto';
-import type { MemberKeyMap } from '@/lib/chatCrypto';
+import type { ChatIdentity, MemberKeyMap } from '@/lib/chatCrypto';
 
 /**
  * The per-trip E2EE session (Milestone 7, F10 — frontend half).
@@ -49,6 +49,14 @@ export type ChatCryptoStatus =
 export interface ChatCryptoApi {
   status: ChatCryptoStatus;
   error?: string;
+  /**
+   * Only meaningful while `keyless`:
+   * - 'missing'  no envelope for this account exists yet (awaiting a share),
+   * - 'mismatch' an envelope exists but was wrapped to ANOTHER device's key —
+   *              the ordinary "second browser" case, healed by importing this
+   *              account's backup code (Retry alone can never fix it).
+   */
+  keylessReason?: 'missing' | 'mismatch';
   /** True when this row is ciphertext per its flag (independent of state). */
   isEncrypted: (row: { e2ee?: boolean }) => boolean;
   /** Render text for a row: plaintext rows verbatim; ciphertext rows cached. */
@@ -79,6 +87,7 @@ export function useTripChatCrypto(
 ): ChatCryptoApi {
   const [status, setStatus] = useState<ChatCryptoStatus>('starting');
   const [error, setError] = useState<string | undefined>(undefined);
+  const [keylessReason, setKeylessReason] = useState<'missing' | 'mismatch' | undefined>(undefined);
   const [, setTick] = useState(0); // bump after decrypt batches land
 
   const convKeyRef = useRef<CryptoKey | null>(null);
@@ -93,10 +102,48 @@ export function useTripChatCrypto(
 
   /* ------------------------------ key biography ----------------------------- */
 
+  /**
+   * Tries to open MY envelope with THIS browser's identity. A failure here is
+   * NOT an error: it is the ordinary "second browser" case — the account has
+   * an envelope, but it was wrapped to the OTHER device's public key, so this
+   * device can never decrypt it (Retry is deterministic and useless). Reported
+   * as `keyless` so the UI can point at the backup-code door instead.
+   */
+  const adoptEnvelope = useCallback(
+    async (
+      identity: ChatIdentity,
+      mine: string | undefined,
+      livePubs: MemberKeyMap,
+      cachedPubs: MemberKeyMap
+    ): Promise<boolean> => {
+      if (!mine) {
+        setKeylessReason('missing');
+        setStatus('keyless');
+        return false;
+      }
+      try {
+        convKeyRef.current = await unwrapMyEnvelope(mine, identity, livePubs, cachedPubs);
+        setKeylessReason(undefined);
+        setStatus('ready');
+        return true;
+      } catch (err) {
+        console.warn('chatCrypto: this device cannot open the chat key envelope', err);
+        // A missing wrapper pubkey (the member who wrapped it left the trip and
+        // we have no cache) is a RE-SHARE wait, not a wrong-device key.
+        const reason = /wrapper/i.test(String((err as any)?.message || '')) ? 'missing' : 'mismatch';
+        setKeylessReason(reason);
+        setStatus('keyless');
+        return false;
+      }
+    },
+    []
+  );
+
   const runKeyFlow = useCallback(async () => {
     if (!tripId) return;
     setStatus('starting');
     setError(undefined);
+    setKeylessReason(undefined);
 
     try {
       const identity = await ensureIdentity();
@@ -152,12 +199,7 @@ export function useTripChatCrypto(
           // so we recover as an ordinary keyholder: unwrap and move on.
           if (err?.status !== 409) throw err;
           const fresh = await api.getTripChatKeys(tripId);
-          if (fresh.mine) {
-            convKeyRef.current = await unwrapMyEnvelope(fresh.mine, identity, livePubs, cachedPubs);
-            setStatus('ready');
-            return;
-          }
-          setStatus('keyless');
+          await adoptEnvelope(identity, fresh.mine, livePubs, cachedPubs);
           return;
         }
         convKeyRef.current = conversationKey;
@@ -166,16 +208,11 @@ export function useTripChatCrypto(
       }
 
       if (state.mine) {
-        convKeyRef.current = await unwrapMyEnvelope(
-          state.mine,
-          identity,
-          livePubs,
-          cachedPubs
-        );
-        setStatus('ready');
+        await adoptEnvelope(identity, state.mine, livePubs, cachedPubs);
         return;
       }
 
+      setKeylessReason('missing');
       setStatus('keyless');
     } catch (err: any) {
       // Capture the real cause for the diagnostics tooltip — thrown strings
@@ -185,12 +222,47 @@ export function useTripChatCrypto(
         err?.message || (typeof err === 'string' && err) || String(err) || 'Chat encryption is unavailable right now.';
       markError(message);
     }
-  }, [tripId, currentUserId, markError]);
+  }, [tripId, currentUserId, markError, adoptEnvelope]);
 
   /** Re-runs the whole key flow in place — the banner's Retry medicine. */
   const retry = useCallback(() => {
     void runKeyFlow();
   }, [runKeyFlow]);
+
+  /**
+   * Quiet re-check used while `keyless`: fetches the current key state and
+   * tries to open my envelope again WITHOUT flickering through 'starting'.
+   * Polled (plus on window focus) so a freshly shared envelope — or one added
+   * for this account's second device — lands without a page reload.
+   */
+  const refreshKey = useCallback(async () => {
+    if (!tripId) return;
+    try {
+      const identity = await ensureIdentity();
+      if (!identity) return;
+      const state = await api.getTripChatKeys(tripId);
+      if (!state.epoch) return;
+      const livePubs: MemberKeyMap = {};
+      for (const member of state.members || []) {
+        if (member.pubKey) livePubs[member.userId] = member.pubKey;
+      }
+      mergeMemberKeys(tripId, livePubs);
+      await adoptEnvelope(identity, state.mine, livePubs, cachedMemberKeys(tripId));
+    } catch {
+      /* stays keyless; the next poll retries */
+    }
+  }, [tripId, adoptEnvelope]);
+
+  useEffect(() => {
+    if (!enabled || !tripId || status !== 'keyless') return;
+    const tick = () => void refreshKey();
+    const timer = window.setInterval(tick, 6000);
+    window.addEventListener('focus', tick);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', tick);
+    };
+  }, [enabled, tripId, status, refreshKey]);
 
   useEffect(() => {
     if (!enabled || !tripId) return;
@@ -289,6 +361,7 @@ export function useTripChatCrypto(
   return {
     status,
     error,
+    keylessReason,
     isEncrypted,
     plaintextOf,
     syncRows,
