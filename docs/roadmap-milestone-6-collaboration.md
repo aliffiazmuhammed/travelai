@@ -971,7 +971,7 @@ components/dashboard/CommentsTab.tsx    list, composer, day filter chips, tombst
 
 ## 21. Appendix — Phase E6 sprint F6b (comments frontend) SHIPPED
 
-> Shipped 2026-10-18, one commit. `npx tsc --noEmit` clean + `vite build` green (the comment surface code-splits inside the existing `ItineraryDisplay` chunk).
+> Shipped 2026-10-18, one commit. `tsc -p tsconfig.app.json` clean + `vite build` green (the comment surface code-splits inside the existing `ItineraryDisplay` chunk).
 
 ### 21.1 What shipped
 
@@ -991,7 +991,13 @@ components/dashboard/CommentsTab.tsx    list, composer, day filter chips, tombst
 3. **The identity contract:** HTTP responses' `isYou` is authority; live frames' `isYou` is ignored (it is the author's view). Dedupe by `_id` makes the author's optimistic echo idempotent even when their own frame arrives mid-flight.
 4. **`dayCounts` stay server-truth:** the first load reads the aggregation; the composer/removal nudge locally in between; live frames never guess at the aggregate (they only prepend/patch rows).
 
-### 21.3 Honest limits
+### 21.3 Post-ship fix (2026-10-19) — production ReferenceError + the false-green checker
+
+- **The crash:** the first F6b bundle shipped `const ref = useRef(onCommentEvent)` inside `useTripEvents` without destructuring `onCommentEvent` from `options` → every real-trip open died with `ReferenceError: onCommentEvent is not defined`. Fixed (plus two latent type errors the same check then surfaced: the undeclared `canRate` prop and Dashboard's `navigate({...location, state})`).
+- **Why every earlier "tsc clean" claim was hollow:** the root `frontend/tsconfig.json` has `"files": []` + project references, so plain `npx tsc --noEmit` checks ZERO files and always exits 0. The verification command for the frontend is **`npx tsc -p tsconfig.app.json`** (exit 0 = actually checked). `vite build` never type-checks (esbuild strips types), so it is not a substitute.
+- Bundle-level assertion used as the regression guard: the shipped `ItineraryDisplay-*.js` must contain the destructured `{ onTripUpdated, onCommentEvent }` and no free `useRef(onCommentEvent)`.
+
+### 21.4 Honest limits
 
 - **Stretch F6b2 (per-day badges in `DayTimeline`) is not shipped** — the tab's day chips are the cut that made the sprint; the badges need `dayCounts` threaded into the timeline component.
 - **Unread counts are not shipped** — that is the F10 notification-center work (a `TripReadState` collection, never embedded in `Trip`).

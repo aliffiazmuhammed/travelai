@@ -93,6 +93,8 @@ interface ItineraryDisplayProps {
   customRoutes?: CustomRoute[];
   /** Planned trip start date — drives per-day weather advisories (Milestone 4.4). */
   startDate?: string;
+  /** Whether the feedback/rating cards may render (defaults to true). */
+  canRate?: boolean;
   /** Called after the user rates the itinerary. */
   onFeedbackSubmitted?: (feedback: TripFeedbackType) => void;
   onBackToList?: () => void;

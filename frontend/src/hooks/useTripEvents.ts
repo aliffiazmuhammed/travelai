@@ -71,7 +71,7 @@ export function useTripEvents(
   tripId?: string,
   options: UseTripEventsOptions = {}
 ): PresenceUser[] {
-  const { onTripUpdated, heartbeatMs = 10000 } = options;
+  const { onTripUpdated, onCommentEvent, heartbeatMs = 10000 } = options;
   const [presence, setPresence] = useState<PresenceUser[]>([]);
 
   // Latest callback without resubscribing the EventSource on re-render.

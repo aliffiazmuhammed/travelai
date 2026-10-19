@@ -72,7 +72,11 @@ const Dashboard: React.FC = () => {
           });
         }
         // Consume the hand-off so a later quiet refresh doesn't reselect.
-        navigate({ ...location, state: null }, { replace: true });
+        // URL-only navigate (`Partial<Path>` has no `state`); the hand-off is
+        // one-shot so a refresh arriving with no state is legitimate too.
+        navigate(`${location.pathname}${location.search}${location.hash}`, {
+          replace: true,
+        });
       }
     } catch (err: any) {
       console.error("Failed to fetch trips:", err);
