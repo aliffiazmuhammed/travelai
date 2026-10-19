@@ -34,6 +34,15 @@ export interface ITripComment extends Document {
   body: string;
   /** F10: true when `body` is end-to-end ciphertext rather than plain text. */
   e2ee: boolean;
+  /**
+   * F12a: cosmetic persona flag — a `@TravelAI` answer posted by a member's
+   * client (encrypted with the trip conversation key like any other row).
+   * The SPA renders these rows as the "TravelAI" participant. The server
+   * attributes the row to the (human) poster; the flag carries no rank or
+   * moderation privilege, so a malicious client could flag its own rows —
+   * harmless by design, documented in the honest-limits appendix.
+   */
+  bot: boolean;
   /** Optional day anchor (1..999); absent means "about the trip in general". */
   day?: number;
   /** Set when the author edits the body (renders "(edited)" in the SPA). */
@@ -68,6 +77,8 @@ const tripCommentSchema = new Schema<ITripComment>(
     },
     day: { type: Number, min: 1, max: 999 },
     e2ee: { type: Boolean, default: false },
+    // F12a: "@TravelAI" answer rows (persona only — see the interface comment).
+    bot: { type: Boolean, default: false },
     editedAt: { type: Date },
     deletedAt: { type: Date },
   },

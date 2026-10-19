@@ -26,6 +26,12 @@ export const createCommentSchema = z
     day: z.coerce.number().int().min(1).max(999).optional(),
     /** F10: body is end-to-end ciphertext; `iv.iv` prefix carries the nonce. */
     e2ee: z.boolean().optional(),
+    /**
+     * F12a: persona flag for @TravelAI answers, posted by the asker's client.
+     * Cosmetic only (no rank/moderation meaning); spoofable-but-harmless by
+     * design — see the TripComment model docs.
+     */
+    bot: z.boolean().optional(),
   })
   .superRefine((value, ctx) => {
     if (!value.e2ee && value.body.length > env.COMMENT_MAX_LEN) {

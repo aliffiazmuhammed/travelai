@@ -48,6 +48,7 @@ import {
   setTripChatKeys,
   addTripChatEnvelopes,
 } from '../services/collab/chatKeys.js';
+import { answerTravelAI } from '../services/collab/assistant.js';
 
 /**
  * Collaboration endpoints (Milestone 6, sprint E2).
@@ -244,8 +245,8 @@ export const postTripComment = catchAsync(
       body: req.body?.body,
       day: req.body?.day,
       e2ee: req.body?.e2ee,
-    });
-    res.status(201).json({ success: true, comment });
+      bot: req.body?.bot,
+    });    res.status(201).json({ success: true, comment });
   }
 );
 
@@ -415,6 +416,33 @@ export const postTripChatEnvelopes = catchAsync(
     const { trip } = tripContext(req);
     const state = await addTripChatEnvelopes(trip, String(req.userId), req.body?.envelopes);
     res.status(200).json({ success: true, ...state });
+  }
+);
+
+/**
+ * POST /:id/chat/assistant — one @TravelAI ask (F12a).
+ *
+ * The client-fed grounding is the F10 story: the asker's browser ships the
+ * decrypted recent messages it wants grounded; the server adds the trip
+ * document (which it owns) and calls the provider. The PLAINTEXT answer comes
+ * back ONLY HERE — the client encrypts it with the trip conversation key and
+ * posts it as a `bot: true` comment through the normal endpoint, so what gets
+ * stored and broadcast is ciphertext, same as every other row.
+ *
+ * Deliberately ignores `req.rev` and bumps nothing (same rule as comments):
+ * an assistant answer must never invalidate a collaborator's open edit.
+ */
+export const postChatAssistant = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { trip } = tripContext(req);
+    const result = await answerTravelAI(
+      trip,
+      String(req.userId),
+      req.body?.prompt,
+      req.body?.context
+    );
+    // Hygiene: the prompt/context are never logged anywhere in this handler.
+    res.status(200).json({ success: true, ...result });
   }
 );
 

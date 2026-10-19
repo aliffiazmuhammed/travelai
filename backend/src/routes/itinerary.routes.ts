@@ -45,6 +45,7 @@ import {
   getTripChatKeys,
   putTripChatKeys,
   postTripChatEnvelopes,
+  postChatAssistant,
 } from '../controllers/collab.controller.js';
 import {
   getTripExpenses,
@@ -90,6 +91,8 @@ import {
   setTripChatKeysSchema,
   addChatEnvelopesSchema,
 } from '../schemas/chatKey.schema.js';
+import { assistantRequestSchema } from '../schemas/assistant.schema.js';
+import { assistantAskLimiter } from '../middleware/rateLimiter.middleware.js';
 import {
   commentCreateLimiter,
   generateLimiter,
@@ -426,6 +429,18 @@ router.post(
   requireTripRole('viewer'),
   validate(addChatEnvelopesSchema),
   postTripChatEnvelopes
+);
+
+// @TravelAI asks (Milestone 7, F12a) — viewer floor, burst-limited (5/min);
+// the daily budget + mention gate live in the service. Same "never touches
+// Trip.rev" rule as the rest of the live tier.
+router.post(
+  '/:id/chat/assistant',
+  protect,
+  requireTripRole('viewer'),
+  assistantAskLimiter,
+  validate(assistantRequestSchema),
+  postChatAssistant
 );
 
 export default router;

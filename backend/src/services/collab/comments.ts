@@ -32,6 +32,8 @@ export interface CommentRow {
   body: string;
   /** F10: true → `body` is end-to-end ciphertext only members can decrypt. */
   e2ee?: boolean;
+  /** F12a: persona flag — render this row as the "TravelAI" participant. */
+  bot?: boolean;
   day?: number;
   /** True for the caller's own comments; computed per viewer. */
   isYou: boolean;
@@ -174,6 +176,8 @@ export function projectComment(
   };
   // F10: the flag travels with the ciphertext (legacy rows simply omit it).
   if (!deleted && row.e2ee) projected.e2ee = true;
+  // F12a: the persona flag rides with the row (cosmetic — see the schema docs).
+  if (!deleted && row.bot) projected.bot = true;
   if (row.day !== undefined && row.day !== null) projected.day = Number(row.day);
   if (row.editedAt) projected.editedAt = row.editedAt;
   if (row.deletedAt) projected.deletedAt = row.deletedAt;
@@ -267,7 +271,7 @@ export async function listTripComments(
 export async function createTripComment(
   trip: any,
   userId: string,
-  input: { body: string; day?: number; e2ee?: boolean }
+  input: { body: string; day?: number; e2ee?: boolean; bot?: boolean }
 ): Promise<CommentRow> {
   const tripId = String(trip._id);
 
@@ -284,6 +288,8 @@ export async function createTripComment(
     day: input.day,
     // F10: the server stores ciphertext as-is — it cannot read it, ever.
     e2ee: Boolean(input.e2ee),
+    // F12a: persona flag for @TravelAI answers (cosmetic; authorship stays).
+    bot: Boolean(input.bot),
   });
 
   const user = await User.findOne({ _id: userId }).select('email');

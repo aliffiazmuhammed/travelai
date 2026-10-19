@@ -26,6 +26,28 @@ export const generateLimiter = rateLimit({
 });
 
 /**
+ * F12a @TravelAI asks: the provider spends money per answer and mentions are
+ * inherently bursty ("ask it one more thing!"). Two brakes stacked:
+ * - THIS burst limiter: 5 asks / minute, user-keyed (pattern of flaw F18);
+ * - the service-layer `BOT_DAILY_LIMIT` per user × trip × day inside
+ *   `assistant.ts` (in-process, resets on restart — an honest cost brake).
+ * The mention gate itself remains the primary brake by product design.
+ */
+export const assistantAskLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  keyGenerator: (req: any): string => String(req?.userId ?? req?.ip ?? 'anonymous'),
+  validate: false,
+  message: {
+    success: false,
+    error: 'TravelAI needs a breath — wait a minute before the next ask.',
+    message: 'TravelAI needs a breath — wait a minute before the next ask.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
  * User-keyed limiters (Milestone 6, flaw F18): collaboration actions are
  * per-account, so a shared NAT should not lock a college dorm out. They fall
  * back to the IP key when a request has no authenticated user, and validation
