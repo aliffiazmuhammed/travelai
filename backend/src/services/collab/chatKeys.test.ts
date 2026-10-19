@@ -4,6 +4,8 @@ import { Types } from 'mongoose';
 import {
   isBase64,
   assertEnvelopeInputs,
+  assertEnvelopeMetadata,
+  envelopeSlotMeta,
   assertEpochTransition,
   projectKeyState,
   mergePubKeyList,
@@ -251,6 +253,100 @@ test('projectKeyState: a missing pubKey simply hasEnvelope=false without pubKey'
     ID_A
   );
   assert.equal('pubKey' in state.members[0], false);
+});
+
+/* --------------- F10e: envelope slot metadata + wrapper verification -------- */
+
+const envelopeBlob = (payload: unknown): string =>
+  Buffer.from(JSON.stringify(payload), 'utf8').toString('base64');
+
+const V2_BLOB = envelopeBlob({ v: 2, w: ID_A, wk: 'PUBA=', iv: 'aXY=', d: 'ZD0=' });
+const V1_BLOB = envelopeBlob({ v: 1, w: ID_A, iv: 'aXY=', d: 'ZD0=' });
+
+test('envelopeSlotMeta: reads a v2 wrapper + the device key it used', () => {
+  assert.deepEqual(envelopeSlotMeta(V2_BLOB), {
+    version: 2,
+    wrapper: ID_A,
+    wrapperPub: 'PUBA=',
+  });
+});
+
+test('envelopeSlotMeta: a legacy v1 envelope has no wrapper key', () => {
+  assert.deepEqual(envelopeSlotMeta(V1_BLOB), {
+    version: 1,
+    wrapper: ID_A,
+    wrapperPub: null,
+  });
+});
+
+test('envelopeSlotMeta: anything unreadable degrades to nulls (⇒ re-wrap it)', () => {
+  for (const junk of [
+    '!!!junk!!!',
+    '',
+    envelopeBlob([1, 2, 3]),
+    envelopeBlob('a string'),
+    validWrapped,
+    42,
+    null,
+  ]) {
+    assert.deepEqual(envelopeSlotMeta(junk), {
+      version: null,
+      wrapper: null,
+      wrapperPub: null,
+    });
+  }
+});
+
+test('assertEnvelopeMetadata: a v2 envelope must name a REALLY published wrapper key', () => {
+  assert.doesNotThrow(() =>
+    assertEnvelopeMetadata({ 'PUBC=': V2_BLOB }, { [ID_A]: ['PUBA='] })
+  );
+  // A key that was rotated out of the wrapper's list cannot be named.
+  assert.throws(
+    () =>
+      assertEnvelopeMetadata(
+        { 'PUBC=': envelopeBlob({ v: 2, w: ID_A, wk: 'EVICTED=', iv: 'aXY=', d: 'ZD0=' }) },
+        { [ID_A]: ['PUBA='] }
+      ),
+    (error: unknown) => error instanceof AppError && error.statusCode === 400
+  );
+  // Nor can a member label an envelope with someone else's key.
+  assert.throws(
+    () =>
+      assertEnvelopeMetadata(
+        { 'PUBC=': envelopeBlob({ v: 2, w: ID_B, wk: 'PUBA=', iv: 'aXY=', d: 'ZD0=' }) },
+        { [ID_A]: ['PUBA='] }
+      ),
+    (error: unknown) => error instanceof AppError && error.statusCode === 400
+  );
+});
+
+test('assertEnvelopeMetadata: v2 needs both fields, v1 stays accepted', () => {
+  assert.throws(
+    () =>
+      assertEnvelopeMetadata(
+        { 'PUBC=': envelopeBlob({ v: 2, w: ID_A, iv: 'aXY=', d: 'ZD0=' }) },
+        { [ID_A]: ['PUBA='] }
+      ),
+    (error: unknown) => error instanceof AppError && error.statusCode === 400
+  );
+  assert.doesNotThrow(() =>
+    assertEnvelopeMetadata({ 'PUBC=': V1_BLOB }, { [ID_A]: ['PUBA='] })
+  );
+});
+
+test('projectKeyState: slots carry wrapper metadata so dead slots can be re-wrapped', () => {
+  const blob = envelopeBlob({ v: 2, w: ID_B, wk: 'BOB=', iv: 'aXY=', d: 'ZD0=' });
+  const state = projectKeyState(
+    { epoch: 1, envelopes: new Map([['ALA=', blob], ['ALB=', 'not-an-envelope']]) },
+    [{ _id: ID_A, email: 'a@example.com', chatPubKeys: ['ALA=', 'ALB='] }],
+    ID_A
+  );
+  assert.deepEqual(state.members[0].slots, [
+    { pub: 'ALA=', wrapper: ID_B, wrapperPub: 'BOB=' }, // provably openable while BOB= lives
+    { pub: 'ALB=', wrapper: null, wrapperPub: null }, // rubbish → cannot prove → re-wrap
+  ]);
+  assert.deepEqual(state.members[0].envelopedPubKeys, ['ALA=', 'ALB=']);
 });
 
 /* --------- the ciphertext cap arithmetic F10 pins on (comments/decisions) -- */

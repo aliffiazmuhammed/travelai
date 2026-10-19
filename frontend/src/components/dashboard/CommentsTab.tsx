@@ -685,9 +685,14 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
    * Honest but plain-language: while this device cannot use the chat's secure
    * channel, a message sent from here is not protected. No crypto vocabulary,
    * no icons — one quiet line and a way to try again.
+   *
+   * F10e: this covers EVERY not-ready state, not just error/keyless. 'starting'
+   * and 'bootstrap' send plaintext too (the first open mints and shares the key,
+   * which takes a moment), and 'off' means this browser has no WebCrypto at all
+   * — all three used to send in the clear with nothing on screen saying so.
    */
   const sendNotice =
-    cryptoApi.status === 'error' || cryptoApi.status === 'keyless' ? (
+    cryptoApi.status !== 'ready' ? (
       <div className="flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground">
         <span>Messages you send here aren&apos;t protected yet.</span>
         <button

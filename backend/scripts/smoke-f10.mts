@@ -16,7 +16,11 @@
  *   shape walls (base64, member/device-only envelope targets, epoch
  *   monotonicity), bootstrap → decrypt roundtrip → ciphertext-on-the-wire →
  *   full-history self-heal for a late joiner → multi-device slots (F10d) →
- *   rotation rules.
+ *   slot metadata + dead-slot repair + v1 compatibility (F10e) → rotation rules.
+ *
+ * ENVELOPE FORMAT: this script writes what the CURRENT SPA writes — v2
+ * (`{ v:2, w, wk, iv, d }`, slot-bound AEAD). `wrapLegacyV1Envelope` stands in
+ * for a pre-F10e client so the compatibility path stays covered.
  */
 import 'dotenv/config';
 import mongoose from 'mongoose';
@@ -71,40 +75,83 @@ async function mintIdentity(): Promise<Identity> {
 
 const ids = new Map<string, Map<string, CryptoKey>>(); // email → (epoch → conv key)
 
+const HKDF_INFO_V1 = HKDF_INFO;
+const ENVELOPE_AAD_PREFIX = 'travelai-chat-envelope-v2';
+
+/** The wrap key: ECDH(myPriv, theirPub) → HKDF-SHA-256 → AES-256-GCM. */
+async function deriveWrapKey(myPriv: CryptoKey, theirPubB64: string): Promise<CryptoKey> {
+  const toPub = await subtle.importKey(
+    'spki',
+    unb64(theirPubB64),
+    { name: 'ECDH', namedCurve: 'P-256' },
+    false,
+    []
+  );
+  const shared = await subtle.deriveBits({ name: 'ECDH', public: toPub }, myPriv, 256);
+  const hkdfSeed = await subtle.importKey('raw', shared, 'HKDF', false, ['deriveBits']);
+  const wrapKeyBytes = await subtle.deriveBits(
+    { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(0), info: HKDF_INFO_V1 },
+    hkdfSeed,
+    256
+  );
+  return subtle.importKey('raw', wrapKeyBytes, 'AES-GCM', false, ['encrypt', 'decrypt']);
+}
+
+/**
+ * Wraps one conversation key for one member — the CURRENT SPA format (F10e):
+ * base64 of `{ v:2, w, wk, iv, d }`, wrapper id AND wrapper device key inside,
+ * the AEAD bound to the slot with associated data. This smoke is the SPA
+ * contract's executable reference, so it must write exactly what
+ * `frontend/src/lib/chatCryptoCore.ts` writes.
+ */
 async function wrapEnvelope(
   wrapperId: string,
   from: Identity,
   toPubB64: string,
   conv: CryptoKey
 ): Promise<string> {
-  const toPub = await subtle.importKey(
-    'spki',
-    unb64(toPubB64),
-    { name: 'ECDH', namedCurve: 'P-256' },
-    false,
-    []
+  const wrapKey = await deriveWrapKey(from.priv, toPubB64);
+  const iv = new Uint8Array(12);
+  globalThis.crypto.getRandomValues(iv);
+  const raw = await subtle.exportKey('raw', conv);
+  const ct = await subtle.encrypt(
+    {
+      name: 'AES-GCM',
+      iv,
+      additionalData: new TextEncoder().encode(
+        `${ENVELOPE_AAD_PREFIX}|${wrapperId}|${from.pubB64}|${toPubB64}`
+      ),
+    },
+    wrapKey,
+    raw
   );
-  const shared = await subtle.deriveBits({ name: 'ECDH', public: toPub }, from.priv, 256);
-  const hkdfSeed = await subtle.importKey('raw', shared, 'HKDF', false, ['deriveBits']);
-  const wrapKeyBytes = await subtle.deriveBits(
-    { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(0), info: HKDF_INFO },
-    hkdfSeed,
-    256
-  );
-  const wrapKey = await subtle.importKey('raw', wrapKeyBytes, 'AES-GCM', false, ['encrypt']);
+  const envelope = {
+    v: 2,
+    w: wrapperId,
+    wk: from.pubB64,
+    iv: Buffer.from(iv).toString('base64'),
+    d: b64(ct),
+  };
+  return b64(new TextEncoder().encode(JSON.stringify(envelope)));
+}
+
+/**
+ * The LEGACY (v1) writer: `{ v:1, w, iv, d }`, no wrapper key, no AAD. Kept so
+ * the smoke can prove a pre-F10e client's envelopes still open and are reported
+ * without wrapper-key metadata (which is what keeps the healing rule honest).
+ */
+async function wrapLegacyV1Envelope(
+  wrapperId: string,
+  from: Identity,
+  toPubB64: string,
+  conv: CryptoKey
+): Promise<string> {
+  const wrapKey = await deriveWrapKey(from.priv, toPubB64);
   const iv = new Uint8Array(12);
   globalThis.crypto.getRandomValues(iv);
   const raw = await subtle.exportKey('raw', conv);
   const ct = await subtle.encrypt({ name: 'AES-GCM', iv }, wrapKey, raw);
-  // Envelope wire format — THE SPA's contract (chatCrypto.ts): base64 of a
-  // compact JSON `{ v, w, iv, d }`. The wrapper id rides inside because a
-  // recipient may need a member's public key who has since LEFT the trip.
-  const envelope = {
-    v: 1,
-    w: wrapperId,
-    iv: Buffer.from(iv).toString('base64'),
-    d: b64(ct),
-  };
+  const envelope = { v: 1, w: wrapperId, iv: Buffer.from(iv).toString('base64'), d: b64(ct) };
   return b64(new TextEncoder().encode(JSON.stringify(envelope)));
 }
 
@@ -117,7 +164,11 @@ async function unwrapEnvelope(mine: Identity, envelope: string): Promise<CryptoK
   throw new Error('unused — recipients use openEnvelopeAs(senderDeviceKeys, …)');
 }
 
-/** Opens one envelope with ONE candidate sender device key (null = cannot). */
+/**
+ * Opens one envelope as `recipient`. v2 names its own wrapper key and is bound
+ * to the slot (one deterministic attempt); v1 only names the wrapper's user id,
+ * so the caller must supply candidate sender device keys.
+ */
 async function openEnvelopeAs(
   recipient: Identity,
   senderKeyB64: string,
@@ -127,25 +178,24 @@ async function openEnvelopeAs(
     const env = JSON.parse(new TextDecoder().decode(unb64(envelope))) as {
       v: number;
       w: string;
+      wk?: string;
       iv: string;
       d: string;
     };
-    const senderPub = await subtle.importKey(
-      'spki',
-      unb64(senderKeyB64),
-      { name: 'ECDH', namedCurve: 'P-256' },
-      false,
-      []
-    );
-    const shared = await subtle.deriveBits({ name: 'ECDH', public: senderPub }, recipient.priv, 256);
-    const hkdfSeed = await subtle.importKey('raw', shared, 'HKDF', false, ['deriveBits']);
-    const wrapKeyBytes = await subtle.deriveBits(
-      { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(0), info: HKDF_INFO },
-      hkdfSeed,
-      256
-    );
-    const wrapKey = await subtle.importKey('raw', wrapKeyBytes, 'AES-GCM', false, ['decrypt']);
-    const raw = await subtle.decrypt({ name: 'AES-GCM', iv: unb64(env.iv) }, wrapKey, unb64(env.d));
+    const senderKey = env.v === 2 ? env.wk : senderKeyB64;
+    if (!senderKey) return null;
+    const wrapKey = await deriveWrapKey(recipient.priv, senderKey);
+    const params =
+      env.v === 2
+        ? {
+            name: 'AES-GCM',
+            iv: unb64(env.iv),
+            additionalData: new TextEncoder().encode(
+              `${ENVELOPE_AAD_PREFIX}|${env.w}|${env.wk}|${recipient.pubB64}`
+            ),
+          }
+        : { name: 'AES-GCM', iv: unb64(env.iv) };
+    const raw = await subtle.decrypt(params, wrapKey, unb64(env.d));
     return await subtle.importKey('raw', raw, 'AES-GCM', false, ['encrypt', 'decrypt']);
   } catch {
     return null;
@@ -155,7 +205,8 @@ async function openEnvelopeAs(
 /**
  * The SPA's F10d rule: try EVERY envelope the server handed over (this account
  * may have several devices) against every device key of the wrapper until one
- * opens — exactly what `unwrapMyEnvelope` does in the browser.
+ * opens — exactly what `unwrapMyEnvelope` does in the browser. v2 envelopes
+ * carry their wrapper key, so a single attempt each is enough.
  */
 async function openAny(
   recipient: Identity,
@@ -163,7 +214,15 @@ async function openAny(
   envelopes: string[]
 ): Promise<CryptoKey | null> {
   for (const envelope of envelopes) {
-    for (const key of senderDeviceKeys) {
+    const version = (() => {
+      try {
+        return JSON.parse(new TextDecoder().decode(unb64(envelope))).v;
+      } catch {
+        return 0;
+      }
+    })();
+    const candidates = version === 2 ? ['v2'] : senderDeviceKeys;
+    for (const key of candidates) {
       const opened = await openEnvelopeAs(recipient, key, envelope);
       if (opened) return opened;
     }
@@ -499,6 +558,102 @@ async function main() {
   const carolReads = carolConv ? await decryptBody(carolConv, ciphertext) : null;
   check('carol decrypts the HISTORICAL message (full-history decision)', carolReads === bobPlain, carolReads);
 
+  /* ------- F10e: slot metadata, legacy v1 slots, and dead-slot repair ------- */
+  const metaState = await api('GET', `/itinerary/${tripId}/chat/keys`, { email: ALICE_EMAIL });
+  const bobRow = metaState.body.members.find((m: any) => m.userId === String(bob._id));
+  const bobSlot = (bobRow?.slots || []).find((s: any) => s.pub === bobPub);
+  check(
+    'F10e: a slot reports the wrapper member AND the device key that wrapped it',
+    bobSlot?.wrapper === String(alice._id) && bobSlot?.wrapperPub === aliceId.pubB64,
+    bobSlot
+  );
+
+  // A v2 envelope may not be labelled with a key that member never published:
+  // the client's healing rule trusts this metadata to call a slot settled.
+  const forgedMeta = await api('POST', `/itinerary/${tripId}/chat/envelopes`, {
+    email: ALICE_EMAIL,
+    body: {
+      envelopes: {
+        // wrapper id claims alice, but the wrapping device key is bob's.
+        [carolPubFromState!]: await wrapEnvelope(String(alice._id), bobId, carolPubFromState!, conv),
+      },
+    },
+  });
+  check(
+    'F10e: a v2 envelope naming an unpublished wrapper key is a 400',
+    forgedMeta.status === 400,
+    forgedMeta.body?.message
+  );
+
+  // A pre-F10e client writes `{ v:1, w, iv, d }`: still accepted, still opens,
+  // and reported WITHOUT a wrapper key (so the old membership rule applies).
+  const carolV1 = await api('POST', `/itinerary/${tripId}/chat/envelopes`, {
+    email: ALICE_EMAIL,
+    body: {
+      envelopes: {
+        [carolPubFromState!]: await wrapLegacyV1Envelope(
+          String(alice._id),
+          aliceId,
+          carolPubFromState!,
+          conv
+        ),
+      },
+    },
+  });
+  check('F10e: a legacy v1 envelope is still accepted', carolV1.status === 200, carolV1.body?.message);
+  const v1State = await api('GET', `/itinerary/${tripId}/chat/keys`, { email: ALICE_EMAIL });
+  const carolSlotV1 = (v1State.body.members.find((m: any) => m.userId === String(carol._id))?.slots || [])
+    .find((s: any) => s.pub === carolPubFromState);
+  check(
+    'F10e: a v1 slot reports its wrapper id but no wrapper key',
+    carolSlotV1?.wrapper === String(alice._id) && carolSlotV1?.wrapperPub === null,
+    carolSlotV1
+  );
+  const carolV1Keys = await api('GET', `/itinerary/${tripId}/chat/keys`, { email: CAROL_EMAIL });
+  check(
+    'F10e: carol still opens a legacy v1 envelope (v1 read path)',
+    Boolean(await openAny(carolId, [aliceId.pubB64, aliceLaptop.pubB64], carolV1Keys.body.mineAll || []))
+  );
+
+  // The worst a member can do to another's slot: overwrite it with rubbish —
+  // last write wins and the server cannot see inside. Before F10e the slot was
+  // then skipped forever (a permanent lockout); now the metadata says "cannot
+  // prove this works" and the next holder re-wraps it.
+  const vandal = await api('POST', `/itinerary/${tripId}/chat/envelopes`, {
+    email: ALICE_EMAIL,
+    body: {
+      envelopes: { [carolPubFromState!]: b64(globalThis.crypto.getRandomValues(new Uint8Array(48))) },
+    },
+  });
+  check('F10e: the blind server stores rubbish in a slot (200)', vandal.status === 200, vandal.body?.message);
+  const deadState = await api('GET', `/itinerary/${tripId}/chat/keys`, { email: ALICE_EMAIL });
+  const deadSlot = (deadState.body.members.find((m: any) => m.userId === String(carol._id))?.slots || [])
+    .find((s: any) => s.pub === carolPubFromState);
+  check(
+    'F10e: an unreadable slot reports null metadata (⇒ re-wrap, never skip)',
+    deadSlot?.wrapper === null && deadSlot?.wrapperPub === null,
+    deadSlot
+  );
+  const deadKeys = await api('GET', `/itinerary/${tripId}/chat/keys`, { email: CAROL_EMAIL });
+  check(
+    'F10e: before the repair carol opens nothing (her slot is dead)',
+    (await openAny(carolId, [aliceId.pubB64, aliceLaptop.pubB64], deadKeys.body.mineAll || [])) === null
+  );
+  const repair = await api('POST', `/itinerary/${tripId}/chat/envelopes`, {
+    email: ALICE_EMAIL,
+    body: {
+      envelopes: {
+        [carolPubFromState!]: await wrapEnvelope(String(alice._id), aliceId, carolPubFromState!, conv),
+      },
+    },
+  });
+  check('F10e: a holder re-wraps the dead slot (200)', repair.status === 200, repair.body?.message);
+  const repairedKeys = await api('GET', `/itinerary/${tripId}/chat/keys`, { email: CAROL_EMAIL });
+  check(
+    'F10e: carol is unlocked again by the re-wrap',
+    Boolean(await openAny(carolId, [aliceId.pubB64, aliceLaptop.pubB64], repairedKeys.body.mineAll || []))
+  );
+
   /* ------------------------ envelope + epoch walls --------------------------- */
   const foreignTarget = await api('POST', `/itinerary/${tripId}/chat/envelopes`, {
     email: ALICE_EMAIL,
@@ -555,6 +710,7 @@ async function main() {
   process.exit(failures === 0 ? 0 : 1);
 }
 
+/** A well-formed but meaningless LEGACY (v1-shaped) envelope, for shape walls. */
 function validB64Envelope(): string {
   const iv = new Uint8Array(12);
   globalThis.crypto.getRandomValues(iv);

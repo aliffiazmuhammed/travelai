@@ -169,7 +169,7 @@ export const DiscussionDrawer: React.FC<DiscussionDrawerProps> = ({
                   title={
                     cryptoStatus === "ready"
                       ? "End-to-end encrypted"
-                      : cryptoStatus === "error"
+                      : cryptoStatus === "off" || cryptoStatus === "error"
                         ? "Messages you send now aren't protected"
                         : "Connecting…"
                   }

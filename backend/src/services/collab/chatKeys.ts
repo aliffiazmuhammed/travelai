@@ -27,6 +27,16 @@ import { isObjectId, emailLabel } from './comments.js';
  *   is the definition of end-to-end.
  */
 
+/** One envelope slot as the client sees it (F10e). */
+export interface ChatKeySlot {
+  /** The recipient device key this slot is addressed to. */
+  pub: string;
+  /** The wrapper's userId (`w`) — null when the blob cannot be parsed. */
+  wrapper: string | null;
+  /** The wrapper's device key (`wk`, v2 envelopes only) — null for v1. */
+  wrapperPub: string | null;
+}
+
 /** What a client receives for `GET /:id/chat/keys`. */
 export interface ChatKeyState {
   /** Current epoch (absent when the trip has no key yet). */
@@ -52,6 +62,11 @@ export interface ChatKeyState {
     pubKeys: string[];
     /** Which of those device keys already have an envelope slot. */
     envelopedPubKeys: string[];
+    /**
+     * F10e: those same slots with their wrapper metadata, so a keyholder can
+     * tell a slot the recipient can open from one that must be re-wrapped.
+     */
+    slots: ChatKeySlot[];
     /** True when ANY slot exists (legacy member-id envelope or a device slot). */
     hasEnvelope: boolean;
   }>;
@@ -101,6 +116,69 @@ export function memberDeviceKeys(row: {
 
 export function isBase64(value: unknown, max: number): boolean {
   return typeof value === 'string' && value.length > 0 && value.length <= max && BASE64_RE.test(value);
+}
+
+/**
+ * F10e: the envelope's *own* metadata, read without touching the key it carries.
+ *
+ * The blob is `base64(JSON { v, w, wk, iv, d })` and the wrapper fields are
+ * written in the clear by the client (the recipient needs them to derive the
+ * wrap key at all), so parsing them here is not a peek at the ciphertext — it is
+ * reading the addressing. The server needs it for two things that only it can
+ * do: telling a keyholder whether a filled slot is actually openable (so a dead
+ * slot gets re-wrapped instead of locking that device out forever), and
+ * rejecting a v2 envelope whose metadata is not internally consistent.
+ *
+ * Anything unreadable degrades to nulls — which the client reads as "cannot
+ * prove this slot works", i.e. re-wrap it.
+ */
+export function envelopeSlotMeta(blob: unknown): {
+  version: number | null;
+  wrapper: string | null;
+  wrapperPub: string | null;
+} {
+  const empty = { version: null, wrapper: null, wrapperPub: null };
+  const value = typeof blob === 'string' ? blob.trim() : '';
+  if (!value) return empty;
+  try {
+    const parsed = JSON.parse(Buffer.from(value, 'base64').toString('utf8')) as {
+      v?: unknown;
+      w?: unknown;
+      wk?: unknown;
+    };
+    if (!parsed || typeof parsed !== 'object') return empty;
+    return {
+      version: Number.isInteger(parsed.v) ? Number(parsed.v) : null,
+      wrapper: typeof parsed.w === 'string' && parsed.w ? parsed.w : null,
+      wrapperPub: typeof parsed.wk === 'string' && parsed.wk ? parsed.wk : null,
+    };
+  } catch {
+    return empty;
+  }
+}
+
+/**
+ * F10e: a v2 envelope names the member who wrapped it AND the device key they
+ * used — both are public facts the server already holds, so it can insist they
+ * agree. Without this, a member could label a slot with a stranger's id and the
+ * healing rule above would treat a dead slot as settled. v1 envelopes carry no
+ * metadata to check (and stay accepted for compatibility).
+ */
+export function assertEnvelopeMetadata(
+  entries: Record<string, unknown>,
+  keysByUser: Record<string, string[]>
+): void {
+  for (const blob of Object.values(entries)) {
+    const meta = envelopeSlotMeta(blob);
+    if (meta.version !== 2) continue;
+    if (!meta.wrapper || !meta.wrapperPub) {
+      throw new AppError('A version 2 envelope must name the member and device key that wrapped it.', 400);
+    }
+    const published = keysByUser[meta.wrapper] || [];
+    if (!published.includes(meta.wrapperPub)) {
+      throw new AppError('That envelope names a wrapper key nobody published for that member.', 400);
+    }
+  }
 }
 
 /**
@@ -176,11 +254,18 @@ export function projectKeyState(
       const pubKeys = memberDeviceKeys(row);
       deviceKeys.set(userId, pubKeys);
       const envelopedPubKeys = pubKeys.filter((key) => envelopes.has(key));
+      // F10e: the wrapper metadata of every slot, so the client can tell which
+      // filled slots its recipient can really open (and re-wrap the rest).
+      const slots: ChatKeySlot[] = envelopedPubKeys.map((pub) => {
+        const meta = envelopeSlotMeta(envelopes.get(pub));
+        return { pub, wrapper: meta.wrapper, wrapperPub: meta.wrapperPub };
+      });
       const member: ChatKeyState['members'][number] = {
         userId,
         label: emailLabel(row.email),
         pubKeys,
         envelopedPubKeys,
+        slots,
         hasEnvelope: envelopedPubKeys.length > 0 || envelopes.has(userId),
       };
       if (row.chatPubKey) member.pubKey = String(row.chatPubKey);
@@ -214,13 +299,33 @@ async function loadCurrentDoc(tripId: string): Promise<any> {
   return TripChatKey.findOne({ tripId: new Types.ObjectId(tripId) }).sort({ epoch: -1 });
 }
 
-/** The published device keys of the given members — the envelope-slot allowlist. */
-async function loadMemberPubKeys(memberIds: string[]): Promise<string[]> {
-  if (!memberIds.length) return [];
+/** userId → the published device keys of that member (the envelope-slot allowlist). */
+async function loadMemberKeyMap(memberIds: string[]): Promise<Record<string, string[]>> {
+  if (!memberIds.length) return {};
   const users = await User.find({ _id: { $in: memberIds.map((id) => new Types.ObjectId(id)) } })
     .select('chatPubKey chatPubKeys')
     .lean();
-  return (users as any[]).flatMap((row) => memberDeviceKeys(row));
+  const map: Record<string, string[]> = {};
+  for (const row of users as any[]) {
+    const keys = memberDeviceKeys(row);
+    if (keys.length) map[String(row._id)] = keys;
+  }
+  return map;
+}
+
+/**
+ * The shared slot checks for both key-writing routes: every target must be a
+ * current member or a published device of one, every payload must be sane
+ * base64, and (F10e) a v2 envelope must name a wrapper whose device key is
+ * really published for that member.
+ */
+async function assertSlots(
+  entries: Record<string, string>,
+  memberIds: string[]
+): Promise<void> {
+  const keysByUser = await loadMemberKeyMap(memberIds);
+  assertEnvelopeInputs(entries, memberIds, Object.values(keysByUser).flat());
+  assertEnvelopeMetadata(entries, keysByUser);
 }
 
 /**
@@ -262,7 +367,7 @@ export async function setTripChatKeys(
   const tripId = String((trip as any)._id);
   const memberIds = ((trip as any).members || []).map((m: any) => String(m.userId));
 
-  assertEnvelopeInputs(input.envelopes, memberIds, await loadMemberPubKeys(memberIds));
+  await assertSlots(input.envelopes, memberIds);
 
   const current = await loadCurrentDoc(tripId);
   assertEpochTransition(input.epoch, current ? current.epoch : null);
@@ -301,7 +406,7 @@ export async function addTripChatEnvelopes(
   const tripId = String((trip as any)._id);
   const memberIds = ((trip as any).members || []).map((m: any) => String(m.userId));
 
-  assertEnvelopeInputs(entries, memberIds, await loadMemberPubKeys(memberIds));
+  await assertSlots(entries, memberIds);
 
   const doc = await loadCurrentDoc(tripId);
   if (!doc) {

@@ -540,6 +540,21 @@ export interface TripDecision {
   deletedAt?: string;
 }
 
+/**
+ * F10e: the state of ONE device key's envelope slot in the current epoch.
+ * `wrapper`/`wrapperPub` are the (clear-text) envelope metadata the client
+ * itself wrote; they exist so a keyholder can tell a slot the recipient can
+ * actually open from a dead one that needs re-wrapping.
+ */
+export interface ChatKeySlot {
+  /** The recipient device key this slot is addressed to. */
+  pub: string;
+  /** The wrapper's userId (`w`); null when the blob cannot be read. */
+  wrapper?: string | null;
+  /** The wrapper's device key (`wk`, v2 envelopes only); null for v1. */
+  wrapperPub?: string | null;
+}
+
 /** What the E2EE key state route (F10) returns for `GET /:id/chat/keys`. */
 export interface ChatKeyMember {
   userId: string;
@@ -550,6 +565,8 @@ export interface ChatKeyMember {
   pubKeys?: string[];
   /** Which device keys already have an envelope for the current epoch. */
   envelopedPubKeys?: string[];
+  /** F10e: the same slots with their wrapper metadata. */
+  slots?: ChatKeySlot[];
   /** Whether the CURRENT epoch already has an envelope for this member. */
   hasEnvelope: boolean;
 }

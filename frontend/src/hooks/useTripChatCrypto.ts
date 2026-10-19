@@ -8,7 +8,9 @@ import {
   exportBackupCode as chatExportBackupCode,
   generateConversationKey,
   importBackupCode,
+  memberDeviceKeysOf,
   mergeMemberKeys,
+  slotIsUsable,
   unwrapMyEnvelope,
   wrapEnvelope,
 } from '@/lib/chatCrypto';
@@ -66,7 +68,11 @@ export interface ChatCryptoApi {
   syncRows: (rows: { _id: string; body?: string; e2ee?: boolean }[]) => void;
   /** Remembers just-written plaintext so own bubbles never blink to 🔒. */
   rememberPlaintext: (rowId: string, plaintext: string) => void;
-  /** Encrypts an outgoing message; falls back to plaintext when unusable. */
+  /**
+   * Encrypts an outgoing message. Falls back to (disclosed) plaintext ONLY when
+   * this device has no usable key; while the composer says the chat is
+   * encrypted it throws instead of downgrading — never leak silently.
+   */
   encryptOutgoing: (
     plaintext: string
   ) => Promise<{ body: string; e2ee: boolean }>;
@@ -107,11 +113,7 @@ export function useTripChatCrypto(
   const devicePubsOf = (state: ChatKeysState): MemberKeyMapMulti => {
     const map: MemberKeyMapMulti = {};
     for (const member of state.members || []) {
-      const keys = member.pubKeys?.length
-        ? member.pubKeys
-        : member.pubKey
-          ? [member.pubKey]
-          : [];
+      const keys = memberDeviceKeysOf(member);
       if (keys.length) map[member.userId] = keys;
     }
     return map;
@@ -121,8 +123,8 @@ export function useTripChatCrypto(
   const livePubsOf = (state: ChatKeysState): MemberKeyMap => {
     const map: MemberKeyMap = {};
     for (const member of state.members || []) {
-      if (member.pubKey) map[member.userId] = member.pubKey;
-      else if (member.pubKeys?.length) map[member.userId] = member.pubKeys[0];
+      const newest = member.pubKey || member.pubKeys?.[0];
+      if (newest) map[member.userId] = newest;
     }
     return map;
   };
@@ -185,28 +187,57 @@ export function useTripChatCrypto(
    * device slot that is still empty — a second browser of this account, or a
    * member who joined after the epoch was minted. Idempotent: only gaps are
    * sent, and the server merges them into the current epoch.
+   *
+   * F10e: "empty" is now "not provably openable". A filled slot whose wrapper
+   * has left the trip, whose blob was overwritten with rubbish, or which was
+   * written for a key nobody publishes any more used to be skipped FOREVER —
+   * the recipient waited for a re-share that could never come (`healSlots` was
+   * the only re-share there is). Such a slot is now re-wrapped, which makes it
+   * usable again; `slotIsUsable` documents exactly when a slot is left alone.
    */
   const healSlots = useCallback(
     async (identity: ChatIdentity, state: ChatKeysState) => {
       if (!tripId || !currentUserId || !convKeyRef.current) return;
-      const pending: Record<string, string> = {};
+      const liveDeviceKeys = new Set<string>();
+      const memberIds = new Set<string>();
       for (const member of state.members || []) {
-        const keys = member.pubKeys?.length
-          ? member.pubKeys
-          : member.pubKey
-            ? [member.pubKey]
-            : [];
-        const filled = new Set(member.envelopedPubKeys || []);
-        for (const pub of keys) {
-          if (filled.has(pub)) continue;
+        memberIds.add(member.userId);
+        for (const key of memberDeviceKeysOf(member)) liveDeviceKeys.add(key);
+      }
+
+      const pending: Record<string, string> = {};
+      let wanted = 0;
+      let failed = 0;
+      for (const member of state.members || []) {
+        for (const pub of memberDeviceKeysOf(member)) {
+          // An older server sends no slot metadata: keep the pre-F10e rule
+          // (any envelope counts) rather than re-wrapping the whole roster.
+          const known = member.slots
+            ? member.slots.some((slot) => slot.pub === pub)
+            : (member.envelopedPubKeys || []).includes(pub);
+          const usable = member.slots
+            ? slotIsUsable(member.slots.find((slot) => slot.pub === pub), liveDeviceKeys, memberIds)
+            : true;
+          if (known && usable) continue;
+          wanted += 1;
           try {
             pending[pub] = await wrapEnvelope(currentUserId, identity, pub, convKeyRef.current);
           } catch {
-            /* one device failing to wrap never blocks the rest */
+            failed += 1; // one device failing to wrap never blocks the rest
           }
         }
       }
-      if (!Object.keys(pending).length) return;
+      if (!Object.keys(pending).length) {
+        if (wanted && failed === wanted) {
+          // Every attempt failed. Say so ONCE: this exact silence is what hid
+          // the F10e defect (a non-extractable key cannot be re-wrapped) for a
+          // whole release — nobody could tell healing apart from no work to do.
+          console.warn(
+            `chatCrypto: could not re-share the chat key for ${wanted} device slot(s)`
+          );
+        }
+        return;
+      }
       try {
         await api.addTripChatEnvelopes(tripId, pending);
       } catch {
@@ -249,12 +280,7 @@ export function useTripChatCrypto(
         const conversationKey = await generateConversationKey();
         const envelopes: Record<string, string> = {};
         for (const member of state.members || []) {
-          const keys = member.pubKeys?.length
-            ? member.pubKeys
-            : member.pubKey
-              ? [member.pubKey]
-              : [];
-          for (const pub of keys) {
+          for (const pub of memberDeviceKeysOf(member)) {
             try {
               envelopes[pub] = await wrapEnvelope(
                 currentUserId, // the wrapper id: recipients derive against MY pub
@@ -414,14 +440,20 @@ export function useTripChatCrypto(
 
   const encryptOutgoing = useCallback(
     async (plaintext: string): Promise<{ body: string; e2ee: boolean }> => {
-      if (status === 'ready' && convKeyRef.current) {
-        try {
-          return { body: await encryptMessage(convKeyRef.current, plaintext), e2ee: true };
-        } catch {
-          return { body: plaintext, e2ee: false };
-        }
+      if (status !== 'ready' || !convKeyRef.current) {
+        // No usable key on this device: the composer says so in plain words
+        // ("Messages you send here aren't protected yet"), and the row is
+        // flagged so every reader can tell. Deliberate, disclosed plaintext.
+        return { body: plaintext, e2ee: false };
       }
-      return { body: plaintext, e2ee: false };
+      try {
+        return { body: await encryptMessage(convKeyRef.current, plaintext), e2ee: true };
+      } catch {
+        // NEVER silently downgrade. While the composer promises encryption, a
+        // failed encryption must fail the SEND, not leak the words in the clear
+        // with an `e2ee: false` flag nobody looks at (F10e).
+        throw new Error('This message could not be encrypted — nothing was sent. Please try again.');
+      }
     },
     [status]
   );
