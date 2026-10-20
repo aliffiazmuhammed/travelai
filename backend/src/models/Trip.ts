@@ -79,7 +79,11 @@ export interface ICustomRoute {
   createdAt: Date;
 }
 
-import type { TripRole } from '../services/collab/access.js';
+import {
+  ensureCreatorMembership,
+  type TripMembershipShape,
+  type TripRole,
+} from '../services/collab/access.js';
 
 export interface ITripMember {
   /** The collaborating user's `_id`. */
@@ -322,6 +326,20 @@ const tripSchema = new Schema<ITrip>(
 tripSchema.index({ userId: 1, isDeleted: 1, createdAt: -1 });
 // Membership lookups: the dashboard lists trips the user is a member of.
 tripSchema.index({ 'members.userId': 1, isDeleted: 1, createdAt: -1 });
+
+/**
+ * P0 creation invariant (2026-10-20): every new trip carries its creator as
+ * an `owner` member. Access checks read `members[]` only, so a trip created
+ * without this row is listed on the dashboard but 404s on open.
+ *
+ * Enforcing it at the schema level covers every present and future creation
+ * path (generate, stream, duplicate, seeds, scripts) instead of asking each
+ * controller to remember. `isNew` is deliberate: saving an existing trip must
+ * never re-add a creator who transferred ownership or left.
+ */
+tripSchema.pre('validate', function () {
+  ensureCreatorMembership(this as unknown as TripMembershipShape);
+});
 
 /**
  * Optimistic concurrency (Milestone 6 §3.6). `rev` must move on **every**

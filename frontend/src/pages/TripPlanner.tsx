@@ -284,7 +284,11 @@ const TripPlanner = () => {
           setTimeout(() => {
             setIsOverlayOpen(false);
             setLoading(false);
-            navigate("/dashboard", { state: { itinerary: trip.tripDetails } });
+            // Hand off the exact document id as well as the payload. The old
+            // title match could open a *different* trip with the same title.
+            navigate("/dashboard", {
+              state: { itinerary: trip.tripDetails, tripId: trip._id },
+            });
           }, 800);
         },
         onError: (errMessage) => {

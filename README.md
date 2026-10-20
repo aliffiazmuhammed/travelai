@@ -610,9 +610,9 @@ Run this **once right after the first deploy** against every new MongoDB databas
 npm run migrate:members
 ```
 
-It backfills legacy trips with their owner `members[]` row and `rev` for Milestone 6 access control. It is idempotent and additive — re-running is always safe.
+It backfills legacy trips with their owner `members[]` row and `rev` for Milestone 6 access control. It is idempotent and additive — re-running is always safe. **New trips no longer need it:** since 2026-10-20 a schema `pre('validate')` hook seeds the creator as `owner` on every newly created document (generate, stream, duplicate, seeds, scripts). The script remains for rows created before that fix.
 
-> **Why it is required:** since sprint E4, authorization reads `members[]` only (the pre-backfill creator fallback was removed for security reasons — a left/transferred owner would otherwise keep access). A trip without member rows appears in list results but answers 404 on open until backfilled. The read-only audit tool `backend/scripts/db-audit.mts` lists every database on the cluster with its `trips` and `legacyNoMembers` counts (0 remaining = done):
+> **Why it is required for legacy rows:** since sprint E4, authorization reads `members[]` only (the pre-backfill creator fallback was removed for security reasons — a left/transferred owner would otherwise keep access). A trip without member rows appears in list results but answers 404 on open until backfilled. The read-only audit tool `backend/scripts/db-audit.mts` lists every database on the cluster with its `trips` and `legacyNoMembers` counts (0 remaining = done):
 > ```bash
 > $env:AUDIT_URI='<database-uri>'; npx tsx scripts/db-audit.mts   # from backend/
 > ```

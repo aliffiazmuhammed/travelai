@@ -51,26 +51,62 @@ const Dashboard: React.FC = () => {
       const data = await api.getTrips();
       setTrips(data);
 
-      // If passed state from TripPlanner, find or construct selected trip
-      if (location.state?.itinerary) {
-        const found = data.find(
-          (t) =>
-            t.tripDetails?.trip_title === location.state.itinerary.trip_title
-        );
-        if (found) {
-          // E5 (F16): list rows are summaries — fetch the full document.
-          setSelectedTrip(await api.getTrip(found._id));
-        } else {
-          // Fallback constructed representation
+      // If passed state from TripPlanner, open the EXACT trip it created.
+      // The old title match could open a different trip with the same title.
+      const handoff = location.state as
+        | { tripId?: string; itinerary?: ItineraryData }
+        | null;
+      const handoffTripId = handoff?.tripId;
+      const handoffItinerary = handoff?.itinerary;
+
+      if (handoffTripId || handoffItinerary) {
+        let opened = false;
+
+        if (handoffTripId) {
+          try {
+            // E5 (F16): list rows are summaries — fetch the full document.
+            setSelectedTrip(await api.getTrip(handoffTripId));
+            opened = true;
+          } catch (err) {
+            console.error("Failed to open the generated trip by id:", err);
+          }
+        }
+
+        // Compatibility fallback for hand-offs created before tripId existed.
+        if (!opened && handoffItinerary) {
+          const found = data.find(
+            (t) => t.tripDetails?.trip_title === handoffItinerary.trip_title
+          );
+          if (found) {
+            try {
+              setSelectedTrip(await api.getTrip(found._id));
+              opened = true;
+            } catch (err) {
+              console.error("Failed to open the generated trip by title:", err);
+            }
+          }
+        }
+
+        if (!opened && handoffItinerary) {
+          // Last-resort read-only preview: never leave the user staring at
+          // nothing if the follow-up fetch failed.
           setSelectedTrip({
             _id: "temp-" + Date.now(),
-            title: location.state.itinerary.trip_title,
+            title: handoffItinerary.trip_title,
             status: "planned",
-            tripDetails: location.state.itinerary,
+            tripDetails: handoffItinerary,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           });
+          opened = true;
         }
+
+        if (!opened) {
+          toast.error(
+            "Your trip was created, but it could not be opened. Refresh your library."
+          );
+        }
+
         // Consume the hand-off so a later quiet refresh doesn't reselect.
         // URL-only navigate (`Partial<Path>` has no `state`); the hand-off is
         // one-shot so a refresh arriving with no state is legitimate too.

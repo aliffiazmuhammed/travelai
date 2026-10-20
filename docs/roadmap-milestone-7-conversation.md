@@ -445,3 +445,24 @@ The user asked whether typing `@` to reach the assistant is discoverable, and an
 - **The tip is per browser, not per account.** A second device shows it once more; it is a coach mark, not a setting.
 - **Viewers see no chip or menu** because they cannot send at all; the assistant is a participant in the conversation, not a read-only search box.
 - **Discoverability stops at the chat.** The dashboard does not advertise the assistant, and the landing page does not mention it. This increment fixes the moment of use, not the marketing surface.
+
+### 12.19 P0 — every new trip now carries its creator as owner (production bug, 2026-10-20)
+
+A user-visible contradiction: generation finished, the dashboard toast said *"Failed to load your trips"*, and the new card answered **"Trip not found"** when opened. Duplicate had the same shape. The audit traced it to the Milestone 6 access migration, not to the AI or the dashboard.
+
+**Root cause.** Generate, generate-stream and duplicate each created a `Trip` with `userId` (the creator/audit field) and left `members[]` at its `[]` default. Since sprint E4, `roleOf` reads `members[]` exclusively — deliberately, so a creator who leaves or transfers ownership loses access — and returns `null` for a trip with no member rows. The dashboard list query also matches `userId`, so the trip appeared; every trip-scoped route runs `requireTripRole`, found no row, and returned the standard no-access **404**. The `migrate:members` backfill repairs existing rows but was never a creation-time guard, so every new trip re-broke.
+
+**The fix is a creation invariant, at the model layer.** `ensureCreatorMembership` (in `services/collab/access.ts`, next to `roleOf`) runs from a `Trip` `pre('validate')` hook. On **new documents only** it ensures the creator is present as `owner`: it prepends the row when absent, promotes a weaker creator row instead of duplicating it, and is idempotent. `isNew` is the safety wall — saving an existing trip must never resurrect a creator who transferred ownership or left. Putting it on the schema covers generate, stream, duplicate, seeds, scripts and any future creation path, rather than relying on three controllers to remember.
+
+**The hand-off is now by id.** `TripPlanner` navigated with only `trip.tripDetails`, so the dashboard re-found the trip by `trip_title`. Two trips can share a title; the new route now passes `tripId` and the dashboard opens that exact document, falling back to the old title lookup only for a stale hand-off, then to a read-only preview and an explicit error if even that fails. It no longer reports a list-load failure when only the follow-up open failed.
+
+**Tests / verification.** `tripMembership.test.ts` adds **10** tests: seven for the helper (seed, idempotence, preserve existing rows, promote a weaker creator, leave existing documents alone, no creator → no row, `roleOf` accepts the seeded owner) and three that import the real `Trip` model and call `validate()`, proving the hook is wired (new documents, prepend without loss, promotion). Suite **318/318**. A one-off save against a throwaway local database confirmed the persisted document has exactly one `owner` row and `roleOf` returns `owner`. Backend `tsc --noEmit` clean; frontend typecheck + build clean; SPA mirror refreshed.
+
+**Deployment note.** This prevents *new* ownerless trips; it does not repair rows already in a production database. After deploying, run `npm run migrate:members` once with the production `MONGODB_URI`, then `backend/scripts/db-audit.mts` and confirm `legacyNoMembers` is **0** for every database. The local database audited here had 2 trips and 0 broken, so the production count is still unknown.
+
+**Deliberately not in this increment / honest limits:**
+
+- **No automatic backfill on boot.** A migration that mutates every trip database at startup is a larger operational decision; the idempotent script stays explicit and auditable.
+- **No DB-backed integration test in CI.** The model test runs validation and the hook without a connection; there is still no test Mongo service in the pipeline.
+- **Duplicate keeps the same creator.** The invariant seeds the duplicating account, which is the existing product behaviour; collaborator rows are not copied.
+- **Legacy ownerless trips stay invisible until backfilled.** The dashboard still lists them via `userId` and opening still 404s; that is intentional (no access without a member row), and the backfill is the remedy.

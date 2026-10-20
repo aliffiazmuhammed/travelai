@@ -119,6 +119,51 @@ export function roleOf(trip: TripAccessShape | null | undefined, userId?: string
   return ROLE_RANK[role] !== undefined ? role : null;
 }
 
+/**
+ * Shape of a document at the moment it is being created. `isNew` is Mongoose's
+ * flag; the helper stays framework-free so it can be unit-tested.
+ */
+export interface TripMembershipShape {
+  isNew?: boolean;
+  userId?: unknown;
+  members?: Array<{ userId?: unknown; role?: string; joinedAt?: Date }>;
+}
+
+/**
+ * P0 invariant (2026-10-20): **a freshly created trip always contains its
+ * creator as owner.**
+ *
+ * Why this lives next to `roleOf`: since the Milestone 6 E4 backfill,
+ * authorization reads `members[]` exclusively, and `roleOf` intentionally has
+ * no creator fallback. A trip created without a member row is therefore
+ * listed (the dashboard query also matches `userId`) but answers 404 on every
+ * trip route. The generator and duplicate paths both created such documents,
+ * so the next generated trip was unopenable.
+ *
+ * Only **new** documents are seeded. A transferred or left owner must never be
+ * re-added when an existing document is saved. If a new document already names
+ * the creator with a weaker role, that row is promoted rather than duplicated.
+ *
+ * @returns true when a row was added or promoted.
+ */
+export function ensureCreatorMembership(trip: TripMembershipShape): boolean {
+  if (!trip || !trip.isNew || !trip.userId) return false;
+
+  const creatorId = String(trip.userId);
+  const members = (trip.members ?? []) as NonNullable<TripMembershipShape['members']>;
+  trip.members = members;
+
+  const existing = members.find((entry) => entry && String(entry.userId) === creatorId);
+  if (existing) {
+    if (existing.role === 'owner') return false;
+    existing.role = 'owner';
+    return true;
+  }
+
+  members.unshift({ userId: trip.userId, role: 'owner', joinedAt: new Date() });
+  return true;
+}
+
 /** Zod schema for a role coming in from the wire. */
 export const tripRoleSchema = z.enum(['owner', 'editor', 'commenter', 'viewer']);
 
