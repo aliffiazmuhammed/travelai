@@ -42,6 +42,11 @@ import {
   getTripDecisions,
   postTripCommentDecision,
   deleteTripDecision,
+  getTripPolls,
+  postTripPoll,
+  postTripPollVote,
+  postTripPollClose,
+  deleteTripPoll,
   getTripChatKeys,
   putTripChatKeys,
   postTripChatEnvelopes,
@@ -87,6 +92,7 @@ import {
   transferOwnershipSchema,
 } from '../schemas/collab.schema.js';
 import { createCommentSchema, updateCommentSchema } from '../schemas/comments.schema.js';
+import { createPollSchema, votePollSchema } from '../schemas/polls.schema.js';
 import {
   setTripChatKeysSchema,
   addChatEnvelopesSchema,
@@ -415,6 +421,29 @@ router.delete(
   requireTripRole('viewer'),
   deleteTripDecision
 );
+
+// Polls (Milestone 7, F13a). Reading is `viewer`; creating and voting need
+// `commenter` (participating in the conversation, exactly like posting a
+// message); close/remove sit at `viewer` because creator-or-owner is the rule,
+// not rank — the service decides 403/404. The sealed payload is opaque to the
+// server; the routes validate shape and size only.
+router.get('/:id/polls', protect, requireTripRole('viewer'), getTripPolls);
+router.post(
+  '/:id/polls',
+  protect,
+  requireTripRole('commenter'),
+  validate(createPollSchema),
+  postTripPoll
+);
+router.post(
+  '/:id/polls/:pollId/votes',
+  protect,
+  requireTripRole('commenter'),
+  validate(votePollSchema),
+  postTripPollVote
+);
+router.post('/:id/polls/:pollId/close', protect, requireTripRole('viewer'), postTripPollClose);
+router.delete('/:id/polls/:pollId', protect, requireTripRole('viewer'), deleteTripPoll);
 
 // Chat keys (Milestone 7, F10) — the blind-carrier plumbing of end-to-end
 // chat. All three routes sit at the `viewer` floor like the live tier: the

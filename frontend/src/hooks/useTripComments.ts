@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '@/services/api';
-import type { TripComment, TripDecision } from '@/types';
-import type { CommentFrame, DecisionFrame, TypingFrame } from '@/hooks/useTripEvents';
+import type { TripComment, TripDecision, TripPoll } from '@/types';
+import type { CommentFrame, DecisionFrame, PollFrame, TypingFrame } from '@/hooks/useTripEvents';
 
 /**
  * Trip comments state (Milestone 6 §19.7 / §20, sprint F6b).
@@ -39,6 +39,11 @@ export interface TripCommentsState {
   typing: TypingEntry[];
   /** Active decisions (F9), newest first — the pinned "what we agreed" cards. */
   decisions: TripDecision[];
+  /**
+   * Active polls (F13a), newest first. Payloads and votes are still SEALED
+   * here — the chat surface decodes them with the trip key.
+   */
+  polls: TripPoll[];
 }
 
 export interface TypingEntry {
@@ -91,6 +96,19 @@ export interface UseTripComments {
   ingestDecision: (frame: DecisionFrame) => void;
   /** Comment ids that already have an active decision (drives row buttons). */
   decidedCommentIds: Set<string>;
+  /**
+   * Starts a poll (F13a) from an ALREADY-SEALED payload. Sealing happens in the
+   * chat surface, which is the only place that holds the trip key.
+   */
+  createPoll: (sealedBody: string) => Promise<TripPoll>;
+  /** Casts or changes this member's vote (sealed option index). */
+  votePoll: (pollId: string, sealedChoice: string) => Promise<TripPoll>;
+  /** Stops voting (creator or owner); the tally stays. */
+  closePoll: (pollId: string) => Promise<void>;
+  /** Removes a poll (creator or owner; soft-tombstoned server-side). */
+  removePoll: (pollId: string) => Promise<void>;
+  /** Live ingest for poll frames — wired to `useTripEvents.onPollEvent`. */
+  ingestPoll: (frame: PollFrame) => void;
 }
 
 const TYPING_TTL_MS = 5000; // mirrors the F8a contract (client-side expiry)
@@ -132,6 +150,7 @@ export function useTripComments(
     unread: 0,
     typing: [],
     decisions: [],
+    polls: [],
   });
 
   // Ref mirrors so event handlers never read state inside a setState updater
@@ -250,6 +269,89 @@ export function useTripComments(
       applyDecisionRow(frame.decision, false);
     },
     [applyDecisionRow]
+  );
+
+  /* ------------------------------------------------------------------ */
+  /*  Polls (F13a)                                                       */
+  /* ------------------------------------------------------------------ */
+
+  // Seed the poll list per trip open (bounded by POLL_MAX_PER_TRIP). Polls are
+  // their own collection: creating/voting never bumps `Trip.rev`.
+  useEffect(() => {
+    if (!tripId) return;
+    let alive = true;
+    void (async () => {
+      try {
+        const result = await api.getTripPolls(tripId);
+        if (alive) setState((prev) => ({ ...prev, polls: result.polls || [] }));
+      } catch (err: any) {
+        console.error('polls: initial load failed', err?.message || err);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [tripId]);
+
+  /** Merges one poll row: patch in place (a vote must not reorder the list). */
+  const applyPollRow = useCallback((row: TripPoll) => {
+    setState((prev) => {
+      if (row.deletedAt) {
+        return { ...prev, polls: prev.polls.filter((poll) => poll._id !== row._id) };
+      }
+      const index = prev.polls.findIndex((poll) => poll._id === row._id);
+      if (index === -1) return { ...prev, polls: [row, ...prev.polls] };
+      const next = [...prev.polls];
+      next[index] = row;
+      return { ...prev, polls: next };
+    });
+  }, []);
+
+  const createPoll = useCallback(
+    async (sealedBody: string): Promise<TripPoll> => {
+      if (!tripId) throw new Error('No trip is open.');
+      const result = await api.createTripPoll(tripId, sealedBody);
+      applyPollRow(result.poll);
+      return result.poll;
+    },
+    [tripId, applyPollRow]
+  );
+
+  const votePoll = useCallback(
+    async (pollId: string, sealedChoice: string): Promise<TripPoll> => {
+      if (!tripId) throw new Error('No trip is open.');
+      const result = await api.voteTripPoll(tripId, pollId, sealedChoice);
+      applyPollRow(result.poll);
+      return result.poll;
+    },
+    [tripId, applyPollRow]
+  );
+
+  const closePoll = useCallback(
+    async (pollId: string): Promise<void> => {
+      if (!tripId) return;
+      const result = await api.closeTripPoll(tripId, pollId);
+      applyPollRow(result.poll);
+    },
+    [tripId, applyPollRow]
+  );
+
+  const removePoll = useCallback(
+    async (pollId: string): Promise<void> => {
+      if (!tripId) return;
+      const result = await api.removeTripPoll(tripId, pollId);
+      applyPollRow(result.poll);
+    },
+    [tripId, applyPollRow]
+  );
+
+  /** Live ingest for poll frames — the projection carries the full row. */
+  const ingestPoll = useCallback(
+    (frame: PollFrame) => {
+      if (!frame?.poll?._id) return;
+      applyPollRow(frame.poll);
+    },
+    [applyPollRow]
   );
 
   const ensureLoaded = useCallback(() => {
@@ -530,5 +632,10 @@ export function useTripComments(
     removeDecision,
     ingestDecision,
     decidedCommentIds,
+    createPoll,
+    votePoll,
+    closePoll,
+    removePoll,
+    ingestPoll,
   };
 }

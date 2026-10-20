@@ -541,6 +541,43 @@ export interface TripDecision {
 }
 
 /**
+ * One vote on a poll (Milestone 7, F13a). `choice` is the *sealed* option index:
+ * the server never learns which option won, and the client decrypts each vote
+ * with the trip key before tallying. `userId` is membership metadata (presence
+ * publishes the same ids) — it is what makes `isYou` reliable on a broadcast
+ * frame as well as on your own HTTP response.
+ */
+export interface TripPollVote {
+  userId: string;
+  label: string;
+  /** Ciphertext of the chosen option index (`<b64 iv>.<b64 ct>`). */
+  choice: string;
+  at: string;
+}
+
+/**
+ * A group poll (Milestone 7, F13a) — created and voted on from the chat.
+ * `body` is the sealed `{ q, o[] }` payload (question + option labels), so a
+ * poll is unreadable to the server exactly like a message.
+ */
+export interface TripPoll {
+  _id: string;
+  tripId: string;
+  createdBy: string;
+  /** Display label of whoever started it. */
+  createdByLabel: string;
+  /** True when the caller started this poll. */
+  isYou: boolean;
+  /** Sealed `{ q: string, o: string[] }`. */
+  body: string;
+  e2ee: boolean;
+  votes: TripPollVote[];
+  createdAt: string;
+  closedAt?: string;
+  deletedAt?: string;
+}
+
+/**
  * F10e: the state of ONE device key's envelope slot in the current epoch.
  * `wrapper`/`wrapperPub` are the (clear-text) envelope metadata the client
  * itself wrote; they exist so a keyholder can tell a slot the recipient can

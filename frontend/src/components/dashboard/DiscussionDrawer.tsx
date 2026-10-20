@@ -50,6 +50,8 @@ interface DiscussionDrawerProps {
   hidden?: boolean;
   /** F12b: proposal Apply composition — forwarded to the inner CommentsTab. */
   onApplyProposal?: (proposal: AssistantProposal) => Promise<void> | void;
+  /** F13a: the caller's id, so poll votes can be recognised as "mine". */
+  currentUserId?: string;
 }
 
 const initialsFor = (label: string): string =>
@@ -64,6 +66,7 @@ export const DiscussionDrawer: React.FC<DiscussionDrawerProps> = ({
   presence = [],
   hidden = false,
   onApplyProposal,
+  currentUserId,
 }) => {
   const [open, setOpen] = useState(false);
   const unread = controller.state.unread;
@@ -179,6 +182,7 @@ export const DiscussionDrawer: React.FC<DiscussionDrawerProps> = ({
               typingLabels={controller.typingLabels}
               onTyping={controller.notifyTyping}
               onApplyProposal={onApplyProposal}
+              currentUserId={currentUserId}
             />
           </div>
         </SheetContent>

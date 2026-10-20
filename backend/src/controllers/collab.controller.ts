@@ -45,6 +45,13 @@ import {
   removeTripDecision,
 } from '../services/collab/decisions.js';
 import {
+  closeTripPoll,
+  createTripPoll,
+  listTripPolls,
+  removeTripPoll,
+  voteTripPoll,
+} from '../services/collab/polls.js';
+import {
   getTripChatKeyState,
   setTripChatKeys,
   addTripChatEnvelopes,
@@ -372,6 +379,81 @@ export const deleteTripDecision = catchAsync(
       role
     );
     res.status(200).json({ success: true, decision });
+  }
+);
+
+/* -------------------------------------------------------------------------- */
+/*  Polls (F13a) — sealed questions/votes, tallied on members' devices          */
+/* -------------------------------------------------------------------------- */
+
+/** GET /:id/polls — active polls (closed included), newest first. */
+export const getTripPolls = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { trip } = tripContext(req);
+    const polls = await listTripPolls(String((trip as any)._id), String(req.userId));
+    res.status(200).json({ success: true, polls });
+  }
+);
+
+/**
+ * POST /:id/polls — start a poll. `body` is the sealed `{ q, o[] }` payload
+ * produced by the caller's browser; this route and the service never see the
+ * question or the options, only their shape.
+ */
+export const postTripPoll = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { trip } = tripContext(req);
+    const poll = await createTripPoll(
+      String((trip as any)._id),
+      String(req.userId),
+      req.body?.body
+    );
+    res.status(201).json({ success: true, poll });
+  }
+);
+
+/**
+ * POST /:id/polls/:pollId/votes — cast or change this member's vote. The
+ * sealed `choice` is stored as-is; one row per member, replaced on a change.
+ */
+export const postTripPollVote = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { trip } = tripContext(req);
+    const poll = await voteTripPoll(
+      String((trip as any)._id),
+      String(req.params.pollId),
+      String(req.userId),
+      req.body?.choice
+    );
+    res.status(200).json({ success: true, poll });
+  }
+);
+
+/** POST /:id/polls/:pollId/close — stop voting (creator or owner). */
+export const postTripPollClose = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { trip, role } = tripContext(req);
+    const poll = await closeTripPoll(
+      String((trip as any)._id),
+      String(req.params.pollId),
+      String(req.userId),
+      role
+    );
+    res.status(200).json({ success: true, poll });
+  }
+);
+
+/** DELETE /:id/polls/:pollId — remove (soft); creator or owner. */
+export const deleteTripPoll = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { trip, role } = tripContext(req);
+    const poll = await removeTripPoll(
+      String((trip as any)._id),
+      String(req.params.pollId),
+      String(req.userId),
+      role
+    );
+    res.status(200).json({ success: true, poll });
   }
 );
 

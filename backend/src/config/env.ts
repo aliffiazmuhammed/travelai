@@ -57,6 +57,9 @@ const envSchema = z.object({
   COMMENTS_PAGE_SIZE: z.coerce.number().positive().default(50),
   // F9 decisions (§9-10). Consumed directly by services/collab/decisions.ts
   DECISION_MAX_PER_TRIP: z.coerce.number().positive().default(50),
+  // F13a polls. Sealed payloads are opaque to the server; the cap only bounds
+  // how many cards a trip can accumulate (closed polls still count).
+  POLL_MAX_PER_TRIP: z.coerce.number().positive().default(30),
   // F12a @TravelAI assistant. Per-user-per-trip ask budget per calendar day —
   // the burst brake is the mention gate itself; this stops runaway spend.
   BOT_DAILY_LIMIT: z.coerce.number().int().positive().default(20),

@@ -77,6 +77,14 @@ export interface ChatCryptoApi {
   ) => Promise<{ body: string; e2ee: boolean }>;
   /** Re-runs the key flow in place (the fallback banner's Retry action). */
   retry: () => void;
+  /**
+   * F13a: seals an arbitrary JSON value with the trip key (polls: question +
+   * options, and each vote's index). `null` when this device has no key — the
+   * caller must refuse the action rather than fall back to plaintext.
+   */
+  sealJson: (value: unknown) => Promise<string | null>;
+  /** Opens a sealed JSON value; `null` when it cannot be read on this device. */
+  openJson: <T>(body: string) => Promise<T | null>;
 }
 
 /** Empty render value while a ciphertext row is not (yet) readable. */
@@ -462,6 +470,31 @@ export function useTripChatCrypto(
 
   const isEncrypted = useCallback((row: { e2ee?: boolean }) => Boolean(row?.e2ee), []);
 
+  /**
+   * F13a: the poll channel reuses the message AEAD verbatim — a sealed poll is
+   * just a string only keyholders can read. No plaintext fallback: when this
+   * device has no key the call returns null and the UI refuses the action.
+   */
+  const sealJson = useCallback(async (value: unknown): Promise<string | null> => {
+    const key = convKeyRef.current;
+    if (!key) return null;
+    try {
+      return await encryptMessage(key, JSON.stringify(value));
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const openJson = useCallback(async <T,>(body: string): Promise<T | null> => {
+    const key = convKeyRef.current;
+    if (!key || !body) return null;
+    try {
+      return JSON.parse(await decryptMessage(key, body)) as T;
+    } catch {
+      return null;
+    }
+  }, []);
+
   const plaintextOf = useCallback(
     (row: { _id: string; body: string; e2ee?: boolean }) => {
       if (!row?.e2ee) return row?.body || '';
@@ -480,5 +513,7 @@ export function useTripChatCrypto(
     rememberPlaintext,
     encryptOutgoing,
     retry,
+    sealJson,
+    openJson,
   };
 }

@@ -278,6 +278,8 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
   commentsTypingRef.current = commentsController.ingestTyping;
   const commentsDecisionRef = useRef(commentsController.ingestDecision);
   commentsDecisionRef.current = commentsController.ingestDecision;
+  const commentsPollRef = useRef(commentsController.ingestPoll);
+  commentsPollRef.current = commentsController.ingestPoll;
 
   const livePresence = useTripEvents(isRealTrip ? tripId : undefined, {
     onTripUpdated: () => {
@@ -286,6 +288,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
     onCommentEvent: (frame) => commentsIngestRef.current(frame),
     onTypingEvent: (frame) => commentsTypingRef.current(frame),
     onDecisionEvent: (frame) => commentsDecisionRef.current(frame),
+    onPollEvent: (frame) => commentsPollRef.current(frame),
   });
 
   /** Tab switch; a move INTO/OUT OF the Discuss tab is a surface open/close. */
@@ -878,6 +881,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
               typingLabels={commentsController.typingLabels}
               onTyping={commentsController.notifyTyping}
               onApplyProposal={onSave ? applyAssistantProposal : undefined}
+              currentUserId={currentUserId}
             />
           </TabsContent>
         )}
@@ -895,6 +899,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
           presence={livePresence}
           hidden={activeTab === "comments"}
           onApplyProposal={onSave ? applyAssistantProposal : undefined}
+          currentUserId={currentUserId}
         />
       )}
 

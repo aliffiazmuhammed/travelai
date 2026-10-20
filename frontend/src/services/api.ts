@@ -26,6 +26,7 @@ import type {
   InvitePreview,
   TripComment,
   TripDecision,
+  TripPoll,
   ChatKeysState,
   AssistantProposal,
 } from '@/types';
@@ -585,6 +586,50 @@ class ApiClient {
     decisionId: string
   ): Promise<{ success: boolean; decision: TripDecision }> {
     return this.request(`/api/itinerary/${id}/decisions/${decisionId}`, { method: 'DELETE' });
+  }
+
+  /* ------------------------------------------------------------------------ */
+  /*  Polls (Milestone 7, F13a). Every payload here is SEALED ciphertext — the  */
+  /*  server validates shape and size only, and never counts a vote.            */
+  /* ------------------------------------------------------------------------ */
+
+  async getTripPolls(id: string): Promise<{ success: boolean; polls: TripPoll[] }> {
+    return this.request(`/api/itinerary/${id}/polls`);
+  }
+
+  async createTripPoll(
+    id: string,
+    body: string
+  ): Promise<{ success: boolean; poll: TripPoll }> {
+    return this.request(`/api/itinerary/${id}/polls`, {
+      method: 'POST',
+      body: JSON.stringify({ body, e2ee: true }),
+    });
+  }
+
+  async voteTripPoll(
+    id: string,
+    pollId: string,
+    choice: string
+  ): Promise<{ success: boolean; poll: TripPoll }> {
+    return this.request(`/api/itinerary/${id}/polls/${pollId}/votes`, {
+      method: 'POST',
+      body: JSON.stringify({ choice }),
+    });
+  }
+
+  async closeTripPoll(
+    id: string,
+    pollId: string
+  ): Promise<{ success: boolean; poll: TripPoll }> {
+    return this.request(`/api/itinerary/${id}/polls/${pollId}/close`, { method: 'POST' });
+  }
+
+  async removeTripPoll(
+    id: string,
+    pollId: string
+  ): Promise<{ success: boolean; poll: TripPoll }> {
+    return this.request(`/api/itinerary/${id}/polls/${pollId}`, { method: 'DELETE' });
   }
 
   /* ------------------------------------------------------------------------ */

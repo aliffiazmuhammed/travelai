@@ -345,3 +345,40 @@ Fixed with a `variant` on `DecisionsStrip`:
 
 **Not fixed / unchanged by design:** decisions are still a snapshot — editing the source comment after pinning does not change the card (that *is* the record), and unmarking a decision still leaves the source comment in the thread.
 
+### 12.16 F13a — polls: sealed questions, sealed votes, tallied on devices (user-requested, 2026-10-20)
+
+The user asked *"what about the polling feature it is not visible on frontend"*. It was never built: F12c had deferred debate→poll with the note that *"a vote needs its own storage/merge semantics that E2EE makes non-trivial (who counted what)"*. This increment builds it, with the scope the user chose: **chat card + always-visible band**, **sealed like chat**, **any member from the chat**.
+
+**The shape that keeps the promise.** A poll is not a message and not a server-side tally:
+
+- `models/TripPoll.ts` — `body` is the sealed `{ q, o[] }` payload (question + option labels), each `votes[].choice` is the sealed chosen *index*, `closedAt` closes voting, `deletedAt` tombstones. Votes are embedded (one row per member, bounded by the roster) and **nothing here bumps `Trip.rev`** — the §19.2 rule.
+- **What the server knows:** that a poll exists, who started it, who voted. **What it never knows:** the question, the options, anyone's choice, or the tally. `listTripPolls` / `voteTripPoll` / `closeTripPoll` pass ciphertext through untouched; the projection only adds labels and time.
+- **Tallies are computed in the browser** (`hooks/useDecodedPolls.ts`): the payload and every vote are opened with the trip key, in-range indices are counted, and every member's device derives the same counts from the same rows. Decoding is cached by the ciphertexts, so a vote re-decodes one poll and nothing else. A vote that does not decode, or an index outside the option list, counts for nothing rather than guessing.
+- **One member, one vote:** `upsertVote` replaces a member's row (people change their mind) and returns `changed: false` for the same choice — no save, no broadcast, so a double-tap cannot spam collaborators. Verified live.
+- **Membership ids travel.** Unlike decisions, a poll row carries `createdBy` and each vote carries `userId`. That is deliberate: a broadcast frame cannot carry a per-recipient `isYou`, so the client computes it from a stable id (presence already publishes the same ids to members). Content stays sealed; who-voted is membership.
+- **Rights:** create and vote need `commenter`; read needs `viewer`; close/remove are creator-or-owner (service rules, `viewer` rank floor like decisions). Viewers see the cards and the tally but cannot vote.
+- **No plaintext polls ever:** creation is disabled unless this device's chat is ready, and the dialog seals before sending. A server-side `body` without an `iv.` is refused (400) and a plaintext vote index is refused (409) — both verified live.
+
+**Surface.** `Dashboard/Polls.tsx`:
+
+- `PollsBand` — a `shrink-0` row **above** the chat scroll area (above the decisions band), collapsed by default: `BarChart3 · POLLS · <count> · <newest open question> · N voted · chevron`. Expanding shows full `PollCard`s in a `38vh` own-scroll area. An open poll can never be scrolled away — the same defect F10h fixed for decisions.
+- `PollCard` — question, options as tap targets with a share bar and count, a check on your choice, "N votes", Close (creator/owner), remove (creator/owner). Copy stays product-plain: no encryption vocabulary anywhere (§12.9). Closed polls stay in the conversation as the record; the band carries only open ones.
+- The transcript **interleaves** comments and polls by `createdAt` (`timeline` in `CommentsTab`), so a poll appears where the conversation produced it. A day filter filters messages only; polls bow out there and remain in the band.
+- Creation: the composer's poll button opens `PollComposer` (question ≤120, 2–5 options ≤60, duplicates/blanks dropped), then `crypto.sealJson({q,o})` → `POST`. Sealing failures are surfaced in plain words, never downgraded to plaintext.
+- The feed (Discuss tab) renders the same cards inline above the decisions strip.
+
+**Frames.** `poll:new` / `poll:update` ride the existing SSE bus (`emitPollEvent`), carrying the full projected row (sealed payload + votes). `useTripComments` merges them **in place** — a vote must not reorder the list — and drops tombstones. `useTripEvents` gained `onPollEvent`.
+
+**Tests:** `polls.test.ts` +8 — cap, sealed-shape walls (plaintext index and iv-less payload refused), open/removed/closed discrimination, creator-or-owner management, `upsertVote` (append/replace/no-op, never a duplicate), the projection contract (payload verbatim, `isYou` per viewer, tombstone emptied) and the zod shape rules. `routerCoverage.test.ts` pins the five new routes' rank floors. `smoke-f13.mts` — 33 live checks: membership walls, viewer 403s, plaintext refusals, create + `poll:new` frame, `isYou` for the creator vs another member, plaintext vote 409, vote/change/repeat/second member, `poll:update` frame, close rights + vote-after-close 409 + idempotent close, removal rights, payload emptied, removal hidden from the list, vote-on-removed 404.
+
+**Verified:** backend `tsc --noEmit` clean, suite **293/293**; live `smoke-f13` **33/33 ALL PASS** (both frames included); frontend typecheck + build clean; SPA mirror refreshed (`ItineraryDisplay-BlDNfx6l.js` carries the poll copy).
+
+**Deliberately not in this increment / honest limits:**
+
+- **Who voted for what is visible to members.** With one conversation key, every member can open every vote — it is a show of hands, not a secret ballot. True anonymity needs a different trust model (votes sealed to the poll creator, or blind tokens); not attempted.
+- **The poll creator can lie about the tally.** Tallies are computed client-side from the same rows by every device, so a member's *client* could render its own numbers; the data is consistent, the display is not verifiable. Same trust boundary as the rest of the chat.
+- **A vote is only as fresh as its frame.** Votes are not paginated; the list is bounded by `POLL_MAX_PER_TRIP` (30), so a full fetch is cheap. A member offline for a long time gets the truth on the next `GET /polls`.
+- **No vote deadline / auto-close, no multi-select, no ranked choice, no poll notifications.** Closing is manual by the creator or owner.
+- **TravelAI cannot create polls** — the user chose member-created only, which keeps the F12d no-promises rule untouched.
+- **A known pre-existing nit, unchanged:** decision frames still carry the actor's `isYou` view, so a live-pinned card can briefly show its Unmark affordance to other members (the server still 403s). Polls avoid the class entirely by shipping ids; fixing decisions the same way is a separate change.
+

@@ -169,6 +169,14 @@ test('guards declare the expected minimum roles (spot checks)', () => {
   assert.equal(minimumFor('GET', '/:id/decisions'), 'viewer');
   assert.equal(minimumFor('POST', '/:id/comments/:commentId/decision'), 'viewer');
   assert.equal(minimumFor('DELETE', '/:id/decisions/:decisionId'), 'viewer');
+  // Milestone 7 / F13a — polls. Reading is viewer; starting one and voting are
+  // `commenter` (participation, like posting a message); close/remove bottom out
+  // at `viewer` because creator-or-owner is the rule, not rank.
+  assert.equal(minimumFor('GET', '/:id/polls'), 'viewer');
+  assert.equal(minimumFor('POST', '/:id/polls'), 'commenter');
+  assert.equal(minimumFor('POST', '/:id/polls/:pollId/votes'), 'commenter');
+  assert.equal(minimumFor('POST', '/:id/polls/:pollId/close'), 'viewer');
+  assert.equal(minimumFor('DELETE', '/:id/polls/:pollId'), 'viewer');
 });
 
 test('version-cap routes expose history only with the versions field loaded', () => {

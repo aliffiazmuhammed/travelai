@@ -54,6 +54,8 @@ interface UseTripEventsOptions {
   onTypingEvent?: (frame: TypingFrame) => void;
   /** Called for every `decision:new` / `decision:update` frame (F9). */
   onDecisionEvent?: (frame: DecisionFrame) => void;
+  /** Called for every `poll:new` / `poll:update` frame (F13a). */
+  onPollEvent?: (frame: PollFrame) => void;
   /** Heartbeat cadence; must stay below the server TTL (30s default). */
   heartbeatMs?: number;
 }
@@ -90,6 +92,16 @@ export type DecisionFrame =
   | { type: 'decision:update'; tripId: string; decision: import('@/types').TripDecision };
 
 /**
+ * A poll frame (Milestone 7 F13a). `poll` is the server's projected row: the
+ * sealed payload, the sealed votes and who cast them. The projection carries
+ * `createdBy`/`userId` (membership, not content), so `isYou` is correct for
+ * every recipient — frames can be merged as-is.
+ */
+export type PollFrame =
+  | { type: 'poll:new'; tripId: string; poll: import('@/types').TripPoll }
+  | { type: 'poll:update'; tripId: string; poll: import('@/types').TripPoll };
+
+/**
  * mount an SSE stream + heartbeat loop for a trip. Returns the live roster
  * (empty when the tier is off or the stream could not open).
  */
@@ -97,7 +109,7 @@ export function useTripEvents(
   tripId?: string,
   options: UseTripEventsOptions = {}
 ): PresenceUser[] {
-  const { onTripUpdated, onCommentEvent, onTypingEvent, onDecisionEvent, heartbeatMs = 10000 } = options;
+  const { onTripUpdated, onCommentEvent, onTypingEvent, onDecisionEvent, onPollEvent, heartbeatMs = 10000 } = options;
   const [presence, setPresence] = useState<PresenceUser[]>([]);
 
   // Latest callback without resubscribing the EventSource on re-render.
@@ -109,6 +121,8 @@ export function useTripEvents(
   onTypingEventRef.current = onTypingEvent;
   const onDecisionEventRef = useRef(onDecisionEvent);
   onDecisionEventRef.current = onDecisionEvent;
+  const onPollEventRef = useRef(onPollEvent);
+  onPollEventRef.current = onPollEvent;
 
   // Coalesce bursts of trip:updated into one refetch (a save touches many
   // routes; the UI needs one fresh read, not N).
@@ -152,6 +166,8 @@ export function useTripEvents(
               onTypingEventRef.current?.(event as TypingFrame);
             } else if (event?.type === 'decision:new' || event?.type === 'decision:update') {
               onDecisionEventRef.current?.(event as DecisionFrame);
+            } else if (event?.type === 'poll:new' || event?.type === 'poll:update') {
+              onPollEventRef.current?.(event as PollFrame);
             }
           } catch {
             /* malformed frame — ignore, keep-alives stay as comments */

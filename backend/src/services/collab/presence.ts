@@ -48,7 +48,14 @@ export type TripEvent =
    * Like comments: never touches `Trip`, so no 409s ride these frames.
    */
   | { type: 'decision:new'; tripId: string; decision: unknown }
-  | { type: 'decision:update'; tripId: string; decision: unknown };
+  | { type: 'decision:update'; tripId: string; decision: unknown }
+  /**
+   * Poll frames (Milestone 7, F13a). `poll` is an already-projected `PollRow`:
+   * the sealed payload, the sealed votes and who cast them — never a plaintext
+   * option or choice, because the server never has either.
+   */
+  | { type: 'poll:new'; tripId: string; poll: unknown }
+  | { type: 'poll:update'; tripId: string; poll: unknown };
 
 const presenceByTrip = new Map<string, Map<string, PresenceEntry>>();
 const listeners = new Set<Listener>();
@@ -164,6 +171,18 @@ export function emitTypingFrame(
 export function emitDecisionEvent(
   tripId: string,
   frame: { type: 'decision:new' | 'decision:update'; decision: unknown }
+): void {
+  if (!tripId) return;
+  emit(tripId, { ...frame, tripId } as TripEvent);
+}
+
+/**
+ * Fan-out for a created poll or a vote/close/remove on it (F13a). Same
+ * contract as `emitDecisionEvent` — a pure broadcast beside `Trip`.
+ */
+export function emitPollEvent(
+  tripId: string,
+  frame: { type: 'poll:new' | 'poll:update'; poll: unknown }
 ): void {
   if (!tripId) return;
   emit(tripId, { ...frame, tripId } as TripEvent);

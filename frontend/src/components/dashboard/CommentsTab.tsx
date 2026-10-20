@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import {
+  BarChart3,
   Bot,
   ChevronDown,
   Loader2,
@@ -30,13 +31,16 @@ import {
 } from "lucide-react";
 import { api } from "@/services/api";
 import { cn } from "@/lib/utils";
-import type { TripComment, TripDecision, TripRole } from "@/types/trip";
+import { relativeTime } from "@/lib/relativeTime";
+import type { TripComment, TripDecision, TripPoll, TripRole } from "@/types/trip";
 import type {
   AssistantProposal,
   BotBubblePayload,
 } from "@/types/trip";
 import type { UseTripComments } from "@/hooks/useTripComments";
 import type { ChatCryptoApi } from "@/hooks/useTripChatCrypto";
+import { useDecodedPolls } from "@/hooks/useDecodedPolls";
+import { PollCard, PollComposer, PollsBand } from "@/components/dashboard/Polls";
 import { isRevConflict } from "@/lib/conflicts";
 
 /**
@@ -81,6 +85,12 @@ interface CommentsTabProps {
    * suggestion without the Apply controls.
    */
   onApplyProposal?: (proposal: AssistantProposal) => Promise<void> | void;
+  /**
+   * F13a: the caller's own user id. Polls are voted on by comparing the stable
+   * id on each vote (broadcast frames cannot carry a per-recipient `isYou`),
+   * so without it a member would not see which option is theirs.
+   */
+  currentUserId?: string;
 }
 
 const COMMENT_MAX_LEN = 2000; // mirrors COMMENT_MAX_LEN (server default)
@@ -207,6 +217,8 @@ const OFFLINE_CRYPTO: ChatCryptoApi = {
   syncRows: () => undefined,
   rememberPlaintext: () => undefined,
   encryptOutgoing: async (plaintext) => ({ body: plaintext, e2ee: false }),
+  sealJson: async () => null,
+  openJson: async () => null,
   retry: () => undefined,
 };
 
@@ -214,33 +226,9 @@ const initialsFor = (label: string): string =>
   (label || "T").trim().slice(0, 2).toUpperCase();
 
 /**
- * Chat-style timestamp (WhatsApp convention): clock time for today,
- * "Yesterday" for the day before, else a short date. Same function serves
- * bubbles and the decisions strip so the whole surface reads like a chat.
+ * Chat-style timestamp (WhatsApp convention) — lives in `lib/relativeTime` so
+ * the chat, the decisions strip and the poll cards share one implementation.
  */
-function relativeTime(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "";
-  const time = date.toLocaleTimeString(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-  const now = new Date();
-  if (date.toDateString() === now.toDateString()) return time;
-
-  const yesterday = new Date(now);
-  yesterday.setDate(now.getDate() - 1);
-  if (date.toDateString() === yesterday.toDateString()) return `Yesterday ${time}`;
-
-  const days = Math.floor((now.getTime() - date.getTime()) / 86400000);
-  if (days < 7) {
-    return `${date.toLocaleDateString(undefined, { weekday: "short" })} ${time}`;
-  }
-  return `${date.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  })} ${time}`;
-}
 
 export const CommentsTab: React.FC<CommentsTabProps> = ({
   tripId,
@@ -252,6 +240,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
   onTyping,
   variant = "feed",
   onApplyProposal,
+  currentUserId,
 }) => {
   const { state } = controller;
   const { comments, dayCounts } = state;
@@ -290,6 +279,10 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
   // immutable ciphertext — "applied"/"dismissed" survive only this visit).
   const [appliedProposals, setAppliedProposals] = useState<Set<string>>(new Set());
   const [dismissedProposals, setDismissedProposals] = useState<Set<string>>(new Set());
+  // F13a: poll composer + the one poll whose vote/close/remove is in flight.
+  const [pollComposerOpen, setPollComposerOpen] = useState(false);
+  const [pollCreating, setPollCreating] = useState(false);
+  const [pollBusyId, setPollBusyId] = useState<string | null>(null);
 
   /** Compose the proposal through the parent save path, then mark the card. */
   const applyProposal = async (row: TripComment) => {
@@ -583,6 +576,111 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
     }
   };
 
+  /* ----------------------------------------------------------------------- */
+  /*  Polls (F13a) — open polls are always in sight; the tally is local       */
+  /* ----------------------------------------------------------------------- */
+
+  const polls = state.polls;
+  const decodedPolls = useDecodedPolls(polls, cryptoApi, currentUserId);
+  /**
+   * Ownership is derived from the stable creator id, never from `poll.isYou`:
+   * a live frame is one payload for everyone and carries the actor's view, so
+   * trusting the flag would label someone else's poll "You" and offer them
+   * close/remove on it (the server would 403, but the UI must not lie).
+   */
+  const isMine = (poll: TripPoll) =>
+    currentUserId ? poll.createdBy === currentUserId : poll.isYou;
+  // The band carries only polls that still take votes; closed ones stay in the
+  // transcript as the record of what the group settled.
+  const openPolls = useMemo(() => polls.filter((poll) => !poll.closedAt), [polls]);
+
+  /** Sealing is the chat surface's job — it is the only holder of the key. */
+  const sealForPoll = async (value: unknown): Promise<string> => {
+    const sealed = await cryptoApi.sealJson(value);
+    if (!sealed) {
+      throw new Error("Chat is still unlocking on this device — try again in a moment.");
+    }
+    return sealed;
+  };
+
+  const voteOnPoll = async (poll: TripPoll, index: number) => {
+    if (pollBusyId || poll.closedAt || !canWrite) return;
+    setPollBusyId(poll._id);
+    try {
+      await controller.votePoll(poll._id, await sealForPoll(index));
+    } catch (err: any) {
+      toast.error(err?.message || "Your vote could not be recorded.");
+    } finally {
+      setPollBusyId(null);
+    }
+  };
+
+  const closePoll = async (poll: TripPoll) => {
+    if (pollBusyId) return;
+    setPollBusyId(poll._id);
+    try {
+      await controller.closePoll(poll._id);
+      toast.success("Poll closed");
+    } catch (err: any) {
+      toast.error(err?.message || "Could not close this poll.");
+    } finally {
+      setPollBusyId(null);
+    }
+  };
+
+  const removePoll = async (poll: TripPoll) => {
+    if (pollBusyId) return;
+    setPollBusyId(poll._id);
+    try {
+      await controller.removePoll(poll._id);
+      toast.success("Poll removed");
+    } catch (err: any) {
+      toast.error(err?.message || "Could not remove this poll.");
+    } finally {
+      setPollBusyId(null);
+    }
+  };
+
+  /** Creates the poll from the dialog — sealed before it leaves the browser. */
+  const createPoll = async (question: string, options: string[]) => {
+    if (pollCreating) return;
+    setPollCreating(true);
+    try {
+      await controller.createPoll(await sealForPoll({ q: question, o: options }));
+      setPollComposerOpen(false);
+      toast.success("Poll started");
+    } catch (err: any) {
+      toast.error(err?.message || "Could not start the poll.");
+    } finally {
+      setPollCreating(false);
+    }
+  };
+
+  const canCreatePoll = canWrite && cryptoApi.status === "ready";
+
+  /**
+   * The transcript is comments PLUS polls, in creation order. A poll belongs
+   * where the conversation produced it, so it is interleaved by `createdAt`
+   * rather than pinned off to one side; the band above the chat is the copy
+   * that never scrolls away. A day filter filters *messages*, so polls bow out
+   * there (they are never day-anchored).
+   */
+  const timeline = useMemo(() => {
+    const items: Array<
+      { kind: "comment"; at: number; row: TripComment } | { kind: "poll"; at: number; poll: TripPoll }
+    > = chronological.map((row) => ({
+      kind: "comment" as const,
+      at: Date.parse(row.createdAt) || 0,
+      row,
+    }));
+    if (dayFilter === null) {
+      for (const poll of polls) {
+        items.push({ kind: "poll", at: Date.parse(poll.createdAt) || 0, poll });
+      }
+    }
+    return items.sort((a, b) => a.at - b.at);
+  }, [chronological, polls, dayFilter]);
+
   const confirmDelete = async () => {
     if (!pendingDelete) return;
     const target = pendingDelete;
@@ -757,6 +855,18 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
         <Button
           type="button"
           size="icon"
+          variant="ghost"
+          onClick={() => setPollComposerOpen(true)}
+          disabled={!canCreatePoll}
+          title={canCreatePoll ? "Start a poll" : "Polls become available when the chat is ready on this device"}
+          aria-label="Start a poll"
+          className="h-9 w-9 shrink-0 self-end gap-0 rounded-full text-muted-foreground hover:text-foreground"
+        >
+          <BarChart3 className="w-4 h-4" />
+        </Button>
+        <Button
+          type="button"
+          size="icon"
           onClick={() => void submit()}
           disabled={!draft.trim() || state.submitting}
           title="Send"
@@ -824,21 +934,35 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
               </button>
             ))}
           </div>
-          <Button
-            type="button"
-            size="sm"
-            variant="hero"
-            onClick={() => void submit()}
-            disabled={!draft.trim() || state.submitting}
-            className="rounded-xl text-xs font-bold gap-1.5 h-9 px-3"
-          >
-            {state.submitting ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <Send className="w-3.5 h-3.5" />
-            )}
-            <span>Send</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setPollComposerOpen(true)}
+              disabled={!canCreatePoll}
+              title={canCreatePoll ? "Start a poll" : "Polls become available when the chat is ready on this device"}
+              className="rounded-xl text-xs font-bold gap-1.5 h-9 px-3"
+            >
+              <BarChart3 className="w-3.5 h-3.5" />
+              <span>Poll</span>
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="hero"
+              onClick={() => void submit()}
+              disabled={!draft.trim() || state.submitting}
+              className="rounded-xl text-xs font-bold gap-1.5 h-9 px-3"
+            >
+              {state.submitting ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Send className="w-3.5 h-3.5" />
+              )}
+              <span>Send</span>
+            </Button>
+          </div>
         </div>
       </div>
     )
@@ -868,7 +992,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
           <span>Retry</span>
         </Button>
       </div>
-    ) : chronological.length === 0 ? (
+    ) : timeline.length === 0 ? (
       <div className="py-8 text-center text-xs text-muted-foreground">
         {dayFilter === null
           ? isChat
@@ -878,7 +1002,26 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
       </div>
     ) : (
       <div className="space-y-2">
-        {chronological.map((row) => {
+        {timeline.map((item) => {
+          if (item.kind === "poll") {
+            const poll = item.poll;
+            return (
+              <PollCard
+                key={`poll-${poll._id}`}
+                poll={poll}
+                decoded={decodedPolls.get(poll._id)}
+                mine={isMine(poll)}
+                decoding={cryptoApi.status === "ready"}
+                busy={pollBusyId === poll._id}
+                canVote={canWrite}
+                canManage={isMine(poll) || myRole === "owner"}
+                onVote={(index) => void voteOnPoll(poll, index)}
+                onClosePoll={() => void closePoll(poll)}
+                onRemovePoll={() => void removePoll(poll)}
+              />
+            );
+          }
+          const row = item.row;
           // F12b: bot rows may carry a proposal envelope; the card replaces
           // the raw JSON in the bubble text.
           const botCard = Boolean(row.bot) ? parseBotCard(bodyOf(row)) : null;
@@ -925,6 +1068,23 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
     >
       {isChat ? (
         <>
+          {/* F13a: open polls are the newest actionable thing in the room —
+              one row above the decisions band, collapsed by default. */}
+          <PollsBand
+            polls={openPolls}
+            decoded={decodedPolls}
+            decoding={cryptoApi.status === "ready"}
+            busyId={pollBusyId}
+            canVote={canWrite}
+            canCreate={canCreatePoll}
+            isOwner={myRole === "owner"}
+            myUserId={currentUserId}
+            onNewPoll={() => setPollComposerOpen(true)}
+            onVote={(poll, index) => void voteOnPoll(poll, index)}
+            onClosePoll={(poll) => void closePoll(poll)}
+            onRemovePoll={(poll) => void removePoll(poll)}
+          />
+
           {/* F10h: pinned decisions sit ABOVE the scroll area, not inside it.
               The chat opens at the bottom, so a strip at the top of the
               transcript was invisible until you scrolled all the way back. */}
@@ -987,6 +1147,27 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
               <p className="text-[11px] text-muted-foreground">
                 Messages are end-to-end encrypted.
               </p>
+            )}
+
+            {/* Polls (F13a) — the same cards, inline in the feed */}
+            {polls.length > 0 && (
+              <div className="space-y-2">
+                {polls.map((poll) => (
+                  <PollCard
+                    key={poll._id}
+                    poll={poll}
+                    decoded={decodedPolls.get(poll._id)}
+                    mine={isMine(poll)}
+                    decoding={cryptoApi.status === "ready"}
+                    busy={pollBusyId === poll._id}
+                    canVote={canWrite}
+                    canManage={isMine(poll) || myRole === "owner"}
+                    onVote={(index) => void voteOnPoll(poll, index)}
+                    onClosePoll={() => void closePoll(poll)}
+                    onRemovePoll={() => void removePoll(poll)}
+                  />
+                ))}
+              </div>
             )}
 
             {/* Pinned decisions (F9) — the "what we agreed" strip, newest first */}
@@ -1072,6 +1253,14 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Start-a-poll dialog (F13a) — sealed by the caller before it is sent */}
+      <PollComposer
+        open={pollComposerOpen}
+        onOpenChange={setPollComposerOpen}
+        busy={pollCreating}
+        onSubmit={(question, options) => void createPoll(question, options)}
+      />
     </div>
   );
 };
