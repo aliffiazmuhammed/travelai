@@ -103,6 +103,7 @@ import { assistantRequestSchema } from '../schemas/assistant.schema.js';
 import { assistantAskLimiter } from '../middleware/rateLimiter.middleware.js';
 import {
   commentCreateLimiter,
+  dayAlternativeLimiter,
   generateLimiter,
   inviteManageLimiter,
   publicShareLimiter,
@@ -312,6 +313,7 @@ router.post(
   '/:id/days/:day/indoor-alternative',
   protect,
   requireTripRole('editor'),
+  dayAlternativeLimiter,
   suggestDayAlternative
 );
 

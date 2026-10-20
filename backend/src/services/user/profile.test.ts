@@ -178,7 +178,10 @@ test('publicUser: exposes the owner\'s own fields and the effective label', () =
     avatarUrl: '/uploads/avatar-u1.png',
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     password: 'hash',
+    chatPubKey: 'newest-key',
     chatPubKeys: ['k1'],
+    googleId: 'google-123',
+    updatedAt: new Date('2026-01-02T00:00:00.000Z'),
   });
   assert.deepEqual(Object.keys(projected).sort(), [
     '_id',
@@ -190,7 +193,10 @@ test('publicUser: exposes the owner\'s own fields and the effective label', () =
   ]);
   assert.equal(projected.label, 'Ada');
   assert.equal('password' in projected, false);
+  assert.equal('chatPubKey' in projected, false);
   assert.equal('chatPubKeys' in projected, false);
+  assert.equal('googleId' in projected, false);
+  assert.equal('updatedAt' in projected, false);
 });
 
 test('publicUser: an account with no name still has a usable label', () => {

@@ -21,6 +21,23 @@ const BUILT_IN_ORIGINS = [
   'https://travelai-tjce.onrender.com',
 ];
 
+/**
+ * True when the browser's `Origin` is the very host that served the request.
+ *
+ * A unified deployment (`SERVE_STATIC=true`, SPA and API on one origin) is not
+ * a CORS scenario: no cross-origin read is happening. Vite's module scripts
+ * still send `Origin` because they carry `crossorigin`, so without this check
+ * the allow-list rejects the app's own asset requests unless the deployment
+ * URL happens to be listed separately. Same-origin is always safe to reflect;
+ * everything else still goes through the exact allow-list.
+ */
+export function isSameOriginRequest(rawOrigin: string, rawRequestOrigin: string): boolean {
+  const normalize = (value: string) =>
+    String(value || '').trim().replace(/\/+$/, '').toLowerCase();
+  const origin = normalize(rawOrigin);
+  return origin.length > 0 && origin === normalize(rawRequestOrigin);
+}
+
 /** True when `origin` may receive credentialed responses. */
 export function isAllowedCorsOrigin(rawOrigin: string): boolean {
   // Normalize the incoming origin exactly like the candidates are normalized.

@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import tripRouter from '../../routes/itinerary.routes.js';
 import { TRIP_GUARD_TAG } from '../../middleware/tripAccess.middleware.js';
+import { dayAlternativeLimiter } from '../../middleware/rateLimiter.middleware.js';
 
 /**
  * The anti-loophole guarantee (`docs/roadmap-milestone-6-collaboration.md`
@@ -44,6 +45,25 @@ test('every trip-scoped route carries a requireTripRole guard', () => {
     unguarded.map((layer) => `${methodsOf(layer)} ${pathOf(layer)}`),
     [],
     'Every /:id route must declare requireTripRole(minimum) on the router'
+  );
+});
+
+/**
+ * M7.4: day rebuilds spend a provider call exactly like generation and the
+ * assistant, but had no throttle. Pinning the middleware reference keeps the
+ * brake from disappearing in a future route refactor.
+ */
+test('the indoor-alternative AI route carries its throttle', () => {
+  const layer = routeLayers().find(
+    (candidate) =>
+      pathOf(candidate) === '/:id/days/:day/indoor-alternative' &&
+      methodsOf(candidate).includes('post')
+  );
+  assert.ok(layer, 'expected the indoor-alternative route to exist');
+  const handles = ((layer!.route as any).stack ?? []).map((handler: any) => handler?.handle);
+  assert.ok(
+    handles.includes(dayAlternativeLimiter),
+    'POST /:id/days/:day/indoor-alternative must run dayAlternativeLimiter'
   );
 });
 

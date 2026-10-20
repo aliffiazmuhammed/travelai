@@ -14,6 +14,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -109,6 +119,9 @@ export const ExpenseTracker: React.FC<ExpenseTrackerProps> = ({
   const [refreshing, setRefreshing] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<TripExpense | null>(null);
+  // M7.4: expense deletion is irreversible (there is no expense history), so
+  // the row button opens a confirmation instead of deleting immediately.
+  const [deleteTarget, setDeleteTarget] = useState<TripExpense | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [newParticipant, setNewParticipant] = useState("");
   const [savingPeople, setSavingPeople] = useState(false);
@@ -219,6 +232,13 @@ export const ExpenseTracker: React.FC<ExpenseTrackerProps> = ({
     } finally {
       setBusyId(null);
     }
+  };
+
+  const confirmDeleteExpense = () => {
+    if (!deleteTarget) return;
+    const target = deleteTarget;
+    setDeleteTarget(null);
+    void handleDeleteExpense(target);
   };
 
   const handleBaseCurrencyChange = async (code: string) => {
@@ -711,7 +731,7 @@ export const ExpenseTracker: React.FC<ExpenseTrackerProps> = ({
                           title="Delete expense"
                           disabled={busyId === expense._id}
                           className="h-7 w-7 text-muted-foreground hover:text-destructive rounded-lg"
-                          onClick={() => handleDeleteExpense(expense)}
+                          onClick={() => setDeleteTarget(expense)}
                         >
                           {busyId === expense._id ? (
                             <Loader2 className="w-3 h-3 animate-spin" />
@@ -728,6 +748,43 @@ export const ExpenseTracker: React.FC<ExpenseTrackerProps> = ({
           )}
         </CardContent>
       </Card>
+
+      {/* Delete confirmation (M7.4) */}
+      <AlertDialog
+        open={deleteTarget != null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+      >
+        <AlertDialogContent className="rounded-3xl max-w-md w-[92vw] sm:w-full p-5 sm:p-6">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-lg font-bold">
+              Remove this expense?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs leading-relaxed">
+              <strong className="text-foreground">
+                {deleteTarget?.label?.trim() || "This expense"}
+              </strong>
+              {deleteTarget
+                ? ` (${formatMoney(deleteTarget.amountInBase, base)})`
+                : ""}{" "}
+              will be deleted from the budget and settlement. Expenses have no
+              history, so this cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-0">
+            <AlertDialogCancel className="rounded-xl text-xs font-semibold h-10">
+              Keep it
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="rounded-xl text-xs font-bold h-10 bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={confirmDeleteExpense}
+            >
+              Remove expense
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {canEdit && (
         <ExpenseEditor

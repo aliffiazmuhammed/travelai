@@ -4,6 +4,16 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Clock,
   MapPin,
   Utensils,
@@ -112,6 +122,11 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
   const [newActivityText, setNewActivityText] = useState<string>("");
   const [activeNewDay, setActiveNewDay] = useState<number | null>(null);
   const [editorTarget, setEditorTarget] = useState<DragState | null>(null);
+  // M7.4: deletion asks first. It is saved immediately through the itinerary
+  // blob, so the dialog is the only chance to catch a mis-tap.
+  const [deleteTarget, setDeleteTarget] = useState<
+    (DragState & { day: number; title: string }) | null
+  >(null);
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [dragOverState, setDragOverState] = useState<DragState | null>(null);
 
@@ -636,7 +651,12 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
                               title="Delete activity"
                               className="h-8 w-8 sm:h-7 sm:w-7 text-muted-foreground hover:text-destructive rounded-lg ml-auto sm:ml-0"
                               onClick={() =>
-                                handleDeleteActivity(actualDayIndex, actIdx)
+                                setDeleteTarget({
+                                  dayIndex: actualDayIndex,
+                                  actIndex: actIdx,
+                                  day: dayData.day,
+                                  title: actTitle,
+                                })
                               }
                             >
                               <Trash2 className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
@@ -769,6 +789,45 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
           );
         })}
       </div>
+
+      {/* Delete confirmation (M7.4) */}
+      <AlertDialog
+        open={deleteTarget != null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+      >
+        <AlertDialogContent className="rounded-3xl max-w-md w-[92vw] sm:w-full p-5 sm:p-6">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-lg font-bold">
+              Remove this activity?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs leading-relaxed">
+              <strong className="text-foreground">
+                {deleteTarget?.title?.trim() || "This activity"}
+              </strong>{" "}
+              will be removed from Day {deleteTarget?.day}. The plan updates
+              immediately; History can restore the previous version, but there
+              is no undo on this screen.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-0">
+            <AlertDialogCancel className="rounded-xl text-xs font-semibold h-10">
+              Keep it
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="rounded-xl text-xs font-bold h-10 bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (!deleteTarget) return;
+                handleDeleteActivity(deleteTarget.dayIndex, deleteTarget.actIndex);
+                setDeleteTarget(null);
+              }}
+            >
+              Remove activity
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Full-detail Activity Editor Modal */}
       <ActivityEditor

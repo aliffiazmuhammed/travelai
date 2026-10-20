@@ -26,6 +26,27 @@ export const generateLimiter = rateLimit({
 });
 
 /**
+ * Weather-aware day rebuilds (M4.4): one provider call per press, like a
+ * generation. It was the only AI route without a brake — an editor could hold
+ * the button and spend the provider budget. Keyed per account (F18 pattern) so
+ * a shared household IP does not lock everyone out; the generous hour window
+ * matches `generateLimiter`.
+ */
+export const dayAlternativeLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+  keyGenerator: (req: any): string => String(req?.userId ?? req?.ip ?? 'anonymous'),
+  validate: false,
+  message: {
+    success: false,
+    error: 'You have asked for a lot of day rebuilds. Please try again in an hour.',
+    message: 'You have asked for a lot of day rebuilds. Please try again in an hour.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
  * F12a @TravelAI asks: the provider spends money per answer and mentions are
  * inherently bursty ("ask it one more thing!"). Two brakes stacked:
  * - THIS burst limiter: 5 asks / minute, user-keyed (pattern of flaw F18);

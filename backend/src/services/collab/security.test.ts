@@ -8,7 +8,7 @@ import {
   issueCsrfCookie,
   verifyCsrf,
 } from '../../middleware/csrf.middleware.js';
-import { isAllowedCorsOrigin } from './httpOrigins.js';
+import { isAllowedCorsOrigin, isSameOriginRequest } from './httpOrigins.js';
 
 /* -------------------------------------------------------------------------- */
 /*  Helpers                                                                    */
@@ -218,4 +218,18 @@ test('even near-miss subdomain spoofs are rejected', () => {
 
 test('trailing-slash tolerance on listed origins', () => {
   assert.equal(isAllowedCorsOrigin('http://localhost:5173/'), true);
+});
+
+test('same-origin requests are recognized without being on the allow-list', () => {
+  // The unified deployment serves the SPA itself; Vite's module scripts carry
+  // `crossorigin`, so they arrive with an Origin header that must not be
+  // rejected just because FRONTEND_URL names a different dev port.
+  assert.equal(isSameOriginRequest('http://localhost:5059', 'http://localhost:5059'), true);
+  assert.equal(
+    isSameOriginRequest('https://travelai-tjce.onrender.com/', 'https://travelai-tjce.onrender.com'),
+    true
+  );
+  assert.equal(isSameOriginRequest('http://localhost:5059', 'http://localhost:5060'), false);
+  assert.equal(isSameOriginRequest('https://app.example.com', 'http://app.example.com'), false);
+  assert.equal(isSameOriginRequest('', 'http://localhost:5059'), false);
 });

@@ -39,12 +39,20 @@ export const signin = async (email: string, password: string) => {
   return { user: publicUser(user), token };
 };
 
+/**
+ * Loads the signed-in account for `/api/auth/me`.
+ *
+ * Returns the same narrow projection as signup/signin. The previous
+ * `select('-password')` still shipped `chatPubKey(s)`, `googleId`, `updatedAt`
+ * and any future schema field; `/auth/me` is a profile payload, not a document
+ * dump, so the shape is now explicit and shared with the other auth responses.
+ */
 export const getUserById = async (userId: string) => {
-  const user = await User.findById(userId).select('-password');
+  const user = await User.findById(userId).select('email name avatarUrl createdAt');
   if (!user) {
     throw new AppError('User profile not found.', 404);
   }
-  return user;
+  return publicUser(user);
 };
 
 /**

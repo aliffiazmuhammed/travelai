@@ -17,21 +17,9 @@
     <meta name="twitter:title" content="TravelAI - Smart AI Trip Planner" />
     <meta name="twitter:description" content="Generate customized travel itineraries, budget breakdowns, and interactive maps in seconds." />
 
-    <!-- Prevent Theme Flash -->
-    <script>
-      (function() {
-        try {
-          const theme = localStorage.getItem('travelai_theme');
-          const isDark = theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches);
-          if (isDark) {
-            document.documentElement.classList.add('dark');
-          } else {
-            document.documentElement.classList.remove('dark');
-          }
-        } catch (e) {}
-      })();
-    </script>
-    <script type="module" crossorigin src="/assets/index-CEXMC6iT.js"></script>
+    <!-- Prevent Theme Flash (external so CSP can forbid inline scripts) -->
+    <script src="/theme-init.js"></script>
+    <script type="module" crossorigin src="/assets/index-CiEESsyA.js"></script>
     <link rel="modulepreload" crossorigin href="/assets/vendor-react-Cil1Qq3A.js">
     <link rel="modulepreload" crossorigin href="/assets/vendor-query-AxuAU1bv.js">
     <link rel="modulepreload" crossorigin href="/assets/vendor-ui-DsEQJU64.js">

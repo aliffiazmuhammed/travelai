@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { type Request } from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
@@ -15,8 +15,9 @@ import geoRoutes from './routes/geo.routes.js';
 import { errorHandler } from './middleware/error.middleware.js';
 import { isCloudinaryConfigured, uploadDir } from './services/finance/receipt.js';
 import { CSRF_HEADER, issueCsrfCookie, verifyCsrf } from './middleware/csrf.middleware.js';
-import { isAllowedCorsOrigin } from './services/collab/httpOrigins.js';
+import { isAllowedCorsOrigin, isSameOriginRequest } from './services/collab/httpOrigins.js';
 import { healthState } from './utils/health.js';
+import { buildCspDirectives } from './config/csp.js';
 
 const app = express();
 
@@ -26,10 +27,19 @@ app.set('trust proxy', 1);
 // Connect to MongoDB
 await connectDB();
 
-// Security middleware
+// Deployment shape is needed by both the CSP (local http vs HTTPS) and the
+// static-serving diagnostics below.
+const isRender = Boolean(process.env.RENDER);
+const isDev = env.NODE_ENV === 'development' && !isRender;
+
+// Security middleware. The CSP allow-list lives in `config/csp.ts` so the
+// required origins are unit-tested rather than buried here.
 app.use(
   helmet({
-    contentSecurityPolicy: false,
+    contentSecurityPolicy: {
+      useDefaults: false,
+      directives: buildCspDirectives(isDev),
+    },
     crossOriginEmbedderPolicy: false,
   })
 );
@@ -45,17 +55,22 @@ app.use(
 // slash. When the same service hosts the SPA (single-service deployments),
 // same-origin requests carry no Origin header and skip CORS entirely.
 app.use(
-  cors({
-    origin: (origin, callback) => {
-      if (!origin) return callback(null, true);
-      const cleanOrigin = origin.replace(/\/+$/, '');
-      if (isAllowedCorsOrigin(cleanOrigin)) return callback(null, true);
-      return callback(
-        new Error(`The CORS policy for this site does not allow access from Origin: ${origin}`),
-        false
-      );
-    },
-    credentials: true,
+  // An options delegate (rather than a bare origin function) is needed to know
+  // which host served the request: same-origin is always allowed, and the
+  // exact allow-list only governs real cross-origin calls.
+  cors((req, callback) => {
+    const request = req as Request;
+    const origin = String(request.headers.origin ?? '').replace(/\/+$/, '');
+    if (!origin) return callback(null, { origin: true, credentials: true });
+
+    const selfOrigin = `${request.protocol}://${request.get('host') ?? ''}`;
+    if (isSameOriginRequest(origin, selfOrigin) || isAllowedCorsOrigin(origin)) {
+      return callback(null, { origin: true, credentials: true });
+    }
+    return callback(
+      new Error(`The CORS policy for this site does not allow access from Origin: ${origin}`),
+      { origin: false }
+    );
   })
 );
 
@@ -95,9 +110,6 @@ const candidatePaths = [
 ];
 const frontendDist = candidatePaths.find((p) => fs.existsSync(path.join(p, 'index.html')));
 
-const isRender = Boolean(process.env.RENDER);
-const isDev = env.NODE_ENV === 'development' && !isRender;
-
 // Always serve static frontend bundle on Render and production if frontendDist exists
 const shouldServeStatic = Boolean(
   frontendDist && (isRender || !isDev || env.SERVE_STATIC === 'true' || env.SERVE_STATIC !== 'false')
@@ -123,12 +135,13 @@ app.get('/api/health', (_req, res) => {
     },
     staticServing: {
       enabled: Boolean(shouldServeStatic && frontendDist),
-      resolvedPath: frontendDist || 'NOT_FOUND',
       envServeStatic: env.SERVE_STATIC ?? 'unset',
-      // Absolute paths are deployment diagnostics, not public API. Keep the
-      // production response to what a monitor or SPA actually needs.
+      // Absolute paths are deployment diagnostics, not public API. Production
+      // monitors only need to know *whether* the bundle is served; the where
+      // stays local to the process (and to development logs).
       ...(isDev
         ? {
+            resolvedPath: frontendDist || 'NOT_FOUND',
             cwd: process.cwd(),
             dirname: __dirname,
             candidatePaths: candidatePaths.map((p) => ({
@@ -144,7 +157,7 @@ app.get('/api/health', (_req, res) => {
       // a deploy when avatars or receipts seem to disappear.
       durable: cloudinary,
       folder: process.env.CLOUDINARY_FOLDER || 'travelai/receipts',
-      localUploadsDir: uploadsDir,
+      ...(isDev ? { localUploadsDir: uploadsDir } : {}),
     },
     memory: process.memoryUsage(),
   });

@@ -366,6 +366,7 @@ GROQ_API_KEY=gsk_...your_groq_api_key_here
 FRONTEND_URL=http://localhost:8080
 # Optional: extra exact origins beyond FRONTEND_URL
 ALLOWED_EXTRA_ORIGINS=
+# Same-origin requests (SERVE_STATIC=true) are always allowed and need no entry.
 
 # Collaboration (Milestone 6, sprint E2)
 TRIP_MAX_MEMBERS=25            # hard cap on members per trip (incl. the owner)
@@ -625,7 +626,7 @@ It backfills legacy trips with their owner `members[]` row and `rev` for Milesto
 - **No Secret Leaks**: Strict `.gitignore` configurations ensure zero `.env` or sensitive credentials enter git history.
 - **HTTP-Only Cookies**: Authentication tokens are stored in `httpOnly`, `secure`, `sameSite: none` cookies to mitigate XSS attacks.
 - **Input Validation**: All incoming API payloads are parsed and validated with strict [Zod](https://zod.dev/) schemas before processing.
-- **Security Headers & Rate Limiting**: Enabled via `helmet` and `express-rate-limit` to prevent brute-force abuse on auth and AI endpoints.
+- **Security Headers & Rate Limiting**: `helmet` sends a Content-Security-Policy allow-list (self-only scripts, explicit map/Cloudinary/Unsplash image origins, same-origin API plus Nominatim) and `express-rate-limit` brakes auth, generation, day rebuilds and collaboration writes. `/api/auth/me` returns a narrow profile projection, never the user document.
 - **Untrusted Uploads**: Receipt uploads are size-capped (`MAX_UPLOAD_MB`), MIME-allow-listed, **magic-byte verified** (a renamed executable is rejected), stored under server-generated filenames, and served with `X-Content-Type-Options: nosniff`. Deleting an expense or its receipt removes the stored file.
 
 ---
