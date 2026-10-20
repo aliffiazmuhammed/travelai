@@ -17,6 +17,7 @@ import {
 import { toast } from "sonner";
 import {
   Bot,
+  ChevronDown,
   Loader2,
   MessageCircle,
   Pencil,
@@ -924,8 +925,22 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
     >
       {isChat ? (
         <>
-          {/* Chat scroll area — decisions pinned at the very top (history),
-              then older pages, then the tail. Auto-scroll holds the bottom. */}
+          {/* F10h: pinned decisions sit ABOVE the scroll area, not inside it.
+              The chat opens at the bottom, so a strip at the top of the
+              transcript was invisible until you scrolled all the way back. */}
+          <DecisionsStrip
+            variant="band"
+            decisions={decisions.map((row) =>
+              cryptoApi.isEncrypted(row) ? { ...row, body: bodyOf(row) } : row
+            )}
+            myRole={myRole}
+            busyId={busyDecisionId}
+            onUnmark={(row) => void unmarkDecision(row)}
+          />
+
+          {/* Chat scroll area — older pages, then the tail. Auto-scroll holds
+              the bottom; the mounted transcript starts with the encryption
+              line, which belongs to the conversation, not to the pins. */}
           <div
             ref={chatScrollRef}
             onScroll={handleChatScroll}
@@ -938,14 +953,6 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
                 Messages are end-to-end encrypted.
               </div>
             ) : null}
-            <DecisionsStrip
-              decisions={decisions.map((row) =>
-                cryptoApi.isEncrypted(row) ? { ...row, body: bodyOf(row) } : row
-              )}
-              myRole={myRole}
-              busyId={busyDecisionId}
-              onUnmark={(row) => void unmarkDecision(row)}
-            />
             {loadEarlierButton}
             {streamBody}
           </div>
@@ -1129,11 +1136,73 @@ interface DecisionsStripProps {
   myRole: TripRole;
   busyId: string | null;
   onUnmark: (row: TripDecision) => void;
+  /**
+   * "inline" (feed) renders the strip in place; "band" is the chat's pinned
+   * bar ABOVE the scroll area — collapsed to the newest decision plus a count,
+   * expandable. The chat opens at the bottom, so a strip at the top of the
+   * transcript meant scrolling the whole conversation back just to see what
+   * was pinned.
+   */
+  variant?: "inline" | "band";
 }
 
-/** The pinned strip above the stream; hidden entirely when nothing is pinned. */
-const DecisionsStrip: React.FC<DecisionsStripProps> = ({ decisions, myRole, busyId, onUnmark }) => {
+const DecisionsStrip: React.FC<DecisionsStripProps> = ({
+  decisions,
+  myRole,
+  busyId,
+  onUnmark,
+  variant = "inline",
+}) => {
+  const [expanded, setExpanded] = useState(false);
   if (decisions.length === 0) return null;
+
+  if (variant === "band") {
+    const latest = decisions[0];
+    return (
+      <div className="shrink-0 rounded-xl border border-primary/25 bg-primary/5">
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          aria-expanded={expanded}
+          aria-label={expanded ? "Hide pinned decisions" : "Show pinned decisions"}
+          className="flex w-full items-center gap-1.5 px-3 py-2 text-left"
+        >
+          <Pin className="w-3.5 h-3.5 text-primary shrink-0" />
+          <span className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground shrink-0">
+            Decisions
+          </span>
+          <Badge variant="outline" className="shrink-0 text-[10px]">
+            {decisions.length}
+          </Badge>
+          {!expanded && (
+            <span className="min-w-0 flex-1 truncate text-xs text-foreground/80">
+              {latest.body}
+            </span>
+          )}
+          <ChevronDown
+            className={cn(
+              "w-3.5 h-3.5 shrink-0 ml-auto text-muted-foreground transition-transform",
+              expanded && "rotate-180"
+            )}
+          />
+        </button>
+        {expanded && (
+          <div className="max-h-[38vh] space-y-1.5 overflow-y-auto px-2 pb-2">
+            {decisions.map((row) => (
+              <DecisionCard
+                key={row._id}
+                row={row}
+                canUnmark={row.isYou || myRole === "owner"}
+                isBusy={busyId === row._id}
+                onUnmark={() => onUnmark(row)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-1.5">
       <div className="flex items-center gap-1.5">

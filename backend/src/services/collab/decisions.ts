@@ -2,6 +2,7 @@ import { Types } from 'mongoose';
 import { AppError } from '../../utils/AppError.js';
 import { env } from '../../config/env.js';
 import TripDecision from '../../models/TripDecision.js';
+import TripComment from '../../models/TripComment.js';
 import User from '../../models/User.js';
 import { isObjectId, emailLabel } from './comments.js';
 import { emitDecisionEvent } from './presence.js';
@@ -110,6 +111,28 @@ export function decisionBodyFrom(commentBody: unknown, e2ee?: boolean): string {
     .slice(0, cap);
 }
 
+/**
+ * The client's ciphertext wire format: `<b64 12-byte iv>.<b64 ct>`. The iv is
+ * always 16 base64 chars (12 bytes, no padding), which makes the shape a very
+ * strong signal — used only to repair rows that predate the stored flag.
+ */
+const ENCRYPTED_BODY = /^[A-Za-z0-9+/]{16}\.[A-Za-z0-9+/]+={0,2}$/;
+
+/**
+ * F10h: did a decision written BEFORE the flag existed carry ciphertext?
+ *
+ * Both signals must agree — the source comment is flagged e2ee AND the
+ * snapshot is shaped exactly like the client's wire format. A plaintext remark
+ * can contain a dot ("meet at 9.30"), so the body alone is never trusted; and
+ * the comment's flag alone is not enough either, because a remark edited from
+ * plaintext to ciphertext after promotion leaves an honest plaintext snapshot.
+ * Result: the repair can only ever ADD the flag where it is true, never hide a
+ * readable body.
+ */
+export function inferDecisionE2ee(body: unknown, sourceE2ee: unknown): boolean {
+  return Boolean(sourceE2ee) && ENCRYPTED_BODY.test(String(body || ''));
+}
+
 /** Shapes one row for the client — mirrors `projectComment`'s rules. */
 export function projectDecision(
   row: any,
@@ -151,6 +174,43 @@ async function labelsFor(userIds: string[]): Promise<Map<string, string>> {
 }
 
 /**
+ * F10h: backfills `e2ee` on rows written before the decision document stored
+ * it. Runs on the (bounded, capped) decision list and is idempotent: only rows
+ * with NO flag are considered, and the pair of signals in `inferDecisionE2ee`
+ * must agree. Rows that stay un-flagged are known plaintext snapshots — they
+ * keep rendering as text, which is why the schema leaves the field undefined
+ * instead of defaulting to false.
+ *
+ * A GET may write here by design: the alternative is a migration script the
+ * operator has to remember, and the affected users see base64 until it runs.
+ */
+async function repairDecisionFlags(rows: any[]): Promise<void> {
+  const stale = rows.filter((row) => row.e2ee === undefined || row.e2ee === null);
+  if (stale.length === 0) return;
+
+  const comments = await TripComment.find({ _id: { $in: stale.map((row) => row.commentId) } })
+    .select('_id e2ee')
+    .lean();
+  const sourceFlags = new Map(
+    (comments as Array<{ _id: unknown; e2ee?: boolean }>).map((comment) => [
+      String(comment._id),
+      comment.e2ee,
+    ])
+  );
+
+  const repairs: unknown[] = [];
+  for (const row of stale) {
+    if (inferDecisionE2ee(row.body, sourceFlags.get(String(row.commentId)))) {
+      row.e2ee = true; // the projection below reads the repaired value
+      repairs.push(row._id);
+    }
+  }
+  if (repairs.length > 0) {
+    await TripDecision.updateMany({ _id: { $in: repairs } }, { $set: { e2ee: true } });
+  }
+}
+
+/**
  * Every active decision of the trip, newest first. The collection is bounded
  * by DECISION_MAX_PER_TRIP, so a full fetch is cheap by construction.
  */
@@ -161,6 +221,8 @@ export async function listTripDecisions(tripId: string, viewerId: string): Promi
   })
     .sort({ createdAt: -1, _id: -1 })
     .lean();
+
+  await repairDecisionFlags(rows);
 
   const authorLabels = await labelsFor(rows.map((row) => String(row.userId)));
   const promoterLabels = await labelsFor(rows.map((row) => String(row.createdBy)));
@@ -210,6 +272,7 @@ export async function promoteToDecision(
       userId: comment.userId,
       createdBy: new Types.ObjectId(promoterId),
       body,
+      e2ee: Boolean(comment.e2ee),
       ...(comment.day !== undefined && comment.day !== null ? { day: comment.day } : {}),
     });
   } catch (error: any) {

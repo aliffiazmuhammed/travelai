@@ -25,6 +25,17 @@ export interface ITripDecision extends Document {
   createdBy: Types.ObjectId;
   /** Snapshot of the comment body at promotion time. */
   body: string;
+  /**
+   * F10h: true → the snapshot is end-to-end ciphertext (`<b64 iv>.<b64 ct>`),
+   * exactly like the source comment's flag. Copied at promotion time because
+   * the client must not render the snapshot as text; before this field existed
+   * mongoose's strict mode dropped the flag silently and every encrypted pin
+   * showed as a wall of base64.
+   *
+   * Absent on rows written before F10h — deliberately NOT defaulted to `false`,
+   * so the read path can tell "known plaintext" apart from "not recorded".
+   */
+  e2ee?: boolean;
   /** Optional day anchor inherited from the comment (bounds trip context). */
   day?: number;
   /** Tombstone (unmark) — soft, like comments, for the audit trail. */
@@ -40,6 +51,7 @@ const tripDecisionSchema = new Schema<ITripDecision>(
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     body: { type: String, required: true, trim: true },
+    e2ee: { type: Boolean, default: undefined },
     day: { type: Number, default: undefined },
     deletedAt: { type: Date, default: undefined },
   },

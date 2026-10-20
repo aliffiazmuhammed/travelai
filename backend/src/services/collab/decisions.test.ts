@@ -6,9 +6,11 @@ import {
   assertDecisionPromotion,
   assertDecisionRemoval,
   decisionBodyFrom,
+  inferDecisionE2ee,
   projectDecision,
 } from './decisions.js';
 import { AppError } from '../../utils/AppError.js';
+import TripDecision from '../../models/TripDecision.js';
 
 /**
  * Pure-rule tests for decisions (F9). The snapshot semantics, the promoter
@@ -127,4 +129,50 @@ test('projectDecision: a tombstone keeps its slot but loses the body', () => {
   assert.equal(projected.body, '');
   assert.ok(projected.deletedAt);
   assert.ok(!('day' in projected));
+});
+
+test('projectDecision: an encrypted snapshot keeps its flag; a tombstone does not', () => {
+  const promoter = new Types.ObjectId().toString();
+  const row = {
+    _id: new Types.ObjectId(),
+    tripId: new Types.ObjectId(),
+    commentId: new Types.ObjectId(),
+    createdBy: promoter,
+    body: 'AAAAAAAAAAAAAAAA.AAAAAAAAAAAAAAAA',
+    e2ee: true,
+    createdAt: new Date(),
+  };
+  assert.equal((projectDecision(row, promoter, 'a', 'b') as any).e2ee, true);
+  assert.equal(
+    (projectDecision({ ...row, deletedAt: new Date() }, promoter, 'a', 'b') as any).e2ee,
+    undefined
+  );
+});
+
+test('inferDecisionE2ee: both signals must agree before an old row is re-labelled', () => {
+  const ciphertext = 'AAAAAAAAAAAAAAAA.AAAAAAAAAAAAAAAA';
+  // The pair the repair is for: an encrypted comment promoted before the flag existed.
+  assert.equal(inferDecisionE2ee(ciphertext, true), true);
+  // A plaintext remark may contain a dot — the body alone never decides.
+  assert.equal(inferDecisionE2ee('meet at 9.30', true), false);
+  assert.equal(inferDecisionE2ee(ciphertext, false), false);
+  assert.equal(inferDecisionE2ee(ciphertext, undefined), false);
+  assert.equal(inferDecisionE2ee('', true), false);
+  // The empty ciphertext is not a shape the client ever writes.
+  assert.equal(inferDecisionE2ee('AAAAAAAAAAAAAAAA.', true), false);
+});
+
+test('TripDecision schema persists the e2ee flag (strict mode must not drop it)', () => {
+  const base = {
+    tripId: new Types.ObjectId(),
+    commentId: new Types.ObjectId(),
+    userId: new Types.ObjectId(),
+    createdBy: new Types.ObjectId(),
+  };
+  const encrypted = new TripDecision({ ...base, body: 'AAAAAAAAAAAAAAAA.AAAAAAAAAAAAAAAA', e2ee: true });
+  assert.equal((encrypted.toObject() as any).e2ee, true);
+
+  // Legacy/plaintext shape: absent, not false — the repair scan keys on this.
+  const plain = new TripDecision({ ...base, body: 'take the morning train' });
+  assert.ok(!('e2ee' in (plain.toObject() as any)));
 });

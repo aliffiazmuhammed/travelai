@@ -317,3 +317,31 @@ Both were already true for anyone who never copied a code; the difference is tha
 
 **Verified:** frontend `tsc -p tsconfig.app.json` + `vite build` clean; SPA mirror refreshed; no `TAI1`, `KeyRound`, `Dialog` (drawer), `exportBackupCode` or `importBackupCode` reference remains in `frontend/src` (backend is untouched by this call — it never saw the code).
 
+### 12.15 F10h — pinned decisions: readable, and visible without scrolling (user-reported, 2026-10-20)
+
+Two reports, one release: *"when i pin it i see encrypted text"* and *"the pinned chat i have to scroll all to the chat starting to visible"*.
+
+**Defect 1 — every encrypted pin rendered as raw base64.** The decision document never stored the comment's `e2ee` flag:
+
+- `models/TripDecision.ts` had no `e2ee` field at all, so `promoteToDecision` could not persist one — and mongoose's strict mode would have dropped it silently even if it had. The projection's `if (!deleted && row.e2ee)` was therefore never true.
+- The client's `isEncrypted(row)` reads that flag, so it treated the snapshot as plaintext and printed `<iv>.<ct>` verbatim. The *decryption* pass was fine all along; it was never asked to run (`syncRows` skips rows without the flag).
+
+Fixed at both layers:
+
+- **Write path:** `e2ee: Boolean(comment.e2ee)` is stored on create; the schema now has the field. Deliberately `default: undefined` — *absent* means "not recorded" (legacy) while `false` means "known plaintext", which is what the repair below keys on.
+- **Existing rows:** `listTripDecisions` repairs them on read (`repairDecisionFlags`), because the alternative is a migration the operator has to remember while users keep staring at base64. The repair is conservative — `inferDecisionE2ee(body, sourceE2ee)` requires **both** signals: the source comment is flagged e2ee *and* the snapshot matches the client's wire shape exactly (`16 base64 chars` = the 12-byte IV, `.`, base64 ciphertext). A plaintext remark can contain a dot ("meet at 9.30"), and a remark edited from plaintext to ciphertext after promotion leaves an honest plaintext snapshot — so neither signal alone is trusted. The repair can only ever *add* the flag, never hide a readable body, and it is written back (idempotent).
+- The snapshot body is untouched: it is still the exact ciphertext of the promotion-time comment, which the conversation key opens.
+
+**Defect 2 — the pinned strip was only reachable by scrolling to the top.** In the chat variant the strip lived *inside* the scroll container, before every message; the chat opens auto-scrolled to the bottom, so the pins were off-screen by definition.
+
+Fixed with a `variant` on `DecisionsStrip`:
+
+- `"inline"` — unchanged, used by the feed/dashboard card.
+- `"band"` — the chat renders it **above** the scroll area (`shrink-0`): `Pin · DECISIONS · <count> · <newest body, one truncated line> · chevron`. Collapsed by default (one line, never eats the viewport), tap to expand into the full cards with unmark, capped at `38vh` with its own scroll. A pin made while the band is collapsed is still visible immediately — it becomes the preview line.
+
+**Tests:** `decisions.test.ts` +3 — the flag survives projection but not a tombstone; `inferDecisionE2ee` requires both signals (and rejects a dot-only / empty shape); `new TripDecision({…e2ee:true}).toObject()` keeps the flag while a plain document has *no* key (the strict-mode trap, asserted directly). `smoke-f9.mts` +8 live checks — an encrypted remark pins with `e2ee` stored and returned, a re-read keeps it, a legacy row inserted through the raw collection (no flag) is repaired on read **and written back**, and a legacy *plaintext* row stays unflagged in the database.
+
+**Verified:** backend `tsc --noEmit` clean, suite **285/285**; live `smoke-f9` **29/29 ALL PASS** (SSE frame included); frontend typecheck + build clean; SPA mirror refreshed.
+
+**Not fixed / unchanged by design:** decisions are still a snapshot — editing the source comment after pinning does not change the card (that *is* the record), and unmarking a decision still leaves the source comment in the thread.
+

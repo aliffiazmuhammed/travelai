@@ -275,6 +275,94 @@ async function main() {
   });
   check('unmarking an already-tombstoned decision is a 404', reUnmark.status === 404, reUnmark.status);
 
+  /* ------------------- F10h: encrypted snapshots keep e2ee ----------------- */
+  const CIPHERTEXT = 'AAAAAAAAAAAAAAAA.AAAAAAAAAAAAAAAA'; // 12-byte iv . ct, the client's wire shape
+  const encryptedRemark = await api('POST', `/itinerary/${tripId}/comments`, {
+    email: AUTHOR_EMAIL,
+    body: { body: CIPHERTEXT, e2ee: true },
+  });
+  check('author posted an encrypted remark', encryptedRemark.status === 201, encryptedRemark.body);
+  check(
+    'the comment echoes its e2ee flag',
+    encryptedRemark.body?.comment?.e2ee === true,
+    encryptedRemark.body?.comment
+  );
+  const encryptedCommentId = String(encryptedRemark.body?.comment?._id);
+
+  const encryptedPromote = await api(
+    'POST',
+    `/itinerary/${tripId}/comments/${encryptedCommentId}/decision`,
+    { email: AUTHOR_EMAIL }
+  );
+  check('an encrypted remark can be pinned (201)', encryptedPromote.status === 201, encryptedPromote.body);
+  check(
+    'the snapshot STORES the e2ee flag (the client is not left rendering base64)',
+    encryptedPromote.body?.decision?.e2ee === true &&
+      encryptedPromote.body?.decision?.body === CIPHERTEXT,
+    encryptedPromote.body?.decision
+  );
+
+  const encryptedList = await api('GET', `/itinerary/${tripId}/decisions`, { email: OWNER_EMAIL });
+  const encryptedRow = (encryptedList.body?.decisions as any[] | undefined)?.find(
+    (row) => row.commentId === encryptedCommentId
+  );
+  check('the flag survives a re-read (persisted, not derived)', encryptedRow?.e2ee === true, encryptedRow);
+
+  /* ------------- F10h: rows written before the flag are repaired ----------- */
+  const legacyCipher = 'BBBBBBBBBBBBBBBB.BBBBBBBBBBBBBBBB';
+  const legacyEncComment = await api('POST', `/itinerary/${tripId}/comments`, {
+    email: AUTHOR_EMAIL,
+    body: { body: legacyCipher, e2ee: true },
+  });
+  const legacyPlainComment = await api('POST', `/itinerary/${tripId}/comments`, {
+    email: AUTHOR_EMAIL,
+    body: { body: 'Legacy plaintext pin' },
+  });
+
+  // Insert straight through the collection: a pre-F10h document has NO e2ee
+  // field, which the model cannot produce any more (that was the defect).
+  await mongoose.connect(process.env.MONGODB_URI as string);
+  const legacyBase = {
+    tripId: trip._id,
+    userId: author._id,
+    createdBy: owner._id,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+  const legacyEncInsert = await TripDecision.collection.insertOne({
+    ...legacyBase,
+    commentId: new mongoose.Types.ObjectId(String(legacyEncComment.body?.comment?._id)),
+    body: legacyCipher,
+  });
+  const legacyPlainInsert = await TripDecision.collection.insertOne({
+    ...legacyBase,
+    commentId: new mongoose.Types.ObjectId(String(legacyPlainComment.body?.comment?._id)),
+    body: 'Legacy plaintext pin',
+  });
+  await mongoose.disconnect();
+
+  const repairedList = await api('GET', `/itinerary/${tripId}/decisions`, { email: OWNER_EMAIL });
+  const repairedRows = (repairedList.body?.decisions as any[] | undefined) || [];
+  const repairedEnc = repairedRows.find((row) => row._id === String(legacyEncInsert.insertedId));
+  const repairedPlain = repairedRows.find((row) => row._id === String(legacyPlainInsert.insertedId));
+  check('a legacy encrypted pin is repaired on read (e2ee true)', repairedEnc?.e2ee === true, repairedEnc);
+  check(
+    'a legacy PLAINTEXT pin is never re-labelled (conservative repair)',
+    Boolean(repairedPlain) && repairedPlain.e2ee === undefined,
+    repairedPlain
+  );
+
+  await mongoose.connect(process.env.MONGODB_URI as string);
+  const persistedEnc = await TripDecision.collection.findOne({ _id: legacyEncInsert.insertedId });
+  const persistedPlain = await TripDecision.collection.findOne({ _id: legacyPlainInsert.insertedId });
+  await mongoose.disconnect();
+  check('the repair is written back, not re-derived on every read', persistedEnc?.e2ee === true, persistedEnc);
+  check(
+    'the plaintext row stays unflagged in the database',
+    Boolean(persistedPlain) && !('e2ee' in (persistedPlain as any)),
+    persistedPlain
+  );
+
   /* -------------------------------- cleanup -------------------------------- */
   await mongoose.connect(process.env.MONGODB_URI as string);
   await TripDecision.deleteMany({ tripId: trip._id });
