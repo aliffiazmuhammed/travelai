@@ -2,6 +2,7 @@ import { AppError } from '../../utils/AppError.js';
 import { ROLE_RANK, can, type TripRole } from './access.js';
 import { emitTripUpdated } from './presence.js';
 import User from '../../models/User.js';
+import { userLabel } from './comments.js';
 import Trip from '../../models/Trip.js';
 import { Types } from 'mongoose';
 
@@ -19,6 +20,10 @@ export interface MemberRow {
   userId: string;
   role: TripRole;
   joinedAt: Date;
+  /** F14: display name (or email local part) — visible to every member. */
+  label: string;
+  /** F14: managed profile-photo URL, absent while the member keeps initials. */
+  avatarUrl?: string;
   /** Email — owner's view only (F6: member emails are owner-only). */
   email?: string;
   /** Convenience flag for the caller's own row. */
@@ -32,27 +37,34 @@ export async function projectMembers(
   viewerRole: TripRole
 ): Promise<MemberRow[]> {
   const memberList: Array<any> = trip.members || [];
-  const emails = new Map<string, string>();
+  const people = new Map<string, { label: string; avatarUrl?: string; email?: string }>();
 
-  if (viewerRole === 'owner' && memberList.length > 0) {
+  if (memberList.length > 0) {
+    // F14: names and photos are member-visible; the raw email stays owner-only.
     const users = await User.find({
       _id: { $in: memberList.map((m) => m.userId) },
     })
-      .select('_id email')
+      .select('_id email name avatarUrl')
       .lean();
     for (const user of users) {
-      emails.set(String(user._id), String(user.email));
+      people.set(String(user._id), {
+        label: userLabel(user),
+        ...(user.avatarUrl ? { avatarUrl: user.avatarUrl } : {}),
+        ...(viewerRole === 'owner' && user.email ? { email: String(user.email) } : {}),
+      });
     }
   }
 
   return memberList.map((member) => {
+    const person = people.get(String(member.userId));
     const row: MemberRow = {
       userId: String(member.userId),
       role: member.role,
       joinedAt: member.joinedAt,
+      label: person?.label || 'Traveler',
     };
-    const email = emails.get(String(member.userId));
-    if (email) row.email = email;
+    if (person?.avatarUrl) row.avatarUrl = person.avatarUrl;
+    if (person?.email) row.email = person.email;
     if (String(member.userId) === String(viewerId)) row.isYou = true;
     return row;
   });

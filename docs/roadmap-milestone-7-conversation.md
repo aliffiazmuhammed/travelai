@@ -382,3 +382,44 @@ The user asked *"what about the polling feature it is not visible on frontend"*.
 - **TravelAI cannot create polls** — the user chose member-created only, which keeps the F12d no-promises rule untouched.
 - **A known pre-existing nit, unchanged:** decision frames still carry the actor's `isYou` view, so a live-pinned card can briefly show its Unmark affordance to other members (the server still 403s). Polls avoid the class entirely by shipping ids; fixing decisions the same way is a separate change.
 
+
+### 12.17 F14 — profile editing: names, photos and a password that can change (user-requested, 2026-10-20)
+
+The ask was *"user info editing feature including password reset name profile pic etc"*. Three gaps, one increment:
+
+- **No display name existed.** Every label in the product (chat, decisions, polls, presence, members) was `emailLabel(email)` — the local part of the address. A person's email therefore leaked a little into every surface, and there was no way to be "Ada" instead of "ada".
+- **No profile photo existed.** Avatars were always initials from those labels.
+- **No password change existed.** `auth.service` could hash at signup and compare at signin, nothing else.
+
+The scope was confirmed with the user first: **change the password in the app** (no mail provider exists, so an emailed reset link would be a fiction), **upload a real photo**, **a dedicated `/profile` page**.
+
+**Display name (`User.name`, 1..40 chars).**
+
+- `userLabel(user)` (`services/collab/comments.ts`) is the single label rule: **the name wins, else the email local part, else "Traveler"** — so accounts that never set a name read exactly as before. It clamps at 40 characters because labels travel into SSE frames and every projection.
+- Threaded through one helper instead of scattering the rule: comments (`labelsFor`, create/edit/remove), decisions (list + promote + unmark), polls (labels for creators/voters), chat-key member rows, typing pings, presence heartbeats and the members list now all select `email name` and call `userLabel`.
+- **Labels are projected per request, not baked into rows.** A rename therefore updates the whole history on the next fetch, with no backfill. Frames already in flight keep the label they were projected with — a cosmetic detail, not a correctness one.
+- **The email is unchanged and still owner-only** in the members list; the name and photo are member-visible, because that is what a profile is for.
+
+**Profile photo (`User.avatarUrl`).**
+
+- `services/user/avatar.ts` reuses the receipt storage contract (Cloudinary when configured, `uploads/` otherwise) with narrower walls: **JPEG/PNG/WebP only**, **2 MB** (`AVATAR_MAX_MB`), magic-byte sniffing via the existing `sniffMime`, and a generated filename. No PDF path at all.
+- Cloudinary gets a square **400px face crop** on upload (`w_400,h_400,c_fill,g_face`) and a public id derived from the account, so a replacement overwrites rather than orphaning the old one. The local fallback writes `avatar-<account>-<random>.<ext>` under `/uploads`.
+- Only URLs this server wrote are ever stored (schema wall in the service). The client additionally only renders `/uploads/avatar-*` or `res.cloudinary.com` URLs (`lib/avatar.ts`), so a tampered response cannot turn an avatar into a request to a third-party origin.
+- Replacing or removing a photo deletes the previous file best-effort; a failed cleanup never blocks the account write.
+
+**Where it shows up.** A new protected `/profile` page (lazy route, navbar chip + mobile sheet entry) with three independent forms: photo (change/remove, optimistic local preview), display name (save/clear), password (current + new + confirm). The navbar chip is now an avatar + display name linking to it; avatars render in incoming chat bubbles, the live roster stack (drawer and trip header), and the members list (which now shows the name, with the email beside it for the owner only).
+
+**Password change (`POST /api/auth/password`).** Current password re-checked with bcrypt, new one hashed at cost 12, same 6-character floor as signup, must differ from the current one. The session cookie is untouched, so this device stays signed in. A user-keyed limiter (10 attempts / 15 min) and an upload limiter (20 photos / hour) sit **after** `protect`, so they key on the account rather than a shared NAT. Profile routes are `protect`ed and CSRF-covered like every other write.
+
+**Tests:** `profile.test.ts` +15 — label precedence/trim/clamp/fallback, live-only avatar on the comment projection, name normalization and the 40-char wall, both zod schemas (including new-password ≠ current), the image allow-list, filename derivation, managed-URL parsing (rejects `../`, foreign hosts and receipt URLs), magic-byte acceptance/refusal, the size default and override, and the exact `publicUser` key set (never `password`, never chat keys). Suite **308/308**. `smoke-f14.mts` — **32 live checks**: auth walls, whitespace collapse, 41-char refusal, the name reaching another member's chat row and members list (email still owner-only), the effective label, a text file renamed `.png` and a PDF both refused with 400, a real PNG stored and carried to another member's comment and the members list, removal clearing the reference, wrong/short/reused password refusals, the change cycle (old password stops working, new one works), restore, and clearing the name back to the email local part.
+
+**Verified:** backend `tsc --noEmit` clean, suite **308/308**; live `smoke-f14` **32/32 ALL PASS** (Cloudinary storage active in this environment); frontend typecheck + build clean; SPA mirror refreshed.
+
+**Deliberately not in this increment / honest limits:**
+
+- **No emailed "forgot password".** There is no mail provider in this deployment; the flow offered is "change it while signed in". A locked-out user still has no self-service path, and adding one means a provider plus token storage, not a form.
+- **A password change does not revoke other sessions.** The JWT is stateless and `protect` deliberately does no database read, so a token issued before the change stays valid until it expires (7 days). Revoking everywhere needs a per-request version check (or a session store) — a real cost traded away here, and stated in the UI.
+- **The email is read-only.** It is the sign-in identity and there is no verification mail path; letting a typo change it would lock the account out silently. A verified email-change flow is a separate increment.
+- **No image cropping/rotation UI.** The server face-crops for the chat sizes; the user picks a file.
+- **Names are presentation only.** Authorization still uses `userId` everywhere; two members may share a name, and changing your name changes nothing about access.
+- **`/auth/me` still returns the user document** (minus password) rather than the narrow `publicUser` projection; signin/signup and the profile routes return `publicUser`. Tightening `/me` is harmless follow-up work, not a behaviour change users can see.

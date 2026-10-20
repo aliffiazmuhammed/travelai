@@ -5,6 +5,18 @@ export interface IUser extends Document {
   password: string;
   googleId?: string;
   /**
+   * Display name (Milestone 7, F14). Optional: a member who has never set one is
+   * shown by the email local part, exactly as before F14. Stored trimmed and
+   * length-capped by the schema layer; never an identity for authorization.
+   */
+  name?: string;
+  /**
+   * Profile photo URL (F14) — always a URL this server manages (Cloudinary CDN
+   * or `/uploads/avatar-*`), never a client-supplied foreign URL. Removed with
+   * the file behind it; see `services/user/avatar.ts`.
+   */
+  avatarUrl?: string;
+  /**
    * Chat identity public key (base64 SPKI, ECDH P-256) — Milestone 7, F10.
    * Published by the browser right after it mints the keypair; the matching
    * private key NEVER leaves the device (localStorage + a backup code). The
@@ -35,6 +47,16 @@ const userSchema = new Schema<IUser>(
       required: true,
     },
     googleId: {
+      type: String,
+    },
+    // F14 display name: optional, trimmed, 1..40 chars (validated downstream).
+    name: {
+      type: String,
+      trim: true,
+      maxlength: 40,
+    },
+    // F14 profile photo: a URL this server wrote (Cloudinary or local uploads).
+    avatarUrl: {
       type: String,
     },
     // Filled by PUT /api/auth/chat-key; validated there (base64, ≤512 chars).

@@ -3,7 +3,7 @@ import { AppError } from '../../utils/AppError.js';
 import { env } from '../../config/env.js';
 import TripPoll from '../../models/TripPoll.js';
 import User from '../../models/User.js';
-import { isObjectId, emailLabel } from './comments.js';
+import { isObjectId, userLabel } from './comments.js';
 import { emitPollEvent } from './presence.js';
 import type { TripRole } from './access.js';
 
@@ -183,9 +183,9 @@ async function labelsFor(userIds: string[]): Promise<Map<string, string>> {
   const labels = new Map<string, string>();
   const ids = [...new Set(userIds)].filter(isObjectId);
   if (ids.length === 0) return labels;
-  const users = await User.find({ _id: { $in: ids } }).select('_id email').lean();
-  for (const user of users as Array<{ _id: unknown; email?: string }>) {
-    labels.set(String(user._id), emailLabel(user.email));
+  const users = await User.find({ _id: { $in: ids } }).select('_id email name').lean();
+  for (const user of users as Array<{ _id: unknown; email?: string; name?: string }>) {
+    labels.set(String(user._id), userLabel(user));
   }
   return labels;
 }

@@ -421,7 +421,11 @@ export interface TripMember {
   userId: string;
   role: TripRole;
   joinedAt: string;
-  /** Email — populated for the owner's view only (F6). */
+  /** F14: display name (or email local part) — visible to every member. */
+  label?: string;
+  /** F14: managed profile-photo URL, absent while the member keeps initials. */
+  avatarUrl?: string;
+  /** Email - populated for the owner's view only (F6). */
   email?: string;
   /** True on the caller's own row. */
   isYou?: boolean;
@@ -489,6 +493,8 @@ export interface TripComment {
   _id: string;
   tripId: string;
   label: string;
+  /** F14: managed profile-photo URL of the author, absent while they keep initials. */
+  avatarUrl?: string;
   /** Empty string on a tombstone; `<b64 iv>.<b64 ct>` when `e2ee` (F10). */
   body: string;
   /**

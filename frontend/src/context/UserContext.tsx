@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { API_BASE_URL } from '../config';
 import { queryClient } from '../lib/queryClient';
+import { api } from '../services/api';
 
 import type { User, AuthContextType } from '@/types';
 
@@ -56,6 +57,44 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  /**
+   * F14: re-reads the session's own profile. Used after a profile edit so every
+   * `useAuth()` consumer (navbar chip, chat composer) sees the new name/photo
+   * without a reload.
+   */
+  const refreshUser = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+        credentials: 'include',
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setUser(data.user);
+      }
+    } catch (err) {
+      console.warn("Profile refresh inactive:", err);
+    }
+  };
+
+  const updateProfile = async (name: string) => {
+    const data = await api.updateProfile(name);
+    setUser(data.user);
+  };
+
+  const uploadAvatar = async (file: File) => {
+    const data = await api.uploadAvatar(file);
+    setUser(data.user);
+  };
+
+  const removeAvatar = async () => {
+    const data = await api.removeAvatar();
+    setUser(data.user);
+  };
+
+  const changePassword = async (currentPassword: string, newPassword: string) => {
+    await api.changePassword(currentPassword, newPassword);
   };
 
   const signup = async (email: string, password: string) => {
@@ -155,6 +194,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         signin,
         logout,
         clearError,
+        refreshUser,
+        updateProfile,
+        uploadAvatar,
+        removeAvatar,
+        changePassword,
       }}
     >
       {children}

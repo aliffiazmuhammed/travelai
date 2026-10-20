@@ -4,6 +4,7 @@ import User from '../models/User.js';
 import { env } from '../config/env.js';
 import { AppError } from '../utils/AppError.js';
 import { mergePubKeyList } from './collab/chatKeys.js';
+import { publicUser } from './user/profile.js';
 
 export const signup = async (email: string, password: string) => {
   const normalizedEmail = email.trim().toLowerCase();
@@ -18,7 +19,7 @@ export const signup = async (email: string, password: string) => {
 
   const token = jwt.sign({ userId: user._id }, env.JWT_SECRET, { expiresIn: '7d' });
 
-  return { user: { _id: user._id, email: user.email }, token };
+  return { user: publicUser(user), token };
 };
 
 export const signin = async (email: string, password: string) => {
@@ -35,7 +36,7 @@ export const signin = async (email: string, password: string) => {
 
   const token = jwt.sign({ userId: user._id }, env.JWT_SECRET, { expiresIn: '7d' });
 
-  return { user: { _id: user._id, email: user.email }, token };
+  return { user: publicUser(user), token };
 };
 
 export const getUserById = async (userId: string) => {

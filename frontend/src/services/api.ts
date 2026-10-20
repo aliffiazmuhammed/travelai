@@ -285,6 +285,38 @@ class ApiClient {
     });
   }
 
+  // Profile (Milestone 7, F14)
+  /** Saves the display name; an empty string clears it (email local part). */
+  async updateProfile(name: string): Promise<{ user: User }> {
+    return this.request('/api/auth/profile', {
+      method: 'PATCH',
+      body: JSON.stringify({ name }),
+    });
+  }
+
+  /** Uploads a JPEG/PNG/WebP photo (server sniffs the bytes and caps the size). */
+  async uploadAvatar(file: File): Promise<{ user: User }> {
+    const form = new FormData();
+    form.append('avatar', file);
+    return this.requestForm('/api/auth/avatar', form);
+  }
+
+  /** Removes the profile photo, falling back to initials. */
+  async removeAvatar(): Promise<{ user: User }> {
+    return this.request('/api/auth/avatar', { method: 'DELETE' });
+  }
+
+  /** Changes the password; the current one is re-checked server-side. */
+  async changePassword(
+    currentPassword: string,
+    newPassword: string
+  ): Promise<{ message: string }> {
+    return this.request('/api/auth/password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+  }
+
   // Trip endpoints
   async generateItinerary(input: TripInput): Promise<Trip> {
     return this.request('/api/itinerary/generate', {

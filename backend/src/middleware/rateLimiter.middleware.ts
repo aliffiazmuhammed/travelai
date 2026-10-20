@@ -136,6 +136,41 @@ export const typingPingLimiter = rateLimit({
 });
 
 /**
+ * F14 account security: a password change is a credential check, so it gets the
+ * same brake shape as sign-in but keyed on the account (a shared NAT must not
+ * lock everyone out). 10 tries / 15 min is generous for a human typing and
+ * useless for guessing.
+ */
+export const passwordChangeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  keyGenerator: userOrIpKey,
+  validate: false,
+  message: {
+    success: false,
+    error: 'Too many password attempts. Please try again in a few minutes.',
+    message: 'Too many password attempts. Please try again in a few minutes.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/** F14 avatar uploads: bounded storage churn (20 photos / hour / account). */
+export const avatarUploadLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+  keyGenerator: userOrIpKey,
+  validate: false,
+  message: {
+    success: false,
+    error: 'Too many photo uploads. Please try again in an hour.',
+    message: 'Too many photo uploads. Please try again in an hour.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
  * Public, unauthenticated endpoint — keyed on IP (F11, E5): the shared-trip
  * read needs an abuse brake because guessing share ids is exactly the model
  * of the attack. 120 reads / 15 min / IP comfortably covers a human opening

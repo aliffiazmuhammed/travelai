@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Textarea } from "@/components/ui/textarea";
 import {
   AlertDialog,
@@ -32,6 +32,7 @@ import {
 import { api } from "@/services/api";
 import { cn } from "@/lib/utils";
 import { relativeTime } from "@/lib/relativeTime";
+import { avatarSrc, initialsFor } from "@/lib/avatar";
 import type { TripComment, TripDecision, TripPoll, TripRole } from "@/types/trip";
 import type {
   AssistantProposal,
@@ -221,9 +222,6 @@ const OFFLINE_CRYPTO: ChatCryptoApi = {
   openJson: async () => null,
   retry: () => undefined,
 };
-
-const initialsFor = (label: string): string =>
-  (label || "T").trim().slice(0, 2).toUpperCase();
 
 /**
  * Chat-style timestamp (WhatsApp convention) — lives in `lib/relativeTime` so
@@ -1538,9 +1536,14 @@ const CommentRow: React.FC<CommentRowProps> = ({
               <Bot className="h-4 w-4" />
             </AvatarFallback>
           ) : (
-            <AvatarFallback className="text-[10px] font-bold bg-primary/10 text-primary">
-              {initialsFor(row.label)}
-            </AvatarFallback>
+            <>
+              {avatarSrc(row.avatarUrl) && (
+                <AvatarImage src={avatarSrc(row.avatarUrl)} alt={row.label} />
+              )}
+              <AvatarFallback className="text-[10px] font-bold bg-primary/10 text-primary">
+                {initialsFor(row.label)}
+              </AvatarFallback>
+            </>
           )}
         </Avatar>
       )}

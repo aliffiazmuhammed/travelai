@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Menu, Plane, Sun, Moon, Sparkles, User, LogOut } from "lucide-react";
+import { Menu, Plane, Sun, Moon, Sparkles, LogOut, UserCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/context/UserContext";
+import { avatarSrc, initialsFor } from "@/lib/avatar";
 import { cn } from "@/lib/utils";
 
 const Navbar = () => {
@@ -11,6 +13,10 @@ const Navbar = () => {
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const [isDark, setIsDark] = useState(false);
+
+  // F14: the chip shows the display name (or the email local part without one).
+  const displayName =
+    user?.name?.trim() || user?.label || user?.email?.split("@")[0] || "Traveler";
 
   // Synchronize Dark Mode on mount
   useEffect(() => {
@@ -115,10 +121,21 @@ const Navbar = () => {
             <div className="hidden md:flex items-center gap-2">
               {isAuthenticated ? (
                 <div className="flex items-center gap-2 pl-1">
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-muted/60 border border-border/60 text-xs font-semibold text-foreground/90 max-w-[180px] truncate">
-                    <User className="w-3.5 h-3.5 text-primary shrink-0" />
-                    <span className="truncate">{user?.email}</span>
-                  </div>
+                  <Link
+                    to="/profile"
+                    className="flex items-center gap-2 px-2 py-1.5 rounded-xl bg-muted/60 border border-border/60 text-xs font-semibold text-foreground/90 max-w-[200px] hover:bg-muted transition-colors"
+                    title="Your profile"
+                  >
+                    <Avatar className="h-7 w-7 shrink-0">
+                      {avatarSrc(user?.avatarUrl) && (
+                        <AvatarImage src={avatarSrc(user?.avatarUrl)} alt={displayName} />
+                      )}
+                      <AvatarFallback className="text-[10px] font-bold bg-primary/10 text-primary">
+                        {initialsFor(displayName)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="truncate">{displayName}</span>
+                  </Link>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -205,9 +222,29 @@ const Navbar = () => {
 
                   {isAuthenticated ? (
                     <div className="space-y-3">
-                      <div className="p-3 rounded-2xl bg-muted/50 text-xs font-semibold text-muted-foreground truncate">
-                        {user?.email}
-                      </div>
+                      <Link
+                        to="/profile"
+                        onClick={() => setIsOpen(false)}
+                        className="flex items-center gap-3 p-3 rounded-2xl bg-muted/50 hover:bg-muted transition-colors min-w-0"
+                      >
+                        <Avatar className="h-9 w-9 shrink-0">
+                          {avatarSrc(user?.avatarUrl) && (
+                            <AvatarImage src={avatarSrc(user?.avatarUrl)} alt={displayName} />
+                          )}
+                          <AvatarFallback className="text-[11px] font-bold bg-primary/10 text-primary">
+                            {initialsFor(displayName)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold text-foreground truncate">
+                            {displayName}
+                          </div>
+                          <div className="text-[10px] text-muted-foreground truncate">
+                            {user?.email}
+                          </div>
+                        </div>
+                        <UserCircle2 className="h-4 w-4 text-muted-foreground ml-auto shrink-0" />
+                      </Link>
                       <Button
                         variant="outline"
                         onClick={() => {

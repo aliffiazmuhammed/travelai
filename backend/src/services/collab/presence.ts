@@ -16,8 +16,10 @@ import { env } from '../../config/env.js';
 
 export interface PresenceEntry {
   userId: string;
-  /** Best-effort display label (email local part; no User.name exists yet). */
+  /** F14: display name, else the email local part. */
   label: string;
+  /** F14: managed profile-photo URL, absent while the member keeps initials. */
+  avatarUrl?: string;
   role: import('./access.js').TripRole;
   lastSeen: number;
 }

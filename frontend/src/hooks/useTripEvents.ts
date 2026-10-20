@@ -19,6 +19,8 @@ import type { TripRole } from '@/types/trip';
 export interface PresenceUser {
   userId: string;
   label: string;
+  /** F14: managed profile-photo URL, absent while the member keeps initials. */
+  avatarUrl?: string;
   role: TripRole;
 }
 

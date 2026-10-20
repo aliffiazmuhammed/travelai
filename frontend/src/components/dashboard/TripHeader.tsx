@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Calendar,
   Users,
@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { ShareExportModal } from "./ShareExportModal";
+import { avatarSrc } from "@/lib/avatar";
 import type { PresenceUser } from "@/hooks/useTripEvents";
 import type { ItineraryData } from "@/types/trip";
 
@@ -185,6 +186,9 @@ export const TripHeader: React.FC<TripHeaderProps> = ({
                 <div className="flex -space-x-2">
                   {others.slice(0, 4).map((person) => (
                     <Avatar key={person.userId} className="h-8 w-8 ring-2 ring-white/40 shadow-md">
+                      {avatarSrc(person.avatarUrl) && (
+                        <AvatarImage src={avatarSrc(person.avatarUrl)} alt={person.label} />
+                      )}
                       <AvatarFallback
                         className="bg-primary text-primary-foreground text-[10px] font-bold"
                         title={`${person.label} (${person.role}) is viewing this trip`}

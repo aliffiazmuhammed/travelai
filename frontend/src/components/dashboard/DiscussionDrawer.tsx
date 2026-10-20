@@ -7,9 +7,10 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { avatarSrc, initialsFor } from "@/lib/avatar";
 import { CommentsTab } from "./CommentsTab";
 import type { PresenceUser } from "@/hooks/useTripEvents";
 import type { UseTripComments } from "@/hooks/useTripComments";
@@ -53,9 +54,6 @@ interface DiscussionDrawerProps {
   /** F13a: the caller's id, so poll votes can be recognised as "mine". */
   currentUserId?: string;
 }
-
-const initialsFor = (label: string): string =>
-  (label || "T").trim().slice(0, 2).toUpperCase();
 
 export const DiscussionDrawer: React.FC<DiscussionDrawerProps> = ({
   tripId,
@@ -155,6 +153,9 @@ export const DiscussionDrawer: React.FC<DiscussionDrawerProps> = ({
                 >
                   {roster.map((entry) => (
                     <Avatar key={entry.userId} className="h-6 w-6 ring-2 ring-background">
+                      {avatarSrc(entry.avatarUrl) && (
+                        <AvatarImage src={avatarSrc(entry.avatarUrl)} alt={entry.label} />
+                      )}
                       <AvatarFallback className="text-[8px] font-bold bg-primary/10 text-primary">
                         {initialsFor(entry.label)}
                       </AvatarFallback>

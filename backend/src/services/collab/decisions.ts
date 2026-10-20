@@ -4,7 +4,7 @@ import { env } from '../../config/env.js';
 import TripDecision from '../../models/TripDecision.js';
 import TripComment from '../../models/TripComment.js';
 import User from '../../models/User.js';
-import { isObjectId, emailLabel } from './comments.js';
+import { isObjectId, userLabel } from './comments.js';
 import { emitDecisionEvent } from './presence.js';
 import type { TripRole } from './access.js';
 
@@ -166,9 +166,9 @@ async function labelsFor(userIds: string[]): Promise<Map<string, string>> {
   const labels = new Map<string, string>();
   const ids = [...new Set(userIds)].filter(isObjectId);
   if (ids.length === 0) return labels;
-  const users = await User.find({ _id: { $in: ids } }).select('_id email').lean();
-  for (const user of users as Array<{ _id: unknown; email?: string }>) {
-    labels.set(String(user._id), emailLabel(user.email));
+  const users = await User.find({ _id: { $in: ids } }).select('_id email name').lean();
+  for (const user of users as Array<{ _id: unknown; email?: string; name?: string }>) {
+    labels.set(String(user._id), userLabel(user));
   }
   return labels;
 }
@@ -283,14 +283,14 @@ export async function promoteToDecision(
   }
 
   const [author, promoter] = await Promise.all([
-    User.findOne({ _id: comment.userId }).select('email'),
-    User.findOne({ _id: promoterId }).select('email'),
+    User.findOne({ _id: comment.userId }).select('email name'),
+    User.findOne({ _id: promoterId }).select('email name'),
   ]);
   const decision = projectDecision(
     created,
     promoterId,
-    emailLabel(author?.email),
-    emailLabel(promoter?.email)
+    userLabel(author),
+    userLabel(promoter)
   );
 
   emitDecisionEvent(tripId, { type: 'decision:new', decision });
@@ -327,14 +327,14 @@ export async function removeTripDecision(
   await row.save();
 
   const [author, promoter] = await Promise.all([
-    User.findOne({ _id: row.userId }).select('email'),
-    User.findOne({ _id: row.createdBy }).select('email'),
+    User.findOne({ _id: row.userId }).select('email name'),
+    User.findOne({ _id: row.createdBy }).select('email name'),
   ]);
   const decision = projectDecision(
     row,
     userId,
-    emailLabel(author?.email),
-    emailLabel(promoter?.email)
+    userLabel(author),
+    userLabel(promoter)
   );
 
   emitDecisionEvent(tripId, { type: 'decision:update', decision });

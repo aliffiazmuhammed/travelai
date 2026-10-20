@@ -37,6 +37,7 @@ import {
   listTripComments,
   loadTripComment,
   removeTripComment,
+  userLabel,
 } from '../services/collab/comments.js';
 import { markTripRead, resolveReadState } from '../services/collab/discussion.js';
 import {
@@ -323,10 +324,10 @@ export const markDiscussionRead = catchAsync(
 export const sendTypingPing = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const { trip } = tripContext(req);
-    const user = await User.findOne({ _id: req.userId }).select('email');
+    const user = await User.findOne({ _id: req.userId }).select('email name');
     emitTypingFrame(String((trip as any)._id), {
       userId: String(req.userId),
-      label: (user?.email || String(req.userId)).split('@')[0] || 'Traveler',
+      label: userLabel(user),
     });
     res.status(204).end();
   }
@@ -591,7 +592,7 @@ export const subscribeTripEvents = async (req: AuthenticatedRequest, res: Respon
   const { trip, role } = tripContext(req);
   const tripId = String((trip as any)._id);
   const userId = String(req.userId);
-  const user = await User.findOne({ _id: userId }).select('email');
+  const user = await User.findOne({ _id: userId }).select('email name avatarUrl');
 
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
@@ -616,7 +617,8 @@ export const subscribeTripEvents = async (req: AuthenticatedRequest, res: Respon
   // Initial presence snapshot so avatars appear immediately.
   heartbeat(tripId, {
     userId,
-    label: (user?.email || userId).split('@')[0] || 'Traveler',
+    label: userLabel(user),
+    ...(user?.avatarUrl ? { avatarUrl: user.avatarUrl } : {}),
     role,
   });
   const announce = () => broadcastPresence(tripId);
@@ -640,10 +642,11 @@ export const subscribeTripEvents = async (req: AuthenticatedRequest, res: Respon
 export const sendPresenceHeartbeat = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const { trip, role } = tripContext(req);
-    const user = await User.findOne({ _id: req.userId }).select('email');
+    const user = await User.findOne({ _id: req.userId }).select('email name avatarUrl');
     heartbeat(String((trip as any)._id), {
       userId: String(req.userId),
-      label: (user?.email || String(req.userId)).split('@')[0] || 'Traveler',
+      label: userLabel(user),
+      ...(user?.avatarUrl ? { avatarUrl: user.avatarUrl } : {}),
       role,
     });
     broadcastPresence(String((trip as any)._id));

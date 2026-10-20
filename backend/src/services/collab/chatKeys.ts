@@ -2,7 +2,7 @@ import { Types } from 'mongoose';
 import { AppError } from '../../utils/AppError.js';
 import TripChatKey from '../../models/TripChatKey.js';
 import User from '../../models/User.js';
-import { isObjectId, emailLabel } from './comments.js';
+import { isObjectId, userLabel } from './comments.js';
 
 /**
  * End-to-end chat keys (Milestone 7, F10) — the blind-carrier key service.
@@ -241,6 +241,7 @@ export function projectKeyState(
   memberRows: Array<{
     _id: unknown;
     email?: string;
+    name?: string;
     chatPubKey?: string | null;
     chatPubKeys?: string[] | null;
   }>,
@@ -262,7 +263,7 @@ export function projectKeyState(
       });
       const member: ChatKeyState['members'][number] = {
         userId,
-        label: emailLabel(row.email),
+        label: userLabel(row),
         pubKeys,
         envelopedPubKeys,
         slots,
@@ -344,7 +345,7 @@ export async function getTripChatKeyState(
     loadCurrentDoc(tripId),
     memberIds.length
       ? User.find({ _id: { $in: memberIds.map((id: string) => new Types.ObjectId(id)) } })
-          .select('_id email chatPubKey chatPubKeys')
+          .select('_id email name chatPubKey chatPubKeys')
           .lean()
       : Promise.resolve([]),
   ]);

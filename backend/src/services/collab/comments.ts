@@ -26,8 +26,10 @@ import type { TripRole } from './access.js';
 export interface CommentRow {
   _id: string;
   tripId: string;
-  /** Display label (email local-part, the E2 pattern). */
+  /** Display label — the F14 display name, else the email local-part. */
   label: string;
+  /** F14: managed profile-photo URL, absent while the member keeps initials. */
+  avatarUrl?: string;
   /** Empty string on a tombstone; base64 `iv.ct` ciphertext when `e2ee` (F10). */
   body: string;
   /** F10: true → `body` is end-to-end ciphertext only members can decrypt. */
@@ -62,6 +64,24 @@ export function isObjectId(value: unknown): boolean {
 export function emailLabel(email?: string | null): string {
   const local = String(email || '').split('@')[0]?.trim();
   return local || 'Traveler';
+}
+
+/**
+ * F14: the label every member-facing surface shows for a person.
+ *
+ * A display name wins; without one the pre-F14 rule (the email local part)
+ * still applies, so existing accounts read exactly as they did before. The
+ * label is clamped here because it travels into chat frames, decision cards and
+ * poll rows — no projection should be able to emit an unbounded string.
+ */
+export const LABEL_MAX_LEN = 40;
+
+export function userLabel(
+  user?: { name?: string | null; email?: string | null } | null
+): string {
+  const name = String(user?.name ?? '').trim();
+  if (name) return name.slice(0, LABEL_MAX_LEN);
+  return emailLabel(user?.email).slice(0, LABEL_MAX_LEN);
 }
 
 /**
@@ -163,7 +183,8 @@ export function assertCommentRemoval(
 export function projectComment(
   row: any,
   viewerId: string,
-  label: string
+  label: string,
+  avatarUrl?: string
 ): CommentRow {
   const deleted = Boolean(row.deletedAt);
   const projected: CommentRow = {
@@ -178,6 +199,8 @@ export function projectComment(
   if (!deleted && row.e2ee) projected.e2ee = true;
   // F12a: the persona flag rides with the row (cosmetic — see the schema docs).
   if (!deleted && row.bot) projected.bot = true;
+  // F14: a tombstone has no face either — the label alone still identifies it.
+  if (!deleted && avatarUrl) projected.avatarUrl = avatarUrl;
   if (row.day !== undefined && row.day !== null) projected.day = Number(row.day);
   if (row.editedAt) projected.editedAt = row.editedAt;
   if (row.deletedAt) projected.deletedAt = row.deletedAt;
@@ -199,19 +222,29 @@ export function dayCountsFrom(rows: Array<{ _id: number; count: number }>): Reco
 /*  Data access (thin glue over the rules above)                               */
 /* -------------------------------------------------------------------------- */
 
-/** Hydrates `userId → label` for a page of rows in one query (§19.5). */
-async function labelsFor(rows: Array<{ userId: unknown }>): Promise<Map<string, string>> {
-  const labels = new Map<string, string>();
+/** Hydrates `userId → { label, avatarUrl }` for a page of rows in one query (§19.5). */
+async function labelsFor(
+  rows: Array<{ userId: unknown }>
+): Promise<Map<string, { label: string; avatarUrl?: string }>> {
+  const labels = new Map<string, { label: string; avatarUrl?: string }>();
   if (rows.length === 0) return labels;
 
   const ids = [...new Set(rows.map((row) => String(row.userId)))].filter(isObjectId);
   if (ids.length === 0) return labels;
 
   const users = await User.find({ _id: { $in: ids } })
-    .select('_id email')
+    .select('_id email name avatarUrl')
     .lean();
-  for (const user of users as Array<{ _id: unknown; email?: string }>) {
-    labels.set(String(user._id), emailLabel(user.email));
+  for (const user of users as Array<{
+    _id: unknown;
+    email?: string;
+    name?: string;
+    avatarUrl?: string;
+  }>) {
+    labels.set(String(user._id), {
+      label: userLabel(user),
+      ...(user.avatarUrl ? { avatarUrl: user.avatarUrl } : {}),
+    });
   }
   return labels;
 }
@@ -248,9 +281,15 @@ export async function listTripComments(
   const page = hasMore ? rows.slice(0, limit) : rows;
 
   const labels = await labelsFor(page as Array<{ userId: unknown }>);
-  const comments = page.map((row) =>
-    projectComment(row, viewerId, labels.get(String(row.userId)) || 'Traveler')
-  );
+  const comments = page.map((row) => {
+    const person = labels.get(String(row.userId));
+    return projectComment(
+      row,
+      viewerId,
+      person?.label || 'Traveler',
+      person?.avatarUrl
+    );
+  });
 
   const dayAggregation = await TripComment.aggregate<{ _id: number; count: number }>([
     { $match: { tripId: new Types.ObjectId(tripId), deletedAt: { $exists: false }, day: { $exists: true } } },
@@ -292,8 +331,13 @@ export async function createTripComment(
     bot: Boolean(input.bot),
   });
 
-  const user = await User.findOne({ _id: userId }).select('email');
-  const comment = projectComment(created, userId, emailLabel(user?.email));
+  const user = await User.findOne({ _id: userId }).select('email name avatarUrl');
+  const comment = projectComment(
+    created,
+    userId,
+    userLabel(user),
+    user?.avatarUrl
+  );
 
   emitCommentEvent(tripId, { type: 'comment:new', comment });
   return comment;
@@ -330,8 +374,13 @@ export async function editTripComment(
   row.editedAt = new Date();
   await row.save();
 
-  const user = await User.findOne({ _id: userId }).select('email');
-  const comment = projectComment(row, userId, emailLabel(user?.email));
+  const user = await User.findOne({ _id: userId }).select('email name avatarUrl');
+  const comment = projectComment(
+    row,
+    userId,
+    userLabel(user),
+    user?.avatarUrl
+  );
 
   emitCommentEvent(String(row.tripId), { type: 'comment:update', comment });
   return comment;
@@ -352,8 +401,13 @@ export async function removeTripComment(
   row.body = '';
   await row.save();
 
-  const user = await User.findOne({ _id: String(row.userId) }).select('email');
-  const comment = projectComment(row, userId, emailLabel(user?.email));
+  const user = await User.findOne({ _id: String(row.userId) }).select('email name avatarUrl');
+  const comment = projectComment(
+    row,
+    userId,
+    userLabel(user),
+    user?.avatarUrl
+  );
 
   // `isYou` is viewer-specific on a broadcast frame: the SPA recomputes it from
   // the row it already holds, so the frame is safe to fan out as-is.

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -35,6 +35,7 @@ import {
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { avatarSrc } from "@/lib/avatar";
 import { roleLabel } from "@/hooks/useTripAccess";
 import type {
   TripInviteInfo,
@@ -58,7 +59,7 @@ const ROLE_BADGE_STYLE: Record<TripRole, string> = {
 const EDITABLE_ROLES: TripRole[] = ["editor", "commenter", "viewer"];
 
 const initialsFor = (member: TripMember): string => {
-  const source = member.email || member.userId;
+  const source = member.label || member.email || member.userId;
   return source.slice(0, 2).toUpperCase();
 };
 
@@ -224,7 +225,14 @@ export const TripMembers: React.FC<TripMembersProps> = ({ tripId, myRole }) => {
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <Avatar className="h-9 w-9">
-                        {/* Email is owner-only (F6); fall back to an initial. */}
+                        {/* Email is owner-only (F6); the label and photo are
+                            member-visible (F14). */}
+                        {avatarSrc(member.avatarUrl) && (
+                          <AvatarImage
+                            src={avatarSrc(member.avatarUrl)}
+                            alt={member.label || "Member"}
+                          />
+                        )}
                         <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
                           {initialsFor(member)}
                         </AvatarFallback>
@@ -232,7 +240,8 @@ export const TripMembers: React.FC<TripMembersProps> = ({ tripId, myRole }) => {
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-bold text-foreground truncate max-w-[220px]">
-                            {member.email ||
+                            {member.label ||
+                              member.email ||
                               `Traveler ${member.userId.slice(-4)}`}
                           </span>
                           {member.isYou && (
@@ -242,6 +251,7 @@ export const TripMembers: React.FC<TripMembersProps> = ({ tripId, myRole }) => {
                           )}
                         </div>
                         <p className="text-[11px] text-muted-foreground">
+                          {member.label && member.email ? `${member.email} · ` : ""}
                           {member.joinedAt
                             ? `Joined ${new Date(member.joinedAt).toLocaleDateString()}`
                             : ""}
