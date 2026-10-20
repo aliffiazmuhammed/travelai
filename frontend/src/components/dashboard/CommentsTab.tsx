@@ -108,6 +108,32 @@ const BOT_MENTION_RE = /@travelai/i;
 const BOT_SUMMARY_RE =
   /(summari[sz]e|recap|catch (me|us) up|what (did|have) we (decide[ds]?|agree[ds]?|settle[ds]?)|bring (me|us) up to speed)/i;
 
+/** F15: the literal the Ask chip and the mention menu insert. */
+const BOT_MENTION_TOKEN = "@TravelAI";
+
+/** F15: the one-time composer tip is dismissed per browser, never per trip. */
+const AI_HINT_KEY = "travelai.aiHintDismissed";
+
+/**
+ * F15: the active "@partial" token ending at the caret, if (and only if) the
+ * partial is still a prefix of "travelai". Offering it only while the mention
+ * is being spelled keeps normal prose alone — an email address or an "@" plus
+ * someone's name never opens the menu — and the full token hides it again so
+ * Enter still means "send".
+ */
+function mentionTokenAt(
+  value: string,
+  caret: number
+): { start: number; query: string } | null {
+  const before = value.slice(0, caret);
+  const match = /(^|\s)@([a-zA-Z]{0,12})$/.exec(before);
+  if (!match) return null;
+  const query = match[2].toLowerCase();
+  if (query.length >= "travelai".length) return null;
+  if (!"travelai".startsWith(query)) return null;
+  return { start: caret - query.length - 1, query };
+}
+
 /**
  * F12b/F12d: parse a TravelAI proposal envelope out of a decrypted bot row. The
  * envelope is written by our own ask flow; this parses defensively because a
@@ -281,6 +307,16 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
   const [pollComposerOpen, setPollComposerOpen] = useState(false);
   const [pollCreating, setPollCreating] = useState(false);
   const [pollBusyId, setPollBusyId] = useState<string | null>(null);
+  // F15: the mention menu is driven by the caret, and the "it reads this chat"
+  // tip is a one-time coach mark — dismissed per browser, so it never nags.
+  const [mentionOpen, setMentionOpen] = useState(false);
+  const [aiHintDismissed, setAiHintDismissed] = useState(() => {
+    try {
+      return window.localStorage.getItem(AI_HINT_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
 
   /** Compose the proposal through the parent save path, then mark the card. */
   const applyProposal = async (row: TripComment) => {
@@ -454,6 +490,13 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
     if (!plain || state.submitting) return;
     // Capture BEFORE the draft clears — the mention decides the F12a branch.
     const botAsk = BOT_MENTION_RE.test(plain);
+    // F15: the Ask chip makes a bare mention one tap away — never post it.
+    // The server would reject the ask anyway; catch it before a stray message.
+    if (botAsk && !plain.replace(BOT_MENTION_RE, "").trim()) {
+      toast.error("Add your question after @TravelAI.");
+      composerRef.current?.focus();
+      return;
+    }
     try {
       // F10: encrypt before it leaves the browser (falls back to plaintext,
       // flagged honestly, when encryption is unavailable).
@@ -466,6 +509,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
       );
       if (row && payload.e2ee) cryptoApi.rememberPlaintext(row._id, plain);
       setDraft("");
+      setMentionOpen(false);
       autosizeComposer();
       toast.success("Message sent");
 
@@ -708,6 +752,57 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
     el.style.height = `${Math.min(el.scrollHeight, 112)}px`;
   };
 
+  /**
+   * F15: show/hide the mention menu from the CURRENT draft + caret. Stateless
+   * on purpose — a pasted "@trav" behaves exactly like typed letters.
+   */
+  const syncMentionMenu = (value: string, caret: number | null) => {
+    const token = mentionTokenAt(value, caret ?? value.length);
+    setMentionOpen(Boolean(token) && canWrite);
+  };
+
+  /**
+   * F15: accept the suggestion (menu) or start an ask (chip). The mention is
+   * typed, never auto-sent: the server's mention gate stays the cost brake,
+   * and the violet disclosure explains what leaves the device next.
+   */
+  const insertMention = (source: "menu" | "chip") => {
+    const el = composerRef.current;
+    const caret = el?.selectionStart ?? draft.length;
+    const token = source === "menu" ? mentionTokenAt(draft, caret) : null;
+    const start = token ? token.start : caret;
+    const before = draft.slice(0, start);
+    const after = draft.slice(token ? caret : start);
+    // Mid-sentence, keep one space between the words and the mention.
+    const lead = before && !/\s$/.test(before) ? " " : "";
+    // If text already follows (a token was completed mid-sentence), don't
+    // leave a double space behind the mention.
+    const trail = /\s/.test(after.charAt(0)) ? "" : " ";
+    const inserted = `${lead}${BOT_MENTION_TOKEN}${trail}`;
+    if (before.length + inserted.length + after.length > COMMENT_MAX_LEN) {
+      setMentionOpen(false);
+      return;
+    }
+    setDraft(`${before}${inserted}${after}`);
+    setMentionOpen(false);
+    requestAnimationFrame(() => {
+      const pos = before.length + inserted.length;
+      el?.focus();
+      el?.setSelectionRange(pos, pos);
+      if (isChat) autosizeComposer();
+    });
+    onTyping?.();
+  };
+
+  const dismissAiHint = () => {
+    setAiHintDismissed(true);
+    try {
+      window.localStorage.setItem(AI_HINT_KEY, "1");
+    } catch {
+      /* private mode: hiding it for this visit is enough */
+    }
+  };
+
   /* ----------------------------------------------------------------------- */
   /*  Shared fragments — one logic core, two surface shapes                   */
   /* ----------------------------------------------------------------------- */
@@ -808,6 +903,82 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
       </div>
     ) : null;
 
+  /**
+   * F15: the typing menu — the passive half of discoverability. One option
+   * today (the assistant); accepting types the literal mention, which is the
+   * server's cost gate AND the client's disclosure trigger.
+   */
+  const mentionMenu =
+    mentionOpen && canWrite ? (
+      <div
+        role="listbox"
+        aria-label="Mention TravelAI"
+        className="absolute bottom-full left-0 right-0 z-30 mb-1.5 overflow-hidden rounded-2xl border border-violet-300/60 bg-popover p-1 shadow-lg dark:border-violet-500/30"
+      >
+        <button
+          type="button"
+          role="option"
+          aria-selected="true"
+          onPointerDown={(event) => {
+            // A pointer on the suggestion is a selection, not a blur: keep the
+            // caret in the textarea and insert at the token that opened us.
+            if (event.button !== 0) return;
+            event.preventDefault();
+            insertMention("menu");
+          }}
+          className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors hover:bg-violet-500/10"
+        >
+          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-violet-500/10 text-violet-600 dark:text-violet-300">
+            <Sparkles className="h-3.5 w-3.5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-xs font-bold text-foreground">TravelAI</span>
+            <span className="block truncate text-[11px] text-muted-foreground">
+              Answers from the recent messages here
+            </span>
+          </span>
+          <kbd className="hidden shrink-0 rounded-md border border-border/70 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground sm:block">
+            Enter
+          </kbd>
+        </button>
+      </div>
+    ) : null;
+
+  /**
+   * F15: the active half — a visible way in that costs no typing-space. It is
+   * only on screen while the composer is empty, so it never competes with the
+   * message someone is writing. The one-time tip states where answers come
+   * from in plain words; dismissing it is remembered per browser.
+   */
+  const aiDiscovery =
+    canWrite && !draft.trim() ? (
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <button
+          type="button"
+          onClick={() => insertMention("chip")}
+          disabled={state.submitting}
+          title="Ask TravelAI about this trip"
+          className="inline-flex items-center gap-1.5 rounded-full border border-violet-300/60 bg-violet-500/5 px-2.5 py-1 text-[11px] font-bold text-violet-700 transition-colors hover:bg-violet-500/10 disabled:opacity-50 dark:border-violet-500/30 dark:text-violet-300"
+        >
+          <Sparkles className="h-3.5 w-3.5" />
+          Ask TravelAI
+        </button>
+        {!aiHintDismissed && (
+          <span className="inline-flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground">
+            <span className="truncate">Each ask includes the last few messages here.</span>
+            <button
+              type="button"
+              onClick={dismissAiHint}
+              aria-label="Dismiss TravelAI tip"
+              className="rounded-full p-0.5 hover:bg-muted hover:text-foreground"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        )}
+      </div>
+    ) : null;
+
   const composerBlock = canWrite ? (
     isChat ? (
       /* WhatsApp-style dock: one bar holding [day▾] [input…] (►).
@@ -828,28 +999,51 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
             </option>
           ))}
         </select>
-        <Textarea
-          ref={composerRef}
-          value={draft}
-          onChange={(event) => {
-            setDraft(event.target.value);
-            autosizeComposer();
-            onTyping?.();
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              void submit();
+        <div className="relative min-w-0 flex-1">
+          {mentionMenu}
+          <Textarea
+            ref={composerRef}
+            value={draft}
+            onChange={(event) => {
+              const value = event.target.value;
+              setDraft(value);
+              autosizeComposer();
+              syncMentionMenu(value, event.target.selectionStart);
+              onTyping?.();
+            }}
+            onKeyDown={(event) => {
+              if (mentionOpen) {
+                if (event.key === "Enter" || event.key === "Tab") {
+                  event.preventDefault();
+                  insertMention("menu");
+                  return;
+                }
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  // Keep Escape from also closing the chat drawer.
+                  event.stopPropagation();
+                  setMentionOpen(false);
+                  return;
+                }
+              }
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                void submit();
+              }
+            }}
+            onSelect={(event) =>
+              syncMentionMenu(event.currentTarget.value, event.currentTarget.selectionStart)
             }
-          }}
-          placeholder={
-            anchorDay ? `Message about Day ${anchorDay}…` : "Message the trip…"
-          }
-          rows={1}
-          maxLength={COMMENT_MAX_LEN}
-          disabled={state.submitting}
-          className="max-h-28 min-h-0 flex-1 resize-none overflow-y-auto border-0 bg-transparent px-1 py-2 text-sm shadow-none focus-visible:ring-0"
-        />
+            onBlur={() => setMentionOpen(false)}
+            placeholder={
+              anchorDay ? `Message about Day ${anchorDay}…` : "Message the trip…"
+            }
+            rows={1}
+            maxLength={COMMENT_MAX_LEN}
+            disabled={state.submitting}
+            className="max-h-28 min-h-0 w-full resize-none overflow-y-auto border-0 bg-transparent px-1 py-2 text-sm shadow-none focus-visible:ring-0"
+          />
+        </div>
         <Button
           type="button"
           size="icon"
@@ -880,28 +1074,51 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
       </div>
     ) : (
       <div className="space-y-2">
-        <Textarea
-          value={draft}
-          onChange={(event) => {
-            setDraft(event.target.value);
-            onTyping?.(); // throttled upstream; a 2.5s-silent composer stops pinging
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-              event.preventDefault();
-              void submit();
+        <div className="relative">
+          {mentionMenu}
+          <Textarea
+            ref={composerRef}
+            value={draft}
+            onChange={(event) => {
+              const value = event.target.value;
+              setDraft(value);
+              syncMentionMenu(value, event.target.selectionStart);
+              onTyping?.(); // throttled upstream; a 2.5s-silent composer stops pinging
+            }}
+            onKeyDown={(event) => {
+              if (mentionOpen) {
+                if (event.key === "Enter" || event.key === "Tab") {
+                  event.preventDefault();
+                  insertMention("menu");
+                  return;
+                }
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setMentionOpen(false);
+                  return;
+                }
+              }
+              if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                event.preventDefault();
+                void submit();
+              }
+            }}
+            onSelect={(event) =>
+              syncMentionMenu(event.currentTarget.value, event.currentTarget.selectionStart)
             }
-          }}
-          placeholder={
-            anchorDay
-              ? `Message about Day ${anchorDay}…`
-              : "Message the trip…"
-          }
-          rows={2}
-          maxLength={COMMENT_MAX_LEN}
-          disabled={state.submitting}
-          className="rounded-2xl text-sm resize-none"
-        />
+            onBlur={() => setMentionOpen(false)}
+            placeholder={
+              anchorDay
+                ? `Message about Day ${anchorDay}…`
+                : "Message the trip…"
+            }
+            rows={2}
+            maxLength={COMMENT_MAX_LEN}
+            disabled={state.submitting}
+            className="rounded-2xl text-sm resize-none"
+          />
+        </div>
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-1.5 flex-wrap">
             <button
@@ -1121,6 +1338,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
             {botThinkingLine}
             {botDisclosure}
             {sendNotice}
+            {aiDiscovery}
             {composerBlock}
           </div>
         </>
@@ -1217,6 +1435,8 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
             {botDisclosure}
 
             {sendNotice}
+
+            {aiDiscovery}
 
             {composerBlock}
 

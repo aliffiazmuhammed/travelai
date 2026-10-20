@@ -423,3 +423,25 @@ The scope was confirmed with the user first: **change the password in the app** 
 - **No image cropping/rotation UI.** The server face-crops for the chat sizes; the user picks a file.
 - **Names are presentation only.** Authorization still uses `userId` everywhere; two members may share a name, and changing your name changes nothing about access.
 - **`/auth/me` still returns the user document** (minus password) rather than the narrow `publicUser` projection; signin/signup and the profile routes return `publicUser`. Tightening `/me` is harmless follow-up work, not a behaviour change users can see.
+
+### 12.18 F15 — TravelAI becomes findable: a visible way in, an `@` menu, one honest tip (user-reported UX gap, 2026-10-20)
+
+The user asked whether typing `@` to reach the assistant is discoverable, and answered their own question: *"otherwise how will a first time user understand how to access the ai in the chat."* They were right. Before this increment the only entry point was knowing the exact token. The composer said "Message the trip…", typing `@` produced nothing, and nothing on screen mentioned TravelAI. A member who had never read the release notes could use the whole product and never learn the assistant existed.
+
+**Three layers, one code path.** All three write the same literal (`@TravelAI `) through `insertMention`, so the server-side mention gate, the client-side disclosure and the ask flow are untouched.
+
+- **A visible chip, only while the composer is empty** (`aiDiscovery`). `✨ Ask TravelAI` sits above the input in both shapes — the chat drawer and the Discuss tab. Tapping it types the mention at the caret and focuses the composer; the violet disclosure then appears and states exactly what the ask will send. It hides the moment there is a draft, so it never competes with someone typing, and it re-appears after sending. The chip is not a second send path: it starts an ask the same way typing the mention does.
+- **An `@` menu** (`mentionTokenAt` + `mentionMenu`). Typing `@` — at the start or mid-sentence — opens one row: **TravelAI / Answers from the recent messages here**, with an `Enter` hint. Continuing to type filters by prefix (`@t`, `@tr`, …); `Enter` or `Tab` accepts, `Escape` dismisses without closing the drawer, pointer/tap accepts without stealing the caret. The menu is offered **only while the token is still a proper prefix of "travelai"**, so an email address or an `@name` in prose cannot trigger it, and once the full word is typed the menu is gone and `Enter` means send again. Accepting replaces the partial token, so `@tr` becomes `@TravelAI ` rather than `@TravelAI tr`.
+- **A one-time tip.** Beside the chip, the first time: *"Each ask includes the last few messages here."* with a dismiss `×` remembered in `localStorage` (`travelai.aiHintDismissed`, per browser). No jargon, no lock icons, no mention of keys — the plain claim is true: the ask carries the last readable messages and the answer comes back into the thread.
+
+**Guard rails added with the affordance.** Because a bare mention is now one tap away, `submit` refuses an ask whose text is only the mention (`"Add your question after @TravelAI."`) instead of posting a stray message that the server would reject. Insertion respects `COMMENT_MAX_LEN`, keeps a single space around a mid-sentence mention, and restores the caret after the token. Nothing is auto-sent; the mention remains the explicit, visible act.
+
+**Tests / verification:** frontend-only change — no API, schema, or storage change. `npm run typecheck` clean, `npm run build` clean, SPA mirror refreshed. Manual matrix: chip in drawer/feed, empty and after send; `@`, `@t`, `@travel`, full `@travelai` (menu closes), mid-sentence insertion, Escape (menu only), Enter accepts then Enter sends, email-like prose (no menu), bare-mention send guard.
+
+**Deliberately not in this increment / honest limits:**
+
+- **No member mentions.** The menu lists the assistant only. `@`-mentioning a person would imply notifications and a member-picker that do not exist; adding the row without the behaviour would be a lie.
+- **No arrow-key navigation.** One option makes Up/Down noise; `Enter`/`Tab`/tap cover it. A future multi-row menu should add roving focus and `aria-activedescendant`.
+- **The tip is per browser, not per account.** A second device shows it once more; it is a coach mark, not a setting.
+- **Viewers see no chip or menu** because they cannot send at all; the assistant is a participant in the conversation, not a read-only search box.
+- **Discoverability stops at the chat.** The dashboard does not advertise the assistant, and the landing page does not mention it. This increment fixes the moment of use, not the marketing surface.
