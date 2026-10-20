@@ -3,6 +3,7 @@ import type {
   Trip,
   TripInput,
   User,
+  ItineraryData,
   TripVersionsResponse,
   TripVersionDetails,
   TripFeedback,
@@ -446,9 +447,21 @@ class ApiClient {
   ): Promise<Trip> {
     return this.request(`/api/itinerary/${id}`, {
       method: 'PUT',
-      // revMode 'required' (E4): the owner's whole-document PUT must say which
+      // revMode 'required' (E4): the owner's metadata PUT must say which
       // version it was looking at.
       body: this.withBaseRev(id, updates),
+    });
+  }
+
+  /**
+   * M7.2: editor-ranked itinerary content save. Used by add / delete / rename
+   * and TravelAI Apply, which cannot be expressed as one activity patch.
+   * `title` and `status` stay on the owner-only `updateTrip` route.
+   */
+  async saveTripItinerary(id: string, tripDetails: ItineraryData): Promise<Trip> {
+    return this.request(`/api/itinerary/${id}/itinerary`, {
+      method: 'PUT',
+      body: this.withBaseRev(id, { tripDetails }),
     });
   }
 

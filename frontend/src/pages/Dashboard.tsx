@@ -230,9 +230,9 @@ const Dashboard: React.FC = () => {
     if (!selectedTrip || selectedTrip._id.startsWith("temp-")) return;
     try {
       setIsSaving(true);
-      const updated = await api.updateTrip(selectedTrip._id, {
-        tripDetails: updatedDetails,
-      });
+      // M7.2: editors save content through the editor-ranked endpoint; the
+      // owner-only `PUT /:id` remains reserved for title/status changes.
+      const updated = await api.saveTripItinerary(selectedTrip._id, updatedDetails);
       setSelectedTrip(updated);
       setTrips((prev) =>
         prev.map((t) => (t._id === updated._id ? updated : t))
@@ -268,6 +268,18 @@ const Dashboard: React.FC = () => {
   const handleTripUpdated = (updated: Trip) => {
     setSelectedTrip(updated);
     setTrips((prev) => prev.map((t) => (t._id === updated._id ? updated : t)));
+  };
+
+  /** M7.2: keep the open trip's share token in sync after generate/revoke. */
+  const handleShareIdChange = (shareId?: string) => {
+    const id = selectedTrip?._id;
+    if (!id) return;
+    setSelectedTrip((prev) =>
+      prev && prev._id === id ? { ...prev, shareId } : prev
+    );
+    setTrips((prev) =>
+      prev.map((t) => (t._id === id ? { ...t, shareId } : t))
+    );
   };
 
   // Merge a submitted rating into local state (feedback endpoint returns just the rating)
@@ -309,6 +321,8 @@ const Dashboard: React.FC = () => {
               status={selectedTrip.status || "planned"}
               version={selectedTrip.version}
               hasEdited={selectedTrip.hasEdited}
+              shareId={selectedTrip.shareId}
+              onShareIdChange={handleShareIdChange}
               role={access.role ?? undefined}
               members={selectedTrip.members}
               currentUserId={user?._id}

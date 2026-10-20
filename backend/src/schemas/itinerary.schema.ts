@@ -32,6 +32,15 @@ export const updateTripSchema = z.object({
   tripDetails: z.record(z.string(), z.any()).optional(),
 });
 
+/**
+ * Editor content save (M7.2). Deliberately excludes `title` and `status`:
+ * those are owner-only trip settings. The route guard requires `baseRev`, so
+ * a stale whole-content write cannot silently overwrite a collaborator.
+ */
+export const saveItinerarySchema = z.object({
+  tripDetails: z.record(z.string(), z.any()),
+});
+
 // Editing a single activity within a specific day of the itinerary
 export const updateActivitySchema = z.object({
   day: z.number().int().min(1, 'Day number must be at least 1'),

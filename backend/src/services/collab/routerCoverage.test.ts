@@ -132,6 +132,10 @@ test('guards declare the expected minimum roles (spot checks)', () => {
   };
 
   assert.equal(minimumFor('GET', '/:id'), 'viewer');
+  // M7.2: metadata (`title` / `status`) stays owner-only; itinerary content is
+  // the editor-ranked sibling route.
+  assert.equal(minimumFor('PUT', '/:id'), 'owner');
+  assert.equal(minimumFor('PUT', '/:id/itinerary'), 'editor');
   assert.equal(minimumFor('DELETE', '/:id'), 'owner');
   assert.equal(minimumFor('POST', '/:id/share'), 'owner');
   assert.equal(minimumFor('PUT', '/:id/expenses/:expenseId'), 'editor');
@@ -196,6 +200,7 @@ test('version-cap routes expose history only with the versions field loaded', ()
 
   assert.equal(optionsFor('GET', '/:id/versions').withVersions, true);
   assert.equal(optionsFor('PUT', '/:id').withVersions, true);
+  assert.equal(optionsFor('PUT', '/:id/itinerary').withVersions, true);
   assert.equal(optionsFor('GET', '/:id/expenses').withVersions, undefined);
 });
 
@@ -223,6 +228,7 @@ test('content-mutation routes require baseRev (E4 concurrency spot checks)', () 
   // Required: a stale write here overwrites more than its own item.
   for (const [method, path] of [
     ['PUT', '/:id'],
+    ['PUT', '/:id/itinerary'],
     ['PUT', '/:id/activities'],
     ['PUT', '/:id/activities/reorder'],
     ['PUT', '/:id/days/reorder'],

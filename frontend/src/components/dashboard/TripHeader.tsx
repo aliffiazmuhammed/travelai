@@ -31,6 +31,9 @@ interface TripHeaderProps {
   status?: "draft" | "planned" | "ongoing" | "completed";
   version?: number;
   hasEdited?: boolean;
+  /** Owner-only public share token; absent for editors/viewers (M6 F6). */
+  shareId?: string;
+  onShareIdChange?: (shareId?: string) => void;
   /** Live roster for the avatar stack (E4b; empty when the tier is off). */
   presence?: PresenceUser[];
   /** The viewer's user id — their own presence entry is not shown back to them. */
@@ -80,6 +83,8 @@ export const TripHeader: React.FC<TripHeaderProps> = ({
   status = "planned",
   version,
   hasEdited,
+  shareId,
+  onShareIdChange,
   presence,
   currentUserId,
   onStatusChange,
@@ -363,6 +368,8 @@ export const TripHeader: React.FC<TripHeaderProps> = ({
         onClose={() => setIsShareModalOpen(false)}
         tripId={tripId}
         data={data}
+        initialShareId={shareId}
+        onShareIdChange={onShareIdChange}
         canManageShare={Boolean(onStatusChange)}
       />
     </div>

@@ -33,6 +33,8 @@ import {
   Ban,
   Crown,
   Users,
+  AlertCircle,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { avatarSrc } from "@/lib/avatar";
@@ -68,24 +70,34 @@ export const TripMembers: React.FC<TripMembersProps> = ({ tripId, myRole }) => {
   const [members, setMembers] = useState<TripMember[]>([]);
   const [invites, setInvites] = useState<TripInviteInfo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
   const [transferTarget, setTransferTarget] = useState<TripMember | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
 
   const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
       const membersResult = await api.getTripMembers(tripId);
       setMembers(membersResult.members || []);
-      if (isOwner) {
+    } catch (err: any) {
+      // M7.2: an inline error beats a toast that disappears while the People
+      // tab silently renders "0 members". Keep the retry inside the card.
+      setError(err.message || "Could not load the member list.");
+      setLoading(false);
+      return;
+    }
+    if (isOwner) {
+      try {
         const invitesResult = await api.getTripInvites(tripId);
         setInvites(invitesResult.invites || []);
+      } catch (err: any) {
+        setError(err.message || "Could not load pending invitations.");
       }
-    } catch (err: any) {
-      toast.error(err.message || "Could not load the member list.");
-    } finally {
-      setLoading(false);
     }
+    setLoading(false);
   }, [tripId, isOwner]);
 
   useEffect(() => {
@@ -209,11 +221,31 @@ export const TripMembers: React.FC<TripMembersProps> = ({ tripId, myRole }) => {
             </div>
           </div>
 
+          {error && (
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-destructive/30 bg-destructive/5 p-3">
+              <div className="flex items-center gap-2 min-w-0 text-destructive">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span className="text-xs font-medium">{error}</span>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => void load()}
+                disabled={loading}
+                className="h-8 rounded-xl text-xs font-bold gap-1.5 shrink-0"
+              >
+                <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />
+                Retry
+              </Button>
+            </div>
+          )}
+
           {loading ? (
             <div className="flex items-center justify-center py-8 text-muted-foreground">
               <Loader2 className="w-5 h-5 animate-spin" />
             </div>
-          ) : (
+          ) : members.length === 0 && error ? null : (
             <div className="space-y-2">
               {members.map((member) => {
                 const isRowOwner = member.role === "owner";

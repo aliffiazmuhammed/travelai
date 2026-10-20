@@ -468,6 +468,35 @@ export const updateTrip = catchAsync(
 );
 
 /**
+ * Saves the itinerary content only (M7.2). This is the editor-ranked path used
+ * by add / delete / rename and TravelAI Apply, which cannot be expressed as a
+ * single-activity patch. `title` and `status` stay on the owner-only
+ * `PUT /:id` route, so an editor cannot rename the trip or change its status
+ * through this endpoint. The guard requires `baseRev`; a stale save is a 409,
+ * not a silent overwrite.
+ */
+export const saveTripItinerary = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { tripDetails } = req.body;
+    const { trip, role } = tripContext(req);
+
+    const detailsChanged =
+      JSON.stringify(tripDetails) !== JSON.stringify(trip.tripDetails || {});
+
+    if (detailsChanged) {
+      snapshotCurrent(trip, 'Edited itinerary details');
+      trip.tripDetails = tripDetails;
+      trip.markModified('tripDetails');
+      trip.version = (trip.version ?? 1) + 1;
+      trip.hasEdited = true;
+      await trip.save();
+    }
+
+    res.status(200).json({ ...sanitizeTripFor(trip, role), role });
+  }
+);
+
+/**
  * Updates a single activity inside a specific day of the itinerary.
  * PUT /api/itinerary/:id/activities
  */

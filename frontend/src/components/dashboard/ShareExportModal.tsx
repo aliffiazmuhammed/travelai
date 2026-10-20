@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -30,6 +30,8 @@ interface ShareExportModalProps {
   tripId?: string;
   data: ItineraryData;
   initialShareId?: string;
+  /** Keeps the dashboard's open trip in sync after generate/revoke (M7.2). */
+  onShareIdChange?: (shareId?: string) => void;
   /** Creating/reading the share link is owner-only on the server (Milestone 6 §3.3). */
   canManageShare?: boolean;
 }
@@ -40,10 +42,21 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
   tripId,
   data,
   initialShareId,
+  onShareIdChange,
   canManageShare = true,
 }) => {
   const [shareId, setShareId] = useState<string | undefined>(initialShareId);
   const [loadingShare, setLoadingShare] = useState(false);
+
+  /**
+   * M7.2: the modal stays mounted while trips change, so the initial state
+   * alone is not enough. Re-sync whenever it opens (or the trip changes) from
+   * the owner's freshest `shareId`, which is what makes an active link render
+   * as active instead of "Not yet generated".
+   */
+  useEffect(() => {
+    if (isOpen) setShareId(initialShareId);
+  }, [isOpen, initialShareId, tripId]);
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedText, setCopiedText] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
@@ -76,6 +89,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
       setRevokingShare(true);
       await api.revokeShare(tripId);
       setShareId(undefined);
+      onShareIdChange?.(undefined);
       toast.success("Public link revoked — old URLs no longer work.");
     } catch (err: any) {
       console.error("Failed to revoke share link:", err);
@@ -94,6 +108,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
       setLoadingShare(true);
       const res = await api.shareTrip(tripId);
       setShareId(res.shareId);
+      onShareIdChange?.(res.shareId);
       toast.success("Shareable link generated successfully!");
     } catch (err: any) {
       console.error("Failed to generate share link:", err);

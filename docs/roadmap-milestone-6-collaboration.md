@@ -213,7 +213,8 @@ Every trip-scoped route declares its minimum rank. `requireTripRole` is applied 
 |---|---|
 | `GET /api/itinerary` | `protect` + membership filter in the query |
 | `GET /api/itinerary/:id` | `requireTripRole('viewer')` |
-| `PUT /api/itinerary/:id` | `requireTripRole('owner')` |
+| `PUT /api/itinerary/:id` | `requireTripRole('owner')` (title/status metadata) |
+| `PUT /api/itinerary/:id/itinerary` **(M7.2)** | `requireTripRole('editor', { withVersions: true })` + rev |
 | `DELETE /api/itinerary/:id` | `requireTripRole('owner')` |
 | `POST /api/itinerary/:id/duplicate` | `requireTripRole('viewer')` (any member may fork) |
 | `POST /api/itinerary/:id/share` | `requireTripRole('owner')` |

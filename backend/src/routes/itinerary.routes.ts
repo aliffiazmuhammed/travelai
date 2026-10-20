@@ -5,6 +5,7 @@ import {
   getUserTrips,
   getTripById,
   updateTrip,
+  saveTripItinerary,
   updateTripActivity,
   reorderActivities,
   moveTripDay,
@@ -73,6 +74,7 @@ import { validate } from '../middleware/validate.middleware.js';
 import {
   generateItinerarySchema,
   updateTripSchema,
+  saveItinerarySchema,
   updateActivitySchema,
   reorderActivitiesSchema,
   moveDaySchema,
@@ -163,6 +165,19 @@ router.put(
   updateTrip
 );
 router.delete('/:id', protect, requireTripRole('owner'), deleteTrip);
+
+// Editor: save itinerary content only (add / delete / rename / AI Apply).
+// `title` and `status` are NOT accepted here — they stay owner-only above.
+// The required `baseRev` makes this conflict-safe; the controller snapshots the
+// previous content so every save remains undoable.
+router.put(
+  '/:id/itinerary',
+  protect,
+  requireTripRole('editor', { withVersions: true, revMode: 'required' }),
+  validate(saveItinerarySchema),
+  saveTripItinerary
+);
+
 // Duplicating only needs read access; the copy becomes the caller's own trip.
 router.post('/:id/duplicate', protect, requireTripRole('viewer'), duplicateTrip);
 router.post('/:id/share', protect, requireTripRole('owner'), shareTrip);

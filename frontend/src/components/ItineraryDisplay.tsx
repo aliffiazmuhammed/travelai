@@ -12,6 +12,7 @@ import {
   Receipt,
   Users,
   MessageCircle,
+  History,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +33,7 @@ import { NearbyExplorer } from "./dashboard/NearbyExplorer";
 import { WeatherRoutingCard } from "./dashboard/WeatherRoutingCard";
 import { DayAlternativeDialog } from "./dashboard/DayAlternativeDialog";
 import { TripMembers } from "./dashboard/TripMembers";
+import { TripVersions } from "./dashboard/TripVersions";
 import { CommentsTab } from "./dashboard/CommentsTab";
 import { DiscussionDrawer } from "./dashboard/DiscussionDrawer";
 import { useTripComments } from "@/hooks/useTripComments";
@@ -68,6 +70,9 @@ interface ItineraryDisplayProps {
   version?: number;
   /** Whether the trip has ever been edited. */
   hasEdited?: boolean;
+  /** Owner-only public share token; absent for editors/viewers (M6 F6). */
+  shareId?: string;
+  onShareIdChange?: (shareId?: string) => void;
   /** The caller's role on this trip (Milestone 6 §3.8; undefined = legacy payload). */
   role?: TripRole;
   /** Embedded member list from the trip payload (renders the People tab). */
@@ -127,6 +132,8 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
   status,
   version,
   hasEdited,
+  shareId,
+  onShareIdChange,
   role,
   members,
   presence,
@@ -629,6 +636,8 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
         status={status}
         version={version}
         hasEdited={hasEdited}
+        shareId={shareId}
+        onShareIdChange={onShareIdChange}
         presence={livePresence}
         currentUserId={currentUserId}
         onStatusChange={onStatusChange}
@@ -683,7 +692,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
               // Mobile/tablet: one horizontally-scrollable row of icon-only
               // pills (labels would wrap into two cramped rows of tiny cells).
               // From lg up: the familiar label grid.
-              "flex w-full max-w-full overflow-x-auto scrollbar-none h-auto p-1.5 bg-muted/60 border border-border/60 rounded-2xl shadow-xs gap-1 lg:grid lg:grid-cols-8",
+              "flex w-full max-w-full overflow-x-auto scrollbar-none h-auto p-1.5 bg-muted/60 border border-border/60 rounded-2xl shadow-xs gap-1 lg:grid lg:grid-cols-9",
               !showPeopleTab && "lg:grid-cols-7"
             )}
           >
@@ -740,6 +749,17 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
               <Receipt className="w-3.5 h-3.5" />
               <span className="hidden lg:inline">Expenses</span>
             </TabsTrigger>
+
+            {isRealTrip && (
+              <TabsTrigger
+                value="history"
+                title="Version History"
+                className="py-2.5 px-3 rounded-xl text-xs font-bold gap-2 shrink-0 data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
+              >
+                <History className="w-3.5 h-3.5" />
+                <span className="hidden lg:inline">History</span>
+              </TabsTrigger>
+            )}
 
             {showPeopleTab && (
               <TabsTrigger
@@ -861,6 +881,25 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
             onUpdated={onTripUpdated}
           />
         </TabsContent>
+
+        {/* Version history (M7.2) — viewable by every member; restoring is an
+            editor action, mirrored by `canRestore`. */}
+        {isRealTrip && (
+          <TabsContent value="history" className="outline-hidden animate-fade-in">
+            <TripVersions
+              tripId={tripId}
+              currentVersion={version}
+              hasEdited={hasEdited}
+              canRestore={Boolean(onSave)}
+              onRestored={(updated) => {
+                // Legacy snapshots may predate the current itinerary contract.
+                setItinerary(withItineraryDefaults(updated.tripDetails).day_by_day_itinerary);
+                setHasUnsavedChanges(false);
+                onTripUpdated?.(updated);
+              }}
+            />
+          </TabsContent>
+        )}
 
         {/* People & sharing view (Milestone 6 §3.8) */}
         {showPeopleTab && (

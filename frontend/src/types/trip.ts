@@ -388,6 +388,10 @@ export interface Trip {
   isDeleted?: boolean;
   version?: number;
   hasEdited?: boolean;
+  /** Public share token — owner-only on the wire (Milestone 6 F6). */
+  shareId?: string;
+  /** Whether the share link is active — owner-only on the wire. */
+  isPublic?: boolean;
   /** Optimistic-concurrency counter (Milestone 6 §3.6) — moves on every write. */
   rev?: number;
   /** The caller's role on this trip (Milestone 6). Absent for legacy payloads. */
