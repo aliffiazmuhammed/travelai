@@ -34,4 +34,13 @@ services:
         value: openai/gpt-oss-120b
       - key: SERVE_STATIC
         value: "true"
+      # Live collaboration tier. Safe to leave off (the SPA falls back to a
+      # 20s poll for comments, polls and decisions), but production wants it on.
+      - key: ENABLE_TRIP_SSE
+        value: "true"
+      # Optional but strongly recommended: without Cloudinary, uploaded avatars
+      # and receipts live on Render's ephemeral disk and vanish on redeploy.
+      # Accepts the single CLOUDINARY_URL form (cloudinary://key:secret@cloud).
+      - key: CLOUDINARY_URL
+        sync: false
 

@@ -58,7 +58,8 @@ export type TripCapability =
 /**
  * The single source of truth behind the permission matrix in
  * `docs/roadmap-milestone-6-collaboration.md` §1.3 — the tests iterate it.
- * `commenter` is reserved for a future comments feature (no route uses it yet).
+ * `commenter` is the conversation participant floor: posting comments and
+ * creating/voting in polls sit at that rank; editors inherit it.
  */
 export const TRIP_CAPABILITIES: Record<TripCapability, TripRole> = {
   view: 'viewer',

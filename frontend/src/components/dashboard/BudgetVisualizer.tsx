@@ -30,8 +30,6 @@ import type { ItineraryData } from "@/types/trip";
 
 interface BudgetVisualizerProps {
   budget: ItineraryData["budget_breakdown"];
-  daysCount: number;
-  groupType: string;
   paymentTips: ItineraryData["footnotes_safety_tips"]["payment"];
   perPersonBudget: number;
 }
@@ -46,8 +44,6 @@ const CATEGORY_COLORS = {
 
 export const BudgetVisualizer: React.FC<BudgetVisualizerProps> = ({
   budget,
-  daysCount,
-  groupType,
   paymentTips,
   perPersonBudget,
 }) => {
@@ -88,13 +84,6 @@ export const BudgetVisualizer: React.FC<BudgetVisualizerProps> = ({
       color: CATEGORY_COLORS["Buffer / Misc"],
     },
   ];
-
-  // Daily spend distribution estimation
-  const dailySpend = Math.round((budget.total * multiplier) / Math.max(1, daysCount));
-  const barData = Array.from({ length: daysCount }, (_, i) => ({
-    day: `Day ${i + 1}`,
-    cost: Math.round(dailySpend * (0.85 + ((i % 3) * 0.15))),
-  }));
 
   const activeTotal = Math.round(budget.total * multiplier);
 
@@ -205,36 +194,56 @@ export const BudgetVisualizer: React.FC<BudgetVisualizerProps> = ({
           </CardContent>
         </Card>
 
-        {/* Daily Spending Bar Chart */}
+        {/* Category Totals Bar Chart — real data, no invented daily rhythm */}
         <Card className="rounded-3xl border border-border/70 shadow-card bg-card/70 backdrop-blur-sm">
           <CardHeader>
             <CardTitle className="text-base font-bold flex items-center justify-between">
               <span className="flex items-center gap-2">
                 <BarChart3 className="w-4 h-4 text-emerald-500" />
-                Daily Spending Rhythm
+                Category Totals
               </span>
               <span className="text-xs font-bold text-muted-foreground">
-                Avg: ₹{dailySpend.toLocaleString("en-IN")}/day
+                Total: ₹{activeTotal.toLocaleString("en-IN")}
               </span>
             </CardTitle>
             <CardDescription className="text-xs">
-              Projected day-by-day cashflow based on activities and dining
+              The same planned allocation as the donut, side by side
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="h-64 sm:h-72 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={barData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
-                  <XAxis dataKey="day" tick={{ fontSize: 11, fill: "currentColor" }} stroke="hsl(var(--border))" className="text-muted-foreground" />
-                  <YAxis
+                <BarChart
+                  data={pieData}
+                  layout="vertical"
+                  margin={{ top: 4, right: 16, left: 4, bottom: 4 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="hsl(var(--border))"
+                    opacity={0.4}
+                    horizontal={false}
+                  />
+                  <XAxis
+                    type="number"
                     tick={{ fontSize: 10, fill: "currentColor" }}
                     stroke="hsl(var(--border))"
                     className="text-muted-foreground"
                     tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`}
                   />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    width={104}
+                    tick={{ fontSize: 10, fill: "currentColor" }}
+                    stroke="hsl(var(--border))"
+                    className="text-muted-foreground"
+                  />
                   <Tooltip
-                    formatter={(val: number) => [`₹${val.toLocaleString("en-IN")}`, "Projected Spend"]}
+                    formatter={(val: number) => [
+                      `₹${val.toLocaleString("en-IN")}`,
+                      "Planned allocation",
+                    ]}
                     contentStyle={{
                       backgroundColor: "hsl(var(--card))",
                       color: "hsl(var(--card-foreground))",
@@ -248,7 +257,11 @@ export const BudgetVisualizer: React.FC<BudgetVisualizerProps> = ({
                       color: "hsl(var(--card-foreground))",
                     }}
                   />
-                  <Bar dataKey="cost" fill="#38bdf8" radius={[8, 8, 0, 0]} />
+                  <Bar dataKey="value" barSize={18} radius={[0, 8, 8, 0]}>
+                    {pieData.map((entry, index) => (
+                      <Cell key={`bar-cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>

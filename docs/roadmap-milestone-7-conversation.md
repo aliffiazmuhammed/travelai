@@ -489,3 +489,29 @@ The Milestone 6 capability matrix said editors could edit the itinerary, but the
 - **Share revoke is still one click.** There is no confirmation dialog yet; revoke is immediate and the modal now clears its state correctly.
 - **No live member-list push.** The People tab fetches on open/retry, not on every membership event.
 - **No automatic refresh of the dashboard list's share token** beyond the open trip row; a full list refetch remains the source of truth.
+
+### 12.21 M7.3 — trust and deploy batch: honest charts, a real fallback, and confirmations (2026-10-20)
+
+The audit's remaining P1s were mostly trust issues rather than missing features: one chart invented data, live collaboration silently disappeared when a feature flag was off, the health check reported healthy while the database was gone, search accepted raw regex input, and three irreversible actions still fired on one click.
+
+**The budget tab no longer invents a daily rhythm.** `BudgetVisualizer` had a "Daily Spending Rhythm" bar chart built from `dailySpend * (0.85 | 1.00 | 1.15)` — a decorative pattern labelled *"Projected day-by-day cashflow based on activities and dining"*. No per-day cost exists in the itinerary model, so that chart was fiction. It is now **Category Totals**, a horizontal bar chart of the same five real budget lines as the donut, with the tooltip *"Planned allocation"*. The dead `daysCount` / `groupType` props were removed from the component and its call site.
+
+**Live collaboration has a floor.** `render.yaml` now sets `ENABLE_TRIP_SSE=true` and declares the optional `CLOUDINARY_URL`. The client still discovers the tier through `/api/health`; when `collab.sse` is false (the local default, or any deployment that leaves the flag off), `useTripComments` polls comments, decisions, polls and the read marker every **20 s** while the tab is visible. Focus and tab-return trigger an immediate catch-up; a hidden tab makes no requests. The three surfaces use `Promise.allSettled`, so a single failing endpoint cannot blank the others, and every merge is race-aware: a response that started before a local edit, vote, close or removal cannot undo the newer local state. The same pass fixed a pre-existing typing-indicator bug — `ingestTyping` wrote a local `setTyping` state while `typingLabels` read `state.typing`, so the indicator never appeared and its expiry interval never started.
+
+**Health tells the truth.** `utils/health.ts` maps Mongoose `readyState` onto one contract: only `connected` is **200 / healthy**; disconnected, connecting, disconnecting and unknown are **503 / unhealthy**. `success` follows the same value, so the SPA's `appFeatures()` probe also stops trusting a dead instance. `/api/health` additionally reports `receiptStorage.durable` (true only when Cloudinary is configured) and the Cloudinary folder, which is the field to check after a deploy. Absolute path and candidate-path diagnostics are now development-only.
+
+**Search is literal.** `utils/escapeRegex.ts` escapes every metacharacter and the controller caps the query at 80 characters before building `$regex`, so a dashboard search cannot become an arbitrary pattern.
+
+**Polish.** The profile page now clears the fixed navbar (`pt-24`, matching Dashboard/Planner) instead of hiding its title underneath it. The invite dialog no longer calls commenters "limited for now": it says they can chat, comment and vote in polls, matching the server's `commenter` rank. Removing a member, revoking an invite, and revoking a public share link now each ask for confirmation; transfer-ownership text prefers the member's display name over an email.
+
+**Tests / verification.** `health.test.ts` +4 (connected, disconnected, startup/shutdown, unknown fails closed) and `escapeRegex.test.ts` +4 (all metacharacters, literal punctuation, no accidental group, ordinary words unchanged). Backend suite **326/326**, `npm run build` clean; frontend `npm run typecheck` + `npm run build` clean; SPA mirror refreshed. Post-deploy checks: `GET /api/health` must return **200** with `database: "connected"`, `collab.sse: true`, and `receiptStorage.provider: "cloudinary"` (and `durable: true`) when the Render env is complete.
+
+**Deliberately not in this increment / honest limits:**
+
+- **Polling is a fallback, not real time.** When SSE is off, remote comments can lag up to 20 s (or until focus). When SSE is advertised but the stream itself fails, this increment does not detect the failure and switch to polling; the next page load re-probes `/api/health`. `appFeatures()` is cached for the session, so changing the flag requires a reload.
+- **`ENABLE_TRIP_SSE` in the blueprint is not proof of the running service.** Confirm the value in the Render dashboard and the `collab.sse` field of `/api/health`. Local development still defaults to false.
+- **Cloudinary is only checked, not exercised, by health.** `provider`/`durable` reflect environment configuration; an upload is still the end-to-end proof. Without `CLOUDINARY_URL` the local fallback remains and uploads disappear on redeploy.
+- **Health still exposes `resolvedPath` and the uploads directory.** They are no longer joined by cwd/candidate paths in production, but a tightened public payload could drop them entirely.
+- **Confirmation does not add undo.** Removed members, revoked invites and revoked share URLs remain irreversible even after the dialog. Per-row activity/expense deletes are still one click; itinerary content can be recovered from History, expenses cannot.
+- **No CSP was enabled.** This batch removes specific trust defects; turning on a Content-Security-Policy for maps, charts, Cloudinary images and the AI providers is a separate change with its own allow-list.
+- **No browser smoke was run for this increment.** Verification was the unit suite, both builds, and the static SPA mirror; the polling and confirmation flows still need the post-deploy manual pass.

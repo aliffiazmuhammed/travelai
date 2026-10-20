@@ -16,6 +16,7 @@ import { errorHandler } from './middleware/error.middleware.js';
 import { isCloudinaryConfigured, uploadDir } from './services/finance/receipt.js';
 import { CSRF_HEADER, issueCsrfCookie, verifyCsrf } from './middleware/csrf.middleware.js';
 import { isAllowedCorsOrigin } from './services/collab/httpOrigins.js';
+import { healthState } from './utils/health.js';
 
 const app = express();
 
@@ -102,20 +103,17 @@ const shouldServeStatic = Boolean(
   frontendDist && (isRender || !isDev || env.SERVE_STATIC === 'true' || env.SERVE_STATIC !== 'false')
 );
 
-// Health check with DB status, memory diagnostics, and static serving status
+// Health check with DB status, memory diagnostics, and static serving status.
+// Render polls this path: a live process with a dead database must answer 503
+// so the instance is replaced instead of being reported as ready.
 app.get('/api/health', (_req, res) => {
-  const dbState = mongoose.connection.readyState;
-  const dbStatusMap: Record<number, string> = {
-    0: 'disconnected',
-    1: 'connected',
-    2: 'connecting',
-    3: 'disconnecting',
-  };
+  const health = healthState(mongoose.connection.readyState);
+  const cloudinary = isCloudinaryConfigured();
 
-  res.json({
-    success: true,
-    status: 'healthy',
-    database: dbStatusMap[dbState] || 'unknown',
+  res.status(health.httpStatus).json({
+    success: health.ok,
+    status: health.status,
+    database: health.database,
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
     // E4b feature discovery: the SPA opens SSE streams only when this is true
@@ -127,15 +125,25 @@ app.get('/api/health', (_req, res) => {
       enabled: Boolean(shouldServeStatic && frontendDist),
       resolvedPath: frontendDist || 'NOT_FOUND',
       envServeStatic: env.SERVE_STATIC ?? 'unset',
-      cwd: process.cwd(),
-      dirname: __dirname,
-      candidatePaths: candidatePaths.map((p) => ({
-        path: p,
-        hasIndexHtml: fs.existsSync(path.join(p, 'index.html')),
-      })),
+      // Absolute paths are deployment diagnostics, not public API. Keep the
+      // production response to what a monitor or SPA actually needs.
+      ...(isDev
+        ? {
+            cwd: process.cwd(),
+            dirname: __dirname,
+            candidatePaths: candidatePaths.map((p) => ({
+              path: p,
+              hasIndexHtml: fs.existsSync(path.join(p, 'index.html')),
+            })),
+          }
+        : {}),
     },
     receiptStorage: {
-      provider: isCloudinaryConfigured() ? 'cloudinary' : 'local',
+      provider: cloudinary ? 'cloudinary' : 'local',
+      // Local disk is ephemeral on Render, so this is the field to check after
+      // a deploy when avatars or receipts seem to disappear.
+      durable: cloudinary,
+      folder: process.env.CLOUDINARY_FOLDER || 'travelai/receipts',
       localUploadsDir: uploadsDir,
     },
     memory: process.memoryUsage(),

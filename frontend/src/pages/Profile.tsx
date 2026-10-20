@@ -184,7 +184,7 @@ const Profile = () => {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <main className="container mx-auto max-w-3xl px-4 py-8 md:py-12 space-y-6">
+      <main className="container mx-auto max-w-3xl px-4 pt-24 pb-16 space-y-6">
         <div className="space-y-1">
           <h1 className="text-2xl md:text-3xl font-black tracking-tight text-foreground">
             Your profile

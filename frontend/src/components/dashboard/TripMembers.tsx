@@ -74,6 +74,8 @@ export const TripMembers: React.FC<TripMembersProps> = ({ tripId, myRole }) => {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
   const [transferTarget, setTransferTarget] = useState<TripMember | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<TripMember | null>(null);
+  const [revokeTarget, setRevokeTarget] = useState<TripInviteInfo | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
 
   const load = useCallback(async () => {
@@ -104,14 +106,20 @@ export const TripMembers: React.FC<TripMembersProps> = ({ tripId, myRole }) => {
     void load();
   }, [load]);
 
-  const runMemberAction = async (userId: string, action: () => Promise<unknown>, success: string) => {
+  const runMemberAction = async (
+    userId: string,
+    action: () => Promise<unknown>,
+    success: string
+  ): Promise<boolean> => {
     try {
       setBusyId(userId);
       const result: any = await action();
       if (result?.members) setMembers(result.members);
       toast.success(success);
+      return true;
     } catch (err: any) {
       toast.error(err.message || "That did not go through. Please try again.");
+      return false;
     } finally {
       setBusyId(null);
       setTransferTarget(null);
@@ -129,12 +137,13 @@ export const TripMembers: React.FC<TripMembersProps> = ({ tripId, myRole }) => {
     );
   };
 
-  const handleRemove = (member: TripMember) => {
-    void runMemberAction(
+  const handleRemove = async (member: TripMember) => {
+    const ok = await runMemberAction(
       member.userId,
       () => api.removeMember(tripId, member.userId),
       "Member removed — their expenses stay intact"
     );
+    if (ok) setRemoveTarget(null);
   };
 
   const handleTransfer = (member: TripMember) => {
@@ -166,6 +175,7 @@ export const TripMembers: React.FC<TripMembersProps> = ({ tripId, myRole }) => {
       setInvites((prev) =>
         prev.map((row) => (row._id === invite._id ? { ...row, revokedAt: new Date().toISOString() } : row))
       );
+      setRevokeTarget(null);
       toast.success("Invitation revoked");
     } catch (err: any) {
       toast.error(err.message || "Could not revoke the invitation.");
@@ -347,7 +357,7 @@ export const TripMembers: React.FC<TripMembersProps> = ({ tripId, myRole }) => {
                             variant="ghost"
                             title="Remove from trip (expenses are kept)"
                             disabled={isBusy}
-                            onClick={() => handleRemove(member)}
+                            onClick={() => setRemoveTarget(member)}
                             className="h-8 w-8 text-muted-foreground hover:text-destructive rounded-xl"
                           >
                             {isBusy ? (
@@ -433,7 +443,7 @@ export const TripMembers: React.FC<TripMembersProps> = ({ tripId, myRole }) => {
                             size="sm"
                             variant="outline"
                             disabled={busyId === invite._id}
-                            onClick={() => handleRevoke(invite)}
+                            onClick={() => setRevokeTarget(invite)}
                             className="rounded-xl text-[11px] font-bold gap-1 h-8 px-2.5 hover:text-destructive"
                           >
                             <Ban className="w-3 h-3" />
@@ -497,7 +507,7 @@ export const TripMembers: React.FC<TripMembersProps> = ({ tripId, myRole }) => {
             <AlertDialogTitle className="text-lg font-bold">Transfer ownership?</AlertDialogTitle>
             <AlertDialogDescription className="text-xs leading-relaxed">
               <strong className="text-foreground">
-                {transferTarget?.email || "This member"}
+                {transferTarget?.label || transferTarget?.email || "This member"}
               </strong>{" "}
               becomes the owner and gains full control — invitations, member
               roles and trip deletion. You become an editor and keep editing.
@@ -513,6 +523,77 @@ export const TripMembers: React.FC<TripMembersProps> = ({ tripId, myRole }) => {
               className="rounded-xl text-xs font-bold h-10 bg-amber-600 text-white hover:bg-amber-600/90"
             >
               Transfer ownership
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Remove-member confirmation — removal is immediate and access is lost */}
+      <AlertDialog
+        open={Boolean(removeTarget)}
+        onOpenChange={(open) => {
+          if (!open && busyId !== removeTarget?.userId) setRemoveTarget(null);
+        }}
+      >
+        <AlertDialogContent className="rounded-3xl max-w-md w-[92vw] sm:w-full p-5 sm:p-6">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-lg font-bold">Remove this member?</AlertDialogTitle>
+            <AlertDialogDescription className="text-xs leading-relaxed">
+              <strong className="text-foreground">
+                {removeTarget?.label || removeTarget?.email || "This member"}
+              </strong>{" "}
+              loses access immediately. Their past expenses and participant entry
+              stay with the trip, and they can only return through a new invite.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-0">
+            <AlertDialogCancel className="rounded-xl text-xs font-semibold h-10">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                if (removeTarget) void handleRemove(removeTarget);
+              }}
+              className="rounded-xl text-xs font-bold h-10 bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {removeTarget && busyId === removeTarget.userId ? "Removing…" : "Remove member"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Revoke-invite confirmation — the link dies for everyone who has not joined */}
+      <AlertDialog
+        open={Boolean(revokeTarget)}
+        onOpenChange={(open) => {
+          if (!open && busyId !== revokeTarget?._id) setRevokeTarget(null);
+        }}
+      >
+        <AlertDialogContent className="rounded-3xl max-w-md w-[92vw] sm:w-full p-5 sm:p-6">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-lg font-bold">Revoke this invitation?</AlertDialogTitle>
+            <AlertDialogDescription className="text-xs leading-relaxed">
+              The link{" "}
+              <code className="text-[11px] font-mono bg-muted px-1 py-0.5 rounded">
+                {revokeTarget?.tokenHint}…
+              </code>{" "}
+              stops working immediately. Anyone who has not joined yet will need a
+              new invitation.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-0">
+            <AlertDialogCancel className="rounded-xl text-xs font-semibold h-10">
+              Keep it
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                if (revokeTarget) void handleRevoke(revokeTarget);
+              }}
+              className="rounded-xl text-xs font-bold h-10 bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {revokeTarget && busyId === revokeTarget._id ? "Revoking…" : "Revoke invite"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

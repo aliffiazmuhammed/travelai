@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '@/services/api';
 import type { TripComment, TripDecision, TripPoll } from '@/types';
+import { appFeatures } from '@/hooks/useTripEvents';
 import type { CommentFrame, DecisionFrame, PollFrame, TypingFrame } from '@/hooks/useTripEvents';
 
 /**
@@ -113,6 +114,93 @@ export interface UseTripComments {
 
 const TYPING_TTL_MS = 5000; // mirrors the F8a contract (client-side expiry)
 const TYPING_PING_INTERVAL_MS = 2500; // client throttle; well under the 400/15min cap
+/** M7.3 fallback cadence when the SSE tier is disabled or unreachable. */
+const COLLAB_POLL_MS = 20000;
+
+function newestFirst(a: { createdAt: string }, b: { createdAt: string }): number {
+  return (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0);
+}
+
+/** Timestamp of the freshest vote on a poll (a vote can change without growing the list). */
+function latestVoteAt(poll: TripPoll): number {
+  return Math.max(0, ...(poll.votes || []).map((vote) => Date.parse(vote.at) || 0));
+}
+
+/**
+ * Merges a polled first page into the newest-first comment list.
+ *
+ * Polling is a fallback, not a source of truth: a response that started before
+ * this client edited/deleted a row must not undo the newer local change. New
+ * rows are deduped by `_id`; tombstones patch an existing slot but never
+ * introduce one.
+ */
+function mergePolledComments(list: TripComment[], fetched: TripComment[]): TripComment[] {
+  const byId = new Map(fetched.map((row) => [row._id, row]));
+  const patched = list.map((local) => {
+    const remote = byId.get(local._id);
+    if (!remote) return local;
+    const localStamp = Date.parse(local.editedAt || local.createdAt) || 0;
+    const remoteStamp = Date.parse(remote.editedAt || remote.createdAt) || 0;
+    if (!remote.deletedAt && remoteStamp < localStamp) return local;
+    return { ...remote, isYou: local.isYou || remote.isYou };
+  });
+  const known = new Set(patched.map((row) => row._id));
+  const fresh = fetched.filter((row) => !known.has(row._id) && !row.deletedAt);
+  if (fresh.length === 0) return patched;
+  return [...fresh, ...patched].sort(newestFirst);
+}
+
+/** Keeps decisions created while a poll request was in flight; drops remote removals. */
+function mergePolledDecisions(
+  list: TripDecision[],
+  fetched: TripDecision[],
+  startedAt: number
+): TripDecision[] {
+  const fetchedIds = new Set(fetched.map((row) => row._id));
+  const localById = new Map(list.map((row) => [row._id, row]));
+  const merged = fetched
+    .filter((row) => !row.deletedAt)
+    .map((row) => {
+      const local = localById.get(row._id);
+      return local?.isYou ? { ...row, isYou: true } : row;
+    });
+  const localOnly = list.filter(
+    (row) =>
+      !fetchedIds.has(row._id) &&
+      !row.deletedAt &&
+      (Date.parse(row.createdAt) || 0) >= startedAt
+  );
+  return [...localOnly, ...merged].sort(newestFirst);
+}
+
+/** Same race guard for polls, plus the vote/close freshness checks. */
+function mergePolledPolls(
+  list: TripPoll[],
+  fetched: TripPoll[],
+  startedAt: number
+): TripPoll[] {
+  const fetchedIds = new Set(fetched.map((row) => row._id));
+  const localById = new Map(list.map((row) => [row._id, row]));
+  const merged = fetched
+    .filter((row) => !row.deletedAt)
+    .map((row) => {
+      const local = localById.get(row._id);
+      if (!local) return row;
+      const isYou = row.isYou || local.isYou;
+      if (latestVoteAt(local) > latestVoteAt(row)) {
+        return { ...row, isYou, votes: local.votes, closedAt: local.closedAt ?? row.closedAt };
+      }
+      if (local.closedAt && !row.closedAt) return { ...row, isYou, closedAt: local.closedAt };
+      return isYou ? { ...row, isYou: true } : row;
+    });
+  const localOnly = list.filter(
+    (row) =>
+      !fetchedIds.has(row._id) &&
+      !row.deletedAt &&
+      (Date.parse(row.createdAt) || 0) >= startedAt
+  );
+  return [...localOnly, ...merged].sort(newestFirst);
+}
 
 /** Merges one row into the newest-first list by `_id`: patch in place, else prepend. */
 function mergeRow(list: TripComment[], row: TripComment, markMine: boolean): TripComment[] {
@@ -178,6 +266,118 @@ export function useTripComments(
       return { ...prev, dayCounts: { ...prev.dayCounts, [key]: next } };
     });
   }, []);
+
+  // The polling effect can outlive a trip switch by one request. Refuse to
+  // apply a response captured for the previous trip.
+  const activeTripRef = useRef(tripId);
+  activeTripRef.current = tripId;
+
+  /**
+   * M7.3 — the no-SSE safety net. One quiet round-trip refreshes the three
+   * collaboration surfaces that otherwise rely on live frames. AllSettled keeps
+   * a single failing endpoint (say polls) from blocking comments, and every
+   * merge is race-aware: a response that started before a local edit/vote must
+   * not undo that newer local truth.
+   */
+  const refreshCollab = useCallback(async () => {
+    if (!tripId) return;
+    const startedAt = Date.now();
+    const [commentsResult, decisionsResult, pollsResult, readResult] = await Promise.allSettled([
+      api.getTripComments(tripId, { limit: 50 }),
+      api.getTripDecisions(tripId),
+      api.getTripPolls(tripId),
+      api.getTripReadState(tripId),
+    ]);
+    if (activeTripRef.current !== tripId) return;
+
+    setState((prev) => {
+      let next = prev;
+
+      if (commentsResult.status === 'fulfilled') {
+        const result = commentsResult.value;
+        // A first poll can warm the cache before the Chat tab is opened; if it
+        // beats `ensureLoaded`, record the cursor so "Load earlier" still works.
+        if (!bootstrapped.current) {
+          bootstrapped.current = true;
+          cursorRef.current = result.nextCursor ?? null;
+        }
+        next = {
+          ...next,
+          comments: mergePolledComments(next.comments, result.comments || []),
+          dayCounts: result.dayCounts || next.dayCounts,
+          status: 'ready',
+        };
+      }
+
+      if (decisionsResult.status === 'fulfilled') {
+        next = {
+          ...next,
+          decisions: mergePolledDecisions(
+            next.decisions,
+            decisionsResult.value.decisions || [],
+            startedAt
+          ),
+        };
+      }
+
+      if (pollsResult.status === 'fulfilled') {
+        next = {
+          ...next,
+          polls: mergePolledPolls(next.polls, pollsResult.value.polls || [], startedAt),
+        };
+      }
+
+      if (readResult.status === 'fulfilled') {
+        next = {
+          ...next,
+          unread: openRef.current ? 0 : readResult.value.unread || 0,
+        };
+      }
+
+      return next;
+    });
+  }, [tripId]);
+
+  /**
+   * When the live tier is off (the local default) comments, polls and decisions
+   * would otherwise only change on a manual reload. Poll while visible; focus
+   * and tab-return trigger an immediate catch-up. A live SSE tier takes over
+   * completely, so there is no duplicate traffic.
+   */
+  useEffect(() => {
+    if (!tripId) return;
+    let disposed = false;
+    let timer: number | null = null;
+    let inFlight = false;
+
+    const tick = async () => {
+      if (disposed || inFlight || document.visibilityState === 'hidden') return;
+      inFlight = true;
+      try {
+        await refreshCollab();
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void tick();
+    };
+
+    void appFeatures().then((features) => {
+      if (disposed || features.sse) return;
+      timer = window.setInterval(() => void tick(), COLLAB_POLL_MS);
+      document.addEventListener('visibilitychange', onVisible);
+      window.addEventListener('focus', onVisible);
+    });
+
+    return () => {
+      disposed = true;
+      if (timer !== null) window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
+  }, [tripId, refreshCollab]);
 
   /* ------------------------------------------------------------------ */
   /*  Unread badge (Milestone 7, F8b)                                    */
@@ -568,7 +768,6 @@ export function useTripComments(
 
   const lastTypingPing = useRef(0);
   const typingRef = useRef<TypingEntry[]>([]);
-  const [typing, setTyping] = useState<TypingEntry[]>([]);
 
   /** Throttled outbound ping — decoration, dropped silently on failures. */
   const notifyTyping = useCallback(() => {
@@ -588,7 +787,7 @@ export function useTripComments(
       entry,
       ...typingRef.current.filter((existing) => existing.userId !== frame.userId),
     ].slice(0, 3);
-    setTyping(typingRef.current);
+    setState((prev) => ({ ...prev, typing: typingRef.current }));
   }, []);
 
   // The prune interval runs only while something is on screen; each client
@@ -600,7 +799,9 @@ export function useTripComments(
       const cutoff = Date.now() - TYPING_TTL_MS;
       const expiredNow = typingRef.current.some((entry) => entry.at <= cutoff);
       typingRef.current = typingRef.current.filter((entry) => entry.at > cutoff);
-      if (expiredNow) setTyping(typingRef.current);
+      if (expiredNow) {
+        setState((prev) => ({ ...prev, typing: typingRef.current }));
+      }
     }, 1000);
     return () => window.clearInterval(timer);
   }, [state.typing.length]);

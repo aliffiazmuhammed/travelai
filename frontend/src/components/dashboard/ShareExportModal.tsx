@@ -6,6 +6,16 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -81,6 +91,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
     : "";
 
   const [revokingShare, setRevokingShare] = useState(false);
+  const [confirmRevokeOpen, setConfirmRevokeOpen] = useState(false);
 
   /** F7 (E5): taking the link back down — old URLs die permanently. */
   const handleRevokeShare = async () => {
@@ -90,6 +101,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
       await api.revokeShare(tripId);
       setShareId(undefined);
       onShareIdChange?.(undefined);
+      setConfirmRevokeOpen(false);
       toast.success("Public link revoked — old URLs no longer work.");
     } catch (err: any) {
       console.error("Failed to revoke share link:", err);
@@ -239,7 +251,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                 size="sm"
                 variant="ghost"
                 disabled={revokingShare}
-                onClick={handleRevokeShare}
+                onClick={() => setConfirmRevokeOpen(true)}
                 className="h-8 px-2.5 rounded-lg text-[11px] font-bold text-destructive hover:text-destructive gap-1.5"
               >
                 {revokingShare ? (
@@ -346,6 +358,34 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
           </Button>
         </div>
       </DialogContent>
+
+      {/* Revoking is irreversible for the old URL — confirm before taking it down */}
+      <AlertDialog open={confirmRevokeOpen} onOpenChange={setConfirmRevokeOpen}>
+        <AlertDialogContent className="rounded-3xl max-w-md w-[92vw] sm:w-full p-5 sm:p-6">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-lg font-bold">Stop sharing this trip?</AlertDialogTitle>
+            <AlertDialogDescription className="text-xs leading-relaxed">
+              The public link stops working immediately. Anyone who bookmarked
+              the old URL loses access, and you will need to create a new link
+              to share it again.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-0">
+            <AlertDialogCancel className="rounded-xl text-xs font-semibold h-10">
+              Keep sharing
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                void handleRevokeShare();
+              }}
+              className="rounded-xl text-xs font-bold h-10 bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {revokingShare ? "Revoking…" : "Stop sharing"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 };

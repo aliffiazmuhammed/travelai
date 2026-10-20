@@ -122,8 +122,7 @@ export const InviteDialog: React.FC<InviteDialogProps> = ({ open, onClose, tripI
                     Editor — edit everything except members
                   </SelectItem>
                   <SelectItem value="commenter" className="text-xs">
-                    Commenter — suggest and comment{" "}
-                    <span className="text-muted-foreground">(limited for now)</span>
+                    Commenter — chat, comment and vote in polls
                   </SelectItem>
                   <SelectItem value="viewer" className="text-xs">
                     Viewer — read-only access

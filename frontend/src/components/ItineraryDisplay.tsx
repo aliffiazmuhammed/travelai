@@ -845,8 +845,6 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
         <TabsContent value="budget" className="outline-hidden animate-fade-in">
           <BudgetVisualizer
             budget={safeData.budget_breakdown}
-            daysCount={safeData.duration_days}
-            groupType={safeData.group_type}
             paymentTips={safeData.footnotes_safety_tips.payment}
             perPersonBudget={safeData.budget_per_person}
           />

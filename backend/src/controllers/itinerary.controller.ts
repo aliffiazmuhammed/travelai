@@ -25,6 +25,7 @@ import {
 import Trip from '../models/Trip.js';
 import { Types } from 'mongoose';
 import { catchAsync } from '../utils/catchAsync.js';
+import { escapeRegex } from '../utils/escapeRegex.js';
 import { sanitizeTripFor } from '../utils/sanitizeTrip.js';
 import { roleOf } from '../services/collab/access.js';
 import { tripContext } from '../middleware/tripAccess.middleware.js';
@@ -395,7 +396,9 @@ export const getUserTrips = catchAsync(
     }
 
     if (search && typeof search === 'string' && search.trim()) {
-      const searchRegex = new RegExp(search.trim(), 'i');
+      // Literal title search: escape user punctuation so a query cannot become
+      // a regex, and cap it to keep the scan bounded.
+      const searchRegex = new RegExp(escapeRegex(search.trim().slice(0, 80)), 'i');
       andConditions.push({
         $or: [{ title: searchRegex }, { 'tripDetails.trip_title': searchRegex }],
       });
