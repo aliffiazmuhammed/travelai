@@ -20,6 +20,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
+    # The env schema validates at import time. These placeholders satisfy it
+    # without connecting to MongoDB or calling any provider.
+    env:
+      MONGODB_URI: mongodb://127.0.0.1:27017/travelai_ci
+      JWT_SECRET: ci-test-only-secret-not-used-outside-the-unit-suite
+      GEMINI_API_KEY: ci-test-placeholder
+
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4
