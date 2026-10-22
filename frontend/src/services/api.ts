@@ -441,6 +441,25 @@ class ApiClient {
     return this.request(`/api/itinerary/${id}`);
   }
 
+  /** M7.7: deleted trips the caller still owns, newest deletion first. */
+  async getDeletedTrips(): Promise<Trip[]> {
+    return this.request('/api/itinerary/trash');
+  }
+
+  /** M7.7: recover a soft-deleted trip. Share links and invites stay revoked. */
+  async restoreTrip(id: string): Promise<Trip> {
+    return this.request(`/api/itinerary/${id}/restore`, {
+      method: 'POST',
+    });
+  }
+
+  /** M7.7: permanently remove a deleted trip and its chat, polls and receipts. */
+  async purgeTrip(id: string): Promise<{ success: boolean; message: string }> {
+    return this.request(`/api/itinerary/${id}/purge`, {
+      method: 'DELETE',
+    });
+  }
+
   async updateTrip(
     id: string,
     updates: { title?: string; status?: string; tripDetails?: any }

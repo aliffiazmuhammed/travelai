@@ -102,6 +102,8 @@ export interface ITrip extends Document {
   endDate?: Date;
   status: 'draft' | 'planned' | 'ongoing' | 'completed';
   isDeleted: boolean;
+  /** When the owner moved the trip to Recently deleted; absent while active. */
+  deletedAt?: Date;
   shareId?: string;
   isPublic?: boolean;
   tripDetails: Record<string, any>;
@@ -253,6 +255,10 @@ const tripSchema = new Schema<ITrip>(
       default: false,
       index: true,
     },
+    deletedAt: {
+      type: Date,
+      default: undefined,
+    },
     shareId: {
       type: String,
       unique: true,
@@ -326,6 +332,8 @@ const tripSchema = new Schema<ITrip>(
 tripSchema.index({ userId: 1, isDeleted: 1, createdAt: -1 });
 // Membership lookups: the dashboard lists trips the user is a member of.
 tripSchema.index({ 'members.userId': 1, isDeleted: 1, createdAt: -1 });
+// Recently deleted: owner-only rows, newest deletion first.
+tripSchema.index({ 'members.userId': 1, isDeleted: 1, deletedAt: -1 });
 
 /**
  * P0 creation invariant (2026-10-20): every new trip carries its creator as

@@ -11,7 +11,7 @@
     "dev": "concurrently -n \"backend,frontend\" -c \"blue,cyan\" \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:frontend": "npm run dev --workspace=frontend",
     "dev:backend": "npm run dev --workspace=backend",
-    "build:frontend": "npm run build --workspace=frontend && node -e \"const fs=require('fs'); if(fs.existsSync('frontend/dist')) { fs.cpSync('frontend/dist', 'backend/public', {recursive:true}); }\"",
+    "build:frontend": "npm run build --workspace=frontend && node -e \"const fs=require('fs'); const path=require('path'); if(fs.existsSync('frontend/dist')) { const assets=path.join('backend/public','assets'); fs.rmSync(assets,{recursive:true,force:true}); fs.cpSync('frontend/dist', 'backend/public', {recursive:true}); }\"",
     "build:backend": "npm run build --workspace=backend",
     "build": "npm run build:backend && npm run build:frontend",
     "start": "npm run start --workspace=backend",

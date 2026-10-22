@@ -14,7 +14,9 @@ import { TripRole, can, roleOf } from '../services/collab/access.js';
  *   router.put('/:id', protect, requireTripRole('owner'), updateTrip)
  *
  * Responsibilities:
- * 1. Load the trip by id, rejecting soft-deleted documents.
+ * 1. Load the trip by id, rejecting soft-deleted documents unless the route
+ *    explicitly opts into the trash (`includeDeleted`); restore/purge also set
+ *    `onlyDeleted` so those routes cannot act on a live trip.
  * 2. Resolve the caller's role via `roleOf` and reject with **404 when they
  *    have no access at all** (identical to a nonexistent trip, so ids cannot
  *    be probed) and **403 when they are a member whose rank is too low**.
@@ -51,6 +53,13 @@ export interface TripGuardOptions {
   /** Load `versions` too (the field is `select: false`). */
   withVersions?: boolean;
   revMode?: RevMode;
+  /**
+   * Allow a soft-deleted trip through. Reserved for the trash routes; every
+   * normal trip route must keep the default so a deleted trip answers 404.
+   */
+  includeDeleted?: boolean;
+  /** Require the trip to be deleted (restore/purge). Implies `includeDeleted`. */
+  onlyDeleted?: boolean;
 }
 
 /** Parses a client-supplied `baseRev`, ignoring malformed values. */
@@ -109,14 +118,20 @@ export function requireTripRole(
       throw new AppError('Please sign in to access this feature.', 401);
     }
 
+    const includeDeleted = options.includeDeleted === true || options.onlyDeleted === true;
     const trip = await Trip.findOne({
       _id: String(req.params.id),
-      isDeleted: { $ne: true },
+      ...(includeDeleted ? {} : { isDeleted: { $ne: true } }),
     }).select(options.withVersions ? '+versions' : '');
 
     // Not found AND no access are indistinguishable on purpose (§3.2).
     const role = trip ? roleOf(trip, req.userId) : null;
     if (!trip || !role) {
+      throw new AppError('Trip not found', 404);
+    }
+
+    // Restore/purge are trash-only routes; a live trip is not found there.
+    if (options.onlyDeleted && !trip.isDeleted) {
       throw new AppError('Trip not found', 404);
     }
 

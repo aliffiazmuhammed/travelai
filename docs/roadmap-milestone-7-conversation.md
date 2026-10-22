@@ -623,3 +623,29 @@ Every verification so far was a local command run by hand. A regression could me
 - **No coverage gate.** The 332 tests run, but no threshold fails a PR for dropping coverage.
 - **No deployment verification.** A green workflow means the code compiles and the unit suite passes, not that Render, Cloudinary, Atlas, SSE or the CSP behave correctly in production.
 - **No dependency or secret scanning.** `npm audit`, CodeQL and secret scanning are separate workflows not added here.
+
+### 12.27 M7.7 — a real Recently deleted, not a one-way delete (2026-10-22)
+
+Deletion has been soft since Milestone 6 (`Trip.isDeleted`), but the product treated it as permanent: the row vanished, there was no list, no restore, and the old share link could come back if the document ever flipped. This increment makes the trash a real, owner-only surface.
+
+**The row and the date are explicit.** `Trip.deletedAt` records the move; `isDeleted` remains the access gate. `GET /api/itinerary/trash` lists deleted trips where the caller is still an **owner member**, newest deletion first, capped at `MAX_TRASH_ROWS = 100`. Editors, commenters and viewers never see the list and cannot restore. A creator who transferred ownership no longer sees it either, because membership is authoritative everywhere else.
+
+**Delete revokes public access before it saves.** Owner-only `DELETE /:id` now revokes every active invite, clears `shareId`, turns `isPublic` off, sets `deletedAt`, and saves. This closes a latent issue: previously a soft-deleted trip's link and invites were only dead because read routes filtered `isDeleted`; a restore (or a missed filter) could revive them. Restore brings back the itinerary, chat, polls, expenses and member list, but **not** the old public link or invites. The owner must mint a new link deliberately.
+
+**Restore and purge are trash-only guarded routes.** `POST /:id/restore` and `DELETE /:id/purge` use `requireTripRole('owner', { includeDeleted: true, onlyDeleted: true })`. The guard is still the single authorization choke point: normal routes keep returning 404 for deleted trips, the two trash routes load the deleted row, and they return 404 for a live one. Restore bumps `rev` like any other write. Purge cascades to chat keys, comments, decisions, polls, read markers and invites, then removes the trip and best-effort deletes receipt files. A storage failure leaves an orphan file, not a live trip pointing at missing data.
+
+**The library keeps the act reversible.** The confirmation now says **Move to Recently deleted?** and names the revoked link and invites. A non-empty trash section shows the deletion date and days, offers **Restore**, and puts permanent deletion behind a separate dialog that enumerates what disappears (itinerary and history, chat, polls, decisions, expenses and receipt files). The empty-library copy points at the trash when something is recoverable.
+
+**Verification.** Backend suite **336/336**; the new tests cover the owner-only trash filter and receipt URL collection, and router coverage now asserts that `/trash` resolves before `/:id`, both trash routes are owner-only and set `includeDeleted`/`onlyDeleted`, and no normal trip route opts into deleted rows. A local Mongo smoke proved the guard matrix (live owner passes; outsider 404; deleted trip 404 on normal routes; deleted owner passes the trash guard; outsider trash list empty) and the controller effects (delete revoked the invite, cleared `shareId`/`isPublic` and set `deletedAt`; restore cleared `isDeleted`/`deletedAt`; purge removed the trip and every dependent row). Frontend `typecheck` and build are clean, and the SPA mirror was refreshed. `build:frontend` now clears `backend/public/assets` before copying, so old hashed bundles no longer accumulate.
+
+**Deliberately not in this increment / honest limits:**
+
+- **No retention timer.** Deleted trips stay until the owner presses **Delete forever**; nothing auto-purges after 30 days.
+- **No bulk actions or pagination.** The list is capped at 100 rows and has no select-all, bulk restore or bulk purge.
+- **Only the current owner can recover.** There is no admin restore and no co-owner fallback. If the owner account is lost, the trash is inaccessible even though the rows remain.
+- **Purge is irreversible and has no export.** There is no audit copy, downloadable archive or grace period after the permanent-delete confirmation.
+- **Receipt deletion is best-effort.** A Cloudinary/local failure can leave an orphan file; the database row is already gone.
+- **The cascade is not transactional.** If a dependent `deleteMany` fails, the trip remains and the action can be retried. If `Trip.deleteOne` fails after those deletes, the trip remains with less chat/history. A transaction needs a replica set and a larger write-contract change.
+- **Members are not notified.** Deleting a trip revokes their access and invites, but there is no notification or email; they simply stop seeing it.
+- **No browser click-through for this increment.** Verification was the unit suite, local controller/guard smoke and the frontend build, not a full UI pass of the two dialogs and restore flow.
+- **Still no DB-backed CI.** The new route/guard coverage is structural; the Mongo smoke was a one-off local script, not a CI service container.

@@ -97,6 +97,12 @@ test('specific routes resolve in the order their guards assume', () => {
   assert.ok(indexOfInsights > -1 && indexOfInsights < indexOfFirstIdRoute,
     '/insights must be declared before /:id or Express will match GET /:id first');
 
+  // M7.7: `/trash` is a collection route; `GET /:id` would otherwise try to
+  // interpret it as a trip id.
+  const indexOfTrash = paths.indexOf('/trash');
+  assert.ok(indexOfTrash > -1 && indexOfTrash < indexOfFirstIdRoute,
+    '/trash must be declared before /:id or GET /trash will be treated as a trip id');
+
   // Sprint E2: `DELETE /:id/members/me` must precede `DELETE /:id/members/:userId`,
   // otherwise "me" would be parsed as a member ObjectId and leave impossible.
   const indexOfMe = paths.indexOf('/:id/members/me');
@@ -157,6 +163,9 @@ test('guards declare the expected minimum roles (spot checks)', () => {
   assert.equal(minimumFor('PUT', '/:id'), 'owner');
   assert.equal(minimumFor('PUT', '/:id/itinerary'), 'editor');
   assert.equal(minimumFor('DELETE', '/:id'), 'owner');
+  // M7.7: restoring or permanently deleting is an owner action on a deleted row.
+  assert.equal(minimumFor('POST', '/:id/restore'), 'owner');
+  assert.equal(minimumFor('DELETE', '/:id/purge'), 'owner');
   assert.equal(minimumFor('POST', '/:id/share'), 'owner');
   assert.equal(minimumFor('PUT', '/:id/expenses/:expenseId'), 'editor');
   assert.equal(minimumFor('PUT', '/:id/participants'), 'editor');
@@ -206,7 +215,15 @@ test('guards declare the expected minimum roles (spot checks)', () => {
 test('version-cap routes expose history only with the versions field loaded', () => {
   const layers = routeLayers();
 
-  const optionsFor = (method: string, path: string): { withVersions?: boolean; revMode?: string } => {
+  const optionsFor = (
+    method: string,
+    path: string
+  ): {
+    withVersions?: boolean;
+    revMode?: string;
+    includeDeleted?: boolean;
+    onlyDeleted?: boolean;
+  } => {
     const layer = layers.find(
       (candidate) =>
         pathOf(candidate) === path && methodsOf(candidate).includes(method.toLowerCase())
@@ -222,6 +239,18 @@ test('version-cap routes expose history only with the versions field loaded', ()
   assert.equal(optionsFor('PUT', '/:id').withVersions, true);
   assert.equal(optionsFor('PUT', '/:id/itinerary').withVersions, true);
   assert.equal(optionsFor('GET', '/:id/expenses').withVersions, undefined);
+
+  // M7.7: only the two trash routes opt out of the normal "deleted trips 404"
+  // rule, and both require the row to actually be deleted.
+  for (const [method, path] of [
+    ['POST', '/:id/restore'],
+    ['DELETE', '/:id/purge'],
+  ] as const) {
+    assert.equal(optionsFor(method, path).includeDeleted, true);
+    assert.equal(optionsFor(method, path).onlyDeleted, true);
+  }
+  assert.equal(optionsFor('GET', '/:id').includeDeleted, undefined);
+  assert.equal(optionsFor('GET', '/:id').onlyDeleted, undefined);
 });
 
 /**

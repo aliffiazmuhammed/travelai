@@ -386,6 +386,8 @@ export interface Trip {
   endDate?: string;
   status?: 'draft' | 'planned' | 'ongoing' | 'completed';
   isDeleted?: boolean;
+  /** M7.7: when the owner moved the trip to Recently deleted. */
+  deletedAt?: string;
   version?: number;
   hasEdited?: boolean;
   /** Public share token — owner-only on the wire (Milestone 6 F6). */

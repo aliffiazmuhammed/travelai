@@ -18,6 +18,7 @@ const Dashboard: React.FC = () => {
   const { user } = useAuth();
 
   const [trips, setTrips] = useState<Trip[]>([]);
+  const [deletedTrips, setDeletedTrips] = useState<Trip[]>([]);
   const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [isSaving, setIsSaving] = useState<boolean>(false);
@@ -28,11 +29,15 @@ const Dashboard: React.FC = () => {
   // Fetch all user trips on mount
   useEffect(() => {
     loadTrips();
+    void loadDeletedTrips();
     // E4a (F10): collaborators' writes surface without a manual refresh —
     // refetch on tab focus/visibility plus a gentle poll while this screen
     // is mounted. Failures stay silent; the last known list remains shown.
     const refetchQuietly = () => {
-      if (!document.hidden) void refreshTripsQuietly();
+      if (!document.hidden) {
+        void refreshTripsQuietly();
+        void refreshTrashQuietly();
+      }
     };
     window.addEventListener("focus", refetchQuietly);
     document.addEventListener("visibilitychange", refetchQuietly);
@@ -122,6 +127,23 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  /** M7.7: trash is an additive section; a failure must not hide the library. */
+  const loadDeletedTrips = async () => {
+    try {
+      setDeletedTrips(await api.getDeletedTrips());
+    } catch (err) {
+      console.error("Failed to fetch Recently deleted:", err);
+    }
+  };
+
+  const refreshTrashQuietly = async () => {
+    try {
+      setDeletedTrips(await api.getDeletedTrips());
+    } catch {
+      /* silent — keep the last known trash list */
+    }
+  };
+
   /** E5 (F16): open a trip from the library via the full-document fetch. */
   const [openingDetail, setOpeningDetail] = useState<boolean>(false);
   const handleSelectTrip = async (trip: Trip) => {
@@ -190,14 +212,57 @@ const Dashboard: React.FC = () => {
     }
     try {
       await api.deleteTrip(tripId);
-      toast.success("Trip deleted successfully.");
+      toast.success("Trip moved to Recently deleted.");
       setTrips((prev) => prev.filter((t) => t._id !== tripId));
+      if (trip) {
+        setDeletedTrips((prev) => [
+          {
+            ...trip,
+            isDeleted: true,
+            deletedAt: new Date().toISOString(),
+            shareId: undefined,
+            isPublic: false,
+          },
+          ...prev.filter((t) => t._id !== tripId),
+        ]);
+      } else {
+        void loadDeletedTrips();
+      }
       if (selectedTrip?._id === tripId) {
         setSelectedTrip(null);
       }
     } catch (err: any) {
       console.error("Failed to delete trip:", err);
       toast.error(err.message || "Failed to delete trip.");
+    }
+  };
+
+  // M7.7: restore a deleted trip. The server keeps the old share link/invites
+  // revoked, so the owner must deliberately share again if they want that.
+  const handleRestoreTrip = async (tripId: string) => {
+    try {
+      const restored = await api.restoreTrip(tripId);
+      setDeletedTrips((prev) => prev.filter((t) => t._id !== tripId));
+      setTrips((prev) => [restored, ...prev.filter((t) => t._id !== tripId)]);
+      toast.success("Trip restored to your library.");
+    } catch (err: any) {
+      console.error("Failed to restore trip:", err);
+      toast.error(err.message || "Failed to restore trip.");
+      throw err;
+    }
+  };
+
+  // M7.7: permanent delete. The server cascades chat, polls, decisions and
+  // receipts; this cannot be undone.
+  const handlePurgeTrip = async (tripId: string) => {
+    try {
+      await api.purgeTrip(tripId);
+      setDeletedTrips((prev) => prev.filter((t) => t._id !== tripId));
+      toast.success("Trip permanently deleted.");
+    } catch (err: any) {
+      console.error("Failed to permanently delete trip:", err);
+      toast.error(err.message || "Failed to permanently delete trip.");
+      throw err;
     }
   };
 
@@ -347,9 +412,12 @@ const Dashboard: React.FC = () => {
           /* ALL TRIPS LIBRARY (GRID & LIST) VIEW */
           <MyTripsView
             trips={trips}
+            deletedTrips={deletedTrips}
             onSelectTrip={handleSelectTrip}
             onDuplicateTrip={handleDuplicateTrip}
             onDeleteTrip={handleDeleteTrip}
+            onRestoreTrip={handleRestoreTrip}
+            onPurgeTrip={handlePurgeTrip}
             onNewPlan={() => navigate("/plan")}
           />
         )}

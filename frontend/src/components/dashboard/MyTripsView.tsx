@@ -30,15 +30,23 @@ import {
   CheckCircle2,
   Clock,
   Archive,
+  RotateCcw,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Trip } from "@/types/trip";
 
 interface MyTripsViewProps {
   trips: Trip[];
+  /** M7.7: owner-only soft-deleted trips. */
+  deletedTrips: Trip[];
   onSelectTrip: (trip: Trip) => void;
   onDuplicateTrip: (tripId: string) => Promise<void>;
   onDeleteTrip: (tripId: string) => Promise<void>;
+  onRestoreTrip: (tripId: string) => Promise<void>;
+  onPurgeTrip: (tripId: string) => Promise<void>;
   onNewPlan: () => void;
 }
 
@@ -93,15 +101,20 @@ const STATUS_CONFIG = {
 
 export const MyTripsView: React.FC<MyTripsViewProps> = ({
   trips,
+  deletedTrips,
   onSelectTrip,
   onDuplicateTrip,
   onDeleteTrip,
+  onRestoreTrip,
+  onPurgeTrip,
   onNewPlan,
 }) => {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [tripToDelete, setTripToDelete] = useState<Trip | null>(null);
+  const [tripToPurge, setTripToPurge] = useState<Trip | null>(null);
+  const [showDeleted, setShowDeleted] = useState<boolean>(true);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
   const getTripCover = (title: string): string => {
@@ -163,6 +176,38 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
       setActionLoadingId(null);
       setTripToDelete(null);
     }
+  };
+
+  const handleRestore = async (trip: Trip) => {
+    try {
+      setActionLoadingId(trip._id);
+      await onRestoreTrip(trip._id);
+    } catch {
+      // The dashboard already showed the error toast.
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const confirmPurge = async () => {
+    if (!tripToPurge) return;
+    try {
+      setActionLoadingId(tripToPurge._id);
+      await onPurgeTrip(tripToPurge._id);
+      setTripToPurge(null);
+    } catch {
+      // Keep the dialog open so the owner can retry or cancel.
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const deletedDate = (trip: Trip): string => {
+    const raw = trip.deletedAt || trip.updatedAt;
+    const parsed = raw ? new Date(raw) : null;
+    return parsed && !Number.isNaN(parsed.getTime())
+      ? parsed.toLocaleDateString()
+      : "recently";
   };
 
   return (
@@ -260,6 +305,8 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
             <p className="text-xs text-muted-foreground">
               {search || statusFilter !== "all"
                 ? "Try adjusting your search keywords or status filter."
+                : deletedTrips.length > 0
+                ? "Restore a trip from Recently deleted below, or start a new plan."
                 : "Start planning your first unforgettable journey with our AI assistant!"}
             </p>
           </div>
@@ -586,6 +633,102 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
         </div>
       )}
 
+      {/* M7.7: Recently deleted. Only current owners ever receive these rows;
+          members without the owner role have no restore action. */}
+      {deletedTrips.length > 0 && (
+        <div className="space-y-3 pt-3">
+          <button
+            type="button"
+            onClick={() => setShowDeleted((open) => !open)}
+            className="flex w-full items-center gap-2 rounded-2xl border border-border/70 bg-card px-4 py-3 text-left transition-colors hover:border-primary/40"
+            aria-expanded={showDeleted}
+          >
+            <Archive className="w-4 h-4 text-muted-foreground" />
+            <span className="text-sm font-black uppercase tracking-wider text-foreground">
+              Recently deleted
+            </span>
+            <Badge variant="outline" className="text-[10px]">
+              {deletedTrips.length}
+            </Badge>
+            <span className="ml-auto text-muted-foreground">
+              {showDeleted ? (
+                <ChevronUp className="w-4 h-4" />
+              ) : (
+                <ChevronDown className="w-4 h-4" />
+              )}
+            </span>
+          </button>
+
+          {showDeleted && (
+            <>
+              <p className="px-1 text-[11px] leading-relaxed text-muted-foreground">
+                Only owners see this list. Restoring brings back the itinerary
+                and chat; old share links and invites stay revoked.
+              </p>
+              <div className="space-y-2">
+                {deletedTrips.map((trip) => {
+                  const title =
+                    trip.title || trip.tripDetails?.trip_title || "Deleted trip";
+                  const cover = getTripCover(title);
+                  const days = trip.tripDetails?.duration_days || 5;
+                  const isActing = actionLoadingId === trip._id;
+                  return (
+                    <div
+                      key={trip._id}
+                      className="flex flex-col gap-3 rounded-3xl border border-border/70 bg-card/70 p-3 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <img
+                          src={cover}
+                          alt={title}
+                          className="h-12 w-12 shrink-0 rounded-xl object-cover opacity-70"
+                        />
+                        <div className="min-w-0">
+                          <h4 className="truncate text-sm font-extrabold text-foreground">
+                            {title}
+                          </h4>
+                          <p className="text-[11px] text-muted-foreground">
+                            Deleted {deletedDate(trip)} · {days} days
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 self-end sm:self-center">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={isActing}
+                          onClick={() => handleRestore(trip)}
+                          className="h-9 rounded-xl px-3 text-xs font-bold gap-1.5"
+                        >
+                          {isActing ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <RotateCcw className="w-3.5 h-3.5" />
+                          )}
+                          Restore
+                        </Button>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          title="Delete forever"
+                          disabled={isActing}
+                          onClick={() => setTripToPurge(trip)}
+                          className="h-9 w-9 rounded-xl text-muted-foreground hover:text-destructive"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Delete Confirmation Alert Dialog */}
       <AlertDialog
         open={!!tripToDelete}
@@ -596,14 +739,16 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
         <AlertDialogContent className="rounded-3xl max-w-md w-[92vw] sm:w-full p-5 sm:p-6">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-lg font-bold">
-              Delete Itinerary?
+              Move to Recently deleted?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-xs leading-relaxed">
-              Are you sure you want to remove{" "}
+              This removes{" "}
               <strong className="text-foreground">
                 "{tripToDelete?.title || tripToDelete?.tripDetails?.trip_title}"
-              </strong>
-              ? This action will archive the trip from your library.
+              </strong>{" "}
+              from your library and revokes its share link and pending invites.
+              Only the owner can see it in Recently deleted; you can restore it
+              later.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2 sm:gap-0">
@@ -614,7 +759,42 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
               onClick={confirmDelete}
               className="rounded-xl text-xs font-bold h-10 bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete Trip
+              Move to trash
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Permanent-delete confirmation. Sharper copy than the soft delete. */}
+      <AlertDialog
+        open={!!tripToPurge}
+        onOpenChange={(open) => {
+          if (!open) setTripToPurge(null);
+        }}
+      >
+        <AlertDialogContent className="rounded-3xl max-w-md w-[92vw] sm:w-full p-5 sm:p-6">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-lg font-bold">
+              Delete this trip forever?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs leading-relaxed">
+              <strong className="text-foreground">
+                "{tripToPurge?.title || tripToPurge?.tripDetails?.trip_title}"
+              </strong>{" "}
+              will be permanently deleted, including its itinerary and history,
+              chat, polls, decisions, expenses and receipt files. This cannot be
+              undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-0">
+            <AlertDialogCancel className="rounded-xl text-xs font-semibold h-10">
+              Keep it
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmPurge}
+              className="rounded-xl text-xs font-bold h-10 bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete forever
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -3,6 +3,7 @@ import {
   generateItinerary,
   generateItineraryStream,
   getUserTrips,
+  getDeletedTrips,
   getTripById,
   updateTrip,
   saveTripItinerary,
@@ -17,6 +18,8 @@ import {
   suggestDayAlternative,
   getWeatherRouting,
   deleteTrip,
+  restoreTrip,
+  purgeTrip,
   duplicateTrip,
   shareTrip,
   revokeShareTrip,
@@ -141,6 +144,10 @@ router.get('/', protect, getUserTrips);
 // Insights must be declared before the generic /:id route
 router.get('/insights', protect, getTripInsights);
 
+// M7.7: Recently deleted is a collection route, not a trip id; declare it before
+// `GET /:id` so Express does not try to load a trip called "trash".
+router.get('/trash', protect, getDeletedTrips);
+
 // --- Trip-scoped endpoints (guarded by requireTripRole — one choke point) ---
 
 // Every trip-scoped route below MUST carry a `requireTripRole(minimum)` guard
@@ -166,6 +173,21 @@ router.put(
   updateTrip
 );
 router.delete('/:id', protect, requireTripRole('owner'), deleteTrip);
+
+// M7.7: trash-only routes. `includeDeleted` is what lets the guard find the row;
+// `onlyDeleted` keeps them from acting on a live trip.
+router.post(
+  '/:id/restore',
+  protect,
+  requireTripRole('owner', { includeDeleted: true, onlyDeleted: true }),
+  restoreTrip
+);
+router.delete(
+  '/:id/purge',
+  protect,
+  requireTripRole('owner', { includeDeleted: true, onlyDeleted: true }),
+  purgeTrip
+);
 
 // Editor: save itinerary content only (add / delete / rename / AI Apply).
 // `title` and `status` are NOT accepted here — they stay owner-only above.

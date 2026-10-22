@@ -12,6 +12,7 @@ import {
 } from '../services/ai/prompt.js';
 import { scoreItinerary } from '../services/ai/quality.js';
 import { buildTripHistorySummary } from '../services/itinerary/context.js';
+import { listDeletedTrips, purgeTripCascade } from '../services/itinerary/trash.js';
 import { isValidCoord } from '../services/geo/distance.js';
 import { DailyWeather, getWeatherForecast } from '../services/geo/weather.js';
 import { RoutingDayInput, analyzeWeatherRouting } from '../services/geo/weatherRouting.js';
@@ -23,6 +24,7 @@ import {
   updateActivityInDays,
 } from '../services/itinerary/editing.js';
 import Trip from '../models/Trip.js';
+import TripInvite from '../models/TripInvite.js';
 import { Types } from 'mongoose';
 import { catchAsync } from '../utils/catchAsync.js';
 import { escapeRegex } from '../utils/escapeRegex.js';
@@ -429,6 +431,21 @@ export const getUserTrips = catchAsync(
   }
 );
 
+/**
+ * Recently deleted trips (M7.7). Owner-only by design: only a current owner can
+ * restore, so listing trash for anyone else would be a dead end.
+ */
+export const getDeletedTrips = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const trips = await listDeletedTrips(String(req.userId));
+    const rows = trips.map((trip: any) => ({
+      ...sanitizeTripFor(trip, 'owner'),
+      role: 'owner' as const,
+    }));
+    res.status(200).json(rows);
+  }
+);
+
 export const getTripById = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const { trip, role } = tripContext(req);
@@ -775,11 +792,58 @@ export const getTripInsights = catchAsync(
 export const deleteTrip = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const { trip } = tripContext(req);
+    const deletedAt = new Date();
+
+    // A soft delete must still kill public access immediately. Revoking before
+    // the save means a failure leaves the trip active with dead invites, which
+    // is recoverable; the reverse would leave a hidden trip with live links.
+    await TripInvite.updateMany(
+      { tripId: trip._id, revokedAt: { $exists: false } },
+      { $set: { revokedAt: deletedAt } }
+    );
 
     trip.isDeleted = true;
+    trip.deletedAt = deletedAt;
+    // Restoring brings the trip back, but never revives a public link. The
+    // owner can mint a fresh one deliberately.
+    trip.shareId = undefined;
+    trip.isPublic = false;
     await trip.save();
 
-    res.status(200).json({ success: true, message: 'Trip deleted successfully' });
+    res.status(200).json({
+      success: true,
+      message: 'Trip moved to Recently deleted',
+    });
+  }
+);
+
+/** Restore a soft-deleted trip. The route guard has already proven ownership. */
+export const restoreTrip = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { trip, role } = tripContext(req);
+
+    trip.isDeleted = false;
+    trip.deletedAt = undefined;
+    await trip.save();
+
+    res.status(200).json({
+      ...sanitizeTripFor(trip, role),
+      role,
+    });
+  }
+);
+
+/** Permanently remove a deleted trip and every row/file that belongs to it. */
+export const purgeTrip = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { trip } = tripContext(req);
+
+    await purgeTripCascade(trip);
+
+    res.status(200).json({
+      success: true,
+      message: 'Trip permanently deleted',
+    });
   }
 );
 
