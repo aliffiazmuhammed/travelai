@@ -1,7 +1,8 @@
 # Agency Workspace - implementation milestone plan
 
-**Status:** A0 accepted (2026-10-22); A1 not started.  
+**Status:** A0 accepted (2026-10-22); A1 implemented and verified (2026-10-22); A2 next.  
 **A0 artifacts:** `docs/adr/0001-agency-workspace-boundary.md`, `docs/agency-a0-test-plan.md`, `docs/agency-a0-wireframes.md`, feature flag `AGENCY_WORKSPACE_ENABLED` (default false) and read-only `GET /api/agency/status`.  
+**A1 artifacts:** tenant models (`Agency`, `AgencyMember`, `AgencyInvite`), hashed agency invites, tenant guards, `/api/agency` onboarding/team endpoints and the `/agency` shell with onboarding, switcher, team and settings. See `docs/agency-a1-test-plan.md`.  
 **Goal:** add a separate B2B product for travel agencies without changing the individual traveler experience.  
 **Scope:** agency accounts, team roles, client records, quotes, branded/custom PDF exports, and all existing trip features under an agency-owned workspace.
 
@@ -640,7 +641,8 @@ Exit criteria:
 ### A1 - Agency tenancy, onboarding and team
 
 **Size:** L  
-**Depends on:** A0
+**Depends on:** A0  
+**Status:** Implemented (2026-10-22). Automated and local tenant smoke tests pass; production enablement is a separate ops step.
 
 Backend:
 

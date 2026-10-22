@@ -5,11 +5,13 @@ import { Menu, Plane, Sun, Moon, Sparkles, LogOut, UserCircle2 } from "lucide-re
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/context/UserContext";
+import { useAgencyEnabled } from "@/hooks/useAgencyEnabled";
 import { avatarSrc, initialsFor } from "@/lib/avatar";
 import { cn } from "@/lib/utils";
 
 const Navbar = () => {
   const { isAuthenticated, user, logout } = useAuth();
+  const agencyEnabled = useAgencyEnabled();
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const [isDark, setIsDark] = useState(false);
@@ -49,6 +51,9 @@ const Navbar = () => {
     { label: "Home", path: "/" },
     { label: "Plan Trip", path: "/plan" },
     { label: "My Trips", path: "/dashboard" },
+    ...(isAuthenticated && agencyEnabled
+      ? [{ label: "Agency", path: "/agency" }]
+      : []),
   ];
 
   return (

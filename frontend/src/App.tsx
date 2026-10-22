@@ -17,6 +17,12 @@ const Dashboard = lazy(() => import("./pages/Dashboard"));
 const SharedTrip = lazy(() => import("./pages/SharedTrip"));
 const InviteAccept = lazy(() => import("./pages/InviteAccept"));
 const Profile = lazy(() => import("./pages/Profile"));
+const AgencyApp = lazy(() => import("./pages/agency/AgencyApp"));
+const AgencyOverview = lazy(() => import("./pages/agency/AgencyOverview"));
+const AgencyOnboarding = lazy(() => import("./pages/agency/AgencyOnboarding"));
+const AgencyTeam = lazy(() => import("./pages/agency/AgencyTeam"));
+const AgencySettings = lazy(() => import("./pages/agency/AgencySettings"));
+const AgencyInviteAccept = lazy(() => import("./pages/agency/AgencyInviteAccept"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const PageLoader = () => (
@@ -61,6 +67,23 @@ const App = () => (
                     </ProtectedRoute>
                   }
                 />
+                <Route
+                  path="/agency/invite/:token"
+                  element={<AgencyInviteAccept />}
+                />
+                <Route
+                  path="/agency"
+                  element={
+                    <ProtectedRoute>
+                      <AgencyApp />
+                    </ProtectedRoute>
+                  }
+                >
+                  <Route index element={<AgencyOverview />} />
+                  <Route path="onboarding" element={<AgencyOnboarding />} />
+                  <Route path="team" element={<AgencyTeam />} />
+                  <Route path="settings" element={<AgencySettings />} />
+                </Route>
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>

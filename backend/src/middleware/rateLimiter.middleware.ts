@@ -176,6 +176,26 @@ export const passwordChangeLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+/**
+ * Agency Workspace A1: creating a tenant is a rare, high-impact action. Keep a
+ * modest daily cap per account so a compromised session cannot fill the
+ * database with empty agencies. Team/invite writes reuse the collaboration
+ * limiters above.
+ */
+export const agencyCreateLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000,
+  max: 10,
+  keyGenerator: userOrIpKey,
+  validate: false,
+  message: {
+    success: false,
+    error: 'You have created the maximum number of agencies for today. Please try again tomorrow.',
+    message: 'You have created the maximum number of agencies for today. Please try again tomorrow.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 /** F14 avatar uploads: bounded storage churn (20 photos / hour / account). */
 export const avatarUploadLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,

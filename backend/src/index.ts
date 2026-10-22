@@ -134,13 +134,13 @@ app.get('/api/health', (_req, res) => {
     collab: {
       sse: env.ENABLE_TRIP_SSE,
     },
-    // A0 feature discovery. The agency namespace is dark by default; the
+    // Agency feature discovery. The namespace is dark by default; the
     // frontend must not render agency navigation or call `/api/agency` unless
-    // this is true. Writes stay disabled until A1 ships the tenancy guards.
+    // this is true. A1 ships the tenancy guards and team-management writes.
     agency: {
       enabled: env.AGENCY_WORKSPACE_ENABLED,
-      milestone: 'A0',
-      writesEnabled: false,
+      milestone: 'A1',
+      writesEnabled: env.AGENCY_WORKSPACE_ENABLED,
     },
     staticServing: {
       enabled: Boolean(shouldServeStatic && frontendDist),

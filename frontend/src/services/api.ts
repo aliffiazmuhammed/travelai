@@ -30,6 +30,14 @@ import type {
   TripPoll,
   ChatKeysState,
   AssistantProposal,
+  Agency,
+  AgencyBranding,
+  AgencyHealth,
+  AgencyInvite,
+  AgencyInvitePreview,
+  AgencyInvitableRole,
+  AgencyMember,
+  AgencyRole,
 } from '@/types';
 
 export interface StreamProgressEvent {
@@ -316,6 +324,121 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify({ currentPassword, newPassword }),
     });
+  }
+
+  // Agency Workspace A1. The namespace 404s when the server feature flag is
+  // off; the UI probes `/api/health` and never renders the shell in that case.
+  async getHealth(): Promise<{ agency?: AgencyHealth }> {
+    return this.request('/api/health');
+  }
+
+  async getAgencies(): Promise<{ success: boolean; agencies: Agency[] }> {
+    return this.request('/api/agency');
+  }
+
+  async createAgency(payload: {
+    name: string;
+    branding?: Partial<AgencyBranding>;
+  }): Promise<{ success: boolean; agency: Agency }> {
+    return this.request('/api/agency', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getAgency(id: string): Promise<{ success: boolean; agency: Agency }> {
+    return this.request(`/api/agency/${encodeURIComponent(id)}`);
+  }
+
+  async updateAgency(
+    id: string,
+    payload: { name?: string; branding?: Partial<AgencyBranding> }
+  ): Promise<{ success: boolean; agency: Agency }> {
+    return this.request(`/api/agency/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getAgencyMembers(
+    id: string
+  ): Promise<{ success: boolean; members: AgencyMember[] }> {
+    return this.request(`/api/agency/${encodeURIComponent(id)}/members`);
+  }
+
+  async changeAgencyMemberRole(
+    id: string,
+    userId: string,
+    role: AgencyRole
+  ): Promise<{ success: boolean; members: AgencyMember[] }> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(id)}/members/${encodeURIComponent(userId)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ role }),
+      }
+    );
+  }
+
+  async removeAgencyMember(
+    id: string,
+    userId: string
+  ): Promise<{ success: boolean; members: AgencyMember[] }> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(id)}/members/${encodeURIComponent(userId)}`,
+      { method: 'DELETE' }
+    );
+  }
+
+  async getAgencyInvites(
+    id: string
+  ): Promise<{ success: boolean; invites: AgencyInvite[] }> {
+    return this.request(`/api/agency/${encodeURIComponent(id)}/invites`);
+  }
+
+  async createAgencyInvite(
+    id: string,
+    payload: {
+      role: AgencyInvitableRole;
+      kind?: 'link' | 'email';
+      email?: string;
+      maxUses?: number;
+      ttlHours?: number;
+    }
+  ): Promise<{ success: boolean; invite: AgencyInvite; link: string }> {
+    return this.request(`/api/agency/${encodeURIComponent(id)}/invites`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async revokeAgencyInvite(
+    id: string,
+    inviteId: string
+  ): Promise<{ success: boolean; invite: AgencyInvite }> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(id)}/invites/${encodeURIComponent(inviteId)}`,
+      { method: 'DELETE' }
+    );
+  }
+
+  async getAgencyInvitePreview(
+    token: string
+  ): Promise<{ success: boolean } & AgencyInvitePreview> {
+    return this.request(`/api/agency/invites/${encodeURIComponent(token)}`);
+  }
+
+  async acceptAgencyInvite(token: string): Promise<{
+    success: boolean;
+    agencyId: string;
+    role: AgencyInvitableRole;
+    alreadyMember: boolean;
+    message: string;
+  }> {
+    return this.request(
+      `/api/agency/invites/${encodeURIComponent(token)}/accept`,
+      { method: 'POST' }
+    );
   }
 
   // Trip endpoints
