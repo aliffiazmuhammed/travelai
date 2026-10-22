@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import { parseBooleanFlag } from './features.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -48,6 +49,12 @@ const envSchema = z.object({
     .optional()
     .transform((value) => value !== undefined && value !== '' && value !== 'false'),
   PRESENCE_TTL_MS: z.coerce.number().positive().default(30000),
+  // Agency Workspace (A0). Dark by default; A1 adds the tenancy layer and the
+  // first write routes. Only explicit truthy values enable the namespace.
+  AGENCY_WORKSPACE_ENABLED: z
+    .string()
+    .optional()
+    .transform((value) => parseBooleanFlag(value)),
   // F13: retained version snapshots per trip (each is a full itinerary).
   VERSIONS_MAX: z.coerce.number().positive().default(30),
   // F6a comments (§19.5). Consumed directly by services/collab/comments.ts

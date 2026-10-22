@@ -12,6 +12,7 @@ import authRoutes from './routes/auth.routes.js';
 import itineraryRoutes from './routes/itinerary.routes.js';
 import invitesRoutes from './routes/invites.routes.js';
 import geoRoutes from './routes/geo.routes.js';
+import agencyRoutes from './routes/agency.routes.js';
 import { errorHandler } from './middleware/error.middleware.js';
 import { isCloudinaryConfigured, uploadDir } from './services/finance/receipt.js';
 import { CSRF_HEADER, issueCsrfCookie, verifyCsrf } from './middleware/csrf.middleware.js';
@@ -133,6 +134,14 @@ app.get('/api/health', (_req, res) => {
     collab: {
       sse: env.ENABLE_TRIP_SSE,
     },
+    // A0 feature discovery. The agency namespace is dark by default; the
+    // frontend must not render agency navigation or call `/api/agency` unless
+    // this is true. Writes stay disabled until A1 ships the tenancy guards.
+    agency: {
+      enabled: env.AGENCY_WORKSPACE_ENABLED,
+      milestone: 'A0',
+      writesEnabled: false,
+    },
     staticServing: {
       enabled: Boolean(shouldServeStatic && frontendDist),
       envServeStatic: env.SERVE_STATIC ?? 'unset',
@@ -168,6 +177,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/itinerary', itineraryRoutes);
 app.use('/api/invites', invitesRoutes);
 app.use('/api/geo', geoRoutes);
+// Agency Workspace (A0): read-only placeholder namespace, gated per request.
+app.use('/api/agency', agencyRoutes);
 
 // Uploaded receipt files (Milestone 5.5). Registered before the SPA fallback so
 // `/uploads/<file>` is never rewritten to index.html. Filenames are generated
