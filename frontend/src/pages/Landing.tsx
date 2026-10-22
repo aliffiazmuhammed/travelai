@@ -2,75 +2,221 @@ import { useAuth } from "@/context/UserContext";
 import Navbar from "@/components/Navbar";
 import Hero from "@/components/Hero";
 import FeatureCard from "@/components/FeatureCard";
-import { Brain, Calendar, Map, DollarSign, Share2, Users } from "lucide-react";
+import LandingChat from "@/components/LandingChat";
+import {
+  Brain,
+  Calendar,
+  Map,
+  BadgeIndianRupee,
+  Share2,
+  Users,
+  MessageCircle,
+  Sparkles,
+  SlidersHorizontal,
+  Smartphone,
+  ListChecks,
+  Lock,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 
+interface Feature {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+}
+
+const features: Feature[] = [
+  {
+    icon: Sparkles,
+    title: "A plan in one message",
+    description:
+      "Tell us where you're going, who's coming and what you like. You get a day-by-day plan with places, timings and cost.",
+  },
+  {
+    icon: MessageCircle,
+    title: "Ask TravelAI in the chat",
+    description:
+      "Type @TravelAI in your trip chat and ask anything — from 'is this enough time?' to 'pick dinner for the group'.",
+  },
+  {
+    icon: Users,
+    title: "Say it as a group",
+    description:
+      "Vote in chat on hotels, days or dinner spots. The plan everyone agrees on gets pinned so nobody has to scroll for it.",
+  },
+  {
+    icon: Calendar,
+    title: "Change any day",
+    description:
+      "Add, edit or reorder activities yourself. Move a day, save the change, and it updates for everyone.",
+  },
+  {
+    icon: Map,
+    title: "See the whole trip on a map",
+    description:
+      "Every place for the day, in order, with distance between them. No more juggling five apps.",
+  },
+  {
+    icon: BadgeIndianRupee,
+    title: "Money without chaos",
+    description:
+      "See planned vs. actual spend, log what you paid, and know exactly who owes whom when the trip ends.",
+  },
+  {
+    icon: Share2,
+    title: "Share in one tap",
+    description:
+      "Send a link that anyone can open without an account, copy a WhatsApp summary, or download a clean PDF.",
+  },
+  {
+    icon: SlidersHorizontal,
+    title: "Tweak it anytime",
+    description:
+      "Test a different stay, change the day count, or ask TravelAI for a rainy-day alternative. Nothing is set in stone.",
+  },
+  {
+    icon: Smartphone,
+    title: "Works on phones and laptops",
+    description:
+      "The same trip looks good everywhere, because everyone keeps opening the same link.",
+  },
+];
+
+const steps = [
+  {
+    icon: Sparkles,
+    title: "Tell us about the trip",
+    body: "Where, when, how many people, and what you love doing. A short message is enough.",
+  },
+  {
+    icon: ListChecks,
+    title: "Get a plan you can touch",
+    body: "A day-by-day plan, a map, and costs appear together — and you can change any of it.",
+  },
+  {
+    icon: Users,
+    title: "Decide it together",
+    body: "Friends join the trip chat to vote and ask questions, so you end up with a plan everyone likes.",
+  },
+];
+
+const trustRows: { icon: LucideIcon; title: string; body: string }[] = [
+  {
+    icon: Lock,
+    title: "Your chats stay private",
+    body: "Messages are end-to-end encrypted, meaning only people on your trip can read them.",
+  },
+  {
+    icon: Calendar,
+    title: "You stay in control",
+    body: "Only you can change the trip's name, dates and privacy. Family and friends get the editing or viewing rights you give them.",
+  },
+];
+
 const Landing = () => {
   const { isAuthenticated } = useAuth();
-  const features = [
-    {
-      icon: Brain,
-      title: "Real-Time AI Streaming",
-      description:
-        "Powered by Gemini 2.5 Pro with Groq fallback. Watch your personalized itinerary synthesize live in seconds with multi-stage progress.",
-    },
-    {
-      icon: Calendar,
-      title: "Interactive Day Timelines",
-      description:
-        "Rich vertical timelines with morning to night scheduling. Customize, reorder, edit, and add activities to any day on the fly.",
-    },
-    {
-      icon: Map,
-      title: "Interactive Leaflet Maps",
-      description:
-        "Visualize your destination with OpenStreetMap tiles, custom numbered activity markers, stay locations, and day-by-day travel routes.",
-    },
-    {
-      icon: DollarSign,
-      title: "Visual Budget Analytics",
-      description:
-        "Stay in control with interactive Recharts donut and bar breakdowns, per-person toggles, emergency reserves, and UPI payment guides.",
-    },
-    {
-      icon: Share2,
-      title: "Public Sharing & Export",
-      description:
-        "Generate public web links, copy formatted summaries ready for WhatsApp, export full JSON data, or print clean travel guide PDFs.",
-    },
-    {
-      icon: Users,
-      title: "Smart Group Personalization",
-      description:
-        "Solo, couple, family, or friends trip presets with adult and child count adjusters, pacing algorithms, and custom travel interests.",
-    },
-  ];
 
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
       <Hero />
 
-      {/* Features Section */}
-      <section className="py-16 sm:py-24 px-4">
+      {/* How it works */}
+      <section className="py-16 sm:py-20 px-4" aria-labelledby="how-it-works">
+        <div className="container mx-auto">
+          <div className="text-center mb-10 sm:mb-14 space-y-3">
+            <h2 id="how-it-works" className="text-2xl sm:text-4xl font-bold tracking-tight">
+              Three steps, and you're packed
+            </h2>
+            <p className="text-sm sm:text-lg text-muted-foreground max-w-2xl mx-auto px-2">
+              No forms, no spreadsheets, no group chats full of confusion.
+            </p>
+          </div>
+
+          <ol className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+            {steps.map((step, index) => (
+              <li
+                key={step.title}
+                className="relative rounded-3xl border border-border/70 bg-card p-6 sm:p-7 shadow-card hover-lift space-y-3"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-sky-500 to-primary text-white flex items-center justify-center shadow-md shadow-sky-500/25">
+                    <step.icon className="h-5 w-5" />
+                  </div>
+                  <span className="text-[11px] font-black uppercase tracking-wider text-primary/80">
+                    Step {index + 1}
+                  </span>
+                </div>
+                <h3 className="text-lg font-bold text-foreground tracking-tight">{step.title}</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">{step.body}</p>
+                <span className="absolute right-5 bottom-4 text-5xl font-black text-primary/5 select-none" aria-hidden="true">
+                  {index + 1}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+
+      {/* Meet the AI helper — shows the actual chat, not tech words */}
+      <section className="py-16 sm:py-24 px-4 bg-muted/30 border-y border-border/60" aria-labelledby="meet-travelai">
+        <div className="container mx-auto">
+          <div className="text-center mb-10 sm:mb-14 space-y-3">
+            <h2 id="meet-travelai" className="text-2xl sm:text-4xl font-bold tracking-tight">
+              Meet TravelAI,
+              <span className="block bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                the helper in your trip chat
+              </span>
+            </h2>
+            <p className="text-sm sm:text-lg text-muted-foreground max-w-2xl mx-auto px-2">
+              Type @TravelAI in your trip chat and it answers using your trip details, so the whole group can read and
+              decide together.
+            </p>
+          </div>
+          <LandingChat />
+        </div>
+      </section>
+
+      {/* Features */}
+      <section className="py-16 sm:py-24 px-4" aria-labelledby="features">
         <div className="container mx-auto">
           <div className="text-center mb-12 sm:mb-16 space-y-4">
-            <h2 className="text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight">
-              Everything You Need to
+            <h2 id="features" className="text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight">
+              Everything you need,
               <span className="block bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                Plan the Perfect Trip
+                minus the confusion
               </span>
             </h2>
             <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto px-2">
-              Powerful features designed to make travel planning effortless and enjoyable
+              If something feels like work, TravelAI does it for you. If it feels like fun, that part is yours.
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
             {features.map((feature, index) => (
-              <div key={index} className="animate-fade-in" style={{ animationDelay: `${index * 0.1}s` }}>
+              <div key={feature.title} className="animate-fade-in" style={{ animationDelay: `${(index % 3) * 0.1}s` }}>
                 <FeatureCard {...feature} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Plain-language trust band */}
+      <section className="py-12 sm:py-16 px-4" aria-labelledby="privacy">
+        <div className="container mx-auto">
+          <div className="max-w-4xl mx-auto grid gap-4 sm:grid-cols-2">
+            {trustRows.map(({ icon: Icon, title, body }) => (
+              <div key={title} className="rounded-3xl border border-border/70 bg-card p-6 shadow-xs flex gap-4">
+                <div className="w-10 h-10 rounded-xl bg-accent/10 text-accent flex items-center justify-center shrink-0">
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-base font-bold text-foreground tracking-tight">{title}</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{body}</p>
+                </div>
               </div>
             ))}
           </div>
@@ -87,10 +233,10 @@ const Landing = () => {
 
             <div className="relative z-10 max-w-3xl mx-auto space-y-4 sm:space-y-6">
               <h2 className="text-2xl sm:text-4xl md:text-5xl font-black tracking-tight text-white drop-shadow-sm">
-                Ready to Start Your Adventure?
+                Ready for your next trip?
               </h2>
               <p className="text-sm sm:text-lg md:text-xl text-sky-100 font-medium max-w-2xl mx-auto px-2">
-                Join thousands of travelers who've discovered smarter trip planning with AI
+                Type it out, watch the plan come together, and share it with whoever's coming.
               </p>
               <div className="pt-2 sm:pt-4">
                 <Link to={isAuthenticated ? "/dashboard" : "/auth"}>
@@ -113,7 +259,7 @@ const Landing = () => {
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="text-center md:text-left">
               <p className="text-sm text-muted-foreground">
-                © 2025 TravelAI. Built with love for travelers.
+                © 2026 TravelAI. Built with love for travelers.
               </p>
             </div>
             <div className="flex gap-6">
