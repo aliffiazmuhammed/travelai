@@ -604,3 +604,22 @@ The previous increments kept deferring the viewer matrix because it needs a seco
 - **The viewer can read the chat.** Read-only means no writes; it does not mean the transcript is hidden. A viewer who joins after a key epoch receives an envelope like any other member.
 - **Account cleanup was direct-database, not a product feature.** There is still no account deletion or self-service data export; the test user was removed with a one-off local script.
 - **No CI coverage for role-shaped UI.** These checks were manual; the server route guards remain the automated part.
+
+### 12.26 CI — the suite runs on every push (2026-10-22)
+
+Every verification so far was a local command run by hand. A regression could merge as long as the person pushing remembered to run the suite. `.github/workflows/ci.yml` now runs the same checks on pushes to `main`, pull requests, and manual dispatches: `npm ci`, the **332-test** backend suite, the backend TypeScript build, frontend `typecheck`, and the frontend Vite build. The root `npm run verify` mirrors those steps locally, so the command in the workflow and the command a developer runs are the same intent.
+
+**CI does not need a database or provider keys.** The backend tests are dependency-free by design; they exercise pure helpers, schemas, route tables and model validation without opening Mongo or calling Gemini, Groq, Cloudinary, OpenStreetMap or Nominatim. That is why the job can run on a bare GitHub runner. The frontend build also uses no secrets; Vite reads only the checked-in code at build time.
+
+**Two deliberate boundaries.** CI runs the workspace build, not `build:frontend`, because that root script copies `frontend/dist` into `backend/public`; a CI checkout has no business rewriting the deploy mirror. It also does not deploy, migrate a database or call production health: those still need Render/Atlas credentials and a human decision. Concurrency cancels an older run on the same ref, and the job is capped at 15 minutes.
+
+**Verification.** `npm run test:backend` passed **332/332** locally, `npm run verify` is the CI-equivalent local command, and the workflow file is the only new runtime surface. No application code or bundle changed in this increment.
+
+**Deliberately not in this increment / honest limits:**
+
+- **No DB-backed integration tests.** The suite still does not start Mongo or exercise a real request/response cycle; that needs a service container and a disposable database.
+- **No browser or E2E tests.** The viewer, recovery, map, PDF and CSP checks remain manual browser passes.
+- **No frontend component tests.** There is no Vitest/RTL harness; `typecheck` and `build` catch type and bundling breaks, not behaviour.
+- **No coverage gate.** The 332 tests run, but no threshold fails a PR for dropping coverage.
+- **No deployment verification.** A green workflow means the code compiles and the unit suite passes, not that Render, Cloudinary, Atlas, SSE or the CSP behave correctly in production.
+- **No dependency or secret scanning.** `npm audit`, CodeQL and secret scanning are separate workflows not added here.
