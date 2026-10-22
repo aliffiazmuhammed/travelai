@@ -156,7 +156,9 @@ export const TripVersions: React.FC<TripVersionsProps> = ({
             Itinerary History
           </h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Every save creates a snapshot. Restore any snapshot to roll back your itinerary.
+            {canRestore
+              ? "Every save creates a snapshot. Restore any snapshot to roll back your itinerary."
+              : "Every save creates a snapshot. Ask an editor or the owner to restore one."}
           </p>
         </div>
 
@@ -202,7 +204,9 @@ export const TripVersions: React.FC<TripVersionsProps> = ({
           </div>
           <h3 className="text-base font-bold text-foreground">No previous versions yet</h3>
           <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-            You're on version {current}. Your first edit or reorder will create a restorable snapshot.
+            {canRestore
+              ? `You're on version ${current}. Your first edit or reorder will create a restorable snapshot.`
+              : `You're on version ${current}. Edits by the owner or editors will appear here.`}
           </p>
         </div>
       ) : (

@@ -132,7 +132,7 @@ function drawCover(ctx: Ctx, data: ItineraryData) {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
   doc.setTextColor(220, 240, 255);
-  doc.text(clean("TRAVELAI  ·  AI 2.5"), PAGE_W - M - 6, TOP + 10, { align: "right" });
+  doc.text(clean("TRAVELAI  ·  ASSISTANT"), PAGE_W - M - 6, TOP + 10, { align: "right" });
 
   // Titles — shrink rather than truncate when the destination name is long
   doc.setFont("helvetica", "bold");

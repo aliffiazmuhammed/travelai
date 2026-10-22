@@ -584,3 +584,23 @@ A fresh browser profile proved the honest limit of the automatic key exchange: i
 - **No multi-epoch keyring.** Clients keep only the current conversation key; old messages are not decrypted in the background. A future keyring would be required to read history across rotations.
 - **The server still trusts any member to publish a higher epoch.** That was already true of the key route; this increment makes the client path usable, not the authorization model stricter.
 - **No second-account viewer test here.** The local verification used one account and multiple published devices; member-side unlock still needs a two-account manual pass.
+
+### 12.25 M7.6 — the read-only viewer pass, and the last version badge (2026-10-22)
+
+The previous increments kept deferring the viewer matrix because it needs a second account. This pass created a disposable one, invited it as a **viewer**, accepted the token, and walked every trip tab before removing the account again.
+
+**The read-only shape was correct.** The dashboard listed the trip under **Shared with me** with a `Viewer` badge. Opening it showed every tab but removed every write affordance found: no Save, Add, Edit, Delete, Invite, role picker or poll composer; Expenses had no add form; Chat had no textarea and no Send/Poll buttons. The chat still showed the exact privacy line and the viewer explanation. Version History was visible, and no Restore control appeared. People listed both members and offered **Leave trip** but no owner controls.
+
+**Three copy defects surfaced because the second role finally looked at the same screens.** With no messages, the chat empty state still said *“No messages yet — start the conversation above”* to a viewer who had no composer. The read-only notice said *“ask the owner to change your role to comment”* instead of naming the commenter role. Version History promised *“Restore any snapshot to roll back your itinerary”* and *“Your first edit … will create a restorable snapshot”* to a viewer who can do neither. The empty state now drops the call to action when `canWrite` is false, the notice says *“make you a commenter,”* and the history copy branches on `canRestore` to point viewers at the owner/editors.
+
+**The last version badge is gone.** The navbar chip that read **AI 2.5** now reads **Assistant**, and the PDF footer says **TRAVELAI · ASSISTANT**. Neither is a model version; the old label implied a precision the product does not claim.
+
+**Verification and cleanup.** Backend `npm run migrate:members` was re-run locally: it reported 0 trips to backfill, and `db-audit.mts` reported `legacyNoMembers = 0` for the `travelai` database (2 trips). The viewer left through the normal route, the invite was revoked, and the disposable user, its read marker and the revoked invite row were deleted directly from the local database. The trip is back to one owner. Frontend `npm run typecheck` and `npm run build` clean; the SPA mirror was refreshed and the fixes were smoke-checked as the owner.
+
+**Deliberately not in this increment / honest limits:**
+
+- **No populated version list was tested as a viewer.** The trip had no snapshots, so the check proved the Restore control is absent when `canRestore` is false, not that an existing version row hides its action.
+- **No commenter/editor second-account pass.** This covered the lowest role; commenter chat/polls and editor saves still need their own disposable accounts.
+- **The viewer can read the chat.** Read-only means no writes; it does not mean the transcript is hidden. A viewer who joins after a key epoch receives an envelope like any other member.
+- **Account cleanup was direct-database, not a product feature.** There is still no account deletion or self-service data export; the test user was removed with a one-off local script.
+- **No CI coverage for role-shaped UI.** These checks were manual; the server route guards remain the automated part.

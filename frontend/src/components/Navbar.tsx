@@ -69,7 +69,7 @@ const Navbar = () => {
                 TravelAI
               </span>
               <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/25">
-                AI 2.5
+                Assistant
               </span>
             </div>
           </Link>

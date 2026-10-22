@@ -1215,7 +1215,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
   ) : (
     <div className="rounded-2xl border border-dashed border-border/70 bg-muted/40 p-3 text-xs text-muted-foreground">
       You're viewing this trip, so the chat is read-only — ask the owner to
-      change your role to comment.
+      make you a commenter.
     </div>
   );
 
@@ -1241,9 +1241,11 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
     ) : timeline.length === 0 ? (
       <div className="py-8 text-center text-xs text-muted-foreground">
         {dayFilter === null
-          ? isChat
-            ? "No messages yet — say hi 👋"
-            : "No messages yet — start the conversation above."
+          ? !canWrite
+            ? "No messages yet."
+            : isChat
+              ? "No messages yet — say hi 👋"
+              : "No messages yet — start the conversation above."
           : "Nothing on this day yet."}
       </div>
     ) : (
