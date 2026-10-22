@@ -544,3 +544,43 @@ The M7.3 limits list named four concrete leftovers. This batch closes them rathe
 - **The same-origin bypass trusts the proxy's host/protocol.** It is computed with `trust proxy` + `Host`, which is correct on Render and localhost. A reverse proxy that rewrites `Host` or lies about `X-Forwarded-Proto` could make a foreign origin look same-origin; the fix is a correct proxy configuration, not a wider allow-list.
 - **`/auth/me` narrows the payload, not the session.** Already-issued JWTs still stay valid after a password change; revocation remains future work.
 - **Still no decryptable session revocation, notifications, password reset, account deletion, chat attachments or CI.** Those remain the post-M7 roadmap, not regressions.
+
+### 12.23 M7.5 — the home page speaks traveler, not engineer (2026-10-22)
+
+The landing page still explained the product to the people who built it: provider names, map libraries, chart libraries, JSON, streaming, presets and algorithms. A first-time traveler could read the whole page and not learn the one thing that makes TravelAI different — that the assistant is inside the trip conversation, not a separate chatbot tab.
+
+**The page now answers three plain questions.** The hero says what the product does in one sentence (“Plan a whole trip with the people you're going with — and ask for changes right in the chat”). A three-step strip explains the actual sequence: describe the trip, get a day-by-day plan, then invite people and ask TravelAI for changes together. Every step is written in traveler language, not implementation language.
+
+**The chat preview is the argument.** `LandingChat` shows a realistic trip thread: two travelers discussing a day, the `@TravelAI` mention, a short answer about moving a rainy-day plan, and an inline poll. It includes the exact privacy line — *“Messages are end-to-end encrypted.”* — without claiming that the mock is a live conversation. The preview is the only place on the page that shows how the assistant is reached; the feature cards then point back to that same behaviour.
+
+**Jargon removed.** The page no longer names Gemini, Groq, Leaflet, Recharts, JSON, streaming, presets or algorithms. Those are real parts of the implementation, but they are not reasons for a traveler to trust or use the product. The rewrite keeps the concrete benefits (fast plans, shared edits, private chat, live polls) and drops the stack tour.
+
+**Verification.** Frontend `npm run typecheck` and `npm run build` clean; the SPA mirror was refreshed. Browser smoke covered signed-out and signed-in landing pages in both dark and light themes, including the chat preview, privacy line and both calls to action.
+
+**Deliberately not in this increment / honest limits:**
+
+- **The chat preview is a static component, not a live demo.** It demonstrates the interaction and privacy copy but does not call the AI or open a real trip.
+- **No new screenshots or marketing assets.** The page still uses the existing hero image and typography.
+- **The navbar still says “AI 2.5.”** It is the last technical-looking label on the public page; renaming it to “Assistant” is a follow-up, not part of this copy pass.
+- **Discoverability still ends at the chat.** §12.18 makes the assistant findable inside a trip; the landing page now explains it, but there is still no in-dashboard coach mark outside the chat.
+
+### 12.24 F10 — chat-key recovery that tells the truth (2026-10-22)
+
+A fresh browser profile proved the honest limit of the automatic key exchange: if a device has no envelope for the current trip key and no other open device can re-wrap it, the chat stayed on *“Chat is unlocking on this device…”* forever. Reconnect looped, polls stayed disabled, and the UI offered no way forward. The cryptography was behaving as designed; the product was not.
+
+**Recovery is a new epoch, not a backup code.** While the device is keyless, the composer notice now says plainly that this device cannot open the chat and that messages sent now are unprotected. **Try again** still re-runs the automatic path. A second, quieter action — **Still stuck? Start a new chat** — opens a destructive confirmation, then mints the next conversation key, wraps it for every device currently published on the trip, and saves it through the existing `PUT /chat/keys` route. On success the device is immediately `ready`, polls re-enable, and the normal privacy line returns.
+
+**What is preserved and what is not.** The new key is wrapped locally for every member device; the server still receives only public keys and ciphertext envelopes, so it cannot read the new chat either. The private half never leaves the browser and no recovery secret is stored. But messages sealed under the old key stay unreadable: this is a forward move, not history recovery. The confirmation says that before anything changes. The action is only offered while keyless, and the hook refuses to run if a working conversation key is already present, so recovery can never downgrade a healthy chat.
+
+**Because the whole trip moves epochs, honesty matters.** If another device is simply offline, reopening its chat usually heals this device automatically; the dialog tells the user that. If they reset anyway, all current devices receive the new key and older messages remain locked for everyone. The server already allowed higher epochs and its `assertEpochTransition` contract is unchanged. A concurrent reset from another device produces the existing **409**; the UI reports that the chat changed and asks the user to try again rather than silently retrying into a different key.
+
+**Verification.** Local unified server with the SPA mirror refreshed. Starting from a cleared browser identity: keyless notice and both actions appeared; reset produced epoch **2**, envelopes for all three published device keys of the single account, `Poll` enabled and no lock notice. A full page reload then auto-unlocked from the new self-envelope without another reset, proving the wrap/unwrap round-trip rather than only the status flag. Frontend `npm run typecheck` and `npm run build` clean.
+
+**Deliberately not in this increment / honest limits:**
+
+- **Lost history is permanent.** There is no escrow, password-derived key, recovery code or server-side copy; those would change the threat model. The only recovery for old messages is another device that still holds the old key and is open.
+- **Recovery rotates the trip, not one message.** Every current device is moved to the new epoch. A device that never comes back cannot read anything sealed after the reset.
+- **No automatic “you seem stuck” prompt.** The recovery link is always visible while keyless, but the app does not count failures and offer it as a modal.
+- **No multi-epoch keyring.** Clients keep only the current conversation key; old messages are not decrypted in the background. A future keyring would be required to read history across rotations.
+- **The server still trusts any member to publish a higher epoch.** That was already true of the key route; this increment makes the client path usable, not the authorization model stricter.
+- **No second-account viewer test here.** The local verification used one account and multiple published devices; member-side unlock still needs a two-account manual pass.

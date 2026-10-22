@@ -78,6 +78,13 @@ export interface ChatCryptoApi {
   /** Re-runs the key flow in place (the fallback banner's Retry action). */
   retry: () => void;
   /**
+   * Last-resort recovery for a device that cannot open the trip key: mint a new
+   * conversation key (next epoch), wrap it for every current device, and move
+   * the trip's chat forward. Messages sealed under the old key stay unreadable.
+   * Only usable while this device is locked (never downgrades a working chat).
+   */
+  resetChat: () => Promise<void>;
+  /**
    * F13a: seals an arbitrary JSON value with the trip key (polls: question +
    * options, and each vote's index). `null` when this device has no key — the
    * caller must refuse the action rather than fall back to plaintext.
@@ -348,6 +355,67 @@ export function useTripChatCrypto(
   }, [runKeyFlow]);
 
   /**
+   * Last-resort recovery for a device that cannot open any existing envelope.
+   * Mints the next conversation key and wraps it for every device currently on
+   * the trip. Deliberately unavailable while this device already has a key:
+   * recovery must never throw away a working chat. Older messages were sealed
+   * under the previous key and remain unreadable — the UI says so before this
+   * runs. No backup code and nothing reusable leaves the browser.
+   */
+  const resetChat = useCallback(async () => {
+    if (!tripId || !currentUserId) {
+      throw new Error('Open the trip again before starting a new chat.');
+    }
+    // Never let recovery downgrade a chat that is already working here.
+    if (convKeyRef.current) {
+      setStatus('ready');
+      return;
+    }
+    const identity = await ensureIdentity();
+    if (!identity) {
+      throw new Error('This browser cannot set up the secure chat.');
+    }
+    setStatus('bootstrap');
+    setError(undefined);
+    try {
+      await api.setMyChatKey(identity.pubKey).catch(() => undefined);
+      const state = await api.getTripChatKeys(tripId);
+      const conversationKey = await generateConversationKey();
+      const envelopes: Record<string, string> = {};
+      for (const member of state.members || []) {
+        for (const pub of memberDeviceKeysOf(member)) {
+          try {
+            envelopes[pub] = await wrapEnvelope(currentUserId, identity, pub, conversationKey);
+          } catch {
+            /* one device failing to wrap never blocks the rest */
+          }
+        }
+      }
+      if (!envelopes[identity.pubKey]) {
+        // Our key was not in the roster view yet (publication race): wrap for
+        // ourselves so this device is never left out of the epoch it minted.
+        envelopes[identity.pubKey] = await wrapEnvelope(
+          currentUserId,
+          identity,
+          identity.pubKey,
+          conversationKey
+        );
+      }
+      const next = await api.putTripChatKeys(tripId, (state.epoch ?? 0) + 1, envelopes);
+      convKeyRef.current = conversationKey;
+      setKeylessReason(undefined);
+      setStatus('ready');
+      await healSlots(identity, next);
+    } catch (err: any) {
+      setStatus('keyless');
+      if (err?.status === 409) {
+        throw new Error('The chat changed on another device just now. Please try again.');
+      }
+      throw new Error(err?.message || 'Could not start a new chat on this device.');
+    }
+  }, [tripId, currentUserId, healSlots]);
+
+  /**
    * Quiet re-check (never flickers through 'starting'): while keyless it tries
    * to open my envelopes; while ready it heals slots that appeared since (a
    * second browser of this account, or a fresh member) so the OTHER device
@@ -513,6 +581,7 @@ export function useTripChatCrypto(
     rememberPlaintext,
     encryptOutgoing,
     retry,
+    resetChat,
     sealJson,
     openJson,
   };

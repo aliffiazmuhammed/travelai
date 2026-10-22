@@ -247,6 +247,9 @@ const OFFLINE_CRYPTO: ChatCryptoApi = {
   sealJson: async () => null,
   openJson: async () => null,
   retry: () => undefined,
+  resetChat: async () => {
+    throw new Error("Chat is unavailable in this browser.");
+  },
 };
 
 /**
@@ -307,6 +310,10 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
   const [pollComposerOpen, setPollComposerOpen] = useState(false);
   const [pollCreating, setPollCreating] = useState(false);
   const [pollBusyId, setPollBusyId] = useState<string | null>(null);
+  // F10 recovery: this device cannot open any existing key, so the only way
+  // forward is a new chat key. Confirm first — older messages stay locked.
+  const [resetChatOpen, setResetChatOpen] = useState(false);
+  const [resettingChat, setResettingChat] = useState(false);
   // F15: the mention menu is driven by the caret, and the "it reads this chat"
   // tip is a one-time coach mark — dismissed per browser, so it never nags.
   const [mentionOpen, setMentionOpen] = useState(false);
@@ -743,6 +750,19 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
     // ensureLoaded is idempotent per open; force a fresh attempt by reloading state
   };
 
+  const startNewChat = async () => {
+    setResettingChat(true);
+    try {
+      await cryptoApi.resetChat();
+      setResetChatOpen(false);
+      toast.success("Chat is ready on this device. New messages and polls are protected.");
+    } catch (err: any) {
+      toast.error(err?.message || "Could not start a new chat. Please try again.");
+    } finally {
+      setResettingChat(false);
+    }
+  };
+
   /** Auto-grow — the WhatsApp trick: the input is one line until it isn't. */
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const autosizeComposer = () => {
@@ -887,19 +907,30 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
    */
   const sendNotice =
     cryptoApi.status !== 'ready' ? (
-      <div className="flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground">
-        <span>
-          {cryptoApi.status === 'keyless'
-            ? "Chat is unlocking on this device — messages you send now aren't protected yet."
-            : "Messages you send here aren't protected yet."}
-        </span>
-        <button
-          type="button"
-          onClick={cryptoApi.retry}
-          className="font-bold underline underline-offset-2 hover:text-foreground"
-        >
-          Reconnect
-        </button>
+      <div className="flex flex-col items-center justify-center gap-1 text-[10px] text-muted-foreground">
+        <div className="flex items-center justify-center gap-1.5">
+          <span>
+            {cryptoApi.status === 'keyless'
+              ? "This device can't open the chat yet. Messages you send now aren't protected."
+              : "Messages you send here aren't protected yet."}
+          </span>
+          <button
+            type="button"
+            onClick={cryptoApi.retry}
+            className="font-bold underline underline-offset-2 hover:text-foreground"
+          >
+            Try again
+          </button>
+        </div>
+        {cryptoApi.status === 'keyless' && (
+          <button
+            type="button"
+            onClick={() => setResetChatOpen(true)}
+            className="font-semibold text-muted-foreground/80 underline underline-offset-2 hover:text-foreground"
+          >
+            Still stuck? Start a new chat
+          </button>
+        )}
       </div>
     ) : null;
 
@@ -1467,6 +1498,26 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
             <AlertDialogCancel>Keep it</AlertDialogCancel>
             <AlertDialogAction onClick={() => void confirmDelete()}>
               Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* F10 recovery: a locked device can move the chat forward, honestly */}
+      <AlertDialog open={resetChatOpen} onOpenChange={setResetChatOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Start a new chat on this device?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Older messages will stay locked and can't be read here. New messages and polls will be private
+              again. Only do this if this device never unlocks — if another member's chat is open, their app
+              will usually unlock this one for you.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={resettingChat}>Keep trying</AlertDialogCancel>
+            <AlertDialogAction disabled={resettingChat} onClick={() => void startNewChat()}>
+              {resettingChat ? "Starting…" : "Start new chat"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
