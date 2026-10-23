@@ -14,7 +14,12 @@ export async function buildTripHistorySummary(
 ): Promise<TripHistorySummary | null> {
   if (!userId) return null;
 
-  const trips = await Trip.find({ userId, isDeleted: { $ne: true } })
+  const trips = await Trip.find({
+    userId,
+    isDeleted: { $ne: true },
+    // Personalization history is personal-only; agency trips are tenant data.
+    workspace: { $ne: 'agency' },
+  })
     .sort({ createdAt: -1 })
     .limit(MAX_HISTORY_TRIPS)
     .select('title tripDetails generationMeta feedback')

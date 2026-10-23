@@ -48,6 +48,22 @@ interface MyTripsViewProps {
   onRestoreTrip: (tripId: string) => Promise<void>;
   onPurgeTrip: (tripId: string) => Promise<void>;
   onNewPlan: () => void;
+  /** A2: the agency library reuses this view with tenant copy. */
+  variant?: "personal" | "agency";
+  heading?: string;
+  eyebrow?: string;
+  newPlanLabel?: string;
+  emptyTitle?: string;
+  emptyBody?: string;
+  deletedHelpText?: string;
+  /** Cosmetic role gates; the server enforces both. */
+  canDuplicateTrip?: (trip: Trip) => boolean;
+  canDeleteTrip?: (trip: Trip) => boolean;
+  /** Optional controlled search/status (the agency library filters server-side). */
+  searchValue?: string;
+  onSearchChange?: (value: string) => void;
+  statusValue?: string;
+  onStatusChange?: (value: string) => void;
 }
 
 const DESTINATION_IMAGES: Record<string, string> = {
@@ -108,9 +124,30 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
   onRestoreTrip,
   onPurgeTrip,
   onNewPlan,
+  variant = "personal",
+  heading,
+  eyebrow,
+  newPlanLabel,
+  emptyTitle,
+  emptyBody,
+  deletedHelpText,
+  canDuplicateTrip,
+  canDeleteTrip,
+  searchValue,
+  onSearchChange,
+  statusValue,
+  onStatusChange,
 }) => {
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const isAgency = variant === "agency";
+  const planLabel = newPlanLabel ?? (isAgency ? "Create Agency Trip" : "Plan New Trip");
+  const [internalSearch, setInternalSearch] = useState("");
+  const [internalStatusFilter, setInternalStatusFilter] = useState<string>("all");
+  const search = searchValue ?? internalSearch;
+  const statusFilter = statusValue ?? internalStatusFilter;
+  const setSearch = (value: string) =>
+    onSearchChange ? onSearchChange(value) : setInternalSearch(value);
+  const setStatusFilter = (value: string) =>
+    onStatusChange ? onStatusChange(value) : setInternalStatusFilter(value);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [tripToDelete, setTripToDelete] = useState<Trip | null>(null);
   const [tripToPurge, setTripToPurge] = useState<Trip | null>(null);
@@ -149,12 +186,18 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
   // annotation comes with every trip row; a missing role reads as owned
   // (legacy payloads / freshly generated previews).
   const ownedTrips = useMemo(
-    () => filteredTrips.filter((trip) => !trip.role || trip.role === "owner"),
-    [filteredTrips]
+    () =>
+      isAgency
+        ? filteredTrips
+        : filteredTrips.filter((trip) => !trip.role || trip.role === "owner"),
+    [filteredTrips, isAgency]
   );
   const sharedTrips = useMemo(
-    () => filteredTrips.filter((trip) => trip.role && trip.role !== "owner"),
-    [filteredTrips]
+    () =>
+      isAgency
+        ? []
+        : filteredTrips.filter((trip) => trip.role && trip.role !== "owner"),
+    [filteredTrips, isAgency]
   );
 
   const handleDuplicate = async (e: React.MouseEvent, tripId: string) => {
@@ -172,6 +215,8 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
     try {
       setActionLoadingId(tripToDelete._id);
       await onDeleteTrip(tripToDelete._id);
+    } catch {
+      // The caller already showed the error toast.
     } finally {
       setActionLoadingId(null);
       setTripToDelete(null);
@@ -217,13 +262,15 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
         <div>
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold uppercase tracking-wider text-primary">
-              Trip Library
+              {eyebrow ?? (isAgency ? "Agency Trip Library" : "Trip Library")}
             </span>
             <Badge variant="outline" className="text-[10px]">
-              {trips.length} Total Trips
+              {trips.length} {isAgency ? "Agency" : "Total"} Trips
             </Badge>
           </div>
-          <h2 className="text-2xl font-black text-foreground">My Adventures</h2>
+          <h2 className="text-2xl font-black text-foreground">
+            {heading ?? (isAgency ? "Agency trips" : "My Adventures")}
+          </h2>
         </div>
 
         <Button
@@ -233,7 +280,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
           className="rounded-2xl h-11 px-5 text-xs font-bold gap-2 shadow-sm self-start md:self-auto"
         >
           <PlusCircle className="w-4 h-4" />
-          <span>Plan New Trip</span>
+          <span>{planLabel}</span>
         </Button>
       </div>
 
@@ -300,14 +347,18 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
             <h3 className="text-lg font-bold text-foreground">
               {search || statusFilter !== "all"
                 ? "No matching trips found"
-                : "No saved trips yet"}
+                : emptyTitle ??
+                  (isAgency ? "No agency trips yet" : "No saved trips yet")}
             </h3>
             <p className="text-xs text-muted-foreground">
               {search || statusFilter !== "all"
                 ? "Try adjusting your search keywords or status filter."
                 : deletedTrips.length > 0
                 ? "Restore a trip from Recently deleted below, or start a new plan."
-                : "Start planning your first unforgettable journey with our AI assistant!"}
+                : emptyBody ??
+                  (isAgency
+                    ? "Plan a client trip with AI, then refine it with your team and invite the client from the People tab."
+                    : "Start planning your first unforgettable journey with our AI assistant!")}
             </p>
           </div>
           <Button
@@ -317,7 +368,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
             className="rounded-2xl px-5 text-xs font-bold gap-2"
           >
             <PlusCircle className="w-4 h-4" />
-            <span>Create Itinerary</span>
+            <span>{isAgency ? planLabel : "Create Itinerary"}</span>
           </Button>
         </div>
       ) : viewMode === "grid" ? (
@@ -405,32 +456,36 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
                     <ExternalLink className="w-3.5 h-3.5" />
                   </Button>
 
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    title="Duplicate as draft"
-                    disabled={isActing}
-                    onClick={(e) => handleDuplicate(e, trip._id)}
-                    className="h-9 w-9 text-muted-foreground hover:text-primary rounded-xl"
-                  >
-                    <Copy className="w-4 h-4" />
-                  </Button>
+                  {(!canDuplicateTrip || canDuplicateTrip(trip)) && (
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      title="Duplicate as draft"
+                      disabled={isActing}
+                      onClick={(e) => handleDuplicate(e, trip._id)}
+                      className="h-9 w-9 text-muted-foreground hover:text-primary rounded-xl"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </Button>
+                  )}
 
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    title="Delete trip"
-                    disabled={isActing}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setTripToDelete(trip);
-                    }}
-                    className="h-9 w-9 text-muted-foreground hover:text-destructive rounded-xl"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                  {(!canDeleteTrip || canDeleteTrip(trip)) && (
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      title="Delete trip"
+                      disabled={isActing}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setTripToDelete(trip);
+                      }}
+                      className="h-9 w-9 text-muted-foreground hover:text-destructive rounded-xl"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  )}
                 </div>
               </Card>
             );
@@ -505,31 +560,35 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
                     <span>Open</span>
                     <ExternalLink className="w-3.5 h-3.5" />
                   </Button>
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    title="Duplicate as draft"
-                    disabled={isActing}
-                    onClick={(e) => handleDuplicate(e, trip._id)}
-                    className="h-9 w-9 text-muted-foreground hover:text-primary rounded-xl"
-                  >
-                    <Copy className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    title="Delete trip"
-                    disabled={isActing}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setTripToDelete(trip);
-                    }}
-                    className="h-9 w-9 text-muted-foreground hover:text-destructive rounded-xl"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                  {(!canDuplicateTrip || canDuplicateTrip(trip)) && (
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      title="Duplicate as draft"
+                      disabled={isActing}
+                      onClick={(e) => handleDuplicate(e, trip._id)}
+                      className="h-9 w-9 text-muted-foreground hover:text-primary rounded-xl"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </Button>
+                  )}
+                  {(!canDeleteTrip || canDeleteTrip(trip)) && (
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      title="Delete trip"
+                      disabled={isActing}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setTripToDelete(trip);
+                      }}
+                      className="h-9 w-9 text-muted-foreground hover:text-destructive rounded-xl"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  )}
                 </div>
               </div>
             );
@@ -615,17 +674,19 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
                     <span>Open</span>
                     <ExternalLink className="w-3.5 h-3.5" />
                   </Button>
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    title="Duplicate this trip into your own library"
-                    disabled={isActing}
-                    onClick={(e) => handleDuplicate(e, trip._id)}
-                    className="h-9 w-9 text-muted-foreground hover:text-primary rounded-xl"
-                  >
-                    <Copy className="w-4 h-4" />
-                  </Button>
+                  {(!canDuplicateTrip || canDuplicateTrip(trip)) && (
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      title="Duplicate this trip into your own library"
+                      disabled={isActing}
+                      onClick={(e) => handleDuplicate(e, trip._id)}
+                      className="h-9 w-9 text-muted-foreground hover:text-primary rounded-xl"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </Button>
+                  )}
                 </div>
               </div>
             );
@@ -662,8 +723,8 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
           {showDeleted && (
             <>
               <p className="px-1 text-[11px] leading-relaxed text-muted-foreground">
-                Only owners see this list. Restoring brings back the itinerary
-                and chat; old share links and invites stay revoked.
+                {deletedHelpText ??
+                  "Only owners see this list. Restoring brings back the itinerary and chat; old share links and invites stay revoked."}
               </p>
               <div className="space-y-2">
                 {deletedTrips.map((trip) => {

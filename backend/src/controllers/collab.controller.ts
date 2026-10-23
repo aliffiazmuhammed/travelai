@@ -158,6 +158,14 @@ export const transferOwnership = catchAsync(
     const fromUserId = String(req.userId);
     const toUserId = String(req.body?.toUserId || '');
 
+    // Agency trips are owned by the tenant, not transferable to a client.
+    if (trip.workspace === 'agency') {
+      throw new AppError(
+        'Agency trip ownership stays with the agency team. Manage client access with invitations instead.',
+        400
+      );
+    }
+
     resolveTransfer(trip, { trip, fromUserId, toUserId });
     const fresh = await performTransfer(trip, fromUserId, toUserId);
 

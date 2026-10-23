@@ -39,8 +39,21 @@ const ALL_STYLES = [
   "Shopping",
 ];
 
-const TripPlanner = () => {
+interface TripPlannerProps {
+  /** A2: set by the agency shell to create a tenant trip. */
+  agencyId?: string;
+  agencyName?: string;
+  /** Render inside the agency layout instead of the personal Navbar shell. */
+  embedded?: boolean;
+}
+
+const TripPlanner: React.FC<TripPlannerProps> = ({
+  agencyId,
+  agencyName,
+  embedded = false,
+}) => {
   const navigate = useNavigate();
+  const isAgencyMode = Boolean(agencyId);
 
   // Wizard Navigation
   const [currentStep, setCurrentStep] = useState<number>(1);
@@ -269,6 +282,7 @@ const TripPlanner = () => {
           pace,
           ...(dietary.length ? { dietary } : {}),
         },
+        ...(agencyId ? { agencyId } : {}),
       };
 
       await api.generateItineraryStream(payload, {
@@ -286,9 +300,10 @@ const TripPlanner = () => {
             setLoading(false);
             // Hand off the exact document id as well as the payload. The old
             // title match could open a *different* trip with the same title.
-            navigate("/dashboard", {
-              state: { itinerary: trip.tripDetails, tripId: trip._id },
-            });
+            navigate(
+              agencyId ? `/agency/trips/${trip._id}` : "/dashboard",
+              { state: { itinerary: trip.tripDetails, tripId: trip._id } }
+            );
           }, 800);
         },
         onError: (errMessage) => {
@@ -304,23 +319,39 @@ const TripPlanner = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-hero flex flex-col">
-      <Navbar />
+    <div
+      className={
+        embedded
+          ? "flex flex-col"
+          : "min-h-screen bg-gradient-hero flex flex-col"
+      }
+    >
+      {!embedded && <Navbar />}
 
-      <main className="flex-1 container mx-auto px-4 pt-24 pb-20 max-w-4xl">
+      <main
+        className={
+          embedded
+            ? "flex-1 w-full max-w-4xl mx-auto px-0 pt-2 pb-10"
+            : "flex-1 container mx-auto px-4 pt-24 pb-20 max-w-4xl"
+        }
+      >
         {/* Header Title */}
         <div className="text-center space-y-3 mb-6 sm:mb-8">
           <div className="inline-flex items-center gap-2 bg-primary/10 backdrop-blur-sm border border-primary/20 rounded-full px-4 sm:px-5 py-1.5 shadow-2xs">
             <Sparkles className="w-4 h-4 text-primary shrink-0" />
             <span className="text-xs font-semibold text-primary uppercase tracking-wider">
-              Smart Trip Planner
+              {isAgencyMode ? "Agency Trip Planner" : "Smart Trip Planner"}
             </span>
           </div>
           <h1 className="text-2xl sm:text-4xl md:text-5xl font-extrabold text-foreground tracking-tight px-1">
-            Design Your Next Adventure
+            {isAgencyMode ? "Plan a client trip" : "Design Your Next Adventure"}
           </h1>
           <p className="text-xs sm:text-base text-muted-foreground max-w-xl mx-auto px-2">
-            Answer a few quick questions and let our AI craft an unforgettable, optimized itinerary.
+            {isAgencyMode
+              ? `Generate a working draft for ${
+                  agencyName || "your agency"
+                }, then refine it with your team and invite the client.`
+              : "Answer a few quick questions and let our AI craft an unforgettable, optimized itinerary."}
           </p>
         </div>
 

@@ -106,6 +106,9 @@ interface ItineraryDisplayProps {
   onFeedbackSubmitted?: (feedback: TripFeedbackType) => void;
   onBackToList?: () => void;
   onNewPlan?: () => void;
+  /** A2: agency trips hide ownership transfer; staff never "leave" a tenant trip. */
+  agencyTrip?: boolean;
+  agencyStaff?: boolean;
 }
 
 /** Debounce window (ms) for automatic background saving of local edits. */
@@ -153,6 +156,8 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
   onFeedbackSubmitted,
   onBackToList,
   onNewPlan,
+  agencyTrip = false,
+  agencyStaff = false,
 }) => {
   // Legacy AI payloads miss whole sections of the prompt contract (Milestone 2
   // shape evolved); normalize once here so no downstream read can crash.
@@ -902,7 +907,12 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
         {/* People & sharing view (Milestone 6 §3.8) */}
         {showPeopleTab && (
           <TabsContent value="people" className="outline-hidden animate-fade-in">
-            <TripMembers tripId={tripId!} myRole={role!} />
+            <TripMembers
+              tripId={tripId!}
+              myRole={role!}
+              agencyTrip={agencyTrip}
+              agencyStaff={agencyStaff}
+            />
           </TabsContent>
         )}
 

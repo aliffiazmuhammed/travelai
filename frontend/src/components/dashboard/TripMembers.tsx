@@ -49,6 +49,10 @@ interface TripMembersProps {
   tripId: string;
   /** The caller's own role on this trip (annotated payloads only). */
   myRole: TripRole;
+  /** A2: agency trips keep ownership in the tenant, never with a client. */
+  agencyTrip?: boolean;
+  /** Agency staff access comes from their agency membership, not this roster. */
+  agencyStaff?: boolean;
 }
 
 const ROLE_BADGE_STYLE: Record<TripRole, string> = {
@@ -65,7 +69,12 @@ const initialsFor = (member: TripMember): string => {
   return source.slice(0, 2).toUpperCase();
 };
 
-export const TripMembers: React.FC<TripMembersProps> = ({ tripId, myRole }) => {
+export const TripMembers: React.FC<TripMembersProps> = ({
+  tripId,
+  myRole,
+  agencyTrip = false,
+  agencyStaff = false,
+}) => {
   const isOwner = myRole === "owner";
   const [members, setMembers] = useState<TripMember[]>([]);
   const [invites, setInvites] = useState<TripInviteInfo[]>([]);
@@ -215,7 +224,7 @@ export const TripMembers: React.FC<TripMembersProps> = ({ tripId, myRole }) => {
                   <span>Invite</span>
                 </Button>
               )}
-              {me && !isOwner && (
+              {me && !isOwner && !agencyStaff && (
                 <Button
                   type="button"
                   size="sm"
@@ -339,17 +348,19 @@ export const TripMembers: React.FC<TripMembersProps> = ({ tripId, myRole }) => {
                             </SelectContent>
                           </Select>
 
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            title="Transfer ownership to this member"
-                            disabled={isBusy}
-                            onClick={() => setTransferTarget(member)}
-                            className="h-8 w-8 text-muted-foreground hover:text-amber-600 rounded-xl"
-                          >
-                            <Crown className="w-3.5 h-3.5" />
-                          </Button>
+                          {!agencyTrip && (
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              title="Transfer ownership to this member"
+                              disabled={isBusy}
+                              onClick={() => setTransferTarget(member)}
+                              className="h-8 w-8 text-muted-foreground hover:text-amber-600 rounded-xl"
+                            >
+                              <Crown className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
 
                           <Button
                             type="button"

@@ -5,6 +5,7 @@ import {
   BadgeCheck,
   BriefcaseBusiness,
   FileText,
+  LayoutTemplate,
   Loader2,
   Map,
   Settings,
@@ -21,25 +22,25 @@ import AgencyOnboarding from './AgencyOnboarding';
 
 const futureCards = [
   {
-    icon: Map,
-    title: 'Agency trips',
-    milestone: 'A2',
-    description:
-      'Every trip feature you already use, with agency-wide visibility and client-safe sharing.',
-  },
-  {
-    icon: BriefcaseBusiness,
-    title: 'Clients',
-    milestone: 'A4',
-    description:
-      'A private client directory, per-client trip access and short-lived document links.',
-  },
-  {
     icon: FileText,
-    title: 'Quotes & exports',
+    title: 'Branded exports',
     milestone: 'A5–A6',
     description:
-      'Versioned quotes and branded PDF brochures rendered from your agency template.',
+      'PDF brochures and client links rendered from your agency template, with export history.',
+  },
+  {
+    icon: LayoutTemplate,
+    title: 'Templates',
+    milestone: 'A6',
+    description:
+      'Reusable itinerary and quote templates with versions, previews and a default.',
+  },
+  {
+    icon: Sparkles,
+    title: 'Client portal',
+    milestone: 'A7',
+    description:
+      'Clients review proposals, accept quotes and download approved documents in one place.',
   },
 ];
 
@@ -79,7 +80,7 @@ const AgencyOverview: React.FC = () => {
                 variant="outline"
                 className="border-teal-200 bg-teal-50 text-[11px] text-teal-700 dark:border-teal-900 dark:bg-teal-950/40 dark:text-teal-300"
               >
-                Agency workspace · A1
+                Agency workspace A4
               </Badge>
             </div>
             <div className="space-y-2">
@@ -88,8 +89,8 @@ const AgencyOverview: React.FC = () => {
               </h1>
               <p className="max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400">
                 This is your agency's private workspace. Your personal trips stay
-                separate, and clients will only ever see the trip content you
-                deliberately share with them.
+                separate, clients live in a directory only your team can see, and
+                quote prices are always computed server-side.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -97,6 +98,18 @@ const AgencyOverview: React.FC = () => {
                 <Link to="/agency/team">
                   <Users className="mr-2 h-4 w-4" />
                   {teamReady ? 'Manage team' : 'Invite your team'}
+                </Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link to="/agency/trips">
+                  <Map className="mr-2 h-4 w-4" />
+                  Agency trips
+                </Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link to="/agency/clients">
+                  <BriefcaseBusiness className="mr-2 h-4 w-4" />
+                  Clients
                 </Link>
               </Button>
               <Button asChild variant="outline">
@@ -131,7 +144,8 @@ const AgencyOverview: React.FC = () => {
                 Personal stays personal
               </div>
               <div className="mt-1 text-xs text-slate-500">
-                Agency trips will carry their own tenant id.
+                Agency staff trips carry a tenant id and never appear on the
+                personal dashboard; invited clients see only their own trip.
               </div>
             </div>
           </div>
@@ -143,7 +157,7 @@ const AgencyOverview: React.FC = () => {
           <CardHeader>
             <CardTitle className="text-base">Set up checklist</CardTitle>
             <CardDescription>
-              A1 gives you the tenant and the team. Trips, clients and branded
+              A4 adds the client directory and versioned trip quotes. Branded
               exports follow in the next increments.
             </CardDescription>
           </CardHeader>
@@ -173,8 +187,25 @@ const AgencyOverview: React.FC = () => {
             />
             <ChecklistRow
               title="Create your first agency trip"
-              detail="Arrives in A2 — the same planner, chat, map, expenses and versions you know."
-              badge="A2"
+              detail="Use the same planner, chat, map, expenses and versions you know, with agency-wide visibility."
+              action={
+                <Button asChild size="sm" variant="outline">
+                  <Link to="/agency/trips">
+                    Open trips <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                  </Link>
+                </Button>
+              }
+            />
+            <ChecklistRow
+              title="Save a client and prepare a quote"
+              detail="Keep contact details private to the agency, then price the trip with line items, markup, tax and validity."
+              action={
+                <Button asChild size="sm" variant="outline">
+                  <Link to="/agency/clients">
+                    Manage clients <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                  </Link>
+                </Button>
+              }
             />
           </CardContent>
         </Card>
@@ -183,14 +214,16 @@ const AgencyOverview: React.FC = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <Sparkles className="h-4 w-4 text-teal-600" />
-              What A1 unlocked
+              What's live now
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-slate-600 dark:text-slate-400">
             <p>One agency can own multiple staff members with ranked roles.</p>
-            <p>Invite tokens are hashed, single-use by default, and revocable.</p>
-            <p>The last owner can never be removed or demoted.</p>
-            <p>Personal users get a 404 on every agency endpoint.</p>
+            <p>Every agency trip is isolated from personal trips and other agencies.</p>
+            <p>A private client directory keeps contact details inside the agency.</p>
+            <p>Quotes are versioned, priced server-side and locked once sent.</p>
+            <p>Planners edit; owners and admins manage sharing and the trash.</p>
+            <p>Clients stay trip-scoped and never become agency members.</p>
           </CardContent>
         </Card>
       </section>

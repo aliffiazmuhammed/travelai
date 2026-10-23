@@ -31,13 +31,24 @@ import type {
   ChatKeysState,
   AssistantProposal,
   Agency,
+  AgencyAsset,
+  AgencyAssetKind,
   AgencyBranding,
+  AgencyClient,
   AgencyHealth,
   AgencyInvite,
   AgencyInvitePreview,
   AgencyInvitableRole,
   AgencyMember,
+  AgencyQuote,
+  AgencyQuoteInput,
   AgencyRole,
+  AgencyTerms,
+  AgencyExport,
+  AgencyExportInput,
+  AgencyExportPreview,
+  AgencyTemplate,
+  AgencyTemplateAudience,
 } from '@/types';
 
 export interface StreamProgressEvent {
@@ -262,7 +273,7 @@ class ApiClient {
     if (!response.ok) {
       const payload = (data ?? {}) as { error?: string; message?: string };
       throw new Error(
-        payload.error || payload.message || 'We could not upload that receipt. Please try again.'
+        payload.error || payload.message || 'We could not upload that file. Please try again.'
       );
     }
 
@@ -338,6 +349,7 @@ class ApiClient {
 
   async createAgency(payload: {
     name: string;
+    gstin?: string;
     branding?: Partial<AgencyBranding>;
   }): Promise<{ success: boolean; agency: Agency }> {
     return this.request('/api/agency', {
@@ -352,7 +364,12 @@ class ApiClient {
 
   async updateAgency(
     id: string,
-    payload: { name?: string; branding?: Partial<AgencyBranding> }
+    payload: {
+      name?: string;
+      gstin?: string;
+      branding?: Partial<AgencyBranding>;
+      defaultTerms?: Partial<AgencyTerms>;
+    }
   ): Promise<{ success: boolean; agency: Agency }> {
     return this.request(`/api/agency/${encodeURIComponent(id)}`, {
       method: 'PATCH',
@@ -360,10 +377,372 @@ class ApiClient {
     });
   }
 
+  /** A3: the tenant's private brand asset library. */
+  async getAgencyAssets(
+    id: string
+  ): Promise<{ success: boolean; assets: AgencyAsset[] }> {
+    return this.request(`/api/agency/${encodeURIComponent(id)}/assets`);
+  }
+
+  async uploadAgencyAsset(
+    id: string,
+    file: File,
+    meta: { kind: AgencyAssetKind; fontFamily?: string; licenseNote?: string }
+  ): Promise<{ success: boolean; asset: AgencyAsset; agency?: Agency }> {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('kind', meta.kind);
+    if (meta.fontFamily) form.append('fontFamily', meta.fontFamily);
+    if (meta.licenseNote) form.append('licenseNote', meta.licenseNote);
+    return this.requestForm(
+      `/api/agency/${encodeURIComponent(id)}/assets`,
+      form
+    );
+  }
+
+  async deleteAgencyAsset(
+    id: string,
+    assetId: string
+  ): Promise<{ success: boolean; asset: AgencyAsset; agency?: Agency }> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(id)}/assets/${encodeURIComponent(assetId)}`,
+      { method: 'DELETE' }
+    );
+  }
+
+  /** A4: the tenant's private client directory. */
+  async getAgencyClients(
+    id: string,
+    search?: string
+  ): Promise<{ success: boolean; clients: AgencyClient[] }> {
+    const suffix = search?.trim()
+      ? `?search=${encodeURIComponent(search.trim())}`
+      : '';
+    return this.request(`/api/agency/${encodeURIComponent(id)}/clients${suffix}`);
+  }
+
+  async createAgencyClient(
+    id: string,
+    payload: {
+      name: string;
+      email?: string;
+      phone?: string;
+      company?: string;
+      notes?: string;
+    }
+  ): Promise<{ success: boolean; client: AgencyClient }> {
+    return this.request(`/api/agency/${encodeURIComponent(id)}/clients`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async updateAgencyClient(
+    id: string,
+    clientId: string,
+    payload: {
+      name?: string;
+      email?: string;
+      phone?: string;
+      company?: string;
+      notes?: string;
+    }
+  ): Promise<{ success: boolean; client: AgencyClient }> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(id)}/clients/${encodeURIComponent(clientId)}`,
+      { method: 'PATCH', body: JSON.stringify(payload) }
+    );
+  }
+
+  async deleteAgencyClient(
+    id: string,
+    clientId: string
+  ): Promise<{ success: boolean; client: AgencyClient; message: string }> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(id)}/clients/${encodeURIComponent(clientId)}`,
+      { method: 'DELETE' }
+    );
+  }
+
+  /**
+   * Uploaded branding files are private: an `<img src>` would lose the session
+   * in cross-site deployments. Fetching with credentials and handing the UI an
+   * object URL keeps the auth check on every byte. Only same-API asset paths
+   * are accepted so a hostile branding value cannot redirect credentials.
+   */
+  async fetchAgencyAssetBlob(url: string): Promise<Blob> {
+    const isAssetPath =
+      url.startsWith('/api/agency/') &&
+      url.includes('/assets/') &&
+      !url.startsWith('//') &&
+      !url.includes('\\');
+    if (!isAssetPath) {
+      throw new Error('That brand asset link is not valid.');
+    }
+
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}${url}`, { credentials: 'include' });
+    } catch {
+      throw new Error('Unable to load that brand asset. Please try again shortly.');
+    }
+
+    if (!response.ok) {
+      let message = 'We could not load that brand asset.';
+      try {
+        const data = await response.json();
+        message = data?.error || data?.message || message;
+      } catch {
+        /* Binary or empty error body. */
+      }
+      throw new ApiError(message, response.status);
+    }
+
+    return response.blob();
+  }
+
   async getAgencyMembers(
     id: string
   ): Promise<{ success: boolean; members: AgencyMember[] }> {
     return this.request(`/api/agency/${encodeURIComponent(id)}/members`);
+  }
+
+  /** A2: the tenant trip library (agency-wide visibility). */
+  async getAgencyTrips(
+    id: string,
+    params?: { search?: string; status?: string }
+  ): Promise<{ success: boolean; trips: Trip[] }> {
+    const query = new URLSearchParams();
+    if (params?.search) query.append('search', params.search);
+    if (params?.status && params.status !== 'all') query.append('status', params.status);
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    return this.request(
+      `/api/agency/${encodeURIComponent(id)}/trips${suffix}`
+    );
+  }
+
+  async createAgencyTrip(
+    id: string,
+    payload: {
+      title: string;
+      startDate?: string;
+      endDate?: string;
+      assignedTo?: string;
+    }
+  ): Promise<{ success: boolean; trip: Trip }> {
+    return this.request(`/api/agency/${encodeURIComponent(id)}/trips`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  /** Owner/admin-only tenant trash. */
+  async getAgencyDeletedTrips(
+    id: string
+  ): Promise<{ success: boolean; trips: Trip[] }> {
+    return this.request(`/api/agency/${encodeURIComponent(id)}/trash`);
+  }
+
+  async getAgencyTrip(agencyId: string, tripId: string): Promise<Trip> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(agencyId)}/trips/${encodeURIComponent(tripId)}`
+    );
+  }
+
+  async deleteAgencyTrip(
+    agencyId: string,
+    tripId: string
+  ): Promise<{ success: boolean; message: string }> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(agencyId)}/trips/${encodeURIComponent(tripId)}`,
+      { method: 'DELETE' }
+    );
+  }
+
+  async restoreAgencyTrip(
+    agencyId: string,
+    tripId: string
+  ): Promise<Trip> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(agencyId)}/trips/${encodeURIComponent(tripId)}/restore`,
+      { method: 'POST' }
+    );
+  }
+
+  async purgeAgencyTrip(
+    agencyId: string,
+    tripId: string
+  ): Promise<{ success: boolean; message: string }> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(agencyId)}/trips/${encodeURIComponent(tripId)}/purge`,
+      { method: 'DELETE' }
+    );
+  }
+
+  async updateAgencyTrip(
+    agencyId: string,
+    tripId: string,
+    payload: { assignedTo?: string | null; clientId?: string | null }
+  ): Promise<{ success: boolean; trip: Trip }> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(agencyId)}/trips/${encodeURIComponent(tripId)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      }
+    );
+  }
+
+  /** A4: the latest quote version for an agency trip (null before the first save). */
+  async getAgencyQuote(
+    agencyId: string,
+    tripId: string
+  ): Promise<{ success: boolean; quote: AgencyQuote | null }> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(agencyId)}/trips/${encodeURIComponent(tripId)}/quote`
+    );
+  }
+
+  async getAgencyQuoteVersions(
+    agencyId: string,
+    tripId: string
+  ): Promise<{ success: boolean; versions: AgencyQuote[] }> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(agencyId)}/trips/${encodeURIComponent(tripId)}/quote/versions`
+    );
+  }
+
+  /** Totals are always recomputed server-side; drafts are replaced in place. */
+  async saveAgencyQuote(
+    agencyId: string,
+    tripId: string,
+    payload: AgencyQuoteInput
+  ): Promise<{ success: boolean; quote: AgencyQuote }> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(agencyId)}/trips/${encodeURIComponent(tripId)}/quote`,
+      { method: 'PUT', body: JSON.stringify(payload) }
+    );
+  }
+
+  async sendAgencyQuote(
+    agencyId: string,
+    tripId: string
+  ): Promise<{ success: boolean; quote: AgencyQuote }> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(agencyId)}/trips/${encodeURIComponent(tripId)}/quote/send`,
+      { method: 'POST' }
+    );
+  }
+
+  async acceptAgencyQuote(
+    agencyId: string,
+    tripId: string
+  ): Promise<{ success: boolean; quote: AgencyQuote }> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(agencyId)}/trips/${encodeURIComponent(tripId)}/quote/accept`,
+      { method: 'POST' }
+    );
+  }
+
+  async cancelAgencyQuote(
+    agencyId: string,
+    tripId: string
+  ): Promise<{ success: boolean; quote: AgencyQuote }> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(agencyId)}/trips/${encodeURIComponent(tripId)}/quote/cancel`,
+      { method: 'POST' }
+    );
+  }
+
+  /** A5: managed document templates. Internal templates need an admin. */
+  async getAgencyTemplates(
+    id: string,
+    audience?: AgencyTemplateAudience
+  ): Promise<{ success: boolean; templates: AgencyTemplate[] }> {
+    const suffix = audience
+      ? `?audience=${encodeURIComponent(audience)}`
+      : '';
+    return this.request(
+      `/api/agency/${encodeURIComponent(id)}/templates${suffix}`
+    );
+  }
+
+  async getAgencyExports(
+    agencyId: string,
+    tripId: string
+  ): Promise<{ success: boolean; exports: AgencyExport[] }> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(agencyId)}/trips/${encodeURIComponent(tripId)}/exports`
+    );
+  }
+
+  async previewAgencyExport(
+    agencyId: string,
+    tripId: string,
+    payload: AgencyExportInput
+  ): Promise<{ success: boolean; preview: AgencyExportPreview }> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(agencyId)}/trips/${encodeURIComponent(tripId)}/exports/preview`,
+      { method: 'POST', body: JSON.stringify(payload) }
+    );
+  }
+
+  async createAgencyExport(
+    agencyId: string,
+    tripId: string,
+    payload: AgencyExportInput
+  ): Promise<{ success: boolean; message: string; export: AgencyExport }> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(agencyId)}/trips/${encodeURIComponent(tripId)}/exports`,
+      { method: 'POST', body: JSON.stringify(payload) }
+    );
+  }
+
+  async retryAgencyExport(
+    agencyId: string,
+    tripId: string,
+    exportId: string
+  ): Promise<{ success: boolean; message: string; export: AgencyExport }> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(agencyId)}/trips/${encodeURIComponent(tripId)}/exports/${encodeURIComponent(exportId)}/retry`,
+      { method: 'POST' }
+    );
+  }
+
+  /**
+   * Export links are signed and session-bound. Fetch with credentials instead
+   * of handing the URL to an `<a href>`/`window.open`, which would drop the
+   * session cookie in cross-site deployments.
+   */
+  async downloadAgencyExport(url: string): Promise<Blob> {
+    const isExportPath =
+      url.startsWith('/api/agency/') &&
+      !url.startsWith('//') &&
+      !url.includes('\\') &&
+      /\/exports\/[^/?#]+\/download(?:\?[^#]*)?$/.test(url);
+    if (!isExportPath) {
+      throw new Error('That export link is not valid.');
+    }
+
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}${url}`, { credentials: 'include' });
+    } catch {
+      throw new Error('Unable to download that export. Please try again shortly.');
+    }
+
+    if (!response.ok) {
+      let message = 'We could not download that export.';
+      try {
+        const data = await response.json();
+        message = data?.error || data?.message || message;
+      } catch {
+        /* Binary or empty error body. */
+      }
+      throw new ApiError(message, response.status);
+    }
+
+    return response.blob();
   }
 
   async changeAgencyMemberRole(

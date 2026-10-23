@@ -419,6 +419,7 @@ const Dashboard: React.FC = () => {
             onRestoreTrip={handleRestoreTrip}
             onPurgeTrip={handlePurgeTrip}
             onNewPlan={() => navigate("/plan")}
+            canDuplicateTrip={(trip) => trip.workspace !== "agency"}
           />
         )}
       </main>

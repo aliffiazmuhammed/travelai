@@ -381,6 +381,13 @@ export interface Trip {
   title?: string;
   /** Creator's user id (audit trail; Milestone 6 keeps authorization in members[]). */
   userId?: string;
+  /** A2: absent/pre-A2 means personal. */
+  workspace?: 'personal' | 'agency';
+  agencyId?: string;
+  assignedTo?: string;
+  clientId?: string;
+  /** The caller's agency membership on this trip (agency staff only). */
+  agencyRole?: 'owner' | 'admin' | 'planner' | 'viewer';
   /** Planned trip window (drives per-day weather). */
   startDate?: string;
   endDate?: string;
@@ -675,6 +682,8 @@ export interface TripInput {
   groupType: string;
   language?: TripLanguage;
   preferences?: TripPreferences;
+  /** A2: set only by the agency wizard. */
+  agencyId?: string;
 }
 
 export interface TripInsights {

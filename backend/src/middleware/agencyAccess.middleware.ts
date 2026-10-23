@@ -2,11 +2,15 @@ import { Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
 import Agency from '../models/Agency.js';
 import AgencyMember from '../models/AgencyMember.js';
+import Trip from '../models/Trip.js';
 import { catchAsync } from '../utils/catchAsync.js';
 import { AppError } from '../utils/AppError.js';
 import { AuthenticatedRequest } from '../types/index.js';
+import type { TripRole } from '../services/collab/access.js';
 import {
+  agencyCan,
   decideAgencyAccess,
+  mapAgencyRoleToTripRole,
   type AgencyRole,
 } from '../services/agency/access.js';
 
@@ -24,10 +28,14 @@ export interface AgencyAccessRequest extends AuthenticatedRequest {
   agency?: any;
   agencyMember?: any;
   agencyRole?: AgencyRole;
+  /** Set by `requireAgencyTripRole` for tenant-scoped trip routes. */
+  trip?: any;
+  tripRole?: TripRole;
 }
 
 export const AGENCY_MEMBER_GUARD_TAG = Symbol.for('travelai.requireAgencyMember');
 export const AGENCY_ROLE_GUARD_TAG = Symbol.for('travelai.requireAgencyRole');
+export const AGENCY_TRIP_GUARD_TAG = Symbol.for('travelai.requireAgencyTripRole');
 
 const FORBIDDEN_MESSAGE =
   "You don't have permission to make this change in this agency.";
@@ -97,6 +105,66 @@ export function requireAgencyRole(min: AgencyRole): any {
   // accept either guard on a route.
   guarded[AGENCY_ROLE_GUARD_TAG] = { min };
   guarded[AGENCY_MEMBER_GUARD_TAG] = { min };
+  return guarded;
+}
+
+export interface AgencyTripGuardOptions {
+  includeDeleted?: boolean;
+  onlyDeleted?: boolean;
+}
+
+/**
+ * Tenant-scoped trip guard for agency management routes.
+ *
+ * It deliberately resolves the trip through BOTH `agencyId` and
+ * `workspace: 'agency'`, so an id from another agency is a 404 even when the
+ * caller belongs to that other agency. The route must run a role guard first;
+ * this guard only narrows to one trip document.
+ */
+export function requireAgencyTripRole(
+  min: AgencyRole,
+  options: AgencyTripGuardOptions = {}
+): any {
+  const guard = async (
+    req: AgencyAccessRequest,
+    _res: Response,
+    next: NextFunction
+  ) => {
+    if (!req.agency || !req.agencyRole) {
+      throw new AppError(
+        'Route is missing its agency role guard. This is a server bug.',
+        500
+      );
+    }
+
+    const tripId = String(req.params.tripId || '');
+    if (!mongoose.isValidObjectId(tripId)) {
+      throw new AppError('Trip not found', 404);
+    }
+
+    const includeDeleted =
+      options.includeDeleted === true || options.onlyDeleted === true;
+    const trip = await Trip.findOne({
+      _id: tripId,
+      workspace: 'agency',
+      agencyId: req.agency._id,
+      ...(includeDeleted ? {} : { isDeleted: { $ne: true } }),
+    });
+
+    if (!trip || (options.onlyDeleted && !trip.isDeleted)) {
+      throw new AppError('Trip not found', 404);
+    }
+    if (!agencyCan(req.agencyRole, min)) {
+      throw new AppError(FORBIDDEN_MESSAGE, 403);
+    }
+
+    req.trip = trip;
+    req.tripRole = mapAgencyRoleToTripRole(req.agencyRole) ?? undefined;
+    return next();
+  };
+
+  const guarded = catchAsync(guard as any) as any;
+  guarded[AGENCY_TRIP_GUARD_TAG] = { min, options };
   return guarded;
 }
 

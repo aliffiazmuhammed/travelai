@@ -1,9 +1,14 @@
 import { Request, Response, NextFunction } from 'express';
 import Trip from '../models/Trip.js';
+import AgencyMember from '../models/AgencyMember.js';
 import { catchAsync } from '../utils/catchAsync.js';
 import { AppError } from '../utils/AppError.js';
 import { AuthenticatedRequest } from '../types/index.js';
 import { TripRole, can, roleOf } from '../services/collab/access.js';
+import {
+  mapAgencyRoleToTripRole,
+  type AgencyRole,
+} from '../services/agency/access.js';
 
 /**
  * The trip-access guard — the ONLY place trip authorization happens
@@ -38,6 +43,9 @@ export interface TripAccessRequest extends AuthenticatedRequest {
   tripRole?: TripRole;
   /** The client's declared `rev`, when it sent one. */
   baseRev?: number;
+  /** Set when the effective role came from an agency membership. */
+  agencyRole?: AgencyRole;
+  agencyStaff?: boolean;
 }
 
 /** How strictly the guard should compare `req.body.baseRev` against `trip.rev`. */
@@ -82,12 +90,22 @@ export function resolveBaseRev(
  * by the guard. Throws loudly (500) if a handler ever runs without its guard,
  * so a wiring mistake cannot silently weaken authorization.
  */
-export function tripContext(req: Request): { trip: any; role: TripRole } {
+export function tripContext(req: Request): {
+  trip: any;
+  role: TripRole;
+  agencyRole?: AgencyRole;
+  agencyStaff: boolean;
+} {
   const access = req as TripAccessRequest;
   if (!access.trip || !access.tripRole) {
     throw new AppError('Route is missing its trip access guard. This is a server bug.', 500);
   }
-  return { trip: access.trip, role: access.tripRole };
+  return {
+    trip: access.trip,
+    role: access.tripRole,
+    agencyRole: access.agencyRole,
+    agencyStaff: access.agencyStaff === true,
+  };
 }
 
 const FORBIDDEN_MESSAGE =
@@ -125,7 +143,30 @@ export function requireTripRole(
     }).select(options.withVersions ? '+versions' : '');
 
     // Not found AND no access are indistinguishable on purpose (§3.2).
-    const role = trip ? roleOf(trip, req.userId) : null;
+    // Agency staff authorization comes from `AgencyMember`, never from the
+    // trip creator field. Client collaborators on the same trip still resolve
+    // through `members[]` below. When the caller is an agency member, that
+    // mapping takes precedence over any trip membership row; non-members are
+    // treated as clients using the normal invite roles.
+    let role = trip ? roleOf(trip, req.userId) : null;
+    let agencyRole: AgencyRole | undefined;
+    let agencyStaff = false;
+
+    if (trip && trip.workspace === 'agency' && trip.agencyId) {
+      const member = await AgencyMember.findOne({
+        agencyId: trip.agencyId,
+        userId: req.userId,
+      })
+        .select('role')
+        .lean();
+
+      if (member) {
+        agencyRole = member.role as AgencyRole;
+        agencyStaff = true;
+        role = mapAgencyRoleToTripRole(agencyRole);
+      }
+    }
+
     if (!trip || !role) {
       throw new AppError('Trip not found', 404);
     }
@@ -173,6 +214,8 @@ export function requireTripRole(
 
     req.trip = trip;
     req.tripRole = role;
+    req.agencyRole = agencyRole;
+    req.agencyStaff = agencyStaff;
     return next();
   };
 

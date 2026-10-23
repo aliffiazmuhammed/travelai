@@ -211,6 +211,60 @@ export const avatarUploadLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+/** A3 brand assets: same storage-churn brake as avatars, slightly larger cap. */
+export const agencyAssetUploadLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 60,
+  keyGenerator: userOrIpKey,
+  validate: false,
+  message: {
+    success: false,
+    error: 'Too many brand asset uploads. Please try again in an hour.',
+    message: 'Too many brand asset uploads. Please try again in an hour.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
+ * A6 template sources and snapshots are written to private storage and then
+ * rendered in previews. Admin-only, but still bounded per user + agency.
+ */
+export const agencyTemplateUploadLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 30,
+  keyGenerator: (req: any): string =>
+    `${String(req?.userId ?? req?.ip ?? 'anonymous')}:${String(req?.params?.agencyId ?? '')}`,
+  validate: false,
+  message: {
+    success: false,
+    error: 'Too many template uploads. Please try again in an hour.',
+    message: 'Too many template uploads. Please try again in an hour.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
+ * A5 proposal exports: each job starts a headless Chrome process, so the brake
+ * is per user AND agency. Twenty per hour is generous for a desk while
+ * bounding both CPU and an accidental double-click storm.
+ */
+export const agencyExportLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+  keyGenerator: (req: any): string =>
+    `${String(req?.userId ?? req?.ip ?? 'anonymous')}:${String(req?.params?.agencyId ?? '')}`,
+  validate: false,
+  message: {
+    success: false,
+    error: 'Too many exports requested. Please try again in an hour.',
+    message: 'Too many exports requested. Please try again in an hour.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 /**
  * Public, unauthenticated endpoint — keyed on IP (F11, E5): the shared-trip
  * read needs an abuse brake because guessing share ids is exactly the model

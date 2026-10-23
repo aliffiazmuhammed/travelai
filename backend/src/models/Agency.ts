@@ -8,31 +8,69 @@ import mongoose, { Document, Schema, Types } from 'mongoose';
  * several agencies, and an agency has its own team roles.
  */
 export interface IAgencyBranding {
-  /** URL of the agency logo. Upload/storage lands with the branding sprint. */
+  /**
+   * URL of the active logo. Uploaded assets use the private tenant content
+   * route; external URLs remain accepted for existing records.
+   */
   logoUrl?: string;
+  mascotUrl?: string;
   /** Six-digit hex, e.g. #0F766E. */
   primaryColor?: string;
   /** Six-digit hex, e.g. #F59E0B. */
   accentColor?: string;
+  /** Font family names applied by branded exports/client pages (A5+). */
+  fontHeading?: string;
+  fontBody?: string;
   contactEmail?: string;
   contactPhone?: string;
   website?: string;
   address?: string;
 }
 
+/**
+ * Reusable commercial text for quotes (A4). A trip quote may override any list;
+ * defaults exist so an agent does not retype the same terms for every client.
+ */
+export interface IAgencyTerms {
+  inclusions: string[];
+  exclusions: string[];
+  terms: string[];
+}
+
 export interface IAgency extends Document {
   name: string;
   branding: IAgencyBranding;
+  /** Indian tax id for quotes/invoices; optional until A4/A5. */
+  gstin?: string;
+  /** Default inclusions/exclusions/terms copied into a new trip quote. */
+  defaultTerms: IAgencyTerms;
+  /**
+   * Monotonic quote-number sequence, incremented atomically on first save.
+   * Never projected to clients — only the formatted number is public.
+   */
+  quoteCounter: number;
   createdBy: Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
 
+const agencyTermsSchema = new Schema<IAgencyTerms>(
+  {
+    inclusions: { type: [String], default: [] },
+    exclusions: { type: [String], default: [] },
+    terms: { type: [String], default: [] },
+  },
+  { _id: false }
+);
+
 const brandingSchema = new Schema<IAgencyBranding>(
   {
     logoUrl: { type: String, trim: true, maxlength: 2048 },
+    mascotUrl: { type: String, trim: true, maxlength: 2048 },
     primaryColor: { type: String, trim: true, maxlength: 7 },
     accentColor: { type: String, trim: true, maxlength: 7 },
+    fontHeading: { type: String, trim: true, maxlength: 120 },
+    fontBody: { type: String, trim: true, maxlength: 120 },
     contactEmail: { type: String, trim: true, lowercase: true, maxlength: 160 },
     contactPhone: { type: String, trim: true, maxlength: 40 },
     website: { type: String, trim: true, maxlength: 2048 },
@@ -53,6 +91,22 @@ const agencySchema = new Schema<IAgency>(
     branding: {
       type: brandingSchema,
       default: () => ({}),
+    },
+    gstin: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      maxlength: 20,
+    },
+    defaultTerms: {
+      type: agencyTermsSchema,
+      default: () => ({}),
+    },
+    quoteCounter: {
+      type: Number,
+      default: 0,
+      min: 0,
+      select: false,
     },
     createdBy: {
       type: Schema.Types.ObjectId,

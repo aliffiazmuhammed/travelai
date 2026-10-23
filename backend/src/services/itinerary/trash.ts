@@ -28,6 +28,8 @@ export const MAX_TRASH_ROWS = 100;
 export function deletedOwnerFilter(userId: string): Record<string, unknown> {
   return {
     isDeleted: true,
+    // Agency trash is listed through the tenant route, never the personal one.
+    workspace: { $ne: 'agency' },
     members: {
       $elemMatch: {
         userId: new Types.ObjectId(userId),

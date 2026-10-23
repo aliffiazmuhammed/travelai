@@ -47,3 +47,12 @@ Thumbs.db
 
 # Uploaded receipt files (Milestone 5.5) — never commit user uploads
 backend/uploads/
+
+# Private agency brand assets (A3) — tenant data, served only through the API
+backend/agency-assets/
+
+# Rendered agency proposal PDFs (A5) — tenant data, served only through signed URLs
+backend/agency-exports/
+
+# Uploaded agency proposal templates (A6) — private tenant source files
+backend/agency-templates/

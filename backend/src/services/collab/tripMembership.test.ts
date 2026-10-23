@@ -80,6 +80,13 @@ test('ensureCreatorMembership(): a document without a creator is untouched', () 
   assert.equal(trip.members?.length, 0);
 });
 
+test('ensureCreatorMembership(): agency trips do not seed their creator', () => {
+  const trip = creation({ workspace: 'agency' });
+
+  assert.equal(ensureCreatorMembership(trip), false);
+  assert.equal(trip.members?.length, 0);
+});
+
 test('ensureCreatorMembership(): roleOf() accepts the seeded owner', () => {
   const trip = creation();
   ensureCreatorMembership(trip);
@@ -132,6 +139,22 @@ test('Trip validation prepends the creator without dropping existing members', a
   assert.equal(String(trip.members[0].userId), String(trip.userId));
   assert.equal(trip.members[0].role, 'owner');
   assert.equal(String(trip.members[1].userId), String(existingMember));
+});
+
+test('Trip validation leaves an agency trip without a creator membership', async () => {
+  const trip = newTrip({
+    workspace: 'agency',
+    agencyId: new Types.ObjectId(),
+  });
+
+  await trip.validate();
+  assert.equal(trip.members.length, 0);
+});
+
+test('Trip validation requires an agency id for agency trips', async () => {
+  const trip = newTrip({ workspace: 'agency' });
+
+  await assert.rejects(() => trip.validate(), /Agency trips must belong to an agency/);
 });
 
 test('Trip validation repairs a creator that was supplied with a weaker role', async () => {

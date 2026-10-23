@@ -7,6 +7,7 @@ import {
   assertAgencyMemberRemoval,
   assertAgencyRoleChange,
   decideAgencyAccess,
+  mapAgencyRoleToTripRole,
   ownerCount,
   AGENCY_ROLE_RANK,
 } from './access.js';
@@ -28,6 +29,15 @@ function expectStatus(fn: () => void, status: number): void {
     return true;
   });
 }
+
+test('agency staff map onto the shared trip role matrix', () => {
+  assert.equal(mapAgencyRoleToTripRole('owner'), 'owner');
+  assert.equal(mapAgencyRoleToTripRole('admin'), 'owner');
+  assert.equal(mapAgencyRoleToTripRole('planner'), 'editor');
+  assert.equal(mapAgencyRoleToTripRole('viewer'), 'viewer');
+  assert.equal(mapAgencyRoleToTripRole(null), null);
+  assert.equal(mapAgencyRoleToTripRole('nope' as any), null);
+});
 
 test('agency roles are ranked and inherit lower capabilities', () => {
   assert.ok(AGENCY_ROLE_RANK.owner > AGENCY_ROLE_RANK.admin);

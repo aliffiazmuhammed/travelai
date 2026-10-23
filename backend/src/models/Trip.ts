@@ -94,8 +94,21 @@ export interface ITripMember {
   joinedAt: Date;
 }
 
+export type TripWorkspace = 'personal' | 'agency';
+
 export interface ITrip extends Document {
   userId: Types.ObjectId;
+  /**
+   * Which product surface owns this trip. Documents created before A2 have no
+   * `workspace` and are treated as personal by every query (`$ne: 'agency'`).
+   */
+  workspace: TripWorkspace;
+  /** Agency tenant for `workspace: 'agency'`; absent on personal trips. */
+  agencyId?: Types.ObjectId;
+  /** Agency member currently responsible for this trip. */
+  assignedTo?: Types.ObjectId;
+  /** A4 client directory link. Optional until the client model ships. */
+  clientId?: Types.ObjectId;
   title?: string;
   /** Planned trip window — drives per-day weather forecasts (Milestone 4). */
   startDate?: Date;
@@ -238,6 +251,28 @@ const tripSchema = new Schema<ITrip>(
       required: true,
       index: true,
     },
+    workspace: {
+      type: String,
+      enum: ['personal', 'agency'],
+      default: 'personal',
+      index: true,
+    },
+    agencyId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Agency',
+      default: undefined,
+      index: true,
+    },
+    assignedTo: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      default: undefined,
+    },
+    clientId: {
+      type: Schema.Types.ObjectId,
+      ref: 'AgencyClient',
+      default: undefined,
+    },
     title: {
       type: String,
       trim: true,
@@ -334,6 +369,20 @@ tripSchema.index({ userId: 1, isDeleted: 1, createdAt: -1 });
 tripSchema.index({ 'members.userId': 1, isDeleted: 1, createdAt: -1 });
 // Recently deleted: owner-only rows, newest deletion first.
 tripSchema.index({ 'members.userId': 1, isDeleted: 1, deletedAt: -1 });
+// Agency library and trash, always scoped by tenant.
+tripSchema.index({ agencyId: 1, workspace: 1, isDeleted: 1, createdAt: -1 });
+tripSchema.index({ agencyId: 1, workspace: 1, isDeleted: 1, deletedAt: -1 });
+tripSchema.index({ agencyId: 1, assignedTo: 1, isDeleted: 1 });
+
+/** Agency trips must name their tenant; personal trips must not acquire one. */
+tripSchema.pre('validate', function () {
+  if (this.workspace === 'agency' && !this.agencyId) {
+    this.invalidate('agencyId', 'Agency trips must belong to an agency.');
+  }
+  if (this.workspace !== 'agency' && this.agencyId) {
+    this.invalidate('agencyId', 'Only agency trips can belong to an agency.');
+  }
+});
 
 /**
  * P0 creation invariant (2026-10-20): every new trip carries its creator as

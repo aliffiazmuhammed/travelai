@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { AppError } from '../../utils/AppError.js';
+import type { TripRole } from '../collab/access.js';
 
 /**
  * Agency roles and the access-control policy (Agency Workspace A1).
@@ -41,6 +42,27 @@ export function isAgencyRole(value: unknown): value is AgencyRole {
 
 export function agencyCan(role: AgencyRole | null | undefined, min: AgencyRole): boolean {
   return role !== null && role !== undefined && AGENCY_ROLE_RANK[role] >= AGENCY_ROLE_RANK[min];
+}
+
+/**
+ * Agency staff act through their agency role, not through `Trip.members[]`.
+ *
+ * Owners/admins manage the trip (rename, delete, sharing, client access);
+ * planners edit content; viewers are read-only. The mapping intentionally
+ * ignores the `commenter` rank because agency viewers should not post to the
+ * client conversation without an explicit trip invite.
+ */
+export const AGENCY_TRIP_ROLE: Record<AgencyRole, TripRole> = {
+  owner: 'owner',
+  admin: 'owner',
+  planner: 'editor',
+  viewer: 'viewer',
+};
+
+export function mapAgencyRoleToTripRole(
+  role: AgencyRole | null | undefined
+): TripRole | null {
+  return role && isAgencyRole(role) ? AGENCY_TRIP_ROLE[role] : null;
 }
 
 export interface AgencyMemberShape {

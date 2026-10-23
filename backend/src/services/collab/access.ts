@@ -127,6 +127,8 @@ export function roleOf(trip: TripAccessShape | null | undefined, userId?: string
 export interface TripMembershipShape {
   isNew?: boolean;
   userId?: unknown;
+  /** Agency trips are owned by the agency, not by a creator membership row. */
+  workspace?: string;
   members?: Array<{ userId?: unknown; role?: string; joinedAt?: Date }>;
 }
 
@@ -145,10 +147,15 @@ export interface TripMembershipShape {
  * re-added when an existing document is saved. If a new document already names
  * the creator with a weaker role, that row is promoted rather than duplicated.
  *
+ * Agency trips deliberately opt out: their access comes from `AgencyMember`,
+ * not from `members[]`. Seeding the creator would let a planner who is later
+ * removed from the agency retain owner access through the client fallback.
+ *
  * @returns true when a row was added or promoted.
  */
 export function ensureCreatorMembership(trip: TripMembershipShape): boolean {
   if (!trip || !trip.isNew || !trip.userId) return false;
+  if (trip.workspace === 'agency') return false;
 
   const creatorId = String(trip.userId);
   const members = (trip.members ?? []) as NonNullable<TripMembershipShape['members']>;

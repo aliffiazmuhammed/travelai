@@ -5,6 +5,7 @@ import { protect } from '../middleware/auth.middleware.js';
 import {
   AGENCY_MEMBER_GUARD_TAG,
   AGENCY_ROLE_GUARD_TAG,
+  AGENCY_TRIP_GUARD_TAG,
 } from '../middleware/agencyAccess.middleware.js';
 import {
   AGENCY_WORKSPACE_GUARD_TAG,
@@ -66,7 +67,7 @@ test('the feature gate is mounted on the whole namespace', () => {
   );
 });
 
-test('A1 agency API exposes the expected route table', () => {
+test('A1-A6 agency API exposes the expected route table', () => {
   const routes = routeLayers().map(
     (layer) => `${pathOf(layer)} ${methodsOf(layer).join(',')}`
   );
@@ -78,6 +79,42 @@ test('A1 agency API exposes the expected route table', () => {
     '/ POST',
     '/:agencyId GET',
     '/:agencyId PATCH',
+    '/:agencyId/assets GET',
+    '/:agencyId/assets POST',
+    '/:agencyId/assets/:assetId DELETE',
+    '/:agencyId/assets/:assetId/content GET',
+    '/:agencyId/clients GET',
+    '/:agencyId/clients POST',
+    '/:agencyId/clients/:clientId PATCH',
+    '/:agencyId/clients/:clientId DELETE',
+    '/:agencyId/templates GET',
+    '/:agencyId/templates POST',
+    '/:agencyId/templates/:templateId PATCH',
+    '/:agencyId/templates/:templateId/versions GET',
+    '/:agencyId/templates/:templateId/versions POST',
+    '/:agencyId/templates/:templateId/versions/:version/preview POST',
+    '/:agencyId/templates/:templateId/versions/:version/activate POST',
+    '/:agencyId/templates/:templateId/archive POST',
+    '/:agencyId/templates/:templateId/default POST',
+    '/:agencyId/trips/:tripId/exports GET',
+    '/:agencyId/trips/:tripId/exports/preview POST',
+    '/:agencyId/trips/:tripId/exports POST',
+    '/:agencyId/trips/:tripId/exports/:exportId/retry POST',
+    '/:agencyId/exports/:exportId/download GET',
+    '/:agencyId/trips GET',
+    '/:agencyId/trips POST',
+    '/:agencyId/trash GET',
+    '/:agencyId/trips/:tripId GET',
+    '/:agencyId/trips/:tripId PATCH',
+    '/:agencyId/trips/:tripId DELETE',
+    '/:agencyId/trips/:tripId/restore POST',
+    '/:agencyId/trips/:tripId/purge DELETE',
+    '/:agencyId/trips/:tripId/quote GET',
+    '/:agencyId/trips/:tripId/quote/versions GET',
+    '/:agencyId/trips/:tripId/quote PUT',
+    '/:agencyId/trips/:tripId/quote/send POST',
+    '/:agencyId/trips/:tripId/quote/accept POST',
+    '/:agencyId/trips/:tripId/quote/cancel POST',
     '/:agencyId/members GET',
     '/:agencyId/members/:userId PATCH',
     '/:agencyId/members/:userId DELETE',
@@ -107,14 +144,28 @@ test('every tenant-scoped route carries a tenant guard', () => {
   }
 });
 
-test('team, settings and invite management require admin rank', () => {
+test('team, settings, trash, assets and invite management require admin rank', () => {
   const adminRoutes = new Set([
     '/:agencyId PATCH',
+    '/:agencyId/assets POST',
+    '/:agencyId/assets/:assetId DELETE',
+    '/:agencyId/trash GET',
+    '/:agencyId/trips/:tripId DELETE',
+    '/:agencyId/trips/:tripId/restore POST',
+    '/:agencyId/trips/:tripId/purge DELETE',
     '/:agencyId/members/:userId PATCH',
     '/:agencyId/members/:userId DELETE',
     '/:agencyId/invites GET',
     '/:agencyId/invites POST',
     '/:agencyId/invites/:inviteId DELETE',
+    '/:agencyId/templates POST',
+    '/:agencyId/templates/:templateId PATCH',
+    '/:agencyId/templates/:templateId/versions GET',
+    '/:agencyId/templates/:templateId/versions POST',
+    '/:agencyId/templates/:templateId/versions/:version/preview POST',
+    '/:agencyId/templates/:templateId/versions/:version/activate POST',
+    '/:agencyId/templates/:templateId/archive POST',
+    '/:agencyId/templates/:templateId/default POST',
   ]);
 
   for (const layer of routeLayers()) {
@@ -125,10 +176,56 @@ test('team, settings and invite management require admin rank', () => {
 });
 
 test('read-only tenant routes require membership, not admin', () => {
+  const readRoutes = new Set([
+    '/:agencyId GET',
+    '/:agencyId/assets GET',
+    '/:agencyId/assets/:assetId/content GET',
+    '/:agencyId/clients GET',
+    '/:agencyId/templates GET',
+    '/:agencyId/trips GET',
+    '/:agencyId/trips/:tripId GET',
+    '/:agencyId/trips/:tripId/exports GET',
+    '/:agencyId/exports/:exportId/download GET',
+    '/:agencyId/trips/:tripId/quote GET',
+    '/:agencyId/trips/:tripId/quote/versions GET',
+    '/:agencyId/members GET',
+  ]);
   for (const layer of routeLayers()) {
     const key = `${pathOf(layer)} ${methodsOf(layer).join(',')}`;
-    if (key !== '/:agencyId GET' && key !== '/:agencyId/members GET') continue;
+    if (!readRoutes.has(key)) continue;
     assert.equal(roleMin(layer), undefined, `${key} must not require admin`);
+  }
+});
+
+test('trip writes, directory writes, quote actions and exports require planner rank', () => {
+  const plannerRoutes = new Set([
+    '/:agencyId/clients POST',
+    '/:agencyId/clients/:clientId PATCH',
+    '/:agencyId/clients/:clientId DELETE',
+    '/:agencyId/trips POST',
+    '/:agencyId/trips/:tripId PATCH',
+    '/:agencyId/trips/:tripId/exports/preview POST',
+    '/:agencyId/trips/:tripId/exports POST',
+    '/:agencyId/trips/:tripId/exports/:exportId/retry POST',
+    '/:agencyId/trips/:tripId/quote PUT',
+    '/:agencyId/trips/:tripId/quote/send POST',
+    '/:agencyId/trips/:tripId/quote/accept POST',
+    '/:agencyId/trips/:tripId/quote/cancel POST',
+  ]);
+  for (const layer of routeLayers()) {
+    const key = `${pathOf(layer)} ${methodsOf(layer).join(',')}`;
+    if (!plannerRoutes.has(key)) continue;
+    assert.equal(roleMin(layer), 'planner', `${key} must require planner`);
+  }
+});
+
+test('tenant trip routes also narrow to one agency trip', () => {
+  for (const layer of routeLayers()) {
+    if (!pathOf(layer).includes(':tripId')) continue;
+    assert.ok(
+      handlesOf(layer).some((handle: any) => handle?.[AGENCY_TRIP_GUARD_TAG]),
+      `${methodsOf(layer).join(',')} ${pathOf(layer)} is missing requireAgencyTripRole`
+    );
   }
 });
 

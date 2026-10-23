@@ -31,15 +31,18 @@ import { cn } from '@/lib/utils';
 
 const navItems = [
   { to: '/agency', label: 'Overview', icon: LayoutDashboard, end: true },
+  { to: '/agency/trips', label: 'Trips', icon: Map, end: false },
+  {
+    to: '/agency/clients',
+    label: 'Clients',
+    icon: BriefcaseBusiness,
+    end: false,
+  },
   { to: '/agency/team', label: 'Team', icon: Users, end: false },
   { to: '/agency/settings', label: 'Settings', icon: Settings, end: false },
 ];
 
-const futureItems = [
-  { label: 'Trips', icon: Map, milestone: 'A2' },
-  { label: 'Clients', icon: BriefcaseBusiness, milestone: 'A4' },
-  { label: 'Templates', icon: FileText, milestone: 'A6' },
-];
+const futureItems = [{ label: 'Templates', icon: FileText, milestone: 'A6' }];
 
 /**
  * The agency product shell (A1). This layout is intentionally separate from

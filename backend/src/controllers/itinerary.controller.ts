@@ -13,6 +13,15 @@ import {
 import { scoreItinerary } from '../services/ai/quality.js';
 import { buildTripHistorySummary } from '../services/itinerary/context.js';
 import { listDeletedTrips, purgeTripCascade } from '../services/itinerary/trash.js';
+import {
+  agencyTripCopyFields,
+  authorizeAgencyGeneration,
+  ensureAgencyDuplicateAllowed,
+} from '../services/agency/trips.js';
+import {
+  mapAgencyRoleToTripRole,
+} from '../services/agency/access.js';
+import type { TripRole } from '../services/collab/access.js';
 import { isValidCoord } from '../services/geo/distance.js';
 import { DailyWeather, getWeatherForecast } from '../services/geo/weather.js';
 import { RoutingDayInput, analyzeWeatherRouting } from '../services/geo/weatherRouting.js';
@@ -110,6 +119,21 @@ interface GenerateBody {
   groupType: string;
   language?: string;
   preferences?: Record<string, any>;
+  agencyId?: string;
+}
+
+/** Tenant fields for a generated trip; authorizes agency creation first. */
+async function generationTripFields(
+  req: AuthenticatedRequest,
+  agencyId?: string
+): Promise<Record<string, any>> {
+  if (!agencyId) return { workspace: 'personal' };
+  const agency = await authorizeAgencyGeneration(agencyId, req.userId!);
+  return {
+    workspace: 'agency',
+    agencyId: agency.agencyId,
+    assignedTo: req.userId,
+  };
 }
 
 /** Normalizes the `interests` field (array or comma-separated string) to a clean array. */
@@ -195,6 +219,7 @@ export const generateItinerary = catchAsync(
     const body = req.body as GenerateBody;
     const { destination, days, budget, startdate, enddate, interests, groupType, language, preferences } =
       body;
+    const tenantFields = await generationTripFields(req, body.agencyId);
 
     const variant = assignVariant(req.userId);
     const history = await buildTripHistorySummary(req.userId);
@@ -227,6 +252,7 @@ export const generateItinerary = catchAsync(
 
     const trip = new Trip({
       userId: req.userId,
+      ...tenantFields,
       title: parsedItinerary.trip_title,
       status: 'planned',
       isDeleted: false,
@@ -257,6 +283,8 @@ export const generateItineraryStream = async (req: AuthenticatedRequest, res: Re
   };
 
   try {
+    const tenantFields = await generationTripFields(req, body.agencyId);
+
     sendEvent({
       type: 'progress',
       stage: 1,
@@ -334,6 +362,7 @@ export const generateItineraryStream = async (req: AuthenticatedRequest, res: Re
 
     const trip = new Trip({
       userId: req.userId,
+      ...tenantFields,
       title: parsedItinerary.trip_title,
       status: 'planned',
       isDeleted: false,
@@ -385,12 +414,27 @@ export const getUserTrips = catchAsync(
     // under `$and` instead of one clobbering the other.
     const andConditions: Record<string, any>[] = [];
 
+    // A2 tenant separation:
+    // - personal trips match the creator/member rule exactly as before;
+    // - agency trips enter this list ONLY through an explicit trip invite
+    //   (client collaborators), never through the creator field. Agency staff
+    //   use `/api/agency/:agencyId/trips` and are not seeded into `members[]`.
+    const personalTrips = {
+      workspace: { $ne: 'agency' },
+      $or: [{ userId: req.userId }, memberMatcher],
+    };
+    const agencyClientTrips = {
+      workspace: 'agency',
+      ...memberMatcher,
+    };
+
     if (scope === 'owned') {
       query.userId = req.userId;
+      query.workspace = { $ne: 'agency' };
     } else if (scope === 'shared') {
       Object.assign(query, memberMatcher);
     } else {
-      andConditions.push({ $or: [{ userId: req.userId }, memberMatcher] });
+      andConditions.push({ $or: [personalTrips, agencyClientTrips] });
     }
 
     if (status && typeof status === 'string' && status !== 'all') {
@@ -417,7 +461,7 @@ export const getUserTrips = catchAsync(
     const trips = await Trip.find(query)
       .sort({ createdAt: -1 })
       .select(
-        'title status version hasEdited rev startDate endDate createdAt updatedAt members tripDetails.trip_title tripDetails.duration_days tripDetails.budget_per_person tripDetails.group_type tripDetails.season'
+        'title status version hasEdited rev startDate endDate createdAt updatedAt members workspace agencyId tripDetails.trip_title tripDetails.duration_days tripDetails.budget_per_person tripDetails.group_type tripDetails.season'
       );
 
     // Annotate each row with the caller's role and project owner-only fields
@@ -448,12 +492,17 @@ export const getDeletedTrips = catchAsync(
 
 export const getTripById = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const { trip, role } = tripContext(req);
+    const { trip, role, agencyRole, agencyStaff } = tripContext(req);
 
     // `role` annotates the payload so the SPA can gate its controls (cosmetic
     // only â€” the server enforces everything). Absent `role` reads as "owner"
-    // for legacy single-user payloads.
-    res.status(200).json({ ...sanitizeTripFor(trip, role), role });
+    // for legacy single-user payloads. `agencyRole` is the caller's own agency
+    // membership and is absent for client collaborators.
+    res.status(200).json({
+      ...sanitizeTripFor(trip, role),
+      role,
+      ...(agencyStaff && agencyRole ? { agencyRole } : {}),
+    });
   }
 );
 
@@ -739,6 +788,8 @@ export const getTripInsights = catchAsync(
     const trips = await Trip.find({
       members: { $elemMatch: { userId: new Types.ObjectId(String(req.userId)), role: 'owner' } },
       isDeleted: { $ne: true },
+      // Personal generation insights exclude tenant-owned agency trips.
+      workspace: { $ne: 'agency' },
     })
       .sort({ createdAt: -1 })
       .limit(50)
@@ -849,15 +900,25 @@ export const purgeTrip = catchAsync(
 
 export const duplicateTrip = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const { trip } = tripContext(req);
+    const { trip, role, agencyRole, agencyStaff } = tripContext(req);
+
+    // A client collaborator can read an agency trip but must not create an
+    // agency-owned copy; planners and above may.
+    await ensureAgencyDuplicateAllowed(trip, agencyRole, agencyStaff);
 
     const clonedDetails = JSON.parse(JSON.stringify(trip.tripDetails));
     const originalTitle = trip.title || clonedDetails.trip_title || 'Trip';
     const clonedTitle = `${originalTitle} (Copy)`;
     clonedDetails.trip_title = clonedTitle;
 
+    const tenantFields =
+      trip.workspace === 'agency'
+        ? agencyTripCopyFields(trip, req.userId!)
+        : { workspace: 'personal' as const };
+
     const newTrip = new Trip({
       userId: req.userId,
+      ...tenantFields,
       title: clonedTitle,
       status: 'draft',
       isDeleted: false,
@@ -875,7 +936,8 @@ export const duplicateTrip = catchAsync(
 
     await newTrip.save();
 
-    res.status(201).json({ ...sanitizeTripFor(newTrip, 'owner'), role: 'owner' as const });;
+    const responseRole = trip.workspace === 'agency' ? role : 'owner';
+    res.status(201).json({ ...sanitizeTripFor(newTrip, responseRole), role: responseRole });
   }
 );
 

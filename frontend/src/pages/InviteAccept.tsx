@@ -223,7 +223,7 @@ const InviteAccept: React.FC = () => {
                     ? "view the plan and print it — editing stays with the owner."
                     : preview.role === "editor"
                     ? "edit the itinerary, expenses map and days together with the owner."
-                    : "follow along and comment once commenting ships."}
+                    : "follow along and join the trip discussion."}
                 </p>
               </div>
 

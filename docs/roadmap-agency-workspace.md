@@ -1,9 +1,20 @@
 # Agency Workspace - implementation milestone plan
 
-**Status:** A0 accepted (2026-10-22); A1 implemented and verified (2026-10-22); A2 next.  
-**A0 artifacts:** `docs/adr/0001-agency-workspace-boundary.md`, `docs/agency-a0-test-plan.md`, `docs/agency-a0-wireframes.md`, feature flag `AGENCY_WORKSPACE_ENABLED` (default false) and read-only `GET /api/agency/status`.  
-**A1 artifacts:** tenant models (`Agency`, `AgencyMember`, `AgencyInvite`), hashed agency invites, tenant guards, `/api/agency` onboarding/team endpoints and the `/agency` shell with onboarding, switcher, team and settings. See `docs/agency-a1-test-plan.md`.  
-**Goal:** add a separate B2B product for travel agencies without changing the individual traveler experience.  
+**Status:** A0 accepted (2026-10-22); A1 implemented and verified (2026-10-22); A2 implemented and verified (2026-10-22); A3 implemented (2026-10-22); A4 implemented and verified (2026-10-22); A5 implemented and verified (2026-10-22); A6 next.
+
+**A0 artifacts:** `docs/adr/0001-agency-workspace-boundary.md`, `docs/agency-a0-test-plan.md`, `docs/agency-a0-wireframes.md`, feature flag `AGENCY_WORKSPACE_ENABLED` (default false) and read-only `GET /api/agency/status`.
+
+**A1 artifacts:** tenant models (`Agency`, `AgencyMember`, `AgencyInvite`), hashed agency invites, tenant guards, `/api/agency` onboarding/team endpoints and the `/agency` shell with onboarding, switcher, team and settings. See `docs/agency-a1-test-plan.md`.
+
+**A2 artifacts:** agency trip fields and indexes, tenant trip list/create/assignment/trash routes, agency-aware trip guard, agency wizard mode, `/agency/trips` library and client-invite listing. See `docs/agency-a2-test-plan.md`.
+
+**A3 artifacts:** agency branding fields (mascot, typography, GSTIN), `AgencyAsset` model, private tenant storage with an authenticated content route, admin-only upload/delete plus the settings brand library and preview. Tests live in `backend/src/services/agency/assets.test.ts`.
+
+**A4 artifacts:** `AgencyClient` directory model/service/routes and `/agency/clients`, `AgencyQuote` versioned model with server-side minor-unit pricing, client/internal projections, quote number allocation, agency default inclusions/exclusions/terms, the trip Quote tab with internal vs client preview, and status/version actions (`send`, `accept`, `cancel`, new version). Tests live in `backend/src/services/agency/quotes.test.ts`, `models.test.ts`, `routes/agency.routes.test.ts` and `assets.test.ts`; see `docs/agency-a4-test-plan.md`.
+
+**A5 artifacts:** versioned `ExportDocument` builder, `AgencyTemplate`/`AgencyExport`/`AgencyAudit` models, built-in `brochure` and `internal-summary` HTML renderers, headless-Chrome PDF jobs with retry, private export storage, ten-minute signed staff downloads, export rate limiting and audit events, and the trip Export tab (template picker, quote confirmation, real preview, generate/download, history). Tests live in `backend/src/services/agency/exports/exports.test.ts`, `models.test.ts`, `routes/agency.routes.test.ts` and `assets.test.ts`; see `docs/agency-a5-test-plan.md`.
+
+**Goal:** add a separate B2B product for travel agencies without changing the individual traveler experience.
 **Scope:** agency accounts, team roles, client records, quotes, branded/custom PDF exports, and all existing trip features under an agency-owned workspace.
 
 ---
@@ -679,6 +690,8 @@ Exit criteria:
 **Size:** XL  
 **Depends on:** A1
 
+**Status:** Implemented and verified (2026-10-22). See `docs/agency-a2-test-plan.md`.
+
 Backend:
 
 - Add `agencyId`, `workspace`, `assignedTo`, `clientId` to `Trip`.
@@ -699,11 +712,11 @@ Frontend:
 Tests:
 
 - Cross-agency trip id -> 404.
-- Personal dashboard excludes agency trips.
+- Personal dashboard excludes agency staff trips; an invited client still sees their trip through membership.
 - Agency dashboard excludes personal trips.
 - Editor/commenter/viewer parity in an agency trip.
 - Trash is owner/admin-only and still restores correctly.
-- Existing 336 backend tests pass.
+- Existing backend tests still pass.
 
 Exit criteria:
 
@@ -715,7 +728,8 @@ Exit criteria:
 ### A3 - Agency brand and assets
 
 **Size:** M  
-**Depends on:** A1
+**Depends on:** A1  
+**Status:** Implemented (2026-10-22).
 
 Backend:
 
@@ -736,7 +750,7 @@ Tests:
 - MIME sniffing rejects renamed files.
 - Oversized files rejected.
 - Assets are private and scoped by agency.
-- Deleting an asset does not break an active template preview.
+- Deleting an asset does not break an active template preview. A3 has no template previews yet, so deletion clears live logo/mascot/typography pointers; A5/A6 snapshot an asset before a template references it.
 
 Exit criteria:
 
@@ -748,6 +762,7 @@ Exit criteria:
 
 **Size:** L  
 **Depends on:** A2
+**Status:** Implemented and verified (2026-10-22). See `docs/agency-a4-test-plan.md`.
 
 Backend:
 
@@ -782,6 +797,7 @@ Exit criteria:
 
 **Size:** XL  
 **Depends on:** A2, A3, A4
+**Status:** Implemented and verified (2026-10-22). See `docs/agency-a5-test-plan.md`.
 
 Backend:
 

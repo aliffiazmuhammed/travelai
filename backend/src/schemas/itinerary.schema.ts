@@ -9,6 +9,8 @@ export const tripPreferencesSchema = z.object({
   accessibility: z.array(z.string().min(1)).max(10).optional(),
 });
 
+const OBJECT_ID = /^[0-9a-fA-F]{24}$/;
+
 export const generateItinerarySchema = z.object({
   destination: z.string().min(1, 'Destination is required'),
   days: z.number().int().min(1, 'Days must be at least 1').max(30, 'Days cannot exceed 30'),
@@ -19,6 +21,8 @@ export const generateItinerarySchema = z.object({
   groupType: z.string().min(1, 'Group type is required'),
   language: z.enum(SUPPORTED_LANGUAGES).optional(),
   preferences: tripPreferencesSchema.optional(),
+  /** A2: omit for a personal trip; include to create an agency trip. */
+  agencyId: z.string().regex(OBJECT_ID, 'Choose a valid agency.').optional(),
 });
 
 export const tripFeedbackSchema = z.object({
