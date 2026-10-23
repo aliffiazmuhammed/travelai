@@ -41,7 +41,7 @@ services:
       # Agency workspace (A0) is intentionally dark until the tenancy layer
       # ships. Flip to "true" only after A1 is verified.
       - key: AGENCY_WORKSPACE_ENABLED
-        value: "false"
+        value: "true"
       # Optional but strongly recommended: without Cloudinary, uploaded avatars
       # and receipts live on Render's ephemeral disk and vanish on redeploy.
       # Accepts the single CLOUDINARY_URL form (cloudinary://key:secret@cloud).
