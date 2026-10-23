@@ -15,6 +15,7 @@ import geoRoutes from './routes/geo.routes.js';
 import agencyRoutes from './routes/agency.routes.js';
 import { errorHandler } from './middleware/error.middleware.js';
 import { isCloudinaryConfigured, uploadDir } from './services/finance/receipt.js';
+import { agencyStorageProvider } from './services/agency/cloudStorage.js';
 import { CSRF_HEADER, issueCsrfCookie, verifyCsrf } from './middleware/csrf.middleware.js';
 import { isAllowedCorsOrigin, isSameOriginRequest } from './services/collab/httpOrigins.js';
 import { healthState } from './utils/health.js';
@@ -169,6 +170,12 @@ app.get('/api/health', (_req, res) => {
       folder: process.env.CLOUDINARY_FOLDER || 'travelai/receipts',
       ...(isDev ? { localUploadsDir: uploadsDir } : {}),
     },
+    // Agency tenant bytes (brand assets, templates, export PDFs) are private
+    // and never served from a public CDN; this reports where they live.
+    agencyStorage: {
+      provider: agencyStorageProvider(),
+      durable: agencyStorageProvider() === 'cloudinary',
+    },
     memory: process.memoryUsage(),
   });
 });
@@ -205,6 +212,14 @@ try {
   }
 } catch (error) {
   console.warn(`Receipt uploads are disabled (could not prepare ${uploadsDir}):`, error);
+}
+
+// Agency workspace bytes are tenant-private, so Cloudinary storage uses
+// `resource_type: 'raw'` and is never served from the public CDN.
+if (agencyStorageProvider() === 'cloudinary') {
+  console.log('☁️  Agency storage active on Cloudinary (raw, private reads)');
+} else {
+  console.log('💾 Agency storage active on local disk');
 }
 
 if (shouldServeStatic && frontendDist) {

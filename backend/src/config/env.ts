@@ -155,6 +155,10 @@ const envSchema = z.object({
   CLOUDINARY_API_KEY: z.string().optional(),
   CLOUDINARY_API_SECRET: z.string().optional(),
   CLOUDINARY_FOLDER: z.string().optional(),
+  // Agency storage provider (A9 hardening): 'cloudinary' (default when
+  // Cloudinary credentials exist) or 'local'. Consumed by
+  // services/agency/cloudStorage.ts.
+  AGENCY_STORAGE_PROVIDER: z.enum(['cloudinary', 'local']).optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

@@ -51,12 +51,18 @@ function expectAppError(fn: () => unknown, status: number): void {
 async function withTemplateRoot(run: (root: string) => Promise<void>): Promise<void> {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'travelai-template-assets-'));
   const previous = process.env.AGENCY_TEMPLATE_DIR;
+  const previousProvider = process.env.AGENCY_STORAGE_PROVIDER;
+  // These tests assert local-disk semantics against a temp root, so the
+  // provider must be pinned even on a Cloudinary-configured machine.
   process.env.AGENCY_TEMPLATE_DIR = root;
+  process.env.AGENCY_STORAGE_PROVIDER = 'local';
   try {
     await run(root);
   } finally {
     if (previous === undefined) delete process.env.AGENCY_TEMPLATE_DIR;
     else process.env.AGENCY_TEMPLATE_DIR = previous;
+    if (previousProvider === undefined) delete process.env.AGENCY_STORAGE_PROVIDER;
+    else process.env.AGENCY_STORAGE_PROVIDER = previousProvider;
     await fs.rm(root, { recursive: true, force: true });
   }
 }

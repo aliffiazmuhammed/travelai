@@ -92,17 +92,17 @@ Last local run (2026-10-23) — **all 21 executed checks passed** (the positive 
 `docs/agency-operations-runbook.md` covers:
 
 1. **Feature flag and kill switch** — `AGENCY_WORKSPACE_ENABLED=false` 404s the whole `/api/agency` surface and the frontend hides itself from the health probe (no frontend deploy needed). Rollback = redeploy the previous commit; A1-A9 added no destructive migrations.
-2. **Environment configuration** — every agency env var, its default and its blast radius (`AGENCY_OPS_KEY`, `AGENCY_PLAN_TIERS`, `AGENCY_PLAN_DEFAULT`, `AGENCY_PROPOSAL_TTL_DAYS`, `AGENCY_CHROME_PATH`, the three private file roots, `AGENCY_EXPORT_SIGNING_SECRET`).
+2. **Environment configuration** — every agency env var, its default and its blast radius (`AGENCY_OPS_KEY`, `AGENCY_PLAN_TIERS`, `AGENCY_PLAN_DEFAULT`, `AGENCY_PROPOSAL_TTL_DAYS`, `AGENCY_CHROME_PATH`, `AGENCY_STORAGE_PROVIDER`, the local fallback file roots, `AGENCY_EXPORT_SIGNING_SECRET`).
 3. **Onboarding runbook** — ops plan → signup → seats → branding → templates (preview before activate) → first trip → client + quote → export → share → hand-over.
 4. **Support checklist** — usage first, export failures via audit, template validation errors, dead share links, storage; escalation = kill switch + re-run the A9 security smoke.
-5. **Backups, retention and deletion policy** — mongodump together with the three private file roots (they must never be backed up separately); exports expire after 30 days, shares after 90; audit is retained.
+5. **Backups, retention and deletion policy** — mongodump as the source of truth; Cloudinary private raw assets (provider default) rely on the Cloudinary backup add-on or regeneration; local file roots (fallback provider) must be backed up together with the dump; exports expire after 30 days, shares after 90; audit is retained.
 6. **Pilot acceptance checklist** — mirrors the simulated pilot checks in §6.
 
 ---
 
 ## 6. Simulated pilot (A9d)
 
-`backend/scripts/smoke-a9-pilot.mts` walks the full agency lifecycle end-to-end against the real services and a throwaway database (`travelai_a9_pilot_smoke`), exactly as a pilot agency would experience it, and drops all rows and files afterwards. The ops-plan path uses the same secret gate as production (`AGENCY_OPS_KEY`).
+`backend/scripts/smoke-a9-pilot.mts` walks the full agency lifecycle end-to-end against the real services and a throwaway database (`travelai_a9_pilot_smoke`), exactly as a pilot agency would experience it, and drops all rows afterwards, removing the files it creates through the storage layer. The ops-plan path uses the same secret gate as production (`AGENCY_OPS_KEY`).
 
 Last local run (2026-10-23): **34/34 checks passed**, covering:
 
@@ -145,7 +145,7 @@ cd frontend && npm run build
 
 Last local run (2026-10-23):
 
-- backend suite: **468 tests, 468 pass, 0 fail** (includes `routes/agency.routes.test.ts` route coverage, collab security/access suites, and the A9b template-validation regressions)
+- backend suite: **474 tests, 474 pass, 0 fail** (includes `routes/agency.routes.test.ts` route coverage, collab security/access suites, the A9b template-validation regressions, and the `cloudStorage` provider/adapter tests)
 - backend build (`tsc`): clean
 - frontend typecheck: clean
 - frontend production build: clean
@@ -154,4 +154,32 @@ Live smokes (throwaway databases, self-cleaning):
 
 - `backend/scripts/smoke-a9-security.mts` — 29/29 (IDOR + cross-tenant fuzz)
 - `backend/scripts/load-a9.mts` — 21/21 executed (50-concurrent exports, limits, queue drain)
-- `backend/scripts/smoke-a9-pilot.mts` — 34/34 (simulated pilot lifecycle)
+- `backend/scripts/smoke-a9-pilot.mts` — 34/34 (simulated pilot lifecycle), run against both storage providers (§9)
+
+---
+
+## 9. Agency storage providers (Cloudinary-first)
+
+Agency tenant bytes — brand assets, template sources/snapshots and rendered
+export PDFs — follow the same Cloudinary-first contract as receipts and
+avatars, but stay tenant-private:
+
+- **Provider choice.** Cloudinary whenever credentials exist
+  (`CLOUDINARY_URL`, or the `CLOUDINARY_CLOUD_NAME`/`API_KEY`/`API_SECRET`
+  triplet); local disk otherwise. `AGENCY_STORAGE_PROVIDER=local|cloudinary`
+  overrides the detection. `/api/health` reports the active choice as
+  `agencyStorage.provider` (+`durable`).
+- **Private bytes.** Uploads use `resource_type: 'raw'` with
+  `type: 'private'`, so Cloudinary never serves them from the public CDN.
+  Reads generate a short-lived signed download URL on api.cloudinary.com
+  (60 s expiry, no Basic auth) that the server fetches and relays through the
+  existing tenant-guarded content routes. Deletes destroy the private object.
+- **Stable keys.** `storageKey` columns keep their server-generated
+  `<agencyId>/<...>` strings in both providers, so switching providers never
+  changes rows or client contracts.
+- **Verification (2026-10-23).** The 34/34 pilot passed against the live dev
+  backend in both modes — Cloudinary (real private upload/read/delete round
+  trips, including byte-for-byte logo read-back and the rendered export PDF)
+  and `AGENCY_STORAGE_PROVIDER=local` (temp file roots). After the Cloudinary
+  run, the raw resource list confirmed zero residue (pilot cleanup destroys
+  the private objects).

@@ -279,7 +279,10 @@ test('storage keys are server-generated and traversal-safe', async () => {
 
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'travelai-template-'));
   const previous = process.env.AGENCY_TEMPLATE_DIR;
+  const previousProvider = process.env.AGENCY_STORAGE_PROVIDER;
+  // Local-disk semantics against a temp root, even on a Cloudinary machine.
   process.env.AGENCY_TEMPLATE_DIR = root;
+  process.env.AGENCY_STORAGE_PROVIDER = 'local';
   try {
     const source = `${SAFE_TEMPLATE}\n<!-- non-ascii: ₹ -->`;
     await writeAgencyTemplateFile(key, source);
@@ -300,6 +303,8 @@ test('storage keys are server-generated and traversal-safe', async () => {
   } finally {
     if (previous === undefined) delete process.env.AGENCY_TEMPLATE_DIR;
     else process.env.AGENCY_TEMPLATE_DIR = previous;
+    if (previousProvider === undefined) delete process.env.AGENCY_STORAGE_PROVIDER;
+    else process.env.AGENCY_STORAGE_PROVIDER = previousProvider;
     await fs.rm(root, { recursive: true, force: true });
   }
 });

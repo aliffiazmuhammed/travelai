@@ -48,14 +48,19 @@ first so a half-rolled-back deploy never serves a mixed surface.
 | `AGENCY_PLAN_DEFAULT` | `starter` | Tier applied to agencies without an override. |
 | `AGENCY_PROPOSAL_TTL_DAYS` | `30` (max 90) | Default lifetime of a public proposal share link. |
 | `AGENCY_CHROME_PATH` | auto-detect | Chrome/Edge binary for HTML→PDF. Without a browser, export jobs fail retryably (503) and the UI offers Retry. |
-| `AGENCY_ASSET_DIR` | `backend/agency-assets` | Private store for brand assets (A3). |
-| `AGENCY_TEMPLATE_DIR` | `backend/agency-templates` | Private store for uploaded template sources/snapshots (A6). |
-| `AGENCY_EXPORT_DIR` | `backend/agency-exports` | Private store for rendered proposal PDFs (A5). |
+| `AGENCY_STORAGE_PROVIDER` | auto (Cloudinary when Cloudinary credentials exist, else local) | Where agency tenant bytes (brand assets, template sources/snapshots, export PDFs) live. `local` forces the file roots below even when Cloudinary is configured; `cloudinary` forces Cloudinary even without credentials (writes then fail loudly). |
+| `AGENCY_ASSET_DIR` | `backend/agency-assets` | Local fallback store for brand assets (A3). |
+| `AGENCY_TEMPLATE_DIR` | `backend/agency-templates` | Local fallback store for uploaded template sources/snapshots (A6). |
+| `AGENCY_EXPORT_DIR` | `backend/agency-exports` | Local fallback store for rendered proposal PDFs (A5). |
 | `AGENCY_EXPORT_SIGNING_SECRET` | falls back to `JWT_SECRET` | HMAC secret for signed export download URLs. |
 
-Never serve the three private file roots from a public path; they are
-authorised per-request by the tenant guard and signed URLs, never by URL
-guessability.
+Tenant bytes are Cloudinary-first: private raw uploads (`type: private`) that
+are read back only through short-lived signed download URLs on
+api.cloudinary.com — never the public CDN, never Basic auth. When the provider
+is `local`, the three private file roots must never be served from a public
+path; they are authorised per-request by the tenant guard and signed URLs,
+never by URL guessability. `/api/health` reports the active choice as
+`agencyStorage.provider`.
 
 ---
 
@@ -139,24 +144,29 @@ Run this when an agency reports trouble, in order.
   `agencyassets`, `agencytemplates` (+versions), `agencyexports`,
   `agencyquotes`, `agencyclients`, `agencyinvites`, `agencyproposallinks`,
   `agencyaudits`, plus agency-workspace `trips`.
-- Private file roots (§2): brand assets, template sources/snapshots, export
-  PDFs. Files are redundant copies of what the rows reference; the rows are
-  the source of truth.
+- Tenant bytes (brand assets, template sources/snapshots, export PDFs): with
+  the Cloudinary provider these are private raw assets under
+  `<CLOUDINARY_FOLDER>/agency/`; with the local provider they are the three
+  private file roots (§2). Files are redundant copies of what the rows
+  reference; the rows are the source of truth.
 
 **Backups**
 
-- Take `mongodump` of the database and a file backup of the three private
-  roots **together** (rows reference files by server-generated key). A restore
-  needs both.
-- Suggested cadence: daily database dump with 30-day retention; file roots
-  follow the same schedule since files can be regenerated (assets re-uploaded,
-  exports re-rendered) but the dump alone cannot rebuild them.
+- Take `mongodump` of the database. With the local provider, also take a file
+  backup of the three private roots **together** (rows reference files by
+  server-generated key; a restore needs both). With the Cloudinary provider,
+  enable the Cloudinary backup add-on for off-site retention — otherwise
+  tenant bytes can only be regenerated (assets re-uploaded, exports
+  re-rendered) since the rows alone cannot rebuild them.
+- Suggested cadence: daily database dump with 30-day retention; local file
+  roots follow the same schedule.
 
 **Retention**
 
 - Export PDFs expire **30 days** after creation (`EXPORT_RETENTION_DAYS`);
   expired rows stop counting toward storage and their signed URLs stop
-  working. Physical file deletion for expired exports is a maintenance job.
+  working. Physical deletion for expired exports (Cloudinary destroy or local
+  file removal, per provider) is a maintenance job.
 - Public proposal share links live up to **90 days** (default 30,
   `AGENCY_PROPOSAL_TTL_DAYS`); expired links are gone from client view.
 - Audit rows currently have no automatic expiry — retain them; they are the

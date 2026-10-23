@@ -2,17 +2,24 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { AppError } from '../../utils/AppError.js';
+import {
+  agencyStorageProvider,
+  cloudWriteAgencyBytes,
+  cloudReadAgencyBytes,
+  cloudRemoveAgencyBytes,
+} from './cloudStorage.js';
 
 /**
  * Private storage adapter for agency brand assets (A3).
  *
- * The local disk implementation deliberately writes outside the public
- * `/uploads` tree: assets are tenant data and are only served after the agency
- * guard has authorised the caller. Storage keys are `<agencyId>/<assetId>.<ext>`
- * and are generated server-side, so a client can never choose a path.
+ * Bytes are tenant data and are only served after the agency guard has
+ * authorised the caller. Storage keys are `<agencyId>/<assetId>.<ext>` and are
+ * generated server-side, so a client can never choose a path.
  *
- * A Cloudinary/S3 adapter can replace these functions later without changing
- * the routes; the `storageKey` column stays the stable reference.
+ * Cloudinary is the first-choice provider (raw resource_type, never served
+ * from the public CDN); the local implementation below writes outside the
+ * public `/uploads` tree and remains the fallback when Cloudinary is not
+ * configured. The `storageKey` column stays the stable reference either way.
  */
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -65,12 +72,19 @@ export async function writeAgencyAssetFile(
   storageKey: string,
   buffer: Buffer
 ): Promise<void> {
+  if (agencyStorageProvider() === 'cloudinary') {
+    await cloudWriteAgencyBytes(storageKey, buffer);
+    return;
+  }
   const target = agencyAssetFilePath(storageKey);
   await fs.mkdir(path.dirname(target), { recursive: true });
   await fs.writeFile(target, buffer, { mode: 0o600 });
 }
 
 export async function readAgencyAssetFile(storageKey: string): Promise<Buffer> {
+  if (agencyStorageProvider() === 'cloudinary') {
+    return cloudReadAgencyBytes(storageKey, 'Asset not found');
+  }
   try {
     return await fs.readFile(agencyAssetFilePath(storageKey));
   } catch (error: any) {
@@ -83,6 +97,10 @@ export async function readAgencyAssetFile(storageKey: string): Promise<Buffer> {
 
 /** Best-effort delete: a missing file is already the desired state. */
 export async function removeAgencyAssetFile(storageKey: string): Promise<void> {
+  if (agencyStorageProvider() === 'cloudinary') {
+    await cloudRemoveAgencyBytes(storageKey);
+    return;
+  }
   try {
     await fs.unlink(agencyAssetFilePath(storageKey));
   } catch (error: any) {

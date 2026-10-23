@@ -2,13 +2,24 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { AppError } from '../../../utils/AppError.js';
+import {
+  agencyStorageProvider,
+  cloudWriteAgencyBytes,
+  cloudReadAgencyBytes,
+  cloudRemoveAgencyBytes,
+} from '../cloudStorage.js';
 
 /**
  * Private storage for uploaded proposal templates (Agency Workspace A6).
  *
- * Sources live outside the public `/uploads` tree and are read only after the
- * tenant guard has authorised an admin. Keys are server-generated
+ * Sources and snapshot assets are only read after the tenant guard has
+ * authorised an admin. Keys are server-generated
  * `<agencyId>/<templateVersionId>.html`; a client never supplies a path.
+ *
+ * Cloudinary is the first-choice provider (raw resource_type, never served
+ * from the public CDN); the local implementation below writes outside the
+ * public `/uploads` tree and remains the fallback when Cloudinary is not
+ * configured. The `storageKey` columns stay the stable reference either way.
  */
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -104,6 +115,10 @@ export async function writeAgencyTemplateFile(
   storageKey: string,
   source: string
 ): Promise<void> {
+  if (agencyStorageProvider() === 'cloudinary') {
+    await cloudWriteAgencyBytes(storageKey, Buffer.from(source, 'utf8'));
+    return;
+  }
   const target = agencyTemplateFilePath(storageKey);
   await fs.mkdir(path.dirname(target), { recursive: true });
   await fs.writeFile(target, source, { encoding: 'utf8', mode: 0o600 });
@@ -112,6 +127,13 @@ export async function writeAgencyTemplateFile(
 export async function readAgencyTemplateFile(
   storageKey: string
 ): Promise<string> {
+  if (agencyStorageProvider() === 'cloudinary') {
+    const buffer = await cloudReadAgencyBytes(
+      storageKey,
+      'That template source is no longer available.'
+    );
+    return buffer.toString('utf8');
+  }
   try {
     return await fs.readFile(agencyTemplateFilePath(storageKey), 'utf8');
   } catch (error: any) {
@@ -125,6 +147,10 @@ export async function readAgencyTemplateFile(
 export async function removeAgencyTemplateFile(
   storageKey: string
 ): Promise<void> {
+  if (agencyStorageProvider() === 'cloudinary') {
+    await cloudRemoveAgencyBytes(storageKey);
+    return;
+  }
   try {
     await fs.unlink(agencyTemplateFilePath(storageKey));
   } catch (error: any) {
@@ -136,6 +162,10 @@ export async function writeAgencyTemplateAssetFile(
   storageKey: string,
   buffer: Buffer
 ): Promise<void> {
+  if (agencyStorageProvider() === 'cloudinary') {
+    await cloudWriteAgencyBytes(storageKey, buffer);
+    return;
+  }
   const target = agencyTemplateAssetFilePath(storageKey);
   await fs.mkdir(path.dirname(target), { recursive: true });
   await fs.writeFile(target, buffer, { mode: 0o600 });
@@ -144,6 +174,13 @@ export async function writeAgencyTemplateAssetFile(
 export async function readAgencyTemplateAssetFile(
   storageKey: string
 ): Promise<Buffer> {
+  if (agencyStorageProvider() === 'cloudinary') {
+    return cloudReadAgencyBytes(
+      storageKey,
+      'A template asset snapshot is no longer available. Upload a new template version.',
+      409
+    );
+  }
   try {
     return await fs.readFile(agencyTemplateAssetFilePath(storageKey));
   } catch (error: any) {
@@ -160,6 +197,10 @@ export async function readAgencyTemplateAssetFile(
 export async function removeAgencyTemplateAssetFile(
   storageKey: string
 ): Promise<void> {
+  if (agencyStorageProvider() === 'cloudinary') {
+    await cloudRemoveAgencyBytes(storageKey);
+    return;
+  }
   try {
     await fs.unlink(agencyTemplateAssetFilePath(storageKey));
   } catch (error: any) {
