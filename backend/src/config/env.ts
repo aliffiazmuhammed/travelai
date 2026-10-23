@@ -22,6 +22,30 @@ if (fs.existsSync(backendEnv)) {
   dotenv.config();
 }
 
+/**
+ * A8 plan tiers: seats, monthly export activity and storage cap per tier.
+ * Ops may override any limit per agency via the secret-guarded plan route.
+ */
+export interface AgencyPlanTier {
+  seats: number;
+  monthlyExports: number;
+  storageMb: number;
+}
+
+export const DEFAULT_AGENCY_PLAN_TIERS: Record<string, AgencyPlanTier> = {
+  starter: { seats: 3, monthlyExports: 10, storageMb: 100 },
+  pro: { seats: 15, monthlyExports: 100, storageMb: 1024 },
+};
+
+const agencyPlanTiersSchema = z.record(
+  z.string().min(1),
+  z.object({
+    seats: z.number().int().positive(),
+    monthlyExports: z.number().int().positive(),
+    storageMb: z.number().int().positive(),
+  })
+);
+
 const envSchema = z.object({
   PORT: z.coerce.number().default(5000),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -55,6 +79,29 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((value) => parseBooleanFlag(value)),
+  // A7 proposal share links; the service caps requests at 90 days.
+  AGENCY_PROPOSAL_TTL_DAYS: z.coerce.number().positive().default(30),
+  // A8 plan limits. Tiers are env-configurable; AGENCY_PLAN_DEFAULT picks the
+  // tier for agencies without an ops-applied override (services/agency/plan.ts).
+  AGENCY_PLAN_TIERS: z
+    .string()
+    .optional()
+    .transform((raw, ctx) => {
+      if (!raw) return DEFAULT_AGENCY_PLAN_TIERS;
+      try {
+        return agencyPlanTiersSchema.parse(JSON.parse(raw));
+      } catch {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            'AGENCY_PLAN_TIERS must be JSON like {"pro":{"seats":15,"monthlyExports":100,"storageMb":1024}}',
+        });
+        return z.NEVER;
+      }
+    }),
+  AGENCY_PLAN_DEFAULT: z.string().min(1).default('starter'),
+  // A8 ops secret for plan changes. Absent = nobody can change plans via API.
+  AGENCY_OPS_KEY: z.string().min(1).optional(),
   // F13: retained version snapshots per trip (each is a full itinerary).
   VERSIONS_MAX: z.coerce.number().positive().default(30),
   // F6a comments (§19.5). Consumed directly by services/collab/comments.ts

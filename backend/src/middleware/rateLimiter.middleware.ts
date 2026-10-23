@@ -282,3 +282,73 @@ export const publicShareLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+/**
+ * Public proposal accept (A7) — the only public write. The 256-bit token is
+ * the capability, but acceptance changes commercial state, so the brake is
+ * tighter than the read limiter: 20 accepts / 15 min / IP.
+ */
+export const proposalAcceptLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: {
+    success: false,
+    error: 'Too many requests. Please slow down and try again shortly.',
+    message: 'Too many requests. Please slow down and try again shortly.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
+ * A8 per-agency buckets. These share one bucket across every member of a
+ * tenant (the per-user limiters above stay stacked in front), so one busy
+ * desk cannot exhaust a shared hour budget on its own. They must run after
+ * the tenant guard — `req.agency` is set there; the params fallback only
+ * covers routes where the guard has not run yet, which never mounts these.
+ */
+
+const agencyKey = (req: any): string =>
+  String(req?.agency?._id ?? req?.params?.agencyId ?? 'unknown');
+
+export const agencyWideExportLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 60,
+  keyGenerator: agencyKey,
+  validate: false,
+  message: {
+    success: false,
+    error: 'This agency has reached its hourly export limit. Please try again in an hour.',
+    message: 'This agency has reached its hourly export limit. Please try again in an hour.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+export const agencyInviteCreateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 30,
+  keyGenerator: agencyKey,
+  validate: false,
+  message: {
+    success: false,
+    error: 'This agency has reached its hourly invitation limit. Please try again in an hour.',
+    message: 'This agency has reached its hourly invitation limit. Please try again in an hour.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+export const agencyAssetUploadAgencyLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 120,
+  keyGenerator: agencyKey,
+  validate: false,
+  message: {
+    success: false,
+    error: 'This agency has reached its hourly asset upload limit. Please try again in an hour.',
+    message: 'This agency has reached its hourly asset upload limit. Please try again in an hour.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});

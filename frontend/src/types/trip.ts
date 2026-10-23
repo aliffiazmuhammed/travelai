@@ -395,6 +395,8 @@ export interface Trip {
   isDeleted?: boolean;
   /** M7.7: when the owner moved the trip to Recently deleted. */
   deletedAt?: string;
+  /** A8: when an admin archived the trip (read-only; excluded from the active list). */
+  archivedAt?: string;
   version?: number;
   hasEdited?: boolean;
   /** Public share token — owner-only on the wire (Milestone 6 F6). */

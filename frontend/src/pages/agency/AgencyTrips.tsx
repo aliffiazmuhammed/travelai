@@ -7,6 +7,8 @@ import React, {
 } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
+  Archive,
+  ArchiveRestore,
   Building2,
   CalendarPlus,
   FileText,
@@ -107,6 +109,10 @@ const AgencyTrips: React.FC = () => {
   const [assigning, setAssigning] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [assigneeFilter, setAssigneeFilter] = useState('all');
+  const [archivedFilter, setArchivedFilter] = useState<'active' | 'archived'>(
+    'active'
+  );
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [blankOpen, setBlankOpen] = useState(false);
   const [blankTitle, setBlankTitle] = useState('');
@@ -128,6 +134,8 @@ const AgencyTrips: React.FC = () => {
         const result = await api.getAgencyTrips(activeAgencyId, {
           search: debouncedSearch.trim() || undefined,
           status: statusFilter,
+          assignedTo: assigneeFilter === 'all' ? undefined : assigneeFilter,
+          archived: archivedFilter === 'archived',
         });
         if (requestId === listRequestRef.current) {
           setTrips(result.trips || []);
@@ -143,7 +151,7 @@ const AgencyTrips: React.FC = () => {
         }
       }
     },
-    [activeAgencyId, debouncedSearch, statusFilter]
+    [activeAgencyId, debouncedSearch, statusFilter, assigneeFilter, archivedFilter]
   );
 
   const loadDeletedTrips = useCallback(async () => {
@@ -235,16 +243,16 @@ const AgencyTrips: React.FC = () => {
   }, [activeAgencyId, loadTrips, loadDeletedTrips]);
 
   // Assignment labels come from the agency roster, not a client-side name map.
-  const selectedTripId = selectedTrip?._id;
+  // The roster also powers the list's assignee filter chips (A8).
   useEffect(() => {
-    if (!activeAgencyId || !selectedTripId || !canAssign) return;
+    if (!activeAgencyId) return;
     void api
       .getAgencyMembers(activeAgencyId)
       .then((result) => setAssignees(result.members || []))
       .catch(() => {
-        /* the trip still opens; only the picker is unavailable */
+        /* trips still open; only the picker is unavailable */
       });
-  }, [activeAgencyId, selectedTripId, canAssign]);
+  }, [activeAgencyId]);
 
   const access = useTripAccess(selectedTrip, user?._id);
   const assigneeLabel = useMemo(() => {
@@ -345,6 +353,36 @@ const AgencyTrips: React.FC = () => {
       toast.success('Trip permanently deleted.');
     } catch (err) {
       toast.error(errorMessage(err, 'Could not permanently delete this trip.'));
+      throw err;
+    }
+  };
+
+  const handleArchiveTrip = async (tripIdToArchive: string) => {
+    if (!activeAgencyId) return;
+    try {
+      await api.archiveAgencyTrip(activeAgencyId, tripIdToArchive);
+      setTrips((prev) => prev.filter((trip) => trip._id !== tripIdToArchive));
+      toast.success('Trip archived. Pinned exports and client links keep working.');
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not archive this trip.'));
+      throw err;
+    }
+  };
+
+  const handleUnarchiveTrip = async (tripIdToUnarchive: string) => {
+    if (!activeAgencyId) return;
+    try {
+      const result = await api.unarchiveAgencyTrip(
+        activeAgencyId,
+        tripIdToUnarchive
+      );
+      setTrips((prev) => prev.filter((trip) => trip._id !== tripIdToUnarchive));
+      setSelectedTrip((prev) =>
+        prev && prev._id === tripIdToUnarchive ? result.trip : prev
+      );
+      toast.success('Trip restored to the active list.');
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not restore this trip.'));
       throw err;
     }
   };
@@ -476,10 +514,34 @@ const AgencyTrips: React.FC = () => {
             assignedLabel={assigneeLabel}
             assignedTo={selectedTrip.assignedTo}
             assignees={assignees}
-            canAssign={canAssign}
+            canAssign={canAssign && !selectedTrip.archivedAt}
             assigning={assigning}
             onAssignmentChange={handleAssignment}
           />
+
+          {selectedTrip.archivedAt ? (
+            <div className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200 sm:flex-row sm:items-center sm:justify-between">
+              <p className="flex items-start gap-2">
+                <Archive className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>
+                  This trip is archived — it is read-only. Pinned exports,
+                  client links and quote views still work.
+                </span>
+              </p>
+              {canManage ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void handleUnarchiveTrip(selectedTrip._id)}
+                  className="shrink-0 rounded-xl text-xs font-bold"
+                >
+                  <ArchiveRestore className="mr-1.5 h-3.5 w-3.5" />
+                  Unarchive
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="inline-flex items-center gap-1 rounded-2xl border border-slate-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900">
             <button
@@ -536,8 +598,16 @@ const AgencyTrips: React.FC = () => {
               role={access.role ?? undefined}
               members={selectedTrip.members}
               currentUserId={user?._id}
-              onStatusChange={access.isOwner ? handleStatusChange : undefined}
-              onSave={access.canEdit ? handleSaveTrip : undefined}
+              onStatusChange={
+                access.isOwner && !selectedTrip.archivedAt
+                  ? handleStatusChange
+                  : undefined
+              }
+              onSave={
+                access.canEdit && !selectedTrip.archivedAt
+                  ? handleSaveTrip
+                  : undefined
+              }
               canRate={access.isOwner}
               isSaving={isSaving}
               onTripUpdated={handleTripUpdated}
@@ -576,6 +646,7 @@ const AgencyTrips: React.FC = () => {
                 agencyId={activeAgencyId}
                 tripId={selectedTrip._id}
                 tripTitle={selectedTrip.title}
+                archived={Boolean(selectedTrip.archivedAt)}
                 onOpenQuoteTab={() => switchTab('quote')}
               />
             </div>
@@ -655,6 +726,14 @@ const AgencyTrips: React.FC = () => {
             onSearchChange={setSearch}
             statusValue={statusFilter}
             onStatusChange={setStatusFilter}
+            assigneeOptions={assignees}
+            assigneeValue={assigneeFilter}
+            onAssigneeChange={setAssigneeFilter}
+            archivedValue={archivedFilter}
+            onArchivedChange={setArchivedFilter}
+            onArchiveTrip={canManage ? handleArchiveTrip : undefined}
+            onUnarchiveTrip={canManage ? handleUnarchiveTrip : undefined}
+            canArchiveTrip={() => canManage}
           />
         </>
       )}

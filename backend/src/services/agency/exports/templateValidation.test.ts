@@ -220,6 +220,15 @@ test('remote or dynamic CSS is rejected', () => {
   invalid(
     '<style>.x{width:expression(alert(1))}</style><section class="page">{{#days}}{{/days}}</section>'
   );
+  invalid(
+    '<style>.x{background:url(javascript:alert(1))}</style><section class="page">{{#days}}{{/days}}</section>'
+  );
+  invalid(
+    '<style>.x{background:url(vbscript:msgbox(1))}</style><section class="page">{{#days}}{{/days}}</section>'
+  );
+  invalid(
+    '<style>.x{background:url(data:text/html;base64,PGI+Ym9vbTwvYj4=)}</style><section class="page">{{#days}}{{/days}}</section>'
+  );
 });
 
 test('unknown tokens, unescaped values and partials are rejected', () => {

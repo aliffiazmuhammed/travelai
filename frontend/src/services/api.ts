@@ -53,6 +53,11 @@ import type {
   AgencyTemplateListStatus,
   AgencyTemplateVersion,
   AgencyTemplateVersionPreview,
+  AgencyProposalAcceptResult,
+  AgencyProposalLink,
+  AgencyProposalView,
+  AgencyAuditEntry,
+  AgencyUsage,
 } from '@/types';
 
 export interface StreamProgressEvent {
@@ -514,11 +519,18 @@ class ApiClient {
   /** A2: the tenant trip library (agency-wide visibility). */
   async getAgencyTrips(
     id: string,
-    params?: { search?: string; status?: string }
+    params?: {
+      search?: string;
+      status?: string;
+      assignedTo?: string;
+      archived?: boolean;
+    }
   ): Promise<{ success: boolean; trips: Trip[] }> {
     const query = new URLSearchParams();
     if (params?.search) query.append('search', params.search);
     if (params?.status && params.status !== 'all') query.append('status', params.status);
+    if (params?.assignedTo) query.append('assignedTo', params.assignedTo);
+    if (params?.archived) query.append('archived', 'true');
     const suffix = query.toString() ? `?${query.toString()}` : '';
     return this.request(
       `/api/agency/${encodeURIComponent(id)}/trips${suffix}`
@@ -594,6 +606,52 @@ class ApiClient {
         method: 'PATCH',
         body: JSON.stringify(payload),
       }
+    );
+  }
+
+  /** A8: owner/admin operations surfaces. */
+  async getAgencyUsage(
+    id: string
+  ): Promise<{ success: boolean; usage: AgencyUsage }> {
+    return this.request(`/api/agency/${encodeURIComponent(id)}/usage`);
+  }
+
+  async getAgencyAudit(
+    id: string,
+    params?: { page?: number; limit?: number; action?: string }
+  ): Promise<{
+    success: boolean;
+    entries: AgencyAuditEntry[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    const query = new URLSearchParams();
+    if (params?.page) query.append('page', String(params.page));
+    if (params?.limit) query.append('limit', String(params.limit));
+    if (params?.action) query.append('action', params.action);
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    return this.request(`/api/agency/${encodeURIComponent(id)}/audit${suffix}`);
+  }
+
+  /** A8: archive moves a trip to a read-only state (not the A2 trash). */
+  async archiveAgencyTrip(
+    agencyId: string,
+    tripId: string
+  ): Promise<{ success: boolean; message: string; trip: Trip }> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(agencyId)}/trips/${encodeURIComponent(tripId)}/archive`,
+      { method: 'POST' }
+    );
+  }
+
+  async unarchiveAgencyTrip(
+    agencyId: string,
+    tripId: string
+  ): Promise<{ success: boolean; message: string; trip: Trip }> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(agencyId)}/trips/${encodeURIComponent(tripId)}/unarchive`,
+      { method: 'POST' }
     );
   }
 
@@ -868,6 +926,70 @@ class ApiClient {
     }
 
     return response.blob();
+  }
+
+  // Public proposal shares (A7). The token is the capability, so these are
+  // unauthenticated; management endpoints sit behind the usual session.
+  async getAgencyProposal(
+    token: string
+  ): Promise<{ success: boolean; proposal: AgencyProposalView }> {
+    return this.request(
+      `/api/agency/proposals/${encodeURIComponent(token)}`
+    );
+  }
+
+  async acceptAgencyProposal(
+    token: string
+  ): Promise<{
+    success: boolean;
+    message: string;
+    acceptance: AgencyProposalAcceptResult;
+  }> {
+    return this.request(
+      `/api/agency/proposals/${encodeURIComponent(token)}/accept`,
+      { method: 'POST' }
+    );
+  }
+
+  /**
+   * The public PDF route needs no session, so a plain anchor navigation
+   * downloads it (Content-Disposition attachment). The link is safe to open
+   * cross-origin and never embeds query state.
+   */
+  getAgencyProposalPdfUrl(token: string): string {
+    return `${this.baseUrl}/api/agency/proposals/${encodeURIComponent(token)}/pdf`;
+  }
+
+  async createAgencyProposalLink(
+    agencyId: string,
+    tripId: string,
+    exportId: string,
+    payload: { ttlDays?: number } = {}
+  ): Promise<{ success: boolean; message: string; link: AgencyProposalLink; url: string }> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(agencyId)}/trips/${encodeURIComponent(tripId)}/exports/${encodeURIComponent(exportId)}/share`,
+      { method: 'POST', body: JSON.stringify(payload) }
+    );
+  }
+
+  async getAgencyProposalLinks(
+    agencyId: string,
+    tripId: string
+  ): Promise<{ success: boolean; links: AgencyProposalLink[] }> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(agencyId)}/trips/${encodeURIComponent(tripId)}/shares`
+    );
+  }
+
+  async revokeAgencyProposalLink(
+    agencyId: string,
+    tripId: string,
+    shareId: string
+  ): Promise<{ success: boolean; message: string; link: AgencyProposalLink }> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(agencyId)}/trips/${encodeURIComponent(tripId)}/shares/${encodeURIComponent(shareId)}`,
+      { method: 'DELETE' }
+    );
   }
 
   async changeAgencyMemberRole(

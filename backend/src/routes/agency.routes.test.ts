@@ -67,7 +67,7 @@ test('the feature gate is mounted on the whole namespace', () => {
   );
 });
 
-test('A1-A6 agency API exposes the expected route table', () => {
+test('A1-A8 agency API exposes the expected route table', () => {
   const routes = routeLayers().map(
     (layer) => `${pathOf(layer)} ${methodsOf(layer).join(',')}`
   );
@@ -75,6 +75,9 @@ test('A1-A6 agency API exposes the expected route table', () => {
     '/status GET',
     '/invites/:token GET',
     '/invites/:token/accept POST',
+    '/proposals/:token GET',
+    '/proposals/:token/accept POST',
+    '/proposals/:token/pdf GET',
     '/ GET',
     '/ POST',
     '/:agencyId GET',
@@ -101,6 +104,9 @@ test('A1-A6 agency API exposes the expected route table', () => {
     '/:agencyId/trips/:tripId/exports POST',
     '/:agencyId/trips/:tripId/exports/:exportId/retry POST',
     '/:agencyId/exports/:exportId/download GET',
+    '/:agencyId/trips/:tripId/exports/:exportId/share POST',
+    '/:agencyId/trips/:tripId/shares GET',
+    '/:agencyId/trips/:tripId/shares/:shareId DELETE',
     '/:agencyId/trips GET',
     '/:agencyId/trips POST',
     '/:agencyId/trash GET',
@@ -109,6 +115,8 @@ test('A1-A6 agency API exposes the expected route table', () => {
     '/:agencyId/trips/:tripId DELETE',
     '/:agencyId/trips/:tripId/restore POST',
     '/:agencyId/trips/:tripId/purge DELETE',
+    '/:agencyId/trips/:tripId/archive POST',
+    '/:agencyId/trips/:tripId/unarchive POST',
     '/:agencyId/trips/:tripId/quote GET',
     '/:agencyId/trips/:tripId/quote/versions GET',
     '/:agencyId/trips/:tripId/quote PUT',
@@ -121,12 +129,24 @@ test('A1-A6 agency API exposes the expected route table', () => {
     '/:agencyId/invites GET',
     '/:agencyId/invites POST',
     '/:agencyId/invites/:inviteId DELETE',
+    '/:agencyId/usage GET',
+    '/:agencyId/audit GET',
+    '/:agencyId/plan PATCH',
   ]);
 });
 
-test('every non-status route requires authentication', () => {
+// A7 public proposal routes are deliberately unauthenticated: the token is
+// the capability. Everything else in the namespace must sit behind `protect`.
+const PUBLIC_ROUTES = new Set([
+  '/status',
+  '/proposals/:token',
+  '/proposals/:token/accept',
+  '/proposals/:token/pdf',
+]);
+
+test('every route except the token-authenticated public paths requires authentication', () => {
   for (const layer of routeLayers()) {
-    if (pathOf(layer) === '/status') continue;
+    if (PUBLIC_ROUTES.has(pathOf(layer))) continue;
     assert.ok(
       handlesOf(layer).includes(protect),
       `${methodsOf(layer).join(',')} ${pathOf(layer)} is missing protect`
@@ -134,9 +154,26 @@ test('every non-status route requires authentication', () => {
   }
 });
 
+test('only the three proposal paths are public', () => {
+  const publicPaths = routeLayers()
+    .filter((layer) => !handlesOf(layer).includes(protect))
+    .map(pathOf)
+    .filter((path) => path !== '/status');
+  assert.deepEqual(publicPaths.sort(), [
+    '/proposals/:token',
+    '/proposals/:token/accept',
+    '/proposals/:token/pdf',
+  ]);
+});
+
 test('every tenant-scoped route carries a tenant guard', () => {
+  // The plan route is ops-only (secret-guarded service, no membership) —
+  // TravelAI ops is not an agency member. Everything else must narrow to the
+  // tenant before the handler runs.
+  const TENANT_GUARD_EXEMPT = new Set(['/:agencyId/plan']);
   for (const layer of routeLayers()) {
     if (!pathOf(layer).startsWith('/:agencyId')) continue;
+    if (TENANT_GUARD_EXEMPT.has(pathOf(layer))) continue;
     assert.ok(
       hasTag(layer, AGENCY_MEMBER_GUARD_TAG) || hasTag(layer, AGENCY_ROLE_GUARD_TAG),
       `${methodsOf(layer).join(',')} ${pathOf(layer)} is missing an agency tenant guard`
@@ -153,6 +190,8 @@ test('team, settings, trash, assets and invite management require admin rank', (
     '/:agencyId/trips/:tripId DELETE',
     '/:agencyId/trips/:tripId/restore POST',
     '/:agencyId/trips/:tripId/purge DELETE',
+    '/:agencyId/trips/:tripId/archive POST',
+    '/:agencyId/trips/:tripId/unarchive POST',
     '/:agencyId/members/:userId PATCH',
     '/:agencyId/members/:userId DELETE',
     '/:agencyId/invites GET',
@@ -166,6 +205,8 @@ test('team, settings, trash, assets and invite management require admin rank', (
     '/:agencyId/templates/:templateId/versions/:version/activate POST',
     '/:agencyId/templates/:templateId/archive POST',
     '/:agencyId/templates/:templateId/default POST',
+    '/:agencyId/usage GET',
+    '/:agencyId/audit GET',
   ]);
 
   for (const layer of routeLayers()) {
@@ -185,6 +226,7 @@ test('read-only tenant routes require membership, not admin', () => {
     '/:agencyId/trips GET',
     '/:agencyId/trips/:tripId GET',
     '/:agencyId/trips/:tripId/exports GET',
+    '/:agencyId/trips/:tripId/shares GET',
     '/:agencyId/exports/:exportId/download GET',
     '/:agencyId/trips/:tripId/quote GET',
     '/:agencyId/trips/:tripId/quote/versions GET',
@@ -207,6 +249,8 @@ test('trip writes, directory writes, quote actions and exports require planner r
     '/:agencyId/trips/:tripId/exports/preview POST',
     '/:agencyId/trips/:tripId/exports POST',
     '/:agencyId/trips/:tripId/exports/:exportId/retry POST',
+    '/:agencyId/trips/:tripId/exports/:exportId/share POST',
+    '/:agencyId/trips/:tripId/shares/:shareId DELETE',
     '/:agencyId/trips/:tripId/quote PUT',
     '/:agencyId/trips/:tripId/quote/send POST',
     '/:agencyId/trips/:tripId/quote/accept POST',

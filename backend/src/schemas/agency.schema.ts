@@ -358,6 +358,17 @@ export const createAgencyExportSchema = z
   .strict();
 
 /* -------------------------------------------------------------------------- */
+/*  Public proposal shares (A7)                                               */
+/* -------------------------------------------------------------------------- */
+
+/** Link lifetime is capped by the service at 90 days. */
+export const createAgencyProposalLinkSchema = z
+  .object({
+    ttlDays: z.coerce.number().int().min(1).max(90).optional(),
+  })
+  .strict();
+
+/* -------------------------------------------------------------------------- */
 /*  Custom templates (A6)                                                     */
 /* -------------------------------------------------------------------------- */
 
@@ -416,5 +427,14 @@ export const previewAgencyTemplateVersionSchema = z
       .regex(OBJECT_ID, 'Choose a valid quote version.')
       .nullable()
       .optional(),
+  })
+  .strict();
+
+export const updateAgencyPlanSchema = z
+  .object({
+    tierId: z.string().trim().min(1).max(40, 'Plan ids must be 40 characters or fewer.'),
+    seats: z.number().int().positive().optional(),
+    monthlyExports: z.number().int().nonnegative().optional(),
+    storageMb: z.number().int().nonnegative().optional(),
   })
   .strict();

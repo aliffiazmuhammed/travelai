@@ -37,6 +37,18 @@ export interface IAgencyTerms {
   terms: string[];
 }
 
+/**
+ * A8 ops-applied plan override. Absent means the environment default tier.
+ * Only TravelAI ops may change it (secret-guarded route); owners read it via
+ * the usage endpoint.
+ */
+export interface IAgencyPlan {
+  tierId: string;
+  seats?: number;
+  monthlyExports?: number;
+  storageMb?: number;
+}
+
 export interface IAgency extends Document {
   name: string;
   branding: IAgencyBranding;
@@ -49,6 +61,7 @@ export interface IAgency extends Document {
    * Never projected to clients — only the formatted number is public.
    */
   quoteCounter: number;
+  plan?: IAgencyPlan;
   createdBy: Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
@@ -75,6 +88,16 @@ const brandingSchema = new Schema<IAgencyBranding>(
     contactPhone: { type: String, trim: true, maxlength: 40 },
     website: { type: String, trim: true, maxlength: 2048 },
     address: { type: String, trim: true, maxlength: 400 },
+  },
+  { _id: false }
+);
+
+const agencyPlanSchema = new Schema<IAgencyPlan>(
+  {
+    tierId: { type: String, required: true, trim: true, minlength: 1, maxlength: 40 },
+    seats: { type: Number, min: 1 },
+    monthlyExports: { type: Number, min: 0 },
+    storageMb: { type: Number, min: 0 },
   },
   { _id: false }
 );
@@ -107,6 +130,9 @@ const agencySchema = new Schema<IAgency>(
       default: 0,
       min: 0,
       select: false,
+    },
+    plan: {
+      type: agencyPlanSchema,
     },
     createdBy: {
       type: Schema.Types.ObjectId,

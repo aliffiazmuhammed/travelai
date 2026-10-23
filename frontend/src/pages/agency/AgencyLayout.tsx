@@ -6,6 +6,7 @@ import {
   Building2,
   ChevronDown,
   FileText,
+  Gauge,
   LayoutDashboard,
   LogOut,
   Map,
@@ -40,6 +41,8 @@ const navItems = [
   },
   { to: '/agency/templates', label: 'Templates', icon: FileText, end: false },
   { to: '/agency/team', label: 'Team', icon: Users, end: false },
+  // A8: usage and the append-only audit log (owner/admin only).
+  { to: '/agency/operations', label: 'Operations', icon: Gauge, end: false, adminOnly: true },
   { to: '/agency/settings', label: 'Settings', icon: Settings, end: false },
 ];
 
@@ -58,7 +61,12 @@ const AgencyLayout: React.FC = () => {
     setActiveAgency,
     loading,
     error,
+    canManage,
   } = useAgency();
+
+  const visibleNavItems = navItems.filter(
+    (item) => !('adminOnly' in item && item.adminOnly) || canManage
+  );
 
   const displayName =
     user?.name?.trim() || user?.label || user?.email?.split('@')[0] || 'You';
@@ -198,7 +206,7 @@ const AgencyLayout: React.FC = () => {
         </div>
 
         <div className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-3 pb-2 sm:px-5">
-          {navItems.map((item) => (
+          {visibleNavItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

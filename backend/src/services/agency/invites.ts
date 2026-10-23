@@ -19,6 +19,7 @@ import {
   type AgencyInvitableRole,
   type AgencyRole,
 } from './access.js';
+import { assertSeatAvailable } from './plan.js';
 
 /**
  * Agency invitation mechanics (Agency Workspace A1).
@@ -121,6 +122,7 @@ export async function createAgencyInvite(
   }
 
   const rawToken = mintInviteToken();
+  await assertSeatAvailable(input.agencyId);
   const invite = await AgencyInvite.create({
     agencyId: input.agencyId,
     tokenHash: sha256(rawToken),
@@ -273,6 +275,9 @@ export async function redeemAgencyInvite(
   }
 
   // Claim the use first. Losing the race means the link is exhausted.
+  // The seat check is best-effort: two concurrent redeems can overshoot by
+  // one seat, and the next invite re-checks the count.
+  await assertSeatAvailable(String(invite.agencyId));
   const claimed = await AgencyInvite.findOneAndUpdate(
     {
       _id: invite._id,

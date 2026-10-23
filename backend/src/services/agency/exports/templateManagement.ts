@@ -13,6 +13,7 @@ import Trip from '../../../models/Trip.js';
 import { AppError } from '../../../utils/AppError.js';
 import { agencyCan, type AgencyRole } from '../access.js';
 import { recordAgencyAudit } from '../audit.js';
+import { assertStorageQuota } from '../plan.js';
 import { getLatestQuote, reconcileQuoteExpiry } from '../quotes.js';
 import { renderCustomTemplateHtml } from './customTemplate.js';
 import { buildExportDocument } from './document.js';
@@ -180,6 +181,8 @@ export async function createAgencyTemplate(
   const versionId = new Types.ObjectId();
   const storageKey = buildAgencyTemplateStorageKey(agencyId, versionId);
 
+  await assertStorageQuota(agencyId, validated.bytes);
+
   let template: IAgencyTemplate | null = null;
   let version: IAgencyTemplateVersion | null = null;
   let assets: IAgencyTemplateVersionAsset[] = [];
@@ -290,6 +293,7 @@ export async function addAgencyTemplateVersion(
   const validated = validateAgencyTemplateSource(input.buffer, {
     audience: template.audience,
   });
+  await assertStorageQuota(agencyId, validated.bytes);
   const latest = await AgencyTemplateVersion.findOne({
     agencyId,
     templateId: template._id,

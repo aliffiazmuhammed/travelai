@@ -5,29 +5,36 @@ import {
   activateAgencyTemplateVersionHandler,
   addAgencyTemplateVersionHandler,
   archiveAgencyTemplateHandler,
+  archiveAgencyTripHandler,
   cancelAgencyQuoteHandler,
   changeAgencyMemberRoleHandler,
   createAgency,
   createAgencyClientHandler,
   createAgencyExportHandler,
   createAgencyInviteHandler,
+  createAgencyProposalLinkHandler,
   createAgencyTemplateHandler,
   createAgencyTripHandler,
   deleteAgencyAssetHandler,
   deleteAgencyClientHandler,
   downloadAgencyExportHandler,
+  downloadAgencyProposalHandler,
   getAgency,
   getAgencyAssetContentHandler,
   getAgencyInvitePreview,
+  getAgencyProposalHandler,
   getAgencyQuoteHandler,
   getAgencyTripHandler,
+  getAgencyUsageHandler,
   listAgencies,
   listAgencyAssetsHandler,
+  listAgencyAuditHandler,
   listAgencyClientsHandler,
   listAgencyDeletedTripsHandler,
   listAgencyExportsHandler,
   listAgencyInvitesHandler,
   listAgencyMembersHandler,
+  listAgencyProposalLinksHandler,
   listAgencyQuoteVersionsHandler,
   listAgencyTemplatesHandler,
   listAgencyTemplateVersionsHandler,
@@ -37,13 +44,17 @@ import {
   removeAgencyMemberHandler,
   retryAgencyExportHandler,
   revokeAgencyInviteHandler,
+  revokeAgencyProposalLinkHandler,
+  acceptAgencyProposalHandler,
   saveAgencyQuoteHandler,
   sendAgencyQuoteHandler,
   setDefaultAgencyTemplateHandler,
   updateAgency,
   updateAgencyClientHandler,
+  updateAgencyPlanHandler,
   updateAgencyTemplateHandler,
   updateAgencyTripHandler,
+  unarchiveAgencyTripHandler,
   uploadAgencyAssetHandler,
 } from '../controllers/agency.controller.js';
 import { protect } from '../middleware/auth.middleware.js';
@@ -66,24 +77,31 @@ import {
   createAgencyClientSchema,
   createAgencyExportSchema,
   createAgencyInviteSchema,
+  createAgencyProposalLinkSchema,
   createAgencySchema,
   createAgencyTemplateSchema,
   createAgencyTripSchema,
   previewAgencyTemplateVersionSchema,
   saveAgencyQuoteSchema,
   updateAgencyClientSchema,
+  updateAgencyPlanSchema,
   updateAgencySchema,
   updateAgencyTemplateSchema,
   updateAgencyTripSchema,
 } from '../schemas/agency.schema.js';
 import {
+  agencyAssetUploadAgencyLimiter,
   agencyAssetUploadLimiter,
   agencyCreateLimiter,
   agencyExportLimiter,
+  agencyInviteCreateLimiter,
   agencyTemplateUploadLimiter,
+  agencyWideExportLimiter,
   inviteAcceptLimiter,
   inviteManageLimiter,
   invitePreviewLimiter,
+  proposalAcceptLimiter,
+  publicShareLimiter,
 } from '../middleware/rateLimiter.middleware.js';
 
 /**
@@ -104,7 +122,7 @@ router.get('/status', (_req, res) => {
   res.json({
     success: true,
     workspace: 'agency',
-    milestone: 'A6',
+    milestone: 'A8',
     writesEnabled: true,
   });
 });
@@ -117,6 +135,26 @@ router.post(
   protect,
   inviteAcceptLimiter,
   acceptAgencyInvite
+);
+
+// Public proposal shares (A7). No session and no tenant guard: the 256-bit
+// token is the only capability, and the service pins the exact quote and
+// export the link was minted for. Declared before `/:agencyId` for the same
+// reason as invites; every write path (accept) is bounded by its own limiter.
+router.get(
+  '/proposals/:token',
+  publicShareLimiter,
+  getAgencyProposalHandler
+);
+router.post(
+  '/proposals/:token/accept',
+  proposalAcceptLimiter,
+  acceptAgencyProposalHandler
+);
+router.get(
+  '/proposals/:token/pdf',
+  publicShareLimiter,
+  downloadAgencyProposalHandler
 );
 
 // The caller's agencies + onboarding.
@@ -153,6 +191,7 @@ router.post(
   protect,
   requireAgencyRole('admin'),
   agencyAssetUploadLimiter,
+  agencyAssetUploadAgencyLimiter,
   handleAgencyAssetUpload,
   validate(createAgencyAssetSchema),
   uploadAgencyAssetHandler
@@ -280,6 +319,7 @@ router.post(
   requireAgencyRole('planner'),
   requireAgencyTripRole('planner'),
   agencyExportLimiter,
+  agencyWideExportLimiter,
   validate(createAgencyExportSchema),
   previewAgencyExportHandler
 );
@@ -289,6 +329,7 @@ router.post(
   requireAgencyRole('planner'),
   requireAgencyTripRole('planner'),
   agencyExportLimiter,
+  agencyWideExportLimiter,
   validate(createAgencyExportSchema),
   createAgencyExportHandler
 );
@@ -298,6 +339,7 @@ router.post(
   requireAgencyRole('planner'),
   requireAgencyTripRole('planner'),
   agencyExportLimiter,
+  agencyWideExportLimiter,
   retryAgencyExportHandler
 );
 // Signed, short-lived staff download. The route has no `:tripId`, so the
@@ -307,6 +349,34 @@ router.get(
   protect,
   requireAgencyMember(),
   downloadAgencyExportHandler
+);
+
+// Client-facing share links (A7). A link pins one ready client export, so
+// creating one is a planner write narrowed to the trip; listing and revoking
+// follow the same ranks as export history.
+router.post(
+  '/:agencyId/trips/:tripId/exports/:exportId/share',
+  protect,
+  requireAgencyRole('planner'),
+  requireAgencyTripRole('planner'),
+  agencyExportLimiter,
+  agencyWideExportLimiter,
+  validate(createAgencyProposalLinkSchema),
+  createAgencyProposalLinkHandler
+);
+router.get(
+  '/:agencyId/trips/:tripId/shares',
+  protect,
+  requireAgencyMember(),
+  requireAgencyTripRole('viewer'),
+  listAgencyProposalLinksHandler
+);
+router.delete(
+  '/:agencyId/trips/:tripId/shares/:shareId',
+  protect,
+  requireAgencyRole('planner'),
+  requireAgencyTripRole('planner'),
+  revokeAgencyProposalLinkHandler
 );
 
 // Agency trip library (A2). Agency-wide visibility for members; creation needs
@@ -368,6 +438,22 @@ router.delete(
   requireAgencyRole('admin'),
   requireAgencyTripRole('admin', { includeDeleted: true, onlyDeleted: true }),
   purgeTrip
+);
+// A8 archive: a read-only state distinct from the A2 trash. Trash restore
+// already owns /restore, so unarchive takes its own path.
+router.post(
+  '/:agencyId/trips/:tripId/archive',
+  protect,
+  requireAgencyRole('admin'),
+  requireAgencyTripRole('viewer'),
+  archiveAgencyTripHandler
+);
+router.post(
+  '/:agencyId/trips/:tripId/unarchive',
+  protect,
+  requireAgencyRole('admin'),
+  requireAgencyTripRole('viewer'),
+  unarchiveAgencyTripHandler
 );
 
 // Quote and commercial layer (A4). Reading is member-wide (viewers get the
@@ -451,6 +537,7 @@ router.post(
   protect,
   requireAgencyRole('admin'),
   inviteManageLimiter,
+  agencyInviteCreateLimiter,
   validate(createAgencyInviteSchema),
   createAgencyInviteHandler
 );
@@ -459,6 +546,30 @@ router.delete(
   protect,
   requireAgencyRole('admin'),
   revokeAgencyInviteHandler
+);
+
+// A8 operations. Usage and audit are owner/admin read surfaces. The plan
+// route deliberately carries no membership guard: TravelAI ops is not a
+// member; the service gates on the ops secret instead.
+router.get(
+  '/:agencyId/usage',
+  protect,
+  requireAgencyMember(),
+  requireAgencyRole('admin'),
+  getAgencyUsageHandler
+);
+router.get(
+  '/:agencyId/audit',
+  protect,
+  requireAgencyMember(),
+  requireAgencyRole('admin'),
+  listAgencyAuditHandler
+);
+router.patch(
+  '/:agencyId/plan',
+  protect,
+  validate(updateAgencyPlanSchema),
+  updateAgencyPlanHandler
 );
 
 export default router;

@@ -5,6 +5,13 @@ import { AppError } from '../utils/AppError.js';
 import { AuthenticatedRequest } from '../types/index.js';
 import { agencyContext, type AgencyAccessRequest } from '../middleware/agencyAccess.middleware.js';
 import { linkOriginHints } from '../services/collab/invites.js';
+import { listAgencyAudit } from '../services/agency/audit.js';
+import {
+  agencyUsage,
+  changeAgencyPlan,
+  planLimitsFor,
+  usageLevel,
+} from '../services/agency/plan.js';
 import {
   agencyMemberCount,
   createAgencyForUser,
@@ -26,9 +33,11 @@ import {
   revokeAgencyInvite,
 } from '../services/agency/invites.js';
 import {
+  archiveAgencyTrip,
   createAgencyTrip,
   listAgencyDeletedTrips,
   listAgencyTrips,
+  unarchiveAgencyTrip,
   updateAgencyTrip,
 } from '../services/agency/trips.js';
 import {
@@ -61,6 +70,14 @@ import {
   readAgencyExportDownload,
   retryAgencyExport,
 } from '../services/agency/exports/exports.js';
+import {
+  acceptAgencyProposal,
+  createAgencyProposalLink,
+  getAgencyProposal,
+  listAgencyProposalLinks,
+  readAgencyProposalPdf,
+  revokeAgencyProposalLink,
+} from '../services/agency/proposals.js';
 import {
   ensureBuiltinTemplates,
   listAgencyTemplates,
@@ -253,6 +270,9 @@ export const listAgencyTripsHandler = catchAsync(
       role,
       search: typeof req.query.search === 'string' ? req.query.search : undefined,
       status: typeof req.query.status === 'string' ? req.query.status : undefined,
+      assignedTo:
+        typeof req.query.assignedTo === 'string' ? req.query.assignedTo : undefined,
+      archived: req.query.archived === 'true',
     });
     res.json({ success: true, trips });
   }
@@ -884,5 +904,169 @@ export const downloadAgencyExportHandler = catchAsync(
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(buffer);
+  }
+);
+
+/* -------------------------------------------------------------------------- */
+/*  Public proposal shares (A7)                                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Token-authenticated public routes. No session, no tenant guard: the link's
+ * 256-bit token is the capability, and the pinned export/quote are the only
+ * rows these handlers can ever reach.
+ */
+export const getAgencyProposalHandler = catchAsync(
+  async (req, res: Response) => {
+    const proposal = await getAgencyProposal(req.params.token);
+    res.json({ success: true, proposal });
+  }
+);
+
+export const acceptAgencyProposalHandler = catchAsync(
+  async (req, res: Response) => {
+    const acceptance = await acceptAgencyProposal(req.params.token);
+    res.json({
+      success: true,
+      message: 'Proposal accepted.',
+      acceptance,
+    });
+  }
+);
+
+export const downloadAgencyProposalHandler = catchAsync(
+  async (req, res: Response) => {
+    const { buffer, filename } = await readAgencyProposalPdf(req.params.token);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Length', String(buffer.byteLength));
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+  }
+);
+
+export const createAgencyProposalLinkHandler = catchAsync(
+  async (req: AgencyAccessRequest, res: Response) => {
+    const { agency, role } = agencyContext(req);
+    const result = await createAgencyProposalLink({
+      agencyId: String(agency._id),
+      tripId: guardedTripId(req),
+      exportId: String(req.params.exportId || ''),
+      actorId: req.userId!,
+      role,
+      ttlDays: req.body?.ttlDays,
+      linkOrigins: linkOriginHints(req),
+    });
+    res.status(201).json({
+      success: true,
+      message: 'Share link created.',
+      ...result,
+    });
+  }
+);
+
+export const listAgencyProposalLinksHandler = catchAsync(
+  async (req: AgencyAccessRequest, res: Response) => {
+    const { agency, role } = agencyContext(req);
+    const links = await listAgencyProposalLinks({
+      agencyId: String(agency._id),
+      tripId: guardedTripId(req),
+      role,
+    });
+    res.json({ success: true, links });
+  }
+);
+
+export const revokeAgencyProposalLinkHandler = catchAsync(
+  async (req: AgencyAccessRequest, res: Response) => {
+    const { agency, role } = agencyContext(req);
+    const link = await revokeAgencyProposalLink({
+      agencyId: String(agency._id),
+      tripId: guardedTripId(req),
+      linkId: String(req.params.shareId || ''),
+      actorId: req.userId!,
+      role,
+    });
+    res.json({ success: true, message: 'Share link revoked.', link });
+  }
+);
+
+export const getAgencyUsageHandler = catchAsync(
+  async (req: AgencyAccessRequest, res: Response) => {
+    const { agency } = agencyContext(req);
+    const agencyId = String(agency._id);
+    const limits = planLimitsFor(agency);
+    const usage = await agencyUsage(agencyId);
+    res.json({
+      success: true,
+      usage: {
+        plan: limits,
+        used: {
+          seats: usage.seats,
+          exportsThisMonth: usage.exportsThisMonth,
+          storageBytes: usage.storageBytes,
+        },
+        levels: {
+          seats: usageLevel(usage.seats, limits.seats),
+          exports: usageLevel(usage.exportsThisMonth, limits.monthlyExports),
+          storage: usageLevel(usage.storageBytes, limits.storageMb * 1024 * 1024),
+        },
+      },
+    });
+  }
+);
+
+export const listAgencyAuditHandler = catchAsync(
+  async (req: AgencyAccessRequest, res: Response) => {
+    const { agency } = agencyContext(req);
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 50;
+    const action =
+      typeof req.query.action === 'string' ? req.query.action : undefined;
+    const result = await listAgencyAudit({
+      agencyId: String(agency._id),
+      page,
+      limit,
+      actionPrefix: action,
+    });
+    res.json({ success: true, ...result });
+  }
+);
+
+export const archiveAgencyTripHandler = catchAsync(
+  async (req: AgencyAccessRequest, res: Response) => {
+    const { agency, role } = agencyContext(req);
+    const trip = await archiveAgencyTrip({
+      agencyId: String(agency._id),
+      tripId: guardedTripId(req),
+      role,
+      actorId: req.userId!,
+    });
+    res.json({ success: true, message: 'Trip archived.', trip });
+  }
+);
+
+export const unarchiveAgencyTripHandler = catchAsync(
+  async (req: AgencyAccessRequest, res: Response) => {
+    const { agency, role } = agencyContext(req);
+    const trip = await unarchiveAgencyTrip({
+      agencyId: String(agency._id),
+      tripId: guardedTripId(req),
+      role,
+      actorId: req.userId!,
+    });
+    res.json({ success: true, message: 'Trip restored to the active list.', trip });
+  }
+);
+
+export const updateAgencyPlanHandler = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const plan = await changeAgencyPlan({
+      agencyId: String(req.params.agencyId || ''),
+      opsKey: String(req.header('x-travelai-ops') || ''),
+      plan: req.body,
+    });
+    res.json({ success: true, message: 'Plan updated.', plan });
   }
 );

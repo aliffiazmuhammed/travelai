@@ -15,6 +15,7 @@ const Auth = lazy(() => import("./pages/Auth"));
 const TripPlanner = lazy(() => import("./pages/TripPlanner"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const SharedTrip = lazy(() => import("./pages/SharedTrip"));
+const ProposalShare = lazy(() => import("./pages/ProposalShare"));
 const InviteAccept = lazy(() => import("./pages/InviteAccept"));
 const Profile = lazy(() => import("./pages/Profile"));
 const AgencyApp = lazy(() => import("./pages/agency/AgencyApp"));
@@ -26,6 +27,7 @@ const AgencyClients = lazy(() => import("./pages/agency/AgencyClients"));
 const AgencyTemplates = lazy(() => import("./pages/agency/AgencyTemplates"));
 const AgencyTrips = lazy(() => import("./pages/agency/AgencyTrips"));
 const AgencyTripPlanner = lazy(() => import("./pages/agency/AgencyTripPlanner"));
+const AgencyOperations = lazy(() => import("./pages/agency/AgencyOperations"));
 const AgencyInviteAccept = lazy(() => import("./pages/agency/AgencyInviteAccept"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -54,6 +56,7 @@ const App = () => (
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/plan" element={<TripPlanner />} />
                 <Route path="/shared/:shareId" element={<SharedTrip />} />
+                <Route path="/proposal/:token" element={<ProposalShare />} />
                 <Route path="/invite/:token" element={<InviteAccept />} />
                 <Route
                   path="/dashboard"
@@ -91,6 +94,7 @@ const App = () => (
                   <Route path="clients" element={<AgencyClients />} />
                   <Route path="templates" element={<AgencyTemplates />} />
                   <Route path="team" element={<AgencyTeam />} />
+                  <Route path="operations" element={<AgencyOperations />} />
                   <Route path="settings" element={<AgencySettings />} />
                 </Route>
                 <Route path="*" element={<NotFound />} />

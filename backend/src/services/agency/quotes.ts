@@ -1,5 +1,6 @@
 import Agency from '../../models/Agency.js';
 import AgencyQuote, { IAgencyQuote, QuoteStatus } from '../../models/AgencyQuote.js';
+import Trip from '../../models/Trip.js';
 import { AppError } from '../../utils/AppError.js';
 import { agencyCan, type AgencyRole } from './access.js';
 import { assertAgencyClient } from './clients.js';
@@ -589,6 +590,18 @@ function quoteFieldsFromInput(
 export async function saveQuote(input: SaveQuoteInput): Promise<IAgencyQuote> {
   if (!agencyCan(input.role, 'planner')) {
     throw new AppError("You don't have permission to edit this quote.", 403);
+  }
+
+  // The route guard has already scoped the trip, but the service defends its
+  // own boundary: a foreign tripId must never mint a quote row here.
+  const trip = await Trip.findOne({
+    _id: input.tripId,
+    agencyId: input.agencyId,
+    workspace: 'agency',
+    isDeleted: { $ne: true },
+  }).select('_id').lean();
+  if (!trip) {
+    throw new AppError('Trip not found', 404);
   }
 
   const currency = String(input.currency ?? '').trim().toUpperCase();

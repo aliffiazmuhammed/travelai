@@ -136,10 +136,11 @@ app.get('/api/health', (_req, res) => {
     },
     // Agency feature discovery. The namespace is dark by default; the
     // frontend must not render agency navigation or call `/api/agency` unless
-    // this is true. A6 ships custom proposal templates on top of A5 exports.
+    // this is true. A8 ships plan limits, usage/audit and trip archiving on
+    // top of the A7 proposal shares.
     agency: {
       enabled: env.AGENCY_WORKSPACE_ENABLED,
-      milestone: 'A6',
+      milestone: 'A8',
       writesEnabled: env.AGENCY_WORKSPACE_ENABLED,
     },
     staticServing: {

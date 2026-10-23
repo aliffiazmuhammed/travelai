@@ -18,6 +18,7 @@ import {
   reconcileQuoteExpiry,
 } from '../quotes.js';
 import { recordAgencyAudit } from '../audit.js';
+import { assertExportQuota, monthStart } from '../plan.js';
 import { resolveExportBrand } from './brand.js';
 import { buildExportDocument } from './document.js';
 import { renderCustomTemplateHtml } from './customTemplate.js';
@@ -273,6 +274,71 @@ function renderResolvedTemplate(
   return renderExportHtml(doc, renderTemplate(resolved.template), brand);
 }
 
+/**
+ * Renders the exact document a finished job pinned, for paths that are not a
+ * staff preview (A7 public share links). Custom templates resolve their
+ * immutable snapshot even after activation moved on or the template was
+ * archived; built-ins read the live brand pointers like every preview.
+ */
+export async function renderPinnedAgencyExport(input: {
+  agencyId: string;
+  job: IAgencyExport | any;
+  agency: any;
+  trip: any;
+  quote: any | null;
+  client: any | null;
+}): Promise<{ html: string; pageCount: number }> {
+  const template = await AgencyTemplate.findOne({
+    _id: input.job.templateId,
+    agencyId: input.agencyId,
+  });
+  if (!template) throw new AppError('Template not found', 404);
+
+  if (template.builtinKey) {
+    const brand = await resolveExportBrand(input.agencyId, input.agency);
+    const doc = buildExportDocument({
+      agency: input.agency,
+      trip: input.trip,
+      quote: input.quote,
+      client: input.client,
+      brand: brand.documentAssets,
+    });
+    return renderExportHtml(
+      doc,
+      renderTemplate({
+        builtinKey: template.builtinKey,
+        name: input.job.templateName ?? template.name,
+        audience: template.audience,
+        version: Number(input.job.templateVersion ?? template.version ?? 1),
+      }),
+      brand
+    );
+  }
+
+  const custom = await resolveAgencyTemplateVersion({
+    agencyId: input.agencyId,
+    templateId: String(template._id),
+    version: input.job.templateVersion,
+    requireActiveTemplate: false,
+  });
+  const doc = buildExportDocument({
+    agency: input.agency,
+    trip: input.trip,
+    quote: input.quote,
+    client: input.client,
+  });
+  return renderCustomTemplateHtml({
+    doc,
+    template: {
+      name: input.job.templateName ?? template.name,
+      audience: custom.version.audience,
+      version: custom.version.version,
+    },
+    source: custom.source,
+    assets: custom.assets,
+  });
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Render queue                                                              */
 /* -------------------------------------------------------------------------- */
@@ -434,6 +500,15 @@ export async function createAgencyExport(
   if (!agencyCan(input.role, 'planner')) {
     throw new AppError("You don't have permission to generate exports.", 403);
   }
+
+  if (input.trip?.archivedAt) {
+    throw new AppError(
+      'This trip is archived. Unarchive it before generating new exports.',
+      409
+    );
+  }
+
+  await assertExportQuota(input.agencyId);
 
   const resolved = await resolveExportTemplate(
     input.agencyId,
@@ -732,6 +807,19 @@ export async function retryAgencyExport(input: {
   if (!existing) throw new AppError('Export not found', 404);
   if (existing.status !== 'failed') {
     throw new AppError('Only a failed export can be retried.', 409);
+  }
+
+  // A retry only consumes quota when the row was not already counted this
+  // month (it updates the row rather than inserting a new one).
+  const alreadyCounted = await AgencyExport.exists({
+    _id: existing._id,
+    $or: [
+      { createdAt: { $gte: monthStart() } },
+      { updatedAt: { $gte: monthStart() } },
+    ],
+  });
+  if (!alreadyCounted) {
+    await assertExportQuota(input.agencyId);
   }
 
   const updated = await AgencyExport.findOneAndUpdate(

@@ -117,6 +117,8 @@ export interface ITrip extends Document {
   isDeleted: boolean;
   /** When the owner moved the trip to Recently deleted; absent while active. */
   deletedAt?: Date;
+  /** A8: archived trips leave the active list but keep pinned exports/shares. */
+  archivedAt?: Date;
   shareId?: string;
   isPublic?: boolean;
   tripDetails: Record<string, any>;
@@ -291,6 +293,10 @@ const tripSchema = new Schema<ITrip>(
       index: true,
     },
     deletedAt: {
+      type: Date,
+      default: undefined,
+    },
+    archivedAt: {
       type: Date,
       default: undefined,
     },

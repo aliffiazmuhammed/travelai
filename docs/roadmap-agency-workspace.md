@@ -1,6 +1,6 @@
 # Agency Workspace - implementation milestone plan
 
-**Status:** A0 accepted (2026-10-22); A1 implemented and verified (2026-10-22); A2 implemented and verified (2026-10-22); A3 implemented (2026-10-22); A4 implemented and verified (2026-10-22); A5 implemented and verified (2026-10-22); A6 implemented and verified (2026-10-23).
+**Status:** A0 accepted (2026-10-22); A1 implemented and verified (2026-10-22); A2 implemented and verified (2026-10-22); A3 implemented (2026-10-22); A4 implemented and verified (2026-10-22); A5 implemented and verified (2026-10-22); A6 implemented and verified (2026-10-23); A7 implemented and verified (2026-10-23).
 
 **A0 artifacts:** `docs/adr/0001-agency-workspace-boundary.md`, `docs/agency-a0-test-plan.md`, `docs/agency-a0-wireframes.md`, feature flag `AGENCY_WORKSPACE_ENABLED` (default false) and read-only `GET /api/agency/status`.
 
@@ -15,6 +15,8 @@
 **A5 artifacts:** versioned `ExportDocument` builder, `AgencyTemplate`/`AgencyExport`/`AgencyAudit` models, built-in `brochure` and `internal-summary` HTML renderers, headless-Chrome PDF jobs with retry, private export storage, ten-minute signed staff downloads, export rate limiting and audit events, and the trip Export tab (template picker, quote confirmation, real preview, generate/download, history). Tests live in `backend/src/services/agency/exports/exports.test.ts`, `models.test.ts`, `routes/agency.routes.test.ts` and `assets.test.ts`; see `docs/agency-a5-test-plan.md`.
 
 **A6 artifacts:** `AgencyTemplateVersion` model with immutable version rows and private source storage, the validated HTML template contract (`docs/agency-template-contract.md`), asset snapshotting (logo, mascot, fonts, cover, day images), preview-before-activation with real-trip rendering, version pinning on export jobs, one default per audience, archive/restore, and the `/agency/templates` gallery with upload, preview, manage and read-only member views. Tests live in `backend/src/services/agency/exports/templateValidation.test.ts`, `templateAssets.test.ts`, `customTemplate.test.ts`, `templateManagement.test.ts` and `scripts/smoke-a6.mts`; see `docs/agency-a6-test-plan.md`.
+
+**A7 artifacts:** `AgencyProposalLink` capability-token share rows (hashed at rest, TTL-indexed, revocable), public `GET/POST /api/agency/proposals/:token[/accept|/pdf]` routes that re-render the pinned client export server-side, staff create/list/revoke share routes, the public `/proposal/:token` page (sandboxed document iframe, client-only quote summary, accept and PDF download) and share management in the export panel. Tests live in `backend/src/services/agency/proposals.test.ts`, `routes/agency.routes.test.ts` and `scripts/smoke-a7.mts`; see `docs/agency-a7-test-plan.md`.
 
 **Goal:** add a separate B2B product for travel agencies without changing the individual traveler experience.
 **Scope:** agency accounts, team roles, client records, quotes, branded/custom PDF exports, and all existing trip features under an agency-owned workspace.
@@ -879,15 +881,23 @@ Exit criteria:
 
 **Size:** L  
 **Depends on:** A5
+**Status:** Implemented and verified (2026-10-23). See `docs/agency-a7-test-plan.md`.
 
 Deliverables:
 
-- Branded public proposal page for agency trips.
-- Client-facing PDF download using only the client template.
-- Quote view and accept action.
+- Branded public proposal page for agency trips (`/proposal/:token`).
+- Client-facing PDF download using only the client template (stored export bytes streamed from a public token route).
+- Quote view and accept action without an account.
 - Internal cost, markup, expenses and internal notes never appear.
 - Share link revocation and expiry.
 - Optional email delivery later; copy-link is sufficient for v1.
+
+Implementation notes:
+
+- A share link is minted only from a **ready client export**; it pins `(quoteId, exportId)`, so later quote versions, template activations or archives never change what an existing link renders or accepts.
+- The raw token exists only at creation (the staff dialog shows the full URL once); rows store a sha256 hash and answer the same generic 404 for unknown, expired and revoked tokens.
+- Public views re-render the pinned document server-side — no browser job runs inside a public request — and the client quote projection strips markup, markup amount and prepared-by.
+- Acceptance is an atomic `sent → accepted` transition, idempotent on retry, and audited as `share.accepted` + `quote.accepted (via: share)` with no actor row (token-authenticated event).
 
 Tests:
 
@@ -908,6 +918,7 @@ Exit criteria:
 
 **Size:** M/L  
 **Depends on:** A2, A5
+**Status:** Implemented and verified (2026-10-23). See `docs/agency-a8-design.md` and `docs/agency-a8-test-plan.md`.
 
 Deliverables:
 
@@ -936,7 +947,8 @@ Exit criteria:
 ### A9 - Hardening, pilot and launch
 
 **Size:** M  
-**Depends on:** A1-A8
+**Depends on:** A1-A8  
+**Status:** Implemented and verified (2026-10-23). See `docs/agency-a9-test-plan.md` and `docs/agency-operations-runbook.md`.
 
 Deliverables:
 

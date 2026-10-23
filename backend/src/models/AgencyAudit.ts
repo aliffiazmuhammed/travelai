@@ -28,7 +28,8 @@ const agencyAuditSchema = new Schema<IAgencyAudit>(
     actorId: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
+      // A7 public share views/accepts are token-authenticated and have no user.
+      required: false,
     },
     action: {
       type: String,

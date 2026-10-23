@@ -1,0 +1,83 @@
+import mongoose, { Document, Schema, Types } from 'mongoose';
+
+/**
+ * A revocable public share for one client proposal (Agency Workspace A7).
+ *
+ * The link pins the exact things the client saw: the ready client export
+ * (which itself pins template, version and quote) and the quote row. Later
+ * quote versions, template activations or archive actions never change what
+ * an existing link renders or accepts.
+ *
+ * Token hygiene mirrors invites: the raw token exists only at mint time and in
+ * the copied link; `tokenHash` (sha256) is the lookup key. Expired or revoked
+ * rows answer the same generic 404 as unknown tokens.
+ */
+export interface IAgencyProposalLink extends Document {
+  agencyId: Types.ObjectId;
+  tripId: Types.ObjectId;
+  quoteId: Types.ObjectId;
+  exportId: Types.ObjectId;
+  tokenHash: string;
+  tokenHint: string;
+  createdBy: Types.ObjectId;
+  expiresAt: Date;
+  revokedAt?: Date;
+  /** Denormalized from the export at creation; never follows newer rows. */
+  quoteNumber?: string;
+  quoteVersion?: number;
+  templateName?: string;
+  lastViewedAt?: Date;
+  viewCount: number;
+  acceptedAt?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const agencyProposalLinkSchema = new Schema<IAgencyProposalLink>(
+  {
+    agencyId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Agency',
+      required: true,
+      index: true,
+    },
+    tripId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Trip',
+      required: true,
+      index: true,
+    },
+    quoteId: {
+      type: Schema.Types.ObjectId,
+      ref: 'AgencyQuote',
+      required: true,
+    },
+    exportId: {
+      type: Schema.Types.ObjectId,
+      ref: 'AgencyExport',
+      required: true,
+    },
+    tokenHash: { type: String, required: true, unique: true, index: true },
+    tokenHint: { type: String, required: true },
+    createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    expiresAt: { type: Date, required: true },
+    revokedAt: { type: Date },
+    quoteNumber: { type: String, trim: true, maxlength: 20 },
+    quoteVersion: { type: Number, min: 1 },
+    templateName: { type: String, trim: true, maxlength: 80 },
+    lastViewedAt: { type: Date },
+    viewCount: { type: Number, default: 0, min: 0 },
+    acceptedAt: { type: Date },
+  },
+  { timestamps: true }
+);
+
+// Mongo removes expired links; lookups still check the date explicitly.
+agencyProposalLinkSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+// The trip's share list.
+agencyProposalLinkSchema.index({ agencyId: 1, tripId: 1, createdAt: -1 });
+
+export default mongoose.model<IAgencyProposalLink>(
+  'AgencyProposalLink',
+  agencyProposalLinkSchema
+);

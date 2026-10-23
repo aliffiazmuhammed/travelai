@@ -6,6 +6,7 @@ import AgencyAsset, {
   type IAgencyAsset,
 } from '../../models/AgencyAsset.js';
 import { AppError } from '../../utils/AppError.js';
+import { assertStorageQuota } from './plan.js';
 import { sniffMime } from '../finance/receipt.js';
 import {
   agencyAssetContentUrl,
@@ -278,6 +279,8 @@ export async function uploadAgencyAsset(input: UploadAgencyAssetInput) {
   const mime = assertAgencyAssetBytes(input.kind, input.declaredMime, input.buffer);
   const extension = extensionForAgencyAssetMime(mime);
   if (!extension) throw new AppError('That asset type is not supported.', 400);
+
+  await assertStorageQuota(input.agencyId, input.buffer.byteLength);
 
   const assetId = new Types.ObjectId();
   const storageKey = buildAgencyAssetStorageKey(input.agencyId, assetId, extension);

@@ -8,6 +8,7 @@ import React, {
 import { Link } from 'react-router-dom';
 import {
   AlertTriangle,
+  Ban,
   CheckCircle2,
   Copy,
   Download,
@@ -16,10 +17,12 @@ import {
   FileText,
   History,
   LayoutTemplate,
+  Link2,
   Loader2,
   Lock,
   Receipt,
   RefreshCw,
+  Share2,
   ShieldAlert,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -43,6 +46,7 @@ import type {
   AgencyExport,
   AgencyExportPreview,
   AgencyExportStatus,
+  AgencyProposalLink,
   AgencyQuote,
   AgencyTemplate,
   QuoteStatus,
@@ -129,6 +133,9 @@ interface AgencyExportPanelProps {
   agencyId: string;
   tripId: string;
   tripTitle: string;
+  /** A8: archived trips are read-only — new previews/exports are blocked,
+   *  but existing jobs stay downloadable and retryable. */
+  archived?: boolean;
   onOpenQuoteTab: () => void;
 }
 
@@ -141,6 +148,7 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
   agencyId,
   tripId,
   tripTitle,
+  archived = false,
   onOpenQuoteTab,
 }) => {
   const { activeAgency, canManage } = useAgency();
@@ -162,6 +170,13 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
   const [generating, setGenerating] = useState(false);
   const [retryingId, setRetryingId] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [shares, setShares] = useState<AgencyProposalLink[]>([]);
+  const [sharingId, setSharingId] = useState<string | null>(null);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [createdShare, setCreatedShare] = useState<{
+    url: string;
+    quoteNumber: string | null;
+  } | null>(null);
 
   const requestRef = useRef(0);
   const previewRequestRef = useRef(0);
@@ -207,20 +222,23 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
     setPreviewError(null);
     setPreviewLoading(false);
     try {
-      const [exportsResult, templatesResult, quoteResult] = await Promise.all([
-        api.getAgencyExports(agencyId, tripId),
-        canPlan
-          ? api.getAgencyTemplates(agencyId)
-          : Promise.resolve({ success: true, templates: [] as AgencyTemplate[] }),
-        canPlan
-          ? api.getAgencyQuote(agencyId, tripId)
-          : Promise.resolve({ success: true, quote: null as AgencyQuote | null }),
-      ]);
+      const [exportsResult, templatesResult, quoteResult, sharesResult] =
+        await Promise.all([
+          api.getAgencyExports(agencyId, tripId),
+          canPlan
+            ? api.getAgencyTemplates(agencyId)
+            : Promise.resolve({ success: true, templates: [] as AgencyTemplate[] }),
+          canPlan
+            ? api.getAgencyQuote(agencyId, tripId)
+            : Promise.resolve({ success: true, quote: null as AgencyQuote | null }),
+          api.getAgencyProposalLinks(agencyId, tripId),
+        ]);
       if (requestId !== requestRef.current) return;
 
       applyExports(exportsResult.exports || [], false);
       setTemplates(templatesResult.templates || []);
       setQuote(quoteResult.quote ?? null);
+      setShares(sharesResult.links || []);
 
       const available = (templatesResult.templates || []).filter(
         (template) => template.audience !== 'internal' || canAdmin
@@ -301,7 +319,12 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
       ? 'This quote was cancelled. Create a new quote version before exporting it.'
       : null;
 
+  const archivedBlockedReason = archived
+    ? 'This trip is archived. Unarchive it before generating new exports.'
+    : null;
+
   const generationBlocked =
+    Boolean(archived) ||
     !selectedTemplate ||
     (selectedTemplate.audience === 'client' &&
       clientQuoteBlockedReason !== null);
@@ -425,6 +448,56 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
       toast.success('Staff link copied. It expires in 10 minutes.');
     } catch {
       toast.error('Could not copy the link. Use Download instead.');
+    }
+  };
+
+  const handleCreateShare = async (job: AgencyExport) => {
+    setSharingId(job._id);
+    try {
+      const result = await api.createAgencyProposalLink(
+        agencyId,
+        tripId,
+        job._id
+      );
+      const links = await api.getAgencyProposalLinks(agencyId, tripId);
+      setShares(links.links || []);
+      setCreatedShare({
+        url: result.url,
+        quoteNumber: result.link.quoteNumber,
+      });
+    } catch (error) {
+      toast.error(errorMessage(error, 'Could not create a share link.'));
+    } finally {
+      setSharingId(null);
+    }
+  };
+
+  const handleCopyCreatedShare = async () => {
+    if (!createdShare) return;
+    try {
+      await navigator.clipboard.writeText(createdShare.url);
+      toast.success('Client link copied.');
+    } catch {
+      toast.error('Could not copy the link. Select it and copy manually.');
+    }
+  };
+
+  const handleRevokeShare = async (link: AgencyProposalLink) => {
+    setRevokingId(link._id);
+    try {
+      await api.revokeAgencyProposalLink(agencyId, tripId, link._id);
+      setShares((prev) =>
+        prev.map((item) =>
+          item._id === link._id
+            ? { ...item, revokedAt: new Date().toISOString() }
+            : item
+        )
+      );
+      toast.success('Client link revoked.');
+    } catch (error) {
+      toast.error(errorMessage(error, 'Could not revoke that share link.'));
+    } finally {
+      setRevokingId(null);
     }
   };
 
@@ -575,6 +648,22 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
                         >
                           <Copy className="h-3.5 w-3.5" />
                         </Button>
+                        {job.audience === 'client' && canPlan ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => void handleCreateShare(job)}
+                            disabled={sharingId === job._id}
+                            title="Create a client link for this proposal. The client can view and accept it without an account."
+                          >
+                            {sharingId === job._id ? (
+                              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Share2 className="mr-1.5 h-3.5 w-3.5" />
+                            )}
+                            Share with client
+                          </Button>
+                        ) : null}
                       </>
                     ) : null}
                     {job.status === 'failed' && canPlan ? (
@@ -590,6 +679,121 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
                           <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
                         )}
                         Retry
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </CardContent>
+    </Card>
+  );
+
+  const shareLinkActive = (link: AgencyProposalLink): boolean =>
+    !link.revokedAt && new Date(link.expiresAt).getTime() > Date.now();
+
+  const sharesCard = (
+    <Card className="rounded-3xl border-border/70">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-sm">
+          <span className="flex items-center gap-2">
+            <Link2 className="h-4 w-4" />
+            Client share links
+          </span>
+          <span className="text-[11px] font-normal text-slate-500 dark:text-slate-400">
+            Full links are shown only once, when created
+          </span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {shares.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-slate-200 px-3 py-6 text-center text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
+            {canPlan
+              ? 'Share a ready client export to send the client a link they can view and accept without an account.'
+              : 'No client share links have been created for this trip yet.'}
+          </p>
+        ) : (
+          shares.map((link) => {
+            const active = shareLinkActive(link);
+            return (
+              <div
+                key={link._id}
+                className="rounded-2xl border border-slate-200 p-3 dark:border-slate-800"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <p className="truncate text-sm font-semibold">
+                        {link.quoteNumber
+                          ? `${link.quoteNumber} · v${link.quoteVersion}`
+                          : 'Client link'}
+                      </p>
+                      {link.acceptedAt ? (
+                        <Badge
+                          variant="outline"
+                          className="border-teal-300 bg-teal-50 text-[10px] text-teal-800 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-300"
+                        >
+                          Accepted
+                        </Badge>
+                      ) : null}
+                      {link.revokedAt ? (
+                        <Badge
+                          variant="outline"
+                          className="border-rose-300 bg-rose-50 text-[10px] text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300"
+                        >
+                          Revoked
+                        </Badge>
+                      ) : active ? (
+                        <Badge
+                          variant="outline"
+                          className="border-sky-300 bg-sky-50 text-[10px] text-sky-800 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-300"
+                        >
+                          Active
+                        </Badge>
+                      ) : (
+                        <Badge
+                          variant="outline"
+                          className="border-amber-300 bg-amber-50 text-[10px] text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
+                        >
+                          Expired
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                      …{link.tokenHint}
+                      {link.templateName ? ` · ${link.templateName}` : ''}
+                      {' · created '}
+                      {formatAgencyDate(link.createdAt)}
+                      {' · valid until '}
+                      {formatAgencyDate(link.expiresAt)}
+                    </p>
+                    <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
+                      {link.viewCount} view{link.viewCount === 1 ? '' : 's'}
+                      {link.lastViewedAt
+                        ? ` · last viewed ${formatAgencyDate(link.lastViewedAt)}`
+                        : ' · not viewed yet'}
+                      {link.acceptedAt
+                        ? ` · accepted ${formatAgencyDate(link.acceptedAt)}`
+                        : ''}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {active && canPlan ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void handleRevokeShare(link)}
+                        disabled={revokingId === link._id}
+                        title="Revoke this link. The client can no longer open it."
+                      >
+                        {revokingId === link._id ? (
+                          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Ban className="mr-1.5 h-3.5 w-3.5" />
+                        )}
+                        Revoke
                       </Button>
                     ) : null}
                   </div>
@@ -631,6 +835,7 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
           </CardContent>
         </Card>
         {historyCard}
+        {sharesCard}
       </div>
     );
   }
@@ -899,7 +1104,8 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
               <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-2.5 text-[11px] text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300">
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <span>
-                  {clientQuoteBlockedReason ??
+                  {archivedBlockedReason ??
+                    clientQuoteBlockedReason ??
                     'Choose a template before previewing an export.'}
                 </span>
               </div>
@@ -973,6 +1179,7 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
       </div>
 
       {historyCard}
+      {sharesCard}
 
       <Dialog
         open={confirmOpen}
@@ -1055,6 +1262,52 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
               )}
               Generate PDF
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(createdShare)}
+        onOpenChange={(open) => {
+          if (!open) setCreatedShare(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Client link created</DialogTitle>
+            <DialogDescription>
+              Send this link to the client
+              {createdShare?.quoteNumber
+                ? ` for ${createdShare.quoteNumber}`
+                : ''}
+              . They can view the proposal and accept it without an account.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-900/60">
+              <span className="min-w-0 flex-1 break-all text-xs font-medium text-slate-700 dark:text-slate-300">
+                {createdShare?.url}
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void handleCopyCreatedShare()}
+                className="shrink-0"
+              >
+                <Copy className="mr-1.5 h-3.5 w-3.5" />
+                Copy
+              </Button>
+            </div>
+            <p className="flex items-start gap-1.5 text-[11px] text-amber-700 dark:text-amber-400">
+              <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>
+                This full link is shown only once. Anyone with it can open the
+                proposal, so send it only to the client.
+              </span>
+            </p>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setCreatedShare(null)}>Done</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

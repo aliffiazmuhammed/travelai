@@ -30,6 +30,7 @@ import {
   CheckCircle2,
   Clock,
   Archive,
+  ArchiveRestore,
   RotateCcw,
   ChevronDown,
   ChevronUp,
@@ -37,6 +38,14 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Trip } from "@/types/trip";
+import type { AgencyMember } from "@/types";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface MyTripsViewProps {
   trips: Trip[];
@@ -64,6 +73,15 @@ interface MyTripsViewProps {
   onSearchChange?: (value: string) => void;
   statusValue?: string;
   onStatusChange?: (value: string) => void;
+  /** A8 agency-only: assignee filter and the archive shelf. */
+  assigneeOptions?: AgencyMember[];
+  assigneeValue?: string;
+  onAssigneeChange?: (value: string) => void;
+  archivedValue?: "active" | "archived";
+  onArchivedChange?: (value: "active" | "archived") => void;
+  onArchiveTrip?: (tripId: string) => Promise<void>;
+  onUnarchiveTrip?: (tripId: string) => Promise<void>;
+  canArchiveTrip?: (trip: Trip) => boolean;
 }
 
 const DESTINATION_IMAGES: Record<string, string> = {
@@ -137,8 +155,17 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
   onSearchChange,
   statusValue,
   onStatusChange,
+  assigneeOptions,
+  assigneeValue,
+  onAssigneeChange,
+  archivedValue,
+  onArchivedChange,
+  onArchiveTrip,
+  onUnarchiveTrip,
+  canArchiveTrip,
 }) => {
   const isAgency = variant === "agency";
+  const showingArchived = archivedValue === "archived";
   const planLabel = newPlanLabel ?? (isAgency ? "Create Agency Trip" : "Plan New Trip");
   const [internalSearch, setInternalSearch] = useState("");
   const [internalStatusFilter, setInternalStatusFilter] = useState<string>("all");
@@ -234,6 +261,36 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
     }
   };
 
+  const handleArchive = async (trip: Trip) => {
+    if (!onArchiveTrip) return;
+    try {
+      setActionLoadingId(trip._id);
+      await onArchiveTrip(trip._id);
+    } catch {
+      // The caller already showed the error toast.
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleUnarchive = async (trip: Trip) => {
+    if (!onUnarchiveTrip) return;
+    try {
+      setActionLoadingId(trip._id);
+      await onUnarchiveTrip(trip._id);
+    } catch {
+      // The caller already showed the error toast.
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const assigneeName = (userId?: string): string => {
+    if (!userId) return "Unassigned";
+    const match = assigneeOptions?.find((member) => member.userId === userId);
+    return match?.label || match?.email || "Agency member";
+  };
+
   const confirmPurge = async () => {
     if (!tripToPurge) return;
     try {
@@ -299,6 +356,44 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
 
         {/* View Switcher & Status Pills */}
         <div className="flex items-center gap-2 justify-between sm:justify-end overflow-x-auto pb-1 scrollbar-none">
+          {isAgency && onAssigneeChange && assigneeOptions ? (
+            <Select value={assigneeValue || "all"} onValueChange={onAssigneeChange}>
+              <SelectTrigger className="h-8 w-[150px] rounded-xl text-xs">
+                <SelectValue placeholder="Assignee" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all" className="text-xs">
+                  All assignees
+                </SelectItem>
+                <SelectItem value="unassigned" className="text-xs">
+                  Unassigned
+                </SelectItem>
+                {assigneeOptions.map((member) => (
+                  <SelectItem key={member.userId} value={member.userId} className="text-xs">
+                    {member.label || member.email || "Agency member"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
+
+          {isAgency && onArchivedChange ? (
+            <div className="inline-flex p-1 bg-muted/60 rounded-2xl border border-border/60">
+              {(["active", "archived"] as const).map((view) => (
+                <Button
+                  key={view}
+                  type="button"
+                  size="sm"
+                  variant={showingArchived === (view === "archived") ? "hero" : "ghost"}
+                  onClick={() => onArchivedChange(view)}
+                  className="rounded-xl text-xs font-bold h-8 px-3 capitalize"
+                >
+                  {view}
+                </Button>
+              ))}
+            </div>
+          ) : null}
+
           <div className="inline-flex p-1 bg-muted/60 rounded-2xl border border-border/60">
             {["all", "planned", "ongoing", "completed", "draft"].map((status) => (
               <Button
@@ -345,14 +440,22 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
           </div>
           <div className="space-y-1 max-w-sm mx-auto">
             <h3 className="text-lg font-bold text-foreground">
-              {search || statusFilter !== "all"
+              {showingArchived
+                ? "No archived trips"
+                : search ||
+                  statusFilter !== "all" ||
+                  (assigneeValue && assigneeValue !== "all")
                 ? "No matching trips found"
                 : emptyTitle ??
                   (isAgency ? "No agency trips yet" : "No saved trips yet")}
             </h3>
             <p className="text-xs text-muted-foreground">
-              {search || statusFilter !== "all"
-                ? "Try adjusting your search keywords or status filter."
+              {showingArchived
+                ? "Archive a trip from the active list to keep the library tidy; pinned exports and client links keep working."
+                : search ||
+                  statusFilter !== "all" ||
+                  (assigneeValue && assigneeValue !== "all")
+                ? "Try adjusting your search keywords or filters."
                 : deletedTrips.length > 0
                 ? "Restore a trip from Recently deleted below, or start a new plan."
                 : emptyBody ??
@@ -433,9 +536,18 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
                     </h3>
                     <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border/60">
                       <span>Created {new Date(trip.createdAt).toLocaleDateString()}</span>
-                      <span className="font-semibold text-foreground">
-                        {trip.tripDetails?.group_type || "Traveler"}
-                      </span>
+                      {isAgency ? (
+                        <span
+                          className="max-w-[45%] truncate font-semibold text-foreground"
+                          title={`Assigned to ${assigneeName(trip.assignedTo)}`}
+                        >
+                          {assigneeName(trip.assignedTo)}
+                        </span>
+                      ) : (
+                        <span className="font-semibold text-foreground">
+                          {trip.tripDetails?.group_type || "Traveler"}
+                        </span>
+                      )}
                     </div>
                   </CardContent>
                 </div>
@@ -456,7 +568,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
                     <ExternalLink className="w-3.5 h-3.5" />
                   </Button>
 
-                  {(!canDuplicateTrip || canDuplicateTrip(trip)) && (
+                  {!showingArchived && (!canDuplicateTrip || canDuplicateTrip(trip)) && (
                     <Button
                       type="button"
                       size="icon"
@@ -470,7 +582,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
                     </Button>
                   )}
 
-                  {(!canDeleteTrip || canDeleteTrip(trip)) && (
+                  {!showingArchived && (!canDeleteTrip || canDeleteTrip(trip)) && (
                     <Button
                       type="button"
                       size="icon"
@@ -486,6 +598,46 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   )}
+
+                  {isAgency &&
+                    !showingArchived &&
+                    onArchiveTrip &&
+                    (!canArchiveTrip || canArchiveTrip(trip)) && (
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        title="Archive trip"
+                        disabled={isActing}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void handleArchive(trip);
+                        }}
+                        className="h-9 w-9 text-muted-foreground hover:text-amber-600 rounded-xl"
+                      >
+                        <Archive className="w-4 h-4" />
+                      </Button>
+                    )}
+
+                  {isAgency &&
+                    showingArchived &&
+                    onUnarchiveTrip &&
+                    (!canArchiveTrip || canArchiveTrip(trip)) && (
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        title="Restore to the active list"
+                        disabled={isActing}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void handleUnarchive(trip);
+                        }}
+                        className="h-9 w-9 text-muted-foreground hover:text-emerald-600 rounded-xl"
+                      >
+                        <ArchiveRestore className="w-4 h-4" />
+                      </Button>
+                    )}
                 </div>
               </Card>
             );
@@ -560,7 +712,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
                     <span>Open</span>
                     <ExternalLink className="w-3.5 h-3.5" />
                   </Button>
-                  {(!canDuplicateTrip || canDuplicateTrip(trip)) && (
+                  {!showingArchived && (!canDuplicateTrip || canDuplicateTrip(trip)) && (
                     <Button
                       type="button"
                       size="icon"
@@ -573,7 +725,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
                       <Copy className="w-4 h-4" />
                     </Button>
                   )}
-                  {(!canDeleteTrip || canDeleteTrip(trip)) && (
+                  {!showingArchived && (!canDeleteTrip || canDeleteTrip(trip)) && (
                     <Button
                       type="button"
                       size="icon"
@@ -589,6 +741,44 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   )}
+                  {isAgency &&
+                    !showingArchived &&
+                    onArchiveTrip &&
+                    (!canArchiveTrip || canArchiveTrip(trip)) && (
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        title="Archive trip"
+                        disabled={isActing}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void handleArchive(trip);
+                        }}
+                        className="h-9 w-9 text-muted-foreground hover:text-amber-600 rounded-xl"
+                      >
+                        <Archive className="w-4 h-4" />
+                      </Button>
+                    )}
+                  {isAgency &&
+                    showingArchived &&
+                    onUnarchiveTrip &&
+                    (!canArchiveTrip || canArchiveTrip(trip)) && (
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        title="Restore to the active list"
+                        disabled={isActing}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void handleUnarchive(trip);
+                        }}
+                        className="h-9 w-9 text-muted-foreground hover:text-emerald-600 rounded-xl"
+                      >
+                        <ArchiveRestore className="w-4 h-4" />
+                      </Button>
+                    )}
                 </div>
               </div>
             );

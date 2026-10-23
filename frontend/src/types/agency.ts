@@ -292,3 +292,83 @@ export interface AgencyHealth {
   milestone?: string;
   writesEnabled?: boolean;
 }
+
+/* -------------------------------------------------------------------------- */
+/*  Client-facing proposal shares (A7)                                        */
+/* -------------------------------------------------------------------------- */
+
+/** What a share-link visitor is allowed to see: the client quote projection
+ *  (never markup, prepared-by or expenses) plus the rendered document. */
+export interface AgencyProposalView {
+  agency: { name: string };
+  trip: { _id: string; title: string };
+  quote: AgencyQuote | null;
+  canAccept: boolean;
+  accepted: boolean;
+  acceptedAt: string | null;
+  html: string;
+  pageCount: number;
+  templateName: string;
+  pdf: { bytes: number } | null;
+  expiresAt: string;
+}
+
+export interface AgencyProposalAcceptResult {
+  status: 'accepted';
+  acceptedAt: string;
+  quote: AgencyQuote;
+}
+
+/** Staff-side row in the trip's share list. The token itself never returns. */
+export interface AgencyProposalLink {
+  _id: string;
+  tokenHint: string;
+  quoteNumber: string | null;
+  quoteVersion: number;
+  templateName: string | null;
+  createdAt: string;
+  expiresAt: string;
+  revokedAt: string | null;
+  lastViewedAt: string | null;
+  viewCount: number;
+  acceptedAt: string | null;
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Operations (A8): plan limits, usage and audit                             */
+/* -------------------------------------------------------------------------- */
+
+export type AgencyUsageLevel = 'ok' | 'warning' | 'over';
+
+export interface AgencyPlanLimits {
+  tierId: string;
+  seats: number;
+  monthlyExports: number;
+  storageMb: number;
+}
+
+export interface AgencyUsage {
+  plan: AgencyPlanLimits;
+  used: {
+    seats: number;
+    exportsThisMonth: number;
+    storageBytes: number;
+  };
+  levels: {
+    seats: AgencyUsageLevel;
+    exports: AgencyUsageLevel;
+    storage: AgencyUsageLevel;
+  };
+}
+
+export interface AgencyAuditEntry {
+  _id: string;
+  action: string;
+  targetType: string;
+  targetId?: string;
+  metadata?: Record<string, unknown>;
+  /** Resolved display name/email; null for token and TravelAI-ops events. */
+  actor: string | null;
+  createdAt: string;
+}
+

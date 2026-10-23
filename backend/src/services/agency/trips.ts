@@ -6,10 +6,12 @@ import { AppError } from '../../utils/AppError.js';
 import { escapeRegex } from '../../utils/escapeRegex.js';
 import { sanitizeTripFor } from '../../utils/sanitizeTrip.js';
 import {
+  agencyCan,
   decideAgencyAccess,
   mapAgencyRoleToTripRole,
   type AgencyRole,
 } from './access.js';
+import { recordAgencyAudit } from './audit.js';
 import { assertAgencyClient } from './clients.js';
 
 /**
@@ -37,6 +39,7 @@ export const AGENCY_TRIP_SUMMARY_SELECT = [
   'createdAt',
   'updatedAt',
   'deletedAt',
+  'archivedAt',
   'members',
   'tripDetails.trip_title',
   'tripDetails.duration_days',
@@ -55,6 +58,10 @@ export interface AgencyTripListInput {
   role: AgencyRole;
   search?: string;
   status?: string;
+  /** Filter by assignee: a member user id or 'unassigned' (A8). */
+  assignedTo?: string;
+  /** true = only archived trips; default excludes them (A8). */
+  archived?: boolean;
 }
 
 function agencyRoleForTrip(role: AgencyRole) {
@@ -73,8 +80,23 @@ export async function listAgencyTrips(input: AgencyTripListInput) {
     isDeleted: { $ne: true },
   };
 
+  if (input.archived) {
+    query.archivedAt = { $ne: null };
+  } else {
+    query.archivedAt = null;
+  }
+
   if (input.status && input.status !== 'all') {
     query.status = input.status;
+  }
+  if (input.assignedTo) {
+    if (input.assignedTo === 'unassigned') {
+      query.assignedTo = null;
+    } else if (Types.ObjectId.isValid(input.assignedTo)) {
+      query.assignedTo = input.assignedTo;
+    } else {
+      throw new AppError('Choose a valid agency team member.', 400);
+    }
   }
   if (input.search && input.search.trim()) {
     const searchRegex = new RegExp(escapeRegex(input.search.trim().slice(0, 80)), 'i');
@@ -241,6 +263,22 @@ export interface UpdateAgencyTripInput {
 
 /** Metadata-only update for the agency library (currently assignment/client). */
 export async function updateAgencyTrip(trip: any, input: UpdateAgencyTripInput) {
+  // The route guard scopes the doc, but the service defends its own boundary:
+  // a trip document from another tenant or workspace must never be mutated.
+  if (
+    !trip ||
+    String(trip.agencyId) !== String(input.agencyId) ||
+    trip.workspace !== 'agency' ||
+    trip.isDeleted
+  ) {
+    throw new AppError('Trip not found', 404);
+  }
+  if (trip.archivedAt) {
+    throw new AppError(
+      'This trip is archived. Unarchive it before making changes.',
+      409
+    );
+  }
   if (input.assignedTo !== undefined) {
     if (input.assignedTo === null || input.assignedTo === '') {
       trip.assignedTo = undefined;
@@ -331,4 +369,69 @@ export function agencyTripCopyFields(trip: any, userId: string) {
     assignedTo: userId,
     clientId: trip.clientId,
   };
+}
+
+async function setArchivedState(
+  input: {
+    agencyId: string;
+    tripId: string;
+    role: AgencyRole;
+    actorId: string;
+  },
+  archived: boolean
+) {
+  if (!agencyCan(input.role, 'admin')) {
+    throw new AppError("You don't have permission to archive trips.", 403);
+  }
+  if (!Types.ObjectId.isValid(input.tripId)) {
+    throw new AppError('Trip not found', 404);
+  }
+  const trip = await Trip.findOne({
+    _id: input.tripId,
+    workspace: 'agency',
+    agencyId: input.agencyId,
+    isDeleted: { $ne: true },
+  });
+  if (!trip) throw new AppError('Trip not found', 404);
+  if (archived === Boolean(trip.archivedAt)) {
+    throw new AppError(
+      archived
+        ? 'This trip is already archived.'
+        : 'This trip is not archived.',
+      409
+    );
+  }
+  trip.archivedAt = archived ? new Date() : undefined;
+  await trip.save();
+  await recordAgencyAudit({
+    agencyId: input.agencyId,
+    actorId: input.actorId,
+    action: archived ? 'trip.archived' : 'trip.unarchived',
+    targetType: 'Trip',
+    targetId: input.tripId,
+    metadata: { title: String(trip.title || '') },
+  });
+  return {
+    ...sanitizeTripFor(trip, agencyRoleForTrip(input.role)),
+    role: agencyRoleForTrip(input.role),
+  };
+}
+
+/** A8: moves a live trip out of the active list; pinned exports/shares stay. */
+export function archiveAgencyTrip(input: {
+  agencyId: string;
+  tripId: string;
+  role: AgencyRole;
+  actorId: string;
+}) {
+  return setArchivedState(input, true);
+}
+
+export function unarchiveAgencyTrip(input: {
+  agencyId: string;
+  tripId: string;
+  role: AgencyRole;
+  actorId: string;
+}) {
+  return setArchivedState(input, false);
 }
