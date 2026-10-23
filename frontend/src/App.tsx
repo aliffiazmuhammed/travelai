@@ -23,6 +23,7 @@ const AgencyOnboarding = lazy(() => import("./pages/agency/AgencyOnboarding"));
 const AgencyTeam = lazy(() => import("./pages/agency/AgencyTeam"));
 const AgencySettings = lazy(() => import("./pages/agency/AgencySettings"));
 const AgencyClients = lazy(() => import("./pages/agency/AgencyClients"));
+const AgencyTemplates = lazy(() => import("./pages/agency/AgencyTemplates"));
 const AgencyTrips = lazy(() => import("./pages/agency/AgencyTrips"));
 const AgencyTripPlanner = lazy(() => import("./pages/agency/AgencyTripPlanner"));
 const AgencyInviteAccept = lazy(() => import("./pages/agency/AgencyInviteAccept"));
@@ -88,6 +89,7 @@ const App = () => (
                   <Route path="trips/new" element={<AgencyTripPlanner />} />
                   <Route path="trips/:tripId" element={<AgencyTrips />} />
                   <Route path="clients" element={<AgencyClients />} />
+                  <Route path="templates" element={<AgencyTemplates />} />
                   <Route path="team" element={<AgencyTeam />} />
                   <Route path="settings" element={<AgencySettings />} />
                 </Route>

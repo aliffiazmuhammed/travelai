@@ -38,11 +38,10 @@ const navItems = [
     icon: BriefcaseBusiness,
     end: false,
   },
+  { to: '/agency/templates', label: 'Templates', icon: FileText, end: false },
   { to: '/agency/team', label: 'Team', icon: Users, end: false },
   { to: '/agency/settings', label: 'Settings', icon: Settings, end: false },
 ];
-
-const futureItems = [{ label: 'Templates', icon: FileText, milestone: 'A6' }];
 
 /**
  * The agency product shell (A1). This layout is intentionally separate from
@@ -216,22 +215,6 @@ const AgencyLayout: React.FC = () => {
               <item.icon className="h-4 w-4" />
               {item.label}
             </NavLink>
-          ))}
-          {futureItems.map((item) => (
-            <span
-              key={item.label}
-              title={`Agency ${item.label.toLowerCase()} arrive in ${item.milestone}`}
-              className="inline-flex shrink-0 cursor-not-allowed items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-slate-400 dark:text-slate-600"
-            >
-              <item.icon className="h-4 w-4" />
-              {item.label}
-              <Badge
-                variant="outline"
-                className="ml-0.5 border-slate-200 px-1.5 py-0 text-[9px] text-slate-400 dark:border-slate-800 dark:text-slate-600"
-              >
-                {item.milestone}
-              </Badge>
-            </span>
           ))}
         </div>
       </header>

@@ -104,7 +104,7 @@ router.get('/status', (_req, res) => {
   res.json({
     success: true,
     workspace: 'agency',
-    milestone: 'A5',
+    milestone: 'A6',
     writesEnabled: true,
   });
 });

@@ -1,6 +1,6 @@
 # Agency Workspace - implementation milestone plan
 
-**Status:** A0 accepted (2026-10-22); A1 implemented and verified (2026-10-22); A2 implemented and verified (2026-10-22); A3 implemented (2026-10-22); A4 implemented and verified (2026-10-22); A5 implemented and verified (2026-10-22); A6 next.
+**Status:** A0 accepted (2026-10-22); A1 implemented and verified (2026-10-22); A2 implemented and verified (2026-10-22); A3 implemented (2026-10-22); A4 implemented and verified (2026-10-22); A5 implemented and verified (2026-10-22); A6 implemented and verified (2026-10-23).
 
 **A0 artifacts:** `docs/adr/0001-agency-workspace-boundary.md`, `docs/agency-a0-test-plan.md`, `docs/agency-a0-wireframes.md`, feature flag `AGENCY_WORKSPACE_ENABLED` (default false) and read-only `GET /api/agency/status`.
 
@@ -13,6 +13,8 @@
 **A4 artifacts:** `AgencyClient` directory model/service/routes and `/agency/clients`, `AgencyQuote` versioned model with server-side minor-unit pricing, client/internal projections, quote number allocation, agency default inclusions/exclusions/terms, the trip Quote tab with internal vs client preview, and status/version actions (`send`, `accept`, `cancel`, new version). Tests live in `backend/src/services/agency/quotes.test.ts`, `models.test.ts`, `routes/agency.routes.test.ts` and `assets.test.ts`; see `docs/agency-a4-test-plan.md`.
 
 **A5 artifacts:** versioned `ExportDocument` builder, `AgencyTemplate`/`AgencyExport`/`AgencyAudit` models, built-in `brochure` and `internal-summary` HTML renderers, headless-Chrome PDF jobs with retry, private export storage, ten-minute signed staff downloads, export rate limiting and audit events, and the trip Export tab (template picker, quote confirmation, real preview, generate/download, history). Tests live in `backend/src/services/agency/exports/exports.test.ts`, `models.test.ts`, `routes/agency.routes.test.ts` and `assets.test.ts`; see `docs/agency-a5-test-plan.md`.
+
+**A6 artifacts:** `AgencyTemplateVersion` model with immutable version rows and private source storage, the validated HTML template contract (`docs/agency-template-contract.md`), asset snapshotting (logo, mascot, fonts, cover, day images), preview-before-activation with real-trip rendering, version pinning on export jobs, one default per audience, archive/restore, and the `/agency/templates` gallery with upload, preview, manage and read-only member views. Tests live in `backend/src/services/agency/exports/templateValidation.test.ts`, `templateAssets.test.ts`, `customTemplate.test.ts`, `templateManagement.test.ts` and `scripts/smoke-a6.mts`; see `docs/agency-a6-test-plan.md`.
 
 **Goal:** add a separate B2B product for travel agencies without changing the individual traveler experience.
 **Scope:** agency accounts, team roles, client records, quotes, branded/custom PDF exports, and all existing trip features under an agency-owned workspace.
@@ -846,6 +848,7 @@ Exit criteria:
 
 **Size:** L  
 **Depends on:** A5
+**Status:** Implemented and verified (2026-10-23). See `docs/agency-a6-test-plan.md` and `docs/agency-template-contract.md`.
 
 Deliverables:
 
@@ -854,7 +857,7 @@ Deliverables:
 - Template upload/activation/archive/default.
 - Template version pinning on export.
 - Preview with a real trip.
-- Optional PDF-background/slot bridge for PDF-only agencies.
+- ~~Optional PDF-background/slot bridge for PDF-only agencies~~ deferred; agencies author self-contained HTML templates.
 - Asset mapping: logo, mascot, fonts, cover image, day images.
 
 Tests:

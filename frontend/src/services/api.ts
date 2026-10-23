@@ -48,7 +48,11 @@ import type {
   AgencyExportInput,
   AgencyExportPreview,
   AgencyTemplate,
+  AgencyTemplateAssetSelection,
   AgencyTemplateAudience,
+  AgencyTemplateListStatus,
+  AgencyTemplateVersion,
+  AgencyTemplateVersionPreview,
 } from '@/types';
 
 export interface StreamProgressEvent {
@@ -654,16 +658,137 @@ class ApiClient {
     );
   }
 
-  /** A5: managed document templates. Internal templates need an admin. */
+  /** A5/A6: managed document templates. Internal templates need an admin. */
   async getAgencyTemplates(
     id: string,
-    audience?: AgencyTemplateAudience
+    params?: {
+      audience?: AgencyTemplateAudience;
+      status?: AgencyTemplateListStatus;
+    }
   ): Promise<{ success: boolean; templates: AgencyTemplate[] }> {
-    const suffix = audience
-      ? `?audience=${encodeURIComponent(audience)}`
-      : '';
+    const query = new URLSearchParams();
+    if (params?.audience) query.append('audience', params.audience);
+    if (params?.status) query.append('status', params.status);
+    const suffix = query.toString() ? `?${query.toString()}` : '';
     return this.request(
       `/api/agency/${encodeURIComponent(id)}/templates${suffix}`
+    );
+  }
+
+  /** A6c: upload a custom template as a draft (version 1). */
+  async createAgencyTemplate(
+    id: string,
+    input: {
+      file: File;
+      name: string;
+      description?: string;
+      audience: AgencyTemplateAudience;
+      assets?: AgencyTemplateAssetSelection;
+    }
+  ): Promise<{
+    success: boolean;
+    message?: string;
+    template: AgencyTemplate;
+    version: AgencyTemplateVersion;
+  }> {
+    const form = new FormData();
+    form.append('file', input.file);
+    form.append('name', input.name);
+    form.append('audience', input.audience);
+    if (input.description?.trim()) {
+      form.append('description', input.description.trim());
+    }
+    if (input.assets) form.append('assets', JSON.stringify(input.assets));
+    return this.requestForm(
+      `/api/agency/${encodeURIComponent(id)}/templates`,
+      form
+    );
+  }
+
+  /** Uploads the next immutable version; its audience comes from the template. */
+  async addAgencyTemplateVersion(
+    id: string,
+    templateId: string,
+    input: { file: File; assets?: AgencyTemplateAssetSelection }
+  ): Promise<{
+    success: boolean;
+    message?: string;
+    template: AgencyTemplate;
+    version: AgencyTemplateVersion;
+  }> {
+    const form = new FormData();
+    form.append('file', input.file);
+    if (input.assets) form.append('assets', JSON.stringify(input.assets));
+    return this.requestForm(
+      `/api/agency/${encodeURIComponent(id)}/templates/${encodeURIComponent(templateId)}/versions`,
+      form
+    );
+  }
+
+  async getAgencyTemplateVersions(
+    id: string,
+    templateId: string
+  ): Promise<{
+    success: boolean;
+    template: AgencyTemplate;
+    versions: AgencyTemplateVersion[];
+  }> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(id)}/templates/${encodeURIComponent(templateId)}/versions`
+    );
+  }
+
+  async previewAgencyTemplateVersion(
+    id: string,
+    templateId: string,
+    version: number,
+    payload: { tripId: string; quoteId?: string | null }
+  ): Promise<{ success: boolean; preview: AgencyTemplateVersionPreview }> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(id)}/templates/${encodeURIComponent(templateId)}/versions/${encodeURIComponent(String(version))}/preview`,
+      { method: 'POST', body: JSON.stringify(payload) }
+    );
+  }
+
+  async activateAgencyTemplateVersion(
+    id: string,
+    templateId: string,
+    version: number
+  ): Promise<{ success: boolean; message?: string; template: AgencyTemplate }> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(id)}/templates/${encodeURIComponent(templateId)}/versions/${encodeURIComponent(String(version))}/activate`,
+      { method: 'POST' }
+    );
+  }
+
+  async archiveAgencyTemplate(
+    id: string,
+    templateId: string
+  ): Promise<{ success: boolean; message?: string; template: AgencyTemplate }> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(id)}/templates/${encodeURIComponent(templateId)}/archive`,
+      { method: 'POST' }
+    );
+  }
+
+  async setDefaultAgencyTemplate(
+    id: string,
+    templateId: string
+  ): Promise<{ success: boolean; message?: string; template: AgencyTemplate }> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(id)}/templates/${encodeURIComponent(templateId)}/default`,
+      { method: 'POST' }
+    );
+  }
+
+  async updateAgencyTemplate(
+    id: string,
+    templateId: string,
+    payload: { name?: string; description?: string }
+  ): Promise<{ success: boolean; template: AgencyTemplate }> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(id)}/templates/${encodeURIComponent(templateId)}`,
+      { method: 'PATCH', body: JSON.stringify(payload) }
     );
   }
 

@@ -5,6 +5,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { Link } from 'react-router-dom';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -14,6 +15,7 @@ import {
   FileDown,
   FileText,
   History,
+  LayoutTemplate,
   Loader2,
   Lock,
   Receipt,
@@ -34,6 +36,7 @@ import {
 import { API_BASE_URL } from '@/config';
 import { useAgency } from '@/context/AgencyContext';
 import { formatAgencyDate } from '@/lib/agency';
+import { templateVersionNumber } from '@/lib/templates';
 import { cn } from '@/lib/utils';
 import { api } from '@/services/api';
 import type {
@@ -651,14 +654,24 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
               </p>
             </div>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => void loadData()}
-            title="Reload templates, quote and history"
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-          </Button>
+          <div className="flex items-center gap-1.5">
+            {canAdmin ? (
+              <Button asChild variant="outline" size="sm">
+                <Link to="/agency/templates">
+                  <LayoutTemplate className="mr-1.5 h-3.5 w-3.5" />
+                  Manage templates
+                </Link>
+              </Button>
+            ) : null}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void loadData()}
+              title="Reload templates, quote and history"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -673,9 +686,17 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
             </CardHeader>
             <CardContent className="space-y-2">
               {visibleTemplates.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-slate-200 px-3 py-6 text-center text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
-                  No export templates are available yet.
-                </p>
+                <div className="space-y-2 rounded-xl border border-dashed border-slate-200 px-3 py-6 text-center text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                  <p>No active export templates are available yet.</p>
+                  {canAdmin ? (
+                    <Button asChild variant="outline" size="sm">
+                      <Link to="/agency/templates">
+                        <LayoutTemplate className="mr-1.5 h-3.5 w-3.5" />
+                        Set up templates
+                      </Link>
+                    </Button>
+                  ) : null}
+                </div>
               ) : (
                 <div className="grid gap-2 sm:grid-cols-2">
                   {visibleTemplates.map((template) => {
@@ -728,7 +749,9 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
                                   : 'Client-facing proposal document.')}
                             </p>
                             <p className="mt-1.5 text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">
-                              {template.audience} · v{template.version}
+                              {template.audience} ·{' '}
+                              {template.builtinKey ? 'built-in' : 'custom'} · v
+                              {templateVersionNumber(template)}
                             </p>
                           </div>
                         </div>

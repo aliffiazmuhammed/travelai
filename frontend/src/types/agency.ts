@@ -134,6 +134,8 @@ export interface AgencyQuoteInput {
 /* -------------------------------------------------------------------------- */
 
 export type AgencyTemplateAudience = 'client' | 'internal';
+export type AgencyTemplateStatus = 'draft' | 'active' | 'archived';
+export type AgencyTemplateListStatus = 'active' | 'draft' | 'archived' | 'all';
 export type AgencyExportStatus = 'queued' | 'rendering' | 'ready' | 'failed';
 
 /** Managed template metadata; template bytes never reach the client. */
@@ -142,14 +144,48 @@ export interface AgencyTemplate {
   name: string;
   description?: string;
   engine: 'html' | 'docx' | 'pdf-background';
-  status: 'draft' | 'active' | 'archived';
+  status: AgencyTemplateStatus;
   version: number;
+  /** The activated version; present once the template is active. */
+  activeVersion?: number;
   schemaVersion: number;
   audience: AgencyTemplateAudience;
   isDefault: boolean;
   builtinKey?: 'brochure' | 'internal-summary';
   createdAt: string;
   updatedAt: string;
+}
+
+/** One immutable uploaded version; source bytes stay server-side. */
+export interface AgencyTemplateVersion {
+  version: number;
+  audience: AgencyTemplateAudience;
+  pageCount: number;
+  sourceBytes: number;
+  createdAt: string;
+  previewedAt?: string;
+  previewTripId?: string;
+  active: boolean;
+}
+
+export interface AgencyTemplateAssetSelection {
+  logoAssetId?: string | null;
+  mascotAssetId?: string | null;
+  headingFontAssetId?: string | null;
+  bodyFontAssetId?: string | null;
+  coverAssetId?: string | null;
+  /** One image per 1-based itinerary position. */
+  dayAssets?: Array<{ day: number; assetId: string }>;
+}
+
+/** Real-trip render that marks a version as previewed before activation. */
+export interface AgencyTemplateVersionPreview {
+  html: string;
+  pageCount: number;
+  audience: AgencyTemplateAudience;
+  template: AgencyTemplate;
+  version: AgencyTemplateVersion;
+  trip: { _id: string; title: string };
 }
 
 /** One durable export job in the trip history. */

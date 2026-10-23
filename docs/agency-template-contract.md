@@ -317,7 +317,10 @@ Lifecycle rules:
   partial unique index. Setting a default unsets the previous one in the same
   audience.
 - Archived templates cannot be selected by new exports or set as default, but
-  their pinned versions stay resolvable for retries and history.
+  their pinned versions stay resolvable for retries and history. An archived
+  template is restored by previewing one of its versions against a real trip
+  and activating it; a version that was never previewed can be previewed
+  while the template is archived.
 - Every management action writes a tenant-scoped `AgencyAudit` event
   (`template.created`, `template.version_uploaded`, `template.previewed`,
   `template.activated`, `template.archived`, `template.default_set`,

@@ -871,8 +871,7 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
                     Mark accepted
                   </Button>
                 ) : null}
-                {(quote.status === 'sent' || quote.status === 'draft') &&
-                !viewingOldVersion ? (
+                {quote.status === 'sent' && !viewingOldVersion ? (
                   <Button
                     variant="outline"
                     size="sm"

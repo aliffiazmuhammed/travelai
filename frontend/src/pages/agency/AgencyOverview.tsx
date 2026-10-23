@@ -20,25 +20,28 @@ import { agencyRoleBadgeClass, agencyRoleLabel } from '@/lib/agency';
 import { cn } from '@/lib/utils';
 import AgencyOnboarding from './AgencyOnboarding';
 
-const futureCards = [
+const toolCards = [
   {
     icon: FileText,
     title: 'Branded exports',
-    milestone: 'A5–A6',
+    milestone: 'A5 live',
+    to: '/agency/trips',
     description:
-      'PDF brochures and client links rendered from your agency template, with export history.',
+      'PDF brochures with real trip data, signed downloads and an export history for every trip.',
   },
   {
     icon: LayoutTemplate,
     title: 'Templates',
-    milestone: 'A6',
+    milestone: 'A6 live',
+    to: '/agency/templates',
     description:
-      'Reusable itinerary and quote templates with versions, previews and a default.',
+      'Custom proposal layouts with immutable versions, real-trip previews and one default per audience.',
   },
   {
     icon: Sparkles,
     title: 'Client portal',
-    milestone: 'A7',
+    milestone: 'A7 next',
+    to: null,
     description:
       'Clients review proposals, accept quotes and download approved documents in one place.',
   },
@@ -80,7 +83,7 @@ const AgencyOverview: React.FC = () => {
                 variant="outline"
                 className="border-teal-200 bg-teal-50 text-[11px] text-teal-700 dark:border-teal-900 dark:bg-teal-950/40 dark:text-teal-300"
               >
-                Agency workspace A4
+                Agency workspace A6
               </Badge>
             </div>
             <div className="space-y-2">
@@ -157,8 +160,8 @@ const AgencyOverview: React.FC = () => {
           <CardHeader>
             <CardTitle className="text-base">Set up checklist</CardTitle>
             <CardDescription>
-              A4 adds the client directory and versioned trip quotes. Branded
-              exports follow in the next increments.
+              A6 adds custom proposal templates: upload once, preview against a
+              real trip, then activate a version for new exports.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -207,6 +210,17 @@ const AgencyOverview: React.FC = () => {
                 </Button>
               }
             />
+            <ChecklistRow
+              title="Upload your proposal template"
+              detail="Start from an HTML layout, map your brand assets, preview it on a real trip and activate the version."
+              action={
+                <Button asChild size="sm" variant="outline">
+                  <Link to="/agency/templates">
+                    Manage templates <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                  </Link>
+                </Button>
+              }
+            />
           </CardContent>
         </Card>
 
@@ -222,6 +236,8 @@ const AgencyOverview: React.FC = () => {
             <p>Every agency trip is isolated from personal trips and other agencies.</p>
             <p>A private client directory keeps contact details inside the agency.</p>
             <p>Quotes are versioned, priced server-side and locked once sent.</p>
+            <p>Branded PDF exports pin the template, version and quote they used.</p>
+            <p>Custom templates need a real-trip preview before activation.</p>
             <p>Planners edit; owners and admins manage sharing and the trash.</p>
             <p>Clients stay trip-scoped and never become agency members.</p>
           </CardContent>
@@ -229,7 +245,7 @@ const AgencyOverview: React.FC = () => {
       </section>
 
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {futureCards.map((card) => (
+        {toolCards.map((card) => (
           <Card key={card.title} className="border-slate-200 dark:border-slate-800">
             <CardContent className="space-y-3 p-5">
               <div className="flex items-center justify-between">
@@ -246,6 +262,13 @@ const AgencyOverview: React.FC = () => {
                   {card.description}
                 </p>
               </div>
+              {card.to ? (
+                <Button asChild size="sm" variant="outline">
+                  <Link to={card.to}>
+                    Open <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                  </Link>
+                </Button>
+              ) : null}
             </CardContent>
           </Card>
         ))}
