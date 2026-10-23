@@ -2,7 +2,7 @@
 
 **Milestone:** A6 - template contract, asset snapshots, management API and gallery UI
 **Status:** implemented and verified locally (2026-10-23)
-**Feature flag:** `AGENCY_WORKSPACE_ENABLED` stays dark by default; production enablement remains an explicit ops step.
+**Feature flag:** `AGENCY_WORKSPACE_ENABLED` defaults to `false`; the production blueprint sets it to `true` after A9 local verification. Set it to `false` for the kill switch.
 
 ---
 
@@ -135,9 +135,9 @@ Limitations of this run:
 
 ## 6. Production rollout prerequisites
 
-- Keep `AGENCY_WORKSPACE_ENABLED` off until A6 acceptance (and decide whether A7 must land first).
+- A6 acceptance is complete; the production blueprint now enables the workspace. Keep the flag available as the kill switch.
 - Provision `AGENCY_TEMPLATE_DIR` (and `AGENCY_ASSET_DIR`) on persistent private volumes; template sources and snapshots are never served from the public uploads tree.
 - Uploads are rate-limited per member and agency (30 per hour); each file is held in memory only up to the 512 KiB contract limit.
-- Verify `/api/health` reports `agency.milestone: "A6"` and `writesEnabled: true` when the flag is on.
+- Verify `/api/health` reports the current milestone (`A9`) and `writesEnabled: true` when the flag is on.
 - Confirm template routes remain tenant-guarded and admin-only, previews never expose another agency's assets, and archived templates stay resolvable only for pinned export retries.
 - A7 must keep consuming the same DTO, projections and pinned `(templateId, templateVersion)` rather than re-rendering or re-resolving templates in the browser.

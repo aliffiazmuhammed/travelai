@@ -2,7 +2,7 @@
 
 **Milestone:** A2 - agency trip workspace and feature parity
 **Status:** implemented and verified locally (2026-10-22)
-**Feature flag:** `AGENCY_WORKSPACE_ENABLED` remains `false` in `render.yaml`; production stays dark until an explicit rollout.
+**Feature flag:** `AGENCY_WORKSPACE_ENABLED` defaults to `false`; the production blueprint sets it to `true` after A9 local verification. Set it to `false` for the kill switch.
 
 ---
 
@@ -81,7 +81,7 @@ Verified:
 18. Admin can soft-delete the trip; it disappears for the client and appears in the agency trash.
 19. Admin restores it; the client sees it again.
 20. Planner cannot delete the trip (403); admin maps to owner and can.
-21. `/api/health` reports `agency.milestone: "A2"`.
+21. At A2 acceptance, `/api/health` reported `agency.milestone: "A2"` (current builds report `A9`).
 
 ---
 
@@ -102,7 +102,7 @@ These are UI-only checks and do not change the server guarantees above:
 
 ## 5. Production rollout prerequisites
 
-- `AGENCY_WORKSPACE_ENABLED=true` only after A2 acceptance.
-- Confirm `/api/health` reports `database: connected`, durable storage and `agency.milestone: "A2"`.
+- A2 acceptance is complete; the production blueprint now enables the workspace after A9. Keep the flag available as the kill switch.
+- Confirm `/api/health` reports `database: connected`, durable storage and the current milestone (`A9`).
 - Run the existing membership backfill/audit separately; A2 does not require a workspace backfill because legacy documents behave as personal through `$ne: 'agency'`.
 - Do not expose the agency client directory or quote fields until A4/A5 projections hide internal commercial data from client viewers.

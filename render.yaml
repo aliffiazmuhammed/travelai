@@ -38,8 +38,8 @@ services:
       # 20s poll for comments, polls and decisions), but production wants it on.
       - key: ENABLE_TRIP_SSE
         value: "true"
-      # Agency workspace (A0) is intentionally dark until the tenancy layer
-      # ships. Flip to "true" only after A1 is verified.
+      # Agency workspace (A1-A9). Enabled after local hardening and the
+      # simulated pilot; set to "false" as the emergency kill switch.
       - key: AGENCY_WORKSPACE_ENABLED
         value: "true"
       # Optional but strongly recommended: without Cloudinary, uploaded avatars

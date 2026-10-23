@@ -1,6 +1,8 @@
 # Agency Workspace - implementation milestone plan
 
-**Status:** A0 accepted (2026-10-22); A1 implemented and verified (2026-10-22); A2 implemented and verified (2026-10-22); A3 implemented (2026-10-22); A4 implemented and verified (2026-10-22); A5 implemented and verified (2026-10-22); A6 implemented and verified (2026-10-23); A7 implemented and verified (2026-10-23).
+**Status:** A0 accepted (2026-10-22); A1 implemented and verified (2026-10-22); A2 implemented and verified (2026-10-22); A3 implemented (2026-10-22); A4 implemented and verified (2026-10-22); A5 implemented and verified (2026-10-22); A6 implemented and verified (2026-10-23); A7 implemented and verified (2026-10-23); A8 implemented and verified (2026-10-23); A9 implemented and verified locally with a simulated pilot (2026-10-23).
+
+**Rollout:** the production blueprint enables the workspace (`AGENCY_WORKSPACE_ENABLED=true`, commit `158fbcf`). The real-agency pilot and production smoke checks remain operational steps; `false` remains the kill switch.
 
 **A0 artifacts:** `docs/adr/0001-agency-workspace-boundary.md`, `docs/agency-a0-test-plan.md`, `docs/agency-a0-wireframes.md`, feature flag `AGENCY_WORKSPACE_ENABLED` (default false) and read-only `GET /api/agency/status`.
 
@@ -657,7 +659,7 @@ Exit criteria:
 
 **Size:** L  
 **Depends on:** A0  
-**Status:** Implemented (2026-10-22). Automated and local tenant smoke tests pass; production enablement is a separate ops step.
+**Status:** Implemented and verified (2026-10-22). Automated and local tenant smoke tests pass; production enablement is controlled by `AGENCY_WORKSPACE_ENABLED`.
 
 Backend:
 
@@ -948,7 +950,7 @@ Exit criteria:
 
 **Size:** M  
 **Depends on:** A1-A8  
-**Status:** Implemented and verified (2026-10-23). See `docs/agency-a9-test-plan.md` and `docs/agency-operations-runbook.md`.
+**Status:** Implemented and verified locally with a simulated pilot (2026-10-23); the real-agency pilot and production smoke remain pending. See `docs/agency-a9-test-plan.md` and `docs/agency-operations-runbook.md`.
 
 Deliverables:
 
@@ -957,7 +959,7 @@ Deliverables:
 - Load test PDF rendering and export queue.
 - Backups, retention and deletion policy.
 - Agency onboarding runbook and support checklist.
-- Pilot with 2-3 agencies on real trips.
+- Pilot with 2-3 agencies on real trips (pending).
 - Rollback plan and feature-flag kill switch.
 
 Tests:

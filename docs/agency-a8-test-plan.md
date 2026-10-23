@@ -2,7 +2,7 @@
 
 **Milestone:** A8 - plan limits, usage counters, append-only audit and trip archive
 **Status:** implemented and verified locally (2026-10-23)
-**Feature flag:** `AGENCY_WORKSPACE_ENABLED` stays dark by default; production enablement remains an explicit ops step.
+**Feature flag:** `AGENCY_WORKSPACE_ENABLED` defaults to `false`; the production blueprint sets it to `true` after A9 local verification. Set it to `false` for the kill switch.
 
 ---
 
@@ -121,8 +121,8 @@ Limitations of this run:
 
 ## 6. Production rollout prerequisites
 
-- Keep `AGENCY_WORKSPACE_ENABLED` off until A8 acceptance.
+- A8 acceptance is complete; the production blueprint now enables the workspace. Keep the flag available as the kill switch.
 - Set `AGENCY_OPS_KEY` to a strong secret before enabling; without it every ops plan change fails closed (403).
 - Review `AGENCY_PLAN_TIERS` (JSON) and `AGENCY_PLAN_DEFAULT` (`starter`) against the commercial offering before enabling.
-- Verify `/api/health` reports `agency.milestone: "A8"` and `writesEnabled: true` when the flag is on.
+- Verify `/api/health` reports the current milestone (`A9`) and `writesEnabled: true` when the flag is on.
 - Confirm no client-facing projection (usage, audit, share DTOs, rendered documents) exposes internal cost, markup, prepared-by, expenses or chat ciphertext.

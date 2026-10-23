@@ -8,9 +8,9 @@ rollback and the feature-flag kill switch.
 
 ## 1. Feature flag and kill switch
 
-The whole workspace sits behind one flag: `AGENCY_WORKSPACE_ENABLED`.
+The whole workspace sits behind one flag: `AGENCY_WORKSPACE_ENABLED`. It defaults to `false`; the production blueprint sets it to `true` after A9 local verification (commit `158fbcf`).
 
-- **false (default)** — every route under `/api/agency` answers `404 Not
+- **false (environment default and kill switch)** — every route under `/api/agency` answers `404 Not
   Found`, exactly like an unknown path. The workspace is not advertised and
   cannot be probed. The frontend probes the public `/api/health` payload and
   hides every agency entry point automatically; no frontend deploy is needed
@@ -42,7 +42,7 @@ first so a half-rolled-back deploy never serves a mixed surface.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `AGENCY_WORKSPACE_ENABLED` | `false` | Master feature gate (§1). |
+| `AGENCY_WORKSPACE_ENABLED` | `false` | Master feature gate (§1). The production blueprint sets `true`; use `false` as the kill switch. |
 | `AGENCY_OPS_KEY` | *(unset)* | Secret that authorises `PATCH /api/agency/:id/plan`. TravelAI ops only; agencies can never change their own plan. Unset means nobody can change plans over HTTP. |
 | `AGENCY_PLAN_TIERS` | starter {seats 3, monthlyExports 10, storageMb 100} | JSON map of plan tiers. Used by quota and seat checks. |
 | `AGENCY_PLAN_DEFAULT` | `starter` | Tier applied to agencies without an override. |

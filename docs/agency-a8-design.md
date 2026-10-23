@@ -3,7 +3,7 @@
 **Milestone:** A8 - assignment filters, trip archive, plan limits, per-agency rate limits, usage counters, audit log viewer
 **Status:** Implemented and verified (2026-10-23)
 **Depends on:** A2, A5 (both verified)
-**Feature flag:** `AGENCY_WORKSPACE_ENABLED` stays dark until A8 acceptance.
+**Feature flag:** `AGENCY_WORKSPACE_ENABLED` defaults to `false`; the production blueprint was enabled after A9 local verification.
 
 Decisions locked with the user (2026-10-23):
 
@@ -79,7 +79,7 @@ Decisions locked with the user (2026-10-23):
 
 ## 8. File map
 
-Backend: `src/config/env.ts`, `src/models/Agency.ts`, `src/models/Trip.ts`, `src/services/agency/plan.ts` (new), `src/services/agency/audit.ts`, `trips.ts`, `invites.ts`, `exports/exports.ts`, `assets.ts`, `exports/templateManagement.ts`, `src/controllers/agency.controller.ts`, `src/schemas/agency.schema.ts`, `src/routes/agency.routes.ts`, `src/middleware/rateLimiter.middleware.ts`, `src/index.ts` (health milestone 'A8'), tests (`plan.test.ts`, `audit.test.ts` new; trips/routes updated), `scripts/smoke-a8.mts`.
+Backend: `src/config/env.ts`, `src/models/Agency.ts`, `src/models/Trip.ts`, `src/services/agency/plan.ts` (new), `src/services/agency/audit.ts`, `trips.ts`, `invites.ts`, `exports/exports.ts`, `assets.ts`, `exports/templateManagement.ts`, `src/controllers/agency.controller.ts`, `src/schemas/agency.schema.ts`, `src/routes/agency.routes.ts`, `src/middleware/rateLimiter.middleware.ts`, `src/index.ts` (health milestone, now `A9`), tests (`plan.test.ts`, `audit.test.ts` new; trips/routes updated), `scripts/smoke-a8.mts`.
 
 Frontend: `src/pages/agency/AgencyOperations.tsx` (new), `src/pages/agency/AgencyTrips.tsx`, `src/pages/agency/AgencyApp.tsx`, `src/pages/agency/AgencyLayout.tsx`, `src/services/api.ts`, `src/types/agency.ts`.
 

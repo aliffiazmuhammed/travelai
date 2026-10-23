@@ -144,6 +144,29 @@ const PUBLIC_ROUTES = new Set([
   '/proposals/:token/pdf',
 ]);
 
+test('the status probe advertises the latest agency milestone', () => {
+  const layer = routeLayers().find((entry) => pathOf(entry) === '/status');
+  assert.ok(layer, 'status route must exist');
+  const handler = handlesOf(layer).pop();
+  assert.equal(typeof handler, 'function');
+
+  let body: unknown;
+  const response = {
+    json(payload: unknown) {
+      body = payload;
+      return this;
+    },
+  };
+  handler({}, response);
+
+  assert.deepEqual(body, {
+    success: true,
+    workspace: 'agency',
+    milestone: 'A9',
+    writesEnabled: true,
+  });
+});
+
 test('every route except the token-authenticated public paths requires authentication', () => {
   for (const layer of routeLayers()) {
     if (PUBLIC_ROUTES.has(pathOf(layer))) continue;

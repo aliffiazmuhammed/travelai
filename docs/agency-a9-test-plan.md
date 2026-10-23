@@ -2,7 +2,9 @@
 
 **Milestone:** A9 - tenant-isolation review, template sandbox review, load test, ops docs, simulated pilot, rollback plan
 **Status:** implemented and verified locally (2026-10-23)
-**Feature flag:** `AGENCY_WORKSPACE_ENABLED` stays dark by default; production enablement remains an explicit ops step.
+**Feature flag:** `AGENCY_WORKSPACE_ENABLED` defaults to `false`; the production blueprint sets it to `true` after A9 local verification. Set it to `false` for the kill switch.
+
+**Production status:** the production blueprint enables the workspace; a real-agency pilot and production smoke checks remain pending.
 
 ---
 

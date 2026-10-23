@@ -137,11 +137,11 @@ app.get('/api/health', (_req, res) => {
     },
     // Agency feature discovery. The namespace is dark by default; the
     // frontend must not render agency navigation or call `/api/agency` unless
-    // this is true. A8 ships plan limits, usage/audit and trip archiving on
-    // top of the A7 proposal shares.
+    // this is true. The milestone marker tracks the latest implemented
+    // milestone: A9 hardening and pilot on top of the A8 operations surface.
     agency: {
       enabled: env.AGENCY_WORKSPACE_ENABLED,
-      milestone: 'A8',
+      milestone: 'A9',
       writesEnabled: env.AGENCY_WORKSPACE_ENABLED,
     },
     staticServing: {

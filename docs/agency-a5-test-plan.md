@@ -2,7 +2,7 @@
 
 **Milestone:** A5 - export document, built-in brochure template and PDF export
 **Status:** implemented and verified locally (2026-10-22)
-**Feature flag:** `AGENCY_WORKSPACE_ENABLED` stays dark by default; production enablement remains an explicit ops step.
+**Feature flag:** `AGENCY_WORKSPACE_ENABLED` defaults to `false`; the production blueprint sets it to `true` after A9 local verification. Set it to `false` for the kill switch.
 
 ---
 
@@ -133,11 +133,11 @@ The **Copy staff link** action copies the signed staff download URL. A public cl
 
 ## 6. Production rollout prerequisites
 
-- Keep `AGENCY_WORKSPACE_ENABLED` off until A5 acceptance (and decide whether A6/A7 must land first).
+- A5 acceptance is complete; the production blueprint now enables the workspace. Keep the flag available as the kill switch.
 - Install Chrome/Chromium/Edge on every API host, or set `AGENCY_CHROME_PATH` (or `CHROME_EXECUTABLE_PATH`/`PUPPETEER_EXECUTABLE_PATH`). Without it, export generation fails with a 503 and a retryable job.
 - Provision private storage via `AGENCY_EXPORT_DIR` on a persistent volume; export files are never served from the public uploads tree.
 - Set `AGENCY_EXPORT_SIGNING_SECRET` explicitly in production instead of falling back to `JWT_SECRET`.
-- Verify `/api/health` reports `agency.milestone: "A5"` and `writesEnabled: true` when the flag is on.
+- Verify `/api/health` reports the current milestone (`A9`) and `writesEnabled: true` when the flag is on.
 - Confirm export routes remain tenant/trip guarded, internal jobs remain admin-only, and the client document never contains margin, expenses or prepared-by.
 - Expect up to 20 preview/create/retry requests per user per agency per hour, two concurrent renders per process, a 45-second render timeout and 30-day file retention.
 - A6 must keep consuming the same DTO and client projection rather than recomputing prices or branding in the browser.

@@ -2,7 +2,7 @@
 
 **Milestone:** A4 - quote and commercial layer
 **Status:** implemented and verified locally (2026-10-22)
-**Feature flag:** `AGENCY_WORKSPACE_ENABLED` stays dark by default; production enablement remains an explicit ops step.
+**Feature flag:** `AGENCY_WORKSPACE_ENABLED` defaults to `false`; the production blueprint sets it to `true` after A9 local verification. Set it to `false` for the kill switch.
 
 ---
 
@@ -104,8 +104,8 @@ Fix: the agency-change effect now clears only the library lists; the route-owned
 
 ## 5. Production rollout prerequisites
 
-- Keep `AGENCY_WORKSPACE_ENABLED` off until A4 acceptance.
-- Confirm `/api/health` reports `agency.milestone: "A4"` and `writesEnabled: true` when the flag is on.
+- A4 acceptance is complete; the production blueprint now enables the workspace. Keep the flag available as the kill switch.
+- Confirm `/api/health` reports the current milestone (`A9`) and `writesEnabled: true` when the flag is on.
 - Confirm quote/client routes remain tenant-guarded and that client-facing projections never include markup, margin, expenses or prepared-by.
 - Treat quote numbers as permanent once issued; do not renumber or reuse them across environments.
 - A5 exports must consume the same server totals and client projection rather than recomputing prices in the browser.

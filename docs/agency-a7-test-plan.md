@@ -2,7 +2,7 @@
 
 **Milestone:** A7 - public proposal page, client acceptance and share link management
 **Status:** implemented and verified locally (2026-10-23)
-**Feature flag:** `AGENCY_WORKSPACE_ENABLED` stays dark by default; production enablement remains an explicit ops step.
+**Feature flag:** `AGENCY_WORKSPACE_ENABLED` defaults to `false`; the production blueprint sets it to `true` after A9 local verification. Set it to `false` for the kill switch.
 
 ---
 
@@ -126,8 +126,8 @@ Limitations of this run:
 
 ## 6. Production rollout prerequisites
 
-- Keep `AGENCY_WORKSPACE_ENABLED` off until A7 acceptance (and decide whether A8 must land first).
+- A7 acceptance is complete; the production blueprint now enables the workspace. Keep the flag available as the kill switch.
 - Provision `AGENCY_TEMPLATE_DIR`, `AGENCY_ASSET_DIR` and the export output storage on persistent private volumes; the public PDF route reads the same stored bytes the staff download uses.
 - Set `AGENCY_PROPOSAL_TTL_DAYS` (default 30, max 90) before enabling; the TTL index on `expiresAt` must exist for expiry cleanup.
-- Verify `/api/health` reports `agency.milestone: "A7"` and `writesEnabled: true` when the flag is on.
+- Verify `/api/health` reports the current milestone (`A9`) and `writesEnabled: true` when the flag is on.
 - Confirm the three public proposal routes are the only unauthenticated agency paths, and that the public DTO and rendered documents never expose markup, markup amount, prepared-by, expenses or chat ciphertext.
