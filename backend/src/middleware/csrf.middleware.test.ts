@@ -76,6 +76,9 @@ test('each realm bootstrap path is exempt', () => {
     '/api/agency/auth/signin',
     '/api/agency/auth/logout',
     '/api/agency/auth/csrf',
+    '/api/admin/auth/signin',
+    '/api/admin/auth/logout',
+    '/api/admin/auth/csrf',
   ]) {
     const result = check(request({ path, cookies: { token: 'session' } }));
     assert.equal(result.next, true, `${path} must be exempt`);

@@ -6,6 +6,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./context/UserContext";
 import { AgencyAuthProvider } from "./context/AgencyAuthContext";
+import { PlatformAuthProvider } from "./context/PlatformAuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { queryClient } from "./lib/queryClient";
@@ -32,6 +33,14 @@ const AgencyTrips = lazy(() => import("./pages/agency/AgencyTrips"));
 const AgencyTripPlanner = lazy(() => import("./pages/agency/AgencyTripPlanner"));
 const AgencyOperations = lazy(() => import("./pages/agency/AgencyOperations"));
 const AgencyInviteAccept = lazy(() => import("./pages/agency/AgencyInviteAccept"));
+const AdminApp = lazy(() => import("./pages/admin/AdminApp"));
+const AdminLogin = lazy(() => import("./pages/admin/AdminLogin"));
+const AdminOverview = lazy(() => import("./pages/admin/AdminOverview"));
+const AdminAccount = lazy(() => import("./pages/admin/AdminAccount"));
+const AdminAccounts = lazy(() => import("./pages/admin/AdminAccounts"));
+const AdminAgencies = lazy(() => import("./pages/admin/AdminAgencies"));
+const AdminPlatformAdmins = lazy(() => import("./pages/admin/AdminPlatformAdmins"));
+const AdminAudit = lazy(() => import("./pages/admin/AdminAudit"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const PageLoader = () => (
@@ -114,6 +123,37 @@ const App = () => (
                   <Route path="team" element={<AgencyTeam />} />
                   <Route path="operations" element={<AgencyOperations />} />
                   <Route path="settings" element={<AgencySettings />} />
+                </Route>
+                {/* PA1: the platform realm is a third, fully separate front
+                    door. `/admin` never accepts a personal or agency session. */}
+                <Route
+                  path="/admin/login"
+                  element={
+                    <PlatformAuthProvider>
+                      <AdminLogin />
+                    </PlatformAuthProvider>
+                  }
+                />
+                <Route
+                  path="/admin"
+                  element={
+                    <PlatformAuthProvider>
+                      <AdminApp />
+                    </PlatformAuthProvider>
+                  }
+                >
+                  <Route index element={<AdminOverview />} />
+                  <Route path="account" element={<AdminAccount />} />
+                  <Route path="accounts" element={<AdminAccounts />} />
+                  <Route
+                    path="agencies"
+                    element={<AdminAgencies />}
+                  />
+                  <Route
+                    path="audit"
+                    element={<AdminAudit />}
+                  />
+                  <Route path="platform-admins" element={<AdminPlatformAdmins />} />
                 </Route>
                 <Route path="*" element={<NotFound />} />
               </Routes>

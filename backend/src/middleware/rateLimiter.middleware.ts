@@ -30,6 +30,23 @@ export const agencyAuthLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+/**
+ * PA1: the platform realm gets its own store for the same isolation reason —
+ * burning personal or agency attempts must not lock an operator out of the
+ * admin panel. Admin login is intentionally stricter than the other realms.
+ */
+export const platformAuthLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: {
+    success: false,
+    error: 'Too many admin sign-in attempts. Please try again after 15 minutes.',
+    message: 'Too many admin sign-in attempts. Please try again after 15 minutes.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 export const generateLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 20,
@@ -188,6 +205,25 @@ export const passwordChangeLimiter = rateLimit({
     success: false,
     error: 'Too many password attempts. Please try again in a few minutes.',
     message: 'Too many password attempts. Please try again in a few minutes.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
+ * PA2: account management writes are rare and high-impact (disable, password
+ * reset, super-admin creation). The limit is per platform account, generous for
+ * an operator working through a support queue and hostile to scripted abuse.
+ */
+export const platformWriteLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  keyGenerator: userOrIpKey,
+  validate: false,
+  message: {
+    success: false,
+    error: 'Too many platform account changes. Please wait a few minutes and try again.',
+    message: 'Too many platform account changes. Please wait a few minutes and try again.',
   },
   standardHeaders: true,
   legacyHeaders: false,

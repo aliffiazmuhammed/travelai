@@ -14,6 +14,9 @@ import invitesRoutes from './routes/invites.routes.js';
 import geoRoutes from './routes/geo.routes.js';
 import agencyRoutes from './routes/agency.routes.js';
 import agencyAuthRoutes from './routes/agencyAuth.routes.js';
+import adminAuthRoutes from './routes/adminAuth.routes.js';
+import adminRoutes from './routes/admin.routes.js';
+import { requirePlatformAdmin } from './middleware/platformAdmin.middleware.js';
 import { errorHandler } from './middleware/error.middleware.js';
 import { isCloudinaryConfigured, uploadDir } from './services/finance/receipt.js';
 import { agencyStorageProvider } from './services/agency/cloudStorage.js';
@@ -145,6 +148,12 @@ app.get('/api/health', (_req, res) => {
       milestone: 'A9',
       writesEnabled: env.AGENCY_WORKSPACE_ENABLED,
     },
+    // PA1 platform admin discovery. When false the namespace is a 404 and the
+    // SPA renders `/admin` as unavailable instead of offering a login form.
+    platform: {
+      enabled: env.PLATFORM_ADMIN_ENABLED,
+      milestone: 'PA1',
+    },
     staticServing: {
       enabled: Boolean(shouldServeStatic && frontendDist),
       envServeStatic: env.SERVE_STATIC ?? 'unset',
@@ -192,6 +201,12 @@ app.use('/api/geo', geoRoutes);
 // self-service, so it must not inherit the tenant `:agencyId` guard chain.
 app.use('/api/agency/auth', agencyAuthRoutes);
 app.use('/api/agency', agencyRoutes);
+// PA1 platform realm. The flag gate covers the whole namespace before any
+// route, including future `/api/admin` mounts; the auth router repeats it so a
+// route mounted elsewhere still cannot forget the kill switch.
+app.use('/api/admin', requirePlatformAdmin);
+app.use('/api/admin/auth', adminAuthRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Uploaded receipt files (Milestone 5.5). Registered before the SPA fallback so
 // `/uploads/<file>` is never rewritten to index.html. Filenames are generated

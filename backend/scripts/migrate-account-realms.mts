@@ -54,6 +54,13 @@ const PURGE_LEGACY_MEMBERSHIPS = process.argv.includes(
 const PRESERVE_LEGACY_MEMBERSHIPS = process.argv.includes(
   '--preserve-legacy-memberships'
 );
+/**
+ * Live-database repair mode. Reconciles the account/agency indexes only and
+ * skips every data step (user/agency backfill, invite revocation, membership
+ * migration and the membership unique index). This is the safe way to repair a
+ * drifted index on a production database without invalidating pending invites.
+ */
+const INDEXES_ONLY = process.argv.includes('--indexes-only');
 
 const AGENCY_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -578,7 +585,10 @@ async function run(): Promise<void> {
   }
 
   await mongoose.connect(MONGODB_URI);
-  log(`connected${DRY_RUN ? ' (dry run: no writes)' : ''}`);
+  log(
+    `connected${DRY_RUN ? ' (dry run: no writes)' : ''}` +
+      `${INDEXES_ONLY ? ' (indexes only: no data migration)' : ''}`
+  );
 
   const db = mongoose.connection.db;
   if (!db) throw new Error('MongoDB connection has no database handle.');
@@ -590,14 +600,19 @@ async function run(): Promise<void> {
 
   // Must run before the preserve path: the legacy global unique `email_1` index
   // forbids the same email in a second realm, which is exactly what §10.3
-  // creates (personal + agency account for one person).
+  // creates (personal + agency account for one person). Also index-only safe.
   await dropIndexIfExists(users, 'email_1');
 
-  await backfillUsers(users);
-  await backfillAgencies(agencies);
-  await revokeInvites(invites);
+  let membershipsOk = true;
+  if (!INDEXES_ONLY) {
+    await backfillUsers(users);
+    await backfillAgencies(agencies);
+    await revokeInvites(invites);
 
-  const membershipsOk = await migrateMemberships(memberships, users, db);
+    membershipsOk = await migrateMemberships(memberships, users, db);
+  } else {
+    log('skipping user/agency backfill, invite revocation and membership work');
+  }
 
   await ensureIndex(
     users,
@@ -631,12 +646,17 @@ async function run(): Promise<void> {
     { accountType: 1, status: 1 },
     { name: 'account_type_status' }
   );
+  // Deliberately NOT unique: the platform realm needs more than one
+  // super-admin (PA2 creates them from the console). Uniqueness is enforced by
+  // `platform_email_unique` instead; this index only makes role lookups cheap.
+  // `ensureIndex` drops and recreates an index whose options no longer match,
+  // so a database created by an earlier build loses the accidental unique flag
+  // the next time this migration runs.
   await ensureIndex(
     users,
     { platformRole: 1 },
     {
       name: 'platform_super_admin',
-      unique: true,
       partialFilterExpression: { platformRole: 'super_admin' },
     }
   );
@@ -655,22 +675,24 @@ async function run(): Promise<void> {
   // The legacy A1 switcher index was `{ userId, createdAt }`; different builds
   // emitted it with either sort direction, so drop both shapes. (Mongoose will
   // not remove an index it no longer declares.)
-  await dropIndexByKey(memberships, { userId: 1, createdAt: -1 });
-  await dropIndexByKey(memberships, { userId: 1, createdAt: 1 });
-  await ensureIndex(
-    memberships,
-    { userId: 1 },
-    { name: 'userId_1', unique: true }
-  );
+  if (!INDEXES_ONLY) {
+    await dropIndexByKey(memberships, { userId: 1, createdAt: -1 });
+    await dropIndexByKey(memberships, { userId: 1, createdAt: 1 });
+    await ensureIndex(
+      memberships,
+      { userId: 1 },
+      { name: 'userId_1', unique: true }
+    );
+  }
 
-  if (!membershipsOk) {
+  if (!INDEXES_ONLY && !membershipsOk) {
     log(
       'migration incomplete: membership violations remain. The unique ' +
         'AgencyMember.userId index was not created.'
     );
     process.exitCode = 1;
   } else {
-    log('migration complete.');
+    log(INDEXES_ONLY ? 'index repair complete.' : 'migration complete.');
   }
 }
 

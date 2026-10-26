@@ -5,6 +5,7 @@ import Agency from '../models/Agency.js';
 import {
   protectAgency,
   protectPersonal,
+  protectPlatform,
   protectSession,
 } from './auth.middleware.js';
 import { signRealmToken } from '../services/auth/realm.js';
@@ -19,6 +20,7 @@ type Account = {
   accountType: 'personal' | 'agency' | 'platform';
   agencyId?: string;
   platformRole?: string;
+  role?: 'super_admin';
   status?: string;
   mustChangePassword?: boolean;
   tokenVersion?: number;
@@ -61,6 +63,14 @@ function resetFixtures(): void {
     status: 'active',
     tokenVersion: 0,
   };
+  users.platform = {
+    _id: 'platform',
+    accountType: 'platform',
+    platformRole: 'super_admin',
+    role: 'super_admin',
+    status: 'active',
+    tokenVersion: 0,
+  };
   agencies.a1 = { status: 'active' };
   agencies.a2 = { status: 'active' };
 }
@@ -77,6 +87,7 @@ function token(account: Account): string {
     userId: account._id,
     realm: account.accountType,
     agencyId: account.agencyId,
+    role: account.role,
     tokenVersion: account.tokenVersion,
   });
 }
@@ -247,13 +258,6 @@ test('protectSession accepts both realms, records both, and prefers the declared
 });
 
 test('protectSession never accepts a platform token', async () => {
-  users.platform = {
-    _id: 'platform',
-    accountType: 'platform',
-    platformRole: 'super_admin',
-    status: 'active',
-    tokenVersion: 0,
-  };
   const denied = await run(
     protectSession,
     request({ cookies: { platform_token: token(users.platform) } })
@@ -272,4 +276,65 @@ test('a Bearer token takes precedence over a valid cookie', async () => {
   );
   assert.equal(denied.next, false);
   assert.equal(denied.res.statusCode, 401);
+});
+
+test('the platform guard accepts only a platform super-admin token', async () => {
+  const req = request({ cookies: { platform_token: token(users.platform) } });
+  const ok = await run(protectPlatform, req);
+  assert.equal(ok.next, true);
+  assert.equal(req.userId, 'platform');
+  assert.equal(req.realm, 'platform');
+
+  for (const other of [users.personal, users.agency]) {
+    const denied = await run(
+      protectPlatform,
+      request({ cookies: { [other.accountType === 'personal' ? 'token' : 'agency_token']: token(other) } })
+    );
+    assert.equal(denied.next, false);
+    assert.equal(denied.res.statusCode, 401);
+  }
+});
+
+test('personal, agency and shared routes reject a platform token', async () => {
+  const platformToken = token(users.platform);
+  for (const guard of [protectPersonal, protectAgency]) {
+    const denied = await run(guard, request({ cookies: { platform_token: platformToken } }));
+    assert.equal(denied.next, false);
+    assert.equal(denied.res.statusCode, 401);
+  }
+});
+
+test('a platform account without the super-admin role is rejected', async () => {
+  users.platform.platformRole = undefined;
+  users.platform.role = undefined;
+  // A token cannot even be minted without the role claim; assert the guard also
+  // refuses a role claim whose database account no longer holds it.
+  users.platform.role = 'super_admin';
+  const denied = await run(
+    protectPlatform,
+    request({ cookies: { platform_token: token(users.platform) } })
+  );
+  assert.equal(denied.next, false);
+  assert.equal(denied.res.statusCode, 401);
+  users.platform.platformRole = 'super_admin';
+});
+
+test('a forced platform password change blocks the shell but allows me, password and logout', async () => {
+  users.platform.mustChangePassword = true;
+
+  const blocked = await run(
+    protectPlatform,
+    request({ cookies: { platform_token: token(users.platform) }, path: '/overview' })
+  );
+  assert.equal(blocked.res.statusCode, 403);
+  assert.equal(blocked.res.body.code, 'PASSWORD_CHANGE_REQUIRED');
+
+  for (const path of ['/me', '/password', '/logout', '/csrf']) {
+    const allowed = await run(
+      protectPlatform,
+      request({ cookies: { platform_token: token(users.platform) }, path })
+    );
+    assert.equal(allowed.next, true, `${path} must stay reachable`);
+  }
+  users.platform.mustChangePassword = false;
 });

@@ -79,6 +79,12 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((value) => parseBooleanFlag(value)),
+  // Platform admin (PA1). Dark by default: `/api/admin/*` answers 404 and the
+  // SPA never offers `/admin` until this is explicitly enabled.
+  PLATFORM_ADMIN_ENABLED: z
+    .string()
+    .optional()
+    .transform((value) => parseBooleanFlag(value)),
   // A7 proposal share links; the service caps requests at 90 days.
   AGENCY_PROPOSAL_TTL_DAYS: z.coerce.number().positive().default(30),
   // A8 plan limits. Tiers are env-configurable; AGENCY_PLAN_DEFAULT picks the

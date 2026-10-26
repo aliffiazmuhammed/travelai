@@ -1,12 +1,12 @@
 # Platform Admin and Account Realms - implementation milestone plan
 
-**Status:** planning (2026-10-23); revised 2026-10-26 after a code review added
-the shared trip-surface, CSRF, and realm-scoped email-lookup rules. No PA
-milestone implemented yet.
+**Status:** PA0, PA1, PA2, PA3 and PA4 implemented (2026-10-26); PA5 planned. The plan was
+revised 2026-10-26 after a code review added the shared trip-surface, CSRF, and
+realm-scoped email-lookup rules.
 
 **Supersedes:** the account and onboarding assumptions in
-`docs/roadmap-agency-workspace.md`. A0-A9 remain the running agency baseline
-until PA0 ships.
+`docs/roadmap-agency-workspace.md`. A0-A9 remain the running agency baseline,
+but PA0 replaces their self-service account-creation assumption.
 
 **Goal:** add a platform-admin panel that can see registered accounts, onboard
 agency tenants, and grant tenant access without mixing personal, agency, and
@@ -415,12 +415,14 @@ Actions:
 - Disable/enable a personal or agency account.
 - Reset an agency account password (temporary password + forced change).
 - Reset a personal account password only as an explicit support action, if
-  enabled.
+  enabled. PA2 does not enable this: personal credentials stay self-service and
+  the endpoint returns `400` for non-agency accounts.
 - Create/disable another platform super admin, with a last-admin guard.
 - View account memberships and recent audit events.
 
 Not shown: personal trips, chats, receipts, agency clients, quotes, exports, or
-other tenant content.
+other tenant content. The admin surface is a third realm: personal and agency
+sessions are rejected with `401` before any handler runs.
 
 ### 6.4 Agency provisioning
 
@@ -746,7 +748,63 @@ accounts without mixing them.
 - Disabling an agency account leaves the personal account usable.
 - Disabling a personal account leaves the agency account usable.
 - Last super-admin cannot be removed or demoted.
-- Non-platform accounts receive 404 from `/api/admin/*`.
+- Non-platform sessions (personal or agency) receive `401` from `/api/admin/*`,
+  matching the realm-mismatch rule in §3.2. The earlier draft of this section
+  said `404`; the guard deliberately does not enumerate the admin surface.
+
+**Implemented (2026-10-26):**
+
+- API: `GET /api/admin/overview`, `GET /api/admin/accounts`,
+  `GET /api/admin/accounts/:id`, `PATCH /api/admin/accounts/:id/status`,
+  `POST /api/admin/accounts/:id/reset-password`,
+  `GET|POST /api/admin/platform-accounts`,
+  `PATCH /api/admin/platform-accounts/:id`. The directory router repeats the
+  `PLATFORM_ADMIN_ENABLED` gate and adds `protectPlatform`; every mutation uses
+  `platformWriteLimiter` (60 / 15 min per account) and writes a sanitized
+  `PlatformAudit` row.
+- Directory rows carry realm and tenant labels and are keyed by account id, so
+  the same email returns one row per realm/tenant. Search is literal
+  (`escapeRegex`), capped at 120 characters; page size is capped at 100.
+- Policy: no self-disable (`400`), last active super-admin cannot be disabled
+  (`409`, checked in the service and again on the platform-account update),
+  password reset is agency-only (`400` for other realms), disabling bumps
+  `tokenVersion`, and status changes are idempotent (`changed: false`).
+- Frontend: `/admin` live overview, `/admin/accounts` (tabs, search, status
+  filter, pagination, detail dialog, status/reset dialogs),
+  `/admin/platform-admins`, and the `AdminTemporaryPassword` one-time hand-off.
+- Artifacts: `backend/src/services/platform/accounts.ts`,
+  `backend/src/controllers/adminAccounts.controller.ts`,
+  `backend/src/routes/admin.routes.ts`,
+  `backend/src/schemas/platformAccounts.schema.ts`,
+  `backend/src/models/accountRealms.test.ts`,
+  `frontend/src/pages/admin/AdminAccounts.tsx`,
+  `frontend/src/pages/admin/AdminPlatformAdmins.tsx`,
+  `frontend/src/pages/admin/AdminOverview.tsx`.
+
+**Runbook - `platform_super_admin` index repair:** the PA0 migration shipped
+this index with `unique: true`, while the model declares it non-unique. A
+database created by that build therefore allowed only one platform super-admin
+and the second creation failed with `409` (duplicate key). The script no longer
+sets `unique`, and `ensureIndex` drops and recreates an index whose key, unique
+flag, or partial filter no longer match. On a live database, repair the indexes
+only: `--indexes-only` reconciles the `users`/`agencies` indexes, drops the
+legacy global `email_1` index if present, and deliberately skips the backfills,
+pending-invite revocation and membership migration.
+
+```bash
+cd backend
+npx tsx scripts/migrate-account-realms.mts --indexes-only --dry-run
+# "would recreate index users.platform_super_admin"
+npx tsx scripts/migrate-account-realms.mts --indexes-only
+```
+
+Only run the full migration (`--preserve-legacy-memberships`) when the data
+steps themselves are needed; it revokes pending agency invites as part of the
+PA0 remediation.
+
+`platform_email_unique` (partial on `accountType: 'platform'`) still enforces
+one platform account per email; the role index is only a lookup helper.
+
 
 ### PA3 - Agency provisioning and forced first-login password
 
@@ -781,6 +839,78 @@ login without touching any personal account.
 - The owner can invite staff, and invite acceptance creates an agency account
   for the tenant, not a personal account.
 
+**Implemented (2026-10-26):**
+
+- API: `GET /api/admin/agencies/plans` (environment plan catalogue),
+  `GET /api/admin/agencies/owner-preview?email=`, and
+  `POST /api/admin/agencies` with
+  `{ name, slug?, planTierId?, billing?, ownerEmail, ownerName? }`. The router
+  repeats the `PLATFORM_ADMIN_ENABLED` gate and `protectPlatform`, so a
+  personal or agency session receives `401`. Creation uses
+  `platformWriteLimiter` (60 / 15 min per account) plus `agencyCreateLimiter`
+  (10 tenants / day per account) and requires the CSRF header.
+- Slug rules: the slug is optional. When omitted, `allocateAgencySlug` derives
+  it from the name and adds `-2`, `-3`, ... on collision. An explicit slug is
+  validated as 3-40 lowercase alphanumerics joined by single dashes; it is
+  rejected (`400`) rather than rewritten, checked for uniqueness (`409`), and
+  immutable afterwards (`PATCH /api/agency/:id` cannot change it).
+- Owner-email rules: the preview checks all three realms. A personal or
+  platform account with the same email produces a warning only - the new agency
+  account is a separate row and the existing password/data stay untouched. An
+  agency account already attached to another workspace blocks provisioning with
+  `409`, because one agency account belongs to exactly one tenant. The service
+  re-checks the block immediately before writing.
+- Provisioning writes the Agency, the owner's agency-realm account
+  (`{ accountType: 'agency', agencyId, email }`) and the owner membership. New
+  owners receive `Tv!` plus 18 random bytes (base64url), `mustChangePassword:
+  true` and `createdBy` set to the acting platform account; the temporary
+  password appears only in the `201` response, never in audit or logs.
+  Retries that find an existing account for the same tenant reuse it and omit
+  the password.
+- Plan and billing: `planTierId` resolves from `AGENCY_PLAN_TIERS` (default
+  `AGENCY_PLAN_DEFAULT`); an unknown tier is `400`. Billing metadata is
+  trimmed, the contact email is lowercased, and `renewalDate` accepts only a
+  real `YYYY-MM-DD` date.
+- Failure handling uses compensating cleanup instead of transactions: the rows
+  this call created are removed in reverse order (membership, then user, then
+  agency). Only rows created by the current call are listed, so a reused owner
+  account or pre-existing tenant is never deleted.
+- Audit: platform rows `agency.created` and `agency.owner_assigned` (sanitized
+  metadata, no secrets) plus tenant-visible rows with the same actions. The
+  frontend wizard shows realm warnings before submit and the one-time
+  credential hand-off afterwards, with the workspace login URL.
+- Forced first login: `protectAgency` answers
+  `403 { code: 'PASSWORD_CHANGE_REQUIRED' }` on every agency route except
+  `/me`, `/password`, `/logout` and `/csrf`. The password change reissues the
+  agency cookie and bumps `tokenVersion`, so the pre-change session is `401`.
+  `/agency/onboarding` is now an explanatory page; self-service creation stays
+  removed.
+- Frontend: `/admin/agencies` is a three-step wizard (tenant/slug/plan,
+  owner + realm preview + billing, review) and `/admin` gains the route, nav
+  entry and overview shortcut.
+- Artifacts: `backend/src/services/platform/provisioning.ts`,
+  `backend/src/controllers/adminAgencies.controller.ts`,
+  `backend/src/schemas/platformAgencies.schema.ts`,
+  `backend/src/routes/admin.routes.ts`,
+  `backend/src/services/agency/slug.ts`,
+  `backend/src/services/platform/provisioning.test.ts`,
+  `frontend/src/pages/admin/AdminAgencies.tsx`,
+  `frontend/src/pages/admin/AdminTemporaryPassword.tsx`.
+- Verification: 548/548 backend tests and both typechecks pass; the frontend
+  production build succeeds. A real-server HTTP suite covered the forced
+  platform password, plan catalogue, realm preview, CSRF, slug validation and
+  collisions, explicit/allocated slugs, personal/platform same-email
+  separation, owner membership, audit redaction, forced agency password (old
+  session invalidated), tenant rename with slug immutability, staff invitation
+  and acceptance, and realm/tenant isolation. A DB-backed check forced the
+  membership and owner-user writes to fail and confirmed no orphan
+  agency/user/membership remains. Test accounts, tenants and audit rows were
+  removed afterwards.
+- Operational prerequisite: PA3 assumes the PA2 index repair has run. On a
+  database created by the build that shipped `platform_super_admin` as unique,
+  creating a second super-admin still returns `409` until
+  `migrate-account-realms.mts --indexes-only` is applied (see the PA2 runbook).
+
 ### PA4 - Agency lifecycle, access operations, and audit console
 
 **Goal:** operate a tenant end-to-end from the admin panel.
@@ -804,6 +934,96 @@ login without touching any personal account.
 - Plan changes are reflected in usage and audited.
 - The last owner cannot be removed.
 - Admin can reset an agency password without changing the personal password.
+
+**Implemented (2026-10-26):**
+
+- API (all behind `PLATFORM_ADMIN_ENABLED`, `protectPlatform`, CSRF and
+  `platformWriteLimiter`): `GET /api/admin/agencies` (`q`, `status`,
+  `planTierId`, `page`, `limit`, plus status counts), `GET
+  /api/admin/agencies/:id`, `PATCH /api/admin/agencies/:id/status`, `PATCH
+  /api/admin/agencies/:id/plan`, `POST /api/admin/agencies/:id/members/invite`,
+  `PATCH|DELETE /api/admin/agencies/:id/members/:userId`, `POST
+  /api/admin/agencies/:id/members/:userId/transfer-owner`, `POST
+  /api/admin/agencies/:id/members/:userId/reset-password`, and `GET
+  /api/admin/audit` (`q`, `action`, `targetType`, `targetId`, `from`, `to`,
+  paging, action/target facets). Static agency paths are registered before
+  `/:id`, and the route table is covered by `admin.routes.test.ts`.
+- Directory/detail are metadata-only: name, slug, status, effective plan, raw
+  `planOverrides`, usage (seats, exports this month, storage), billing contacts
+  and renewal date, owners, members, pending invites and recent platform audit.
+  Quotes, trips, clients, itineraries and other tenant content are never read.
+- Plan: `services/agency/plan.ts` now owns `normalizeAgencyPlanChange` and
+  `applyAgencyPlan`, shared by the tenant path (`changeAgencyPlan`) and the
+  platform ops path. Unknown tiers and out-of-range overrides are `400`; an
+  omitted override inherits the tier, so clearing a field is explicit. Detail
+  returns raw overrides separately from effective limits so the editor can tell
+  "inherit" from "set". Usage reads the effective plan immediately.
+- Lifecycle: suspension sets `Agency.status = 'suspended'` and bumps
+  `tokenVersion` for every agency account in that tenant, so existing agency
+  sessions die on their next request. Login context, agency auth and all
+  tenant routes already require `status === 'active'`; reactivation does not
+  resurrect the invalidated tokens. Public proposal links fail closed through
+  the existing `agency.status !== 'active'` check in
+  `services/agency/proposals.ts` (generic `404`). Personal accounts and other
+  tenants are unaffected.
+- Access operations reuse the tenant rules (`services/agency/access.ts`,
+  `members.ts`, `invites.ts`) with `actorRole: 'owner'` instead of fabricating a
+  platform membership: invites accept admin/planner/viewer only, role changes
+  cannot grant ownership, the last owner cannot be removed or demoted (`409`),
+  removed members lose access immediately, and owner transfer promotes the heir
+  first and then demotes the previous owner to admin, with compensating
+  rollback if the demotion fails. A non-owner transfer source is `409`.
+- Password reset is agency-only: it returns a one-time `Tv!` password with
+  `mustChangePassword`, bumps the agency account's `tokenVersion`, and never
+  touches the personal (or platform) row that may share the same email.
+- Audit: every mutation writes a sanitized `PlatformAudit` row
+  (`agency.suspended`, `agency.reactivated`, `agency.plan_changed`,
+  `agency.member_invited`, `agency.member_role_changed`,
+  `agency.member_removed`, `agency.owner_transferred`,
+  `account.password_reset`), and tenant-visible changes also write the
+  tenant `AgencyAudit` (`plan.changed`, `member.invited`,
+  `member.role_changed`, `member.removed`, `agency.owner_transferred`,
+  `member.password_reset` with `issuedByPlatform: true`). Temporary passwords,
+  hashes and secret-shaped metadata keys never enter either collection. The
+  platform viewer reads only `PlatformAudit`; tenant audit stays inside the
+  tenant.
+- Frontend: `/admin/agencies` provides a debounced search, status and plan
+  filters, a metadata table, pagination, refresh after provisioning, and opens
+  the tenant drawer. The drawer covers lifecycle, plan/override editing,
+  member roles, invite, owner transfer, removal, password reset and recent
+  platform audit. `/admin/audit` is a filterable, paged platform audit console;
+  the `PA4` placeholder route and nav badge were removed.
+- Artifacts: `backend/src/services/platform/agencies.ts`,
+  `backend/src/services/platform/agencies.test.ts`,
+  `backend/src/services/agency/plan.ts`,
+  `backend/src/services/platform/accounts.ts`,
+  `backend/src/schemas/platformAgencies.schema.ts`,
+  `backend/src/controllers/adminAgencies.controller.ts`,
+  `backend/src/routes/admin.routes.ts`, `frontend/src/pages/admin/AdminAgencies.tsx`,
+  `frontend/src/pages/admin/AdminAgencyDetail.tsx`,
+  `frontend/src/pages/admin/AdminAudit.tsx`, `frontend/src/services/api.ts`,
+  `frontend/src/types/platform.ts`, `frontend/src/App.tsx`,
+  `frontend/src/pages/admin/AdminLayout.tsx`.
+
+**Verification (2026-10-26):** the backend suite passes `558/558`, backend
+`tsc --noEmit` is clean, and frontend `tsc --noEmit` plus `npm run build`
+succeed. A real-server HTTP/DB run against `localhost` covered list filters,
+pagination and `400`s; detail shape and no-content projection; a `pro ->
+starter` change with overrides reflected in live usage and raw overrides in
+detail; invalid tiers, zero/overflow overrides and unknown fields rejected;
+invite/accept/role change/removal with the removed session failing immediately;
+owner transfer (heir becomes sole owner, previous owner becomes admin,
+non-owner source `409`); last-owner removal and demotion `409` on two tenants;
+tenant audit rows for every platform action with `issuedByPlatform: true`; an
+agency password reset that leaves the same-email personal password and session
+working while the old agency password fails and the temporary one forces a
+change; suspension blocking tenant A login, context and routes while personal
+and tenant B continue, reactivation keeping old sessions invalid; a public
+proposal link returning `404` while suspended and recovering on reactivation;
+audit action/target/date/search/facets and invalid-date/unknown-field `400`s;
+no temporary passwords in audit; and realm isolation. PA4 fixtures were removed
+afterwards and `a4-smoke-travel` was restored to `active` (suspension had
+already bumped its agency sessions' `tokenVersion`).
 
 ### PA5 - Migration rehearsal, hardening, pilot, and rollout
 
@@ -1035,7 +1255,10 @@ left untouched (see the note above), and the run warns when one exists.
 
 ### Runbook additions
 
-- Create the first platform admin.
+- Create the first platform admin:
+  `npm run bootstrap:platform-admin -- --email ops@example.com`. The command
+  prints a random temporary password once, sets `mustChangePassword: true`, and
+  refuses to overwrite an existing platform account.
 - Create a tenant with a unique slug.
 - Hand off agency login URL and temporary password.
 - Force a first-login password change.

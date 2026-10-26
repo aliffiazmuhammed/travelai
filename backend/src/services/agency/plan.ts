@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { Types } from 'mongoose';
-import Agency from '../../models/Agency.js';
+import Agency, { type IAgency } from '../../models/Agency.js';
 import AgencyAsset from '../../models/AgencyAsset.js';
 import AgencyExport from '../../models/AgencyExport.js';
 import AgencyMember from '../../models/AgencyMember.js';
@@ -187,6 +187,94 @@ const opsKeyMatches = (provided: string): boolean => {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 };
 
+export interface AgencyPlanChange {
+  tierId: string;
+  seats?: number;
+  monthlyExports?: number;
+  storageMb?: number;
+}
+
+/**
+ * Validates a plan change and drops undefined overrides. Shared by the ops
+ * break-glass route and the PA4 platform console so both paths enforce the same
+ * tier table and numeric bounds.
+ */
+export function normalizeAgencyPlanChange(value: AgencyPlanChange): AgencyPlanChange {
+  const tierId = String(value?.tierId ?? '').trim();
+  if (!tierId || !env.AGENCY_PLAN_TIERS[tierId]) {
+    throw new AppError('Choose a valid plan tier.', 400);
+  }
+
+  const plan: AgencyPlanChange = { tierId };
+  const setNumber = (
+    key: 'seats' | 'monthlyExports' | 'storageMb',
+    minimum: number
+  ) => {
+    const raw = value[key];
+    if (raw === undefined || raw === null) return;
+    const number = Number(raw);
+    if (!Number.isInteger(number) || number < minimum) {
+      throw new AppError(
+        key === 'seats'
+          ? 'Seats must be a whole number of at least 1.'
+          : 'Plan limits must be whole numbers of at least 0.',
+        400
+      );
+    }
+    plan[key] = number;
+  };
+
+  setNumber('seats', 1);
+  setNumber('monthlyExports', 0);
+  setNumber('storageMb', 0);
+  return plan;
+}
+
+export interface ApplyAgencyPlanInput {
+  agencyId: string;
+  plan: AgencyPlanChange;
+  /** Platform admin who made the change; omitted for an ops-key change. */
+  actorId?: string;
+  /** Tenant audit action; callers may keep the historical `plan.changed`. */
+  action?: string;
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Applies a validated plan change and writes the tenant-visible audit row. The
+ * previous limits are returned so the platform console can report a precise
+ * before/after without a second read.
+ */
+export async function applyAgencyPlan(input: ApplyAgencyPlanInput): Promise<{
+  limits: AgencyPlanLimits;
+  previous: AgencyPlanLimits;
+  agency: IAgency;
+}> {
+  const plan = normalizeAgencyPlanChange(input.plan);
+
+  const existing = await Agency.findById(input.agencyId).select('plan').lean();
+  if (!existing) throw new AppError('Agency not found', 404);
+  const previous = planLimitsFor(existing);
+
+  const agency = await Agency.findByIdAndUpdate(
+    input.agencyId,
+    { $set: { plan } },
+    { new: true, runValidators: true }
+  );
+  if (!agency) throw new AppError('Agency not found', 404);
+
+  await recordAgencyAudit({
+    agencyId: input.agencyId,
+    ...(input.actorId ? { actorId: input.actorId } : {}),
+    action: input.action ?? 'plan.changed',
+    targetType: 'Agency',
+    targetId: input.agencyId,
+    metadata: input.metadata ?? { ...plan },
+  });
+
+  return { limits: planLimitsFor(agency), previous, agency };
+}
+
 /**
  * TravelAI-ops plan change. Gated on `AGENCY_OPS_KEY` (constant-time), not on
  * agency rank — ops is not a member. Absent key = nobody can change plans via
@@ -196,24 +284,14 @@ const opsKeyMatches = (provided: string): boolean => {
 export async function changeAgencyPlan(input: {
   agencyId: string;
   opsKey: string;
-  plan: { tierId: string; seats?: number; monthlyExports?: number; storageMb?: number };
+  plan: AgencyPlanChange;
 }): Promise<AgencyPlanLimits> {
   if (!opsKeyMatches(input.opsKey)) {
     throw new AppError('Plan changes require TravelAI ops access.', 403);
   }
-  planTier(input.plan.tierId);
-  const agency = await Agency.findByIdAndUpdate(
-    input.agencyId,
-    { $set: { plan: input.plan } },
-    { new: true, runValidators: true }
-  );
-  if (!agency) throw new AppError('Agency not found', 404);
-  await recordAgencyAudit({
+  const result = await applyAgencyPlan({
     agencyId: input.agencyId,
-    action: 'plan.changed',
-    targetType: 'Agency',
-    targetId: input.agencyId,
-    metadata: { ...input.plan },
+    plan: input.plan,
   });
-  return planLimitsFor(agency);
+  return result.limits;
 }

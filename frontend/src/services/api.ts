@@ -60,12 +60,75 @@ import type {
   AgencyProposalView,
   AgencyAuditEntry,
   AgencyUsage,
+  PlatformAuthSession,
+  PlatformHealth,
+  PlatformAccountDetail,
+  PlatformAccountList,
+  PlatformAccountQuery,
+  PlatformAccountRow,
+  PlatformAccountStatus,
+  PlatformAdminList,
+  PlatformOverview,
+  PlatformAgencyDetail,
+  PlatformAgencyInput,
+  PlatformAgencyInviteResult,
+  PlatformAgencyList,
+  PlatformAgencyMemberInviteInput,
+  PlatformAgencyQuery,
+  PlatformAgencyRole,
+  PlatformAgencyStatus,
+  PlatformAuditList,
+  PlatformAuditQuery,
+  PlatformOwnerPreview,
+  PlatformPlanTier,
+  PlatformProvisionResult,
 } from '@/types';
 
 export interface StreamProgressEvent {
   stage: number;
   progress: number;
   message: string;
+}
+
+/** Builds the PA2 directory query string, dropping empty/default filters. */
+function platformQueryString(params: PlatformAccountQuery): string {
+  const search = new URLSearchParams();
+  if (params.q) search.set('q', params.q);
+  if (params.realm && params.realm !== 'all') search.set('realm', params.realm);
+  if (params.status && params.status !== 'all') search.set('status', params.status);
+  if (params.page) search.set('page', String(params.page));
+  if (params.limit) search.set('limit', String(params.limit));
+  const query = search.toString();
+  return query ? `?${query}` : '';
+}
+
+/** PA4 agency directory filters. */
+function agencyQueryString(params: PlatformAgencyQuery): string {
+  const search = new URLSearchParams();
+  if (params.q) search.set('q', params.q);
+  if (params.status && params.status !== 'all') search.set('status', params.status);
+  if (params.planTierId && params.planTierId !== 'all') {
+    search.set('planTierId', params.planTierId);
+  }
+  if (params.page) search.set('page', String(params.page));
+  if (params.limit) search.set('limit', String(params.limit));
+  const query = search.toString();
+  return query ? `?${query}` : '';
+}
+
+/** PA4 audit viewer filters. */
+function auditQueryString(params: PlatformAuditQuery): string {
+  const search = new URLSearchParams();
+  if (params.q) search.set('q', params.q);
+  if (params.action) search.set('action', params.action);
+  if (params.targetType) search.set('targetType', params.targetType);
+  if (params.actorId) search.set('actorId', params.actorId);
+  if (params.from) search.set('from', params.from);
+  if (params.to) search.set('to', params.to);
+  if (params.page) search.set('page', String(params.page));
+  if (params.limit) search.set('limit', String(params.limit));
+  const query = search.toString();
+  return query ? `?${query}` : '';
 }
 
 /**
@@ -350,7 +413,7 @@ class ApiClient {
 
   // Agency Workspace A1. The namespace 404s when the server feature flag is
   // off; the UI probes `/api/health` and never renders the shell in that case.
-  async getHealth(): Promise<{ agency?: AgencyHealth }> {
+  async getHealth(): Promise<{ agency?: AgencyHealth; platform?: PlatformHealth }> {
     return this.request('/api/health');
   }
 
@@ -411,8 +474,262 @@ class ApiClient {
     });
   }
 
+  // PA1 platform realm auth. The namespace 404s while `PLATFORM_ADMIN_ENABLED`
+  // is off; these calls use the separate `platform_token` cookie and never
+  // touch the personal or agency sessions.
+  async signinPlatform(email: string, password: string): Promise<PlatformAuthSession> {
+    return this.request('/api/admin/auth/signin', {
+      method: 'POST',
+      body: JSON.stringify({
+        email: email.trim().toLowerCase(),
+        password,
+      }),
+    });
+  }
+
+  async getPlatformMe(): Promise<PlatformAuthSession> {
+    return this.request('/api/admin/auth/me');
+  }
+
+  async logoutPlatform(): Promise<{ success: boolean; message: string }> {
+    return this.request('/api/admin/auth/logout', { method: 'POST' });
+  }
+
+  async changePlatformPassword(
+    currentPassword: string,
+    newPassword: string
+  ): Promise<{ success: boolean; message: string }> {
+    return this.request('/api/admin/auth/password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+  }
+
+  // PA2 platform directory. Metadata only: no tenant/personal trip content is
+  // ever returned by these endpoints.
+  async getPlatformOverview(): Promise<PlatformOverview> {
+    return this.request('/api/admin/overview');
+  }
+
+  async listPlatformAccounts(
+    params: PlatformAccountQuery = {}
+  ): Promise<PlatformAccountList> {
+    return this.request(`/api/admin/accounts${platformQueryString(params)}`);
+  }
+
+  async getPlatformAccount(
+    id: string
+  ): Promise<{ success: boolean; account: PlatformAccountDetail }> {
+    return this.request(`/api/admin/accounts/${encodeURIComponent(id)}`);
+  }
+
+  async updatePlatformAccountStatus(
+    id: string,
+    status: PlatformAccountStatus
+  ): Promise<{ success: boolean; account: PlatformAccountRow; changed: boolean }> {
+    return this.request(`/api/admin/accounts/${encodeURIComponent(id)}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    });
+  }
+
+  async resetPlatformAccountPassword(id: string): Promise<{
+    success: boolean;
+    message: string;
+    temporaryPassword: string;
+    email: string;
+    workspace?: string;
+    agencyName?: string;
+  }> {
+    return this.request(
+      `/api/admin/accounts/${encodeURIComponent(id)}/reset-password`,
+      { method: 'POST' }
+    );
+  }
+
+  async listPlatformAdmins(
+    params: PlatformAccountQuery = {}
+  ): Promise<PlatformAdminList> {
+    return this.request(
+      `/api/admin/platform-accounts${platformQueryString({ ...params, realm: 'platform' })}`
+    );
+  }
+
+  async createPlatformAdmin(input: {
+    email: string;
+    name?: string;
+  }): Promise<{
+    success: boolean;
+    message: string;
+    account: PlatformAccountRow;
+    temporaryPassword: string;
+  }> {
+    return this.request('/api/admin/platform-accounts', {
+      method: 'POST',
+      body: JSON.stringify({
+        email: input.email.trim().toLowerCase(),
+        ...(input.name?.trim() ? { name: input.name.trim() } : {}),
+      }),
+    });
+  }
+
+  async updatePlatformAdmin(
+    id: string,
+    input: { status?: PlatformAccountStatus; name?: string | null }
+  ): Promise<{ success: boolean; account: PlatformAccountRow; changed: boolean }> {
+    return this.request(
+      `/api/admin/platform-accounts/${encodeURIComponent(id)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+      }
+    );
+  }
+
   async getAgency(id: string): Promise<{ success: boolean; agency: Agency }> {
     return this.request(`/api/agency/${encodeURIComponent(id)}`);
+  }
+
+  // PA3 agency provisioning. Plan limits and owner warnings are metadata only.
+  async getAgencyPlanTiers(): Promise<{
+    success: boolean;
+    tiers: PlatformPlanTier[];
+  }> {
+    return this.request('/api/admin/agencies/plans');
+  }
+
+  async previewAgencyOwner(email: string): Promise<{
+    success: boolean;
+    preview: PlatformOwnerPreview;
+  }> {
+    return this.request(
+      `/api/admin/agencies/owner-preview?email=${encodeURIComponent(email)}`
+    );
+  }
+
+  async provisionAgency(
+    input: PlatformAgencyInput
+  ): Promise<PlatformProvisionResult> {
+    return this.request('/api/admin/agencies', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  }
+
+  // PA4 agency lifecycle, access operations and audit. Each mutation writes a
+  // platform and a tenant audit row; tenant content is never returned.
+  async listAdminAgencies(
+    params: PlatformAgencyQuery = {}
+  ): Promise<PlatformAgencyList> {
+    return this.request(`/api/admin/agencies${agencyQueryString(params)}`);
+  }
+
+  async getAdminAgency(
+    id: string
+  ): Promise<{ success: boolean; agency: PlatformAgencyDetail }> {
+    return this.request(`/api/admin/agencies/${encodeURIComponent(id)}`);
+  }
+
+  async updateAdminAgencyStatus(
+    id: string,
+    status: PlatformAgencyStatus
+  ): Promise<{ success: boolean; agency: PlatformAgencyDetail; changed: boolean }> {
+    return this.request(`/api/admin/agencies/${encodeURIComponent(id)}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    });
+  }
+
+  async updateAdminAgencyPlan(
+    id: string,
+    plan: {
+      tierId: string;
+      seats?: number;
+      monthlyExports?: number;
+      storageMb?: number;
+    }
+  ): Promise<{
+    success: boolean;
+    message: string;
+    agency: PlatformAgencyDetail;
+    previous: PlatformAgencyDetail['plan'];
+  }> {
+    return this.request(`/api/admin/agencies/${encodeURIComponent(id)}/plan`, {
+      method: 'PATCH',
+      body: JSON.stringify(plan),
+    });
+  }
+
+  async inviteAdminAgencyMember(
+    id: string,
+    input: PlatformAgencyMemberInviteInput
+  ): Promise<PlatformAgencyInviteResult> {
+    return this.request(
+      `/api/admin/agencies/${encodeURIComponent(id)}/members/invite`,
+      {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }
+    );
+  }
+
+  async updateAdminAgencyMemberRole(
+    id: string,
+    userId: string,
+    role: PlatformAgencyRole
+  ): Promise<{ success: boolean; agency: PlatformAgencyDetail }> {
+    return this.request(
+      `/api/admin/agencies/${encodeURIComponent(id)}/members/${encodeURIComponent(userId)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ role }),
+      }
+    );
+  }
+
+  async removeAdminAgencyMember(
+    id: string,
+    userId: string
+  ): Promise<{ success: boolean; agency: PlatformAgencyDetail }> {
+    return this.request(
+      `/api/admin/agencies/${encodeURIComponent(id)}/members/${encodeURIComponent(userId)}`,
+      { method: 'DELETE' }
+    );
+  }
+
+  async transferAdminAgencyOwner(
+    id: string,
+    userId: string,
+    fromUserId?: string
+  ): Promise<{ success: boolean; message: string; agency: PlatformAgencyDetail }> {
+    return this.request(
+      `/api/admin/agencies/${encodeURIComponent(id)}/members/${encodeURIComponent(userId)}/transfer-owner`,
+      {
+        method: 'POST',
+        body: JSON.stringify(fromUserId ? { fromUserId } : {}),
+      }
+    );
+  }
+
+  async resetAdminAgencyMemberPassword(
+    id: string,
+    userId: string
+  ): Promise<{
+    success: boolean;
+    message: string;
+    temporaryPassword: string;
+    email: string;
+    workspace?: string;
+    agencyName?: string;
+  }> {
+    return this.request(
+      `/api/admin/agencies/${encodeURIComponent(id)}/members/${encodeURIComponent(userId)}/reset-password`,
+      { method: 'POST' }
+    );
+  }
+
+  async listAdminAudit(params: PlatformAuditQuery = {}): Promise<PlatformAuditList> {
+    return this.request(`/api/admin/audit${auditQueryString(params)}`);
   }
 
   async updateAgency(

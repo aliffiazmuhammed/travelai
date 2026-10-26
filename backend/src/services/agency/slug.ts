@@ -9,6 +9,22 @@
 export const AGENCY_SLUG_MIN = 3;
 export const AGENCY_SLUG_MAX = 40;
 
+/**
+ * The one slug shape every write path shares (agency model, migration script,
+ * PA3 provisioning). Lowercase alphanumerics joined by single dashes; no leading
+ * or trailing dash and no double dash.
+ */
+export const AGENCY_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+export function isValidAgencySlug(value: unknown): boolean {
+  const slug = String(value ?? '');
+  return (
+    slug.length >= AGENCY_SLUG_MIN &&
+    slug.length <= AGENCY_SLUG_MAX &&
+    AGENCY_SLUG_PATTERN.test(slug)
+  );
+}
+
 /** Lowercases, strips accents and collapses everything else to dashes. */
 export function slugifyAgencyName(name: unknown): string {
   const normalized = String(name ?? '')

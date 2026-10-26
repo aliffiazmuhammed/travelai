@@ -41,6 +41,11 @@ const CSRF_EXEMPT_PATHS = [
   '/api/agency/auth/signin',
   '/api/agency/auth/logout',
   '/api/agency/auth/csrf',
+  // PA1 platform realm bootstrap. The admin namespace is gated separately, but
+  // these three paths must stay usable before a `platform_token` exists.
+  '/api/admin/auth/signin',
+  '/api/admin/auth/logout',
+  '/api/admin/auth/csrf',
   '/api/health',
 ];
 
