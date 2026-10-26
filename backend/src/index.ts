@@ -20,6 +20,11 @@ import { requirePlatformAdmin } from './middleware/platformAdmin.middleware.js';
 import { errorHandler } from './middleware/error.middleware.js';
 import { isCloudinaryConfigured, uploadDir } from './services/finance/receipt.js';
 import { agencyStorageProvider } from './services/agency/cloudStorage.js';
+import { recoverStaleAgencyExports } from './services/agency/exports/exports.js';
+import {
+  pdfRenderDeadlineMs,
+  pdfRendererMode,
+} from './services/agency/exports/pdf.js';
 import { CSRF_HEADER, issueCsrfCookie, verifyCsrf } from './middleware/csrf.middleware.js';
 import { isAllowedCorsOrigin, isSameOriginRequest } from './services/collab/httpOrigins.js';
 import { healthState } from './utils/health.js';
@@ -32,6 +37,16 @@ app.set('trust proxy', 1);
 
 // Connect to MongoDB
 await connectDB();
+
+// Render jobs run inside this process, so a restart can strand a row in
+// `rendering`. Recovering at boot turns that into a retryable failure instead
+// of a permanent spinner (free hosts redeploy and sleep often).
+await recoverStaleAgencyExports().catch((error) => {
+  console.warn('Could not recover interrupted agency exports:', error);
+});
+
+// Resolved once at boot; the health payload reports which PDF engine is wired.
+const pdfRenderer = await pdfRendererMode();
 
 // Deployment shape is needed by both the CSP (local http vs HTTPS) and the
 // static-serving diagnostics below.
@@ -185,6 +200,12 @@ app.get('/api/health', (_req, res) => {
     agencyStorage: {
       provider: agencyStorageProvider(),
       durable: agencyStorageProvider() === 'cloudinary',
+    },
+    // A5 PDF engine. `none` means export generation will fail with a retryable
+    // 503 until a renderer is configured.
+    agencyPdf: {
+      renderer: pdfRenderer,
+      timeoutMs: pdfRenderDeadlineMs(),
     },
     memory: process.memoryUsage(),
   });

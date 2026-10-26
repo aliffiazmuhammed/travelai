@@ -63,6 +63,9 @@ and restore the pre-migration backup as described in
 | `AGENCY_PLAN_DEFAULT` | `starter` | Tier applied to agencies without an override. |
 | `AGENCY_PROPOSAL_TTL_DAYS` | `30` (max 90) | Default lifetime of a public proposal share link. |
 | `AGENCY_CHROME_PATH` | auto-detect | Chrome/Edge binary for HTML→PDF. Without a browser, export jobs fail retryably (503) and the UI offers Retry. |
+| `AGENCY_PDF_RENDERER_URL` | *(unset)* | Base URL of a Gotenberg renderer. When set, exports POST the document to `/forms/chromium/convert/html` and no local browser is needed. Development and CI keep using local Chrome. |
+| `AGENCY_PDF_RENDERER_USERNAME` / `AGENCY_PDF_RENDERER_PASSWORD` | *(unset)* | HTTP basic auth for the renderer. Set both or neither; a publicly reachable renderer must set both. |
+| `AGENCY_PDF_RENDERER_TIMEOUT_MS` | `120000` | Per-attempt render timeout. One automatic retry absorbs a 502/503 while a sleeping renderer starts. |
 | `AGENCY_STORAGE_PROVIDER` | auto (Cloudinary when Cloudinary credentials exist, else local) | Where agency tenant bytes (brand assets, template sources/snapshots, export PDFs) live. `local` forces the file roots below even when Cloudinary is configured; `cloudinary` forces Cloudinary even without credentials (writes then fail loudly). |
 | `AGENCY_ASSET_DIR` | `backend/agency-assets` | Local fallback store for brand assets (A3). |
 | `AGENCY_TEMPLATE_DIR` | `backend/agency-templates` | Local fallback store for uploaded template sources/snapshots (A6). |
@@ -76,6 +79,35 @@ is `local`, the three private file roots must never be served from a public
 path; they are authorised per-request by the tenant guard and signed URLs,
 never by URL guessability. `/api/health` reports the active choice as
 `agencyStorage.provider`.
+
+### 2A. Remote PDF renderer (hosts without Chrome)
+
+Render's free Node runtime has no browser binary, so `AGENCY_CHROME_PATH` cannot
+be satisfied there. Run Gotenberg as a second web service and point the API at
+it:
+
+1. **New → Existing Image** → `docker.io/gotenberg/gotenberg:8-chromium`, plan
+   Free, port 3000, health check `/health`. No repository or build is involved.
+2. Renderer environment: `API_ENABLE_BASIC_AUTH=true`,
+   `GOTENBERG_API_BASIC_AUTH_USERNAME`, `GOTENBERG_API_BASIC_AUTH_PASSWORD`,
+   `API_TIMEOUT=120s`, `CHROMIUM_DISABLE_JAVASCRIPT=true` (export documents carry
+   no scripts, so this only removes attack surface).
+3. App environment: `AGENCY_PDF_RENDERER_URL=https://<renderer>.onrender.com`
+   plus the same username/password.
+4. `GET /api/health` reports `agencyPdf.renderer` as `remote`, `chrome` or
+   `none`. `none` means every export will 503 until this is fixed; the job stays
+   retryable.
+
+Free-tier caveats: 512 MB / 0.1 CPU, the service sleeps after 15 idle minutes
+(the first render of the day pays a cold start inside the 120s budget), and
+multiple free services share 750 instance hours per month. If a photo-heavy
+template exceeds the budget, upgrade the renderer only to a paid Starter
+instance — the URL and credentials stay the same.
+
+Render jobs run inside the API process. Interrupted jobs (redeploy, spin-down)
+are recovered on boot and on the next export-history read: they become `failed`
+with "The render was interrupted. Please retry the export." instead of hanging
+in `rendering`.
 
 ---
 
@@ -225,7 +257,9 @@ Run this when an agency reports trouble, in order.
 2. **Exports failing.** `GET /api/agency/:id/audit?action=export` — every job
    leaves `export.requested` / `export.completed` / `export.failed` with a
    stored error. Common causes:
-   - 503 renderer not configured → install Chrome or set `AGENCY_CHROME_PATH`.
+   - 503 renderer not configured → set `AGENCY_PDF_RENDERER_URL` (preferred on
+     hosts without a browser) or install Chrome and set `AGENCY_CHROME_PATH`;
+     confirm with `/api/health` → `agencyPdf.renderer`.
    - 409 template/version no longer available → regenerate the export.
    - 409 snapshot unreadable → upload a new template version.
 3. **Template upload rejected.** The validator output names the problem:

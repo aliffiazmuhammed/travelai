@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
 import { Types } from 'mongoose';
 import { AppError } from '../../../utils/AppError.js';
 import {
@@ -15,7 +16,7 @@ import {
   safeFontFamily,
   safeHexColour,
 } from './render.js';
-import { countPdfPages } from './pdf.js';
+import { countPdfPages, remotePdfRenderer, renderHtmlToPdf } from './pdf.js';
 import {
   agencyExportFilePath,
   buildAgencyExportStorageKey,
@@ -31,6 +32,7 @@ import {
   exportExpiry,
   EXPORT_RETENTION_DAYS,
   projectAgencyExport,
+  staleRenderCutoff,
 } from './exports.js';
 import { projectAgencyTemplate } from './templates.js';
 
@@ -534,4 +536,161 @@ test('export retention is explicit and finite', () => {
     exportExpiry(now).getTime() - now.getTime(),
     EXPORT_RETENTION_DAYS * 86_400_000
   );
+});
+
+/* -------------------------------------------------------------------------- */
+/*  Remote renderer                                                            */
+/* -------------------------------------------------------------------------- */
+
+const RENDERER_ENV_KEYS = [
+  'AGENCY_PDF_RENDERER_URL',
+  'AGENCY_PDF_RENDERER_USERNAME',
+  'AGENCY_PDF_RENDERER_PASSWORD',
+  'AGENCY_PDF_RENDERER_TIMEOUT_MS',
+] as const;
+
+function clearRendererEnv(): void {
+  for (const key of RENDERER_ENV_KEYS) delete process.env[key];
+}
+
+async function withStubRenderer(
+  handler: Parameters<typeof createServer>[1],
+  run: (url: string) => Promise<void>
+): Promise<void> {
+  const server = createServer(handler);
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  const port = typeof address === 'object' && address ? address.port : 0;
+  try {
+    await run(`http://127.0.0.1:${port}`);
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    clearRendererEnv();
+  }
+}
+
+test('remote renderer posts the document and returns its PDF bytes', async () => {
+  const seen: Array<{
+    url?: string;
+    contentType?: string;
+    auth?: string;
+    body: string;
+  }> = [];
+
+  await withStubRenderer(
+    (req, res) => {
+      let body = '';
+      req.setEncoding('latin1');
+      req.on('data', (chunk) => {
+        body += chunk;
+      });
+      req.on('end', () => {
+        seen.push({
+          url: req.url,
+          contentType: req.headers['content-type'],
+          auth: req.headers.authorization,
+          body,
+        });
+        res.writeHead(200, { 'Content-Type': 'application/pdf' });
+        res.end('%PDF-1.4 stub');
+      });
+    },
+    async (url) => {
+      process.env.AGENCY_PDF_RENDERER_URL = `${url}/`;
+      process.env.AGENCY_PDF_RENDERER_USERNAME = 'travelai';
+      process.env.AGENCY_PDF_RENDERER_PASSWORD = 'secret';
+
+      const pdf = await renderHtmlToPdf('<section class="page">Goa</section>');
+
+      assert.equal(pdf.subarray(0, 5).toString('latin1'), '%PDF-');
+      assert.equal(seen.length, 1);
+      assert.equal(seen[0].url, '/forms/chromium/convert/html');
+      assert.match(
+        String(seen[0].contentType),
+        /^multipart\/form-data; boundary=/
+      );
+      assert.equal(
+        seen[0].auth,
+        `Basic ${Buffer.from('travelai:secret').toString('base64')}`
+      );
+      assert.match(seen[0].body, /name="files"/);
+      assert.match(seen[0].body, /filename="index.html"/);
+      assert.match(seen[0].body, /name="printBackground"\r\n\r\ntrue/);
+      assert.match(seen[0].body, /name="preferCssPageSize"\r\n\r\ntrue/);
+      assert.match(seen[0].body, /name="marginTop"\r\n\r\n0/);
+      assert.match(seen[0].body, /Goa/);
+      // Trailing slashes are normalised so the route is never doubled.
+      assert.equal(remotePdfRenderer()?.url, url);
+    }
+  );
+});
+
+test('remote renderer retries a cold-start 503 once', async () => {
+  let calls = 0;
+
+  await withStubRenderer(
+    (_req, res) => {
+      calls += 1;
+      if (calls === 1) {
+        res.writeHead(503);
+        res.end('starting');
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'application/pdf' });
+      res.end('%PDF-1.4 after retry');
+    },
+    async (url) => {
+      process.env.AGENCY_PDF_RENDERER_URL = url;
+
+      const pdf = await renderHtmlToPdf('<section class="page">Retry</section>');
+
+      assert.equal(calls, 2);
+      assert.equal(pdf.subarray(0, 5).toString('latin1'), '%PDF-');
+    }
+  );
+});
+
+test('remote renderer surfaces auth failures as retryable 503s without retrying', async () => {
+  let calls = 0;
+
+  await withStubRenderer(
+    (_req, res) => {
+      calls += 1;
+      res.writeHead(401);
+      res.end('unauthorized');
+    },
+    async (url) => {
+      process.env.AGENCY_PDF_RENDERER_URL = url;
+
+      await assert.rejects(
+        () => renderHtmlToPdf('<section class="page">No auth</section>'),
+        (error) => {
+          assert.ok(error instanceof AppError);
+          assert.equal(error.statusCode, 503);
+          return true;
+        }
+      );
+      assert.equal(calls, 1);
+    }
+  );
+});
+
+test('stale render cutoff follows the active renderer budget', () => {
+  const now = new Date('2026-10-26T12:00:00.000Z');
+  clearRendererEnv();
+  try {
+    assert.equal(
+      staleRenderCutoff(now).getTime(),
+      now.getTime() - (45_000 * 2 + 60_000)
+    );
+
+    process.env.AGENCY_PDF_RENDERER_URL = 'https://renderer.example';
+    process.env.AGENCY_PDF_RENDERER_TIMEOUT_MS = '20000';
+    assert.equal(
+      staleRenderCutoff(now).getTime(),
+      now.getTime() - (20_000 * 2 + 60_000)
+    );
+  } finally {
+    clearRendererEnv();
+  }
 });

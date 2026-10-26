@@ -134,8 +134,8 @@ The **Copy staff link** action copies the signed staff download URL. A public cl
 ## 6. Production rollout prerequisites
 
 - A5 acceptance is complete; the production blueprint now enables the workspace. Keep the flag available as the kill switch.
-- Install Chrome/Chromium/Edge on every API host, or set `AGENCY_CHROME_PATH` (or `CHROME_EXECUTABLE_PATH`/`PUPPETEER_EXECUTABLE_PATH`). Without it, export generation fails with a 503 and a retryable job.
-- Provision private storage via `AGENCY_EXPORT_DIR` on a persistent volume; export files are never served from the public uploads tree.
+- Give the API a renderer: either install Chrome/Chromium/Edge on every API host and set `AGENCY_CHROME_PATH` (or `CHROME_EXECUTABLE_PATH`/`PUPPETEER_EXECUTABLE_PATH`), or set `AGENCY_PDF_RENDERER_URL` (plus credentials) to a Gotenberg service — required on hosts whose runtime has no browser, such as Render's free tier. Without either, export generation fails with a 503 and a retryable job. `/api/health` reports the active engine as `agencyPdf.renderer`.
+- Provision private storage via `AGENCY_EXPORT_DIR` on a persistent volume, or configure Cloudinary; export files are never served from the public uploads tree.
 - Set `AGENCY_EXPORT_SIGNING_SECRET` explicitly in production instead of falling back to `JWT_SECRET`.
 - Verify `/api/health` reports the current milestone (`A9`) and `writesEnabled: true` when the flag is on.
 - Confirm export routes remain tenant/trip guarded, internal jobs remain admin-only, and the client document never contains margin, expenses or prepared-by.

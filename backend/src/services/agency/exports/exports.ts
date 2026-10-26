@@ -22,7 +22,12 @@ import { assertExportQuota, monthStart } from '../plan.js';
 import { resolveExportBrand } from './brand.js';
 import { buildExportDocument } from './document.js';
 import { renderCustomTemplateHtml } from './customTemplate.js';
-import { countPdfPages, renderHtmlToPdf } from './pdf.js';
+import {
+  countPdfPages,
+  pdfRenderDeadlineMs,
+  remotePdfRenderer,
+  renderHtmlToPdf,
+} from './pdf.js';
 import { renderExportHtml, type ExportRenderBrand } from './render.js';
 import { exportDownloadPath, verifyExportDownload } from './signing.js';
 import {
@@ -60,6 +65,62 @@ export const EXPORT_MAX_CONCURRENT_RENDERS = 2;
 
 export function exportExpiry(now: Date = new Date()): Date {
   return new Date(now.getTime() + EXPORT_RETENTION_DAYS * 86_400_000);
+}
+
+/**
+ * A live render cannot outlast twice its own deadline plus slack. Anything
+ * older was left behind by a process that died — render jobs run in-process,
+ * so a redeploy or a slept instance (Render free tier) strands the row.
+ */
+export function staleRenderCutoff(now: Date = new Date()): Date {
+  return new Date(now.getTime() - (pdfRenderDeadlineMs() * 2 + 60_000));
+}
+
+/**
+ * Turns interrupted jobs into retryable failures. `retryAgencyExport` only
+ * accepts `failed`, so without this sweep an orphaned `rendering` row would
+ * spin forever with no action available in the UI.
+ */
+export async function recoverStaleAgencyExports(
+  now: Date = new Date()
+): Promise<number> {
+  const stale = await AgencyExport.find({
+    status: 'rendering',
+    startedAt: { $lt: staleRenderCutoff(now) },
+  })
+    .select('_id agencyId tripId requestedBy')
+    .lean();
+
+  let recovered = 0;
+  for (const job of stale) {
+    const updated = await AgencyExport.findOneAndUpdate(
+      { _id: job._id, status: 'rendering' },
+      {
+        $set: {
+          status: 'failed',
+          error: 'The render was interrupted. Please retry the export.',
+          completedAt: now,
+        },
+      },
+      { new: true }
+    ).catch(() => null);
+    if (!updated) continue;
+
+    recovered += 1;
+    await recordAgencyAudit({
+      agencyId: String(job.agencyId),
+      actorId: String(job.requestedBy),
+      action: 'export.failed',
+      targetType: 'AgencyExport',
+      targetId: String(job._id),
+      metadata: { tripId: String(job.tripId), reason: 'interrupted' },
+    }).catch(() => undefined);
+  }
+
+  if (recovered > 0) {
+    console.warn(`Recovered ${recovered} interrupted agency export(s).`);
+  }
+  return recovered;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -346,8 +407,17 @@ export async function renderPinnedAgencyExport(input: {
 let activeRenders = 0;
 const renderWaiters: Array<() => void> = [];
 
+/**
+ * A remote renderer on a free instance has a tenth of a CPU and 512 MB, so two
+ * parallel documents only compete for the same budget. Serialise remote work;
+ * a local Chrome process can use the full concurrency.
+ */
+function maxConcurrentRenders(): number {
+  return remotePdfRenderer() ? 1 : EXPORT_MAX_CONCURRENT_RENDERS;
+}
+
 async function acquireRenderSlot(): Promise<() => void> {
-  if (activeRenders < EXPORT_MAX_CONCURRENT_RENDERS) {
+  if (activeRenders < maxConcurrentRenders()) {
     activeRenders += 1;
   } else {
     await new Promise<void>((resolve) => renderWaiters.push(resolve));
@@ -567,6 +637,21 @@ export async function createAgencyExport(
   return job;
 }
 
+let lastRecoverySweepAt = 0;
+const RECOVERY_SWEEP_INTERVAL_MS = 60_000;
+
+/**
+ * Reads of the export history are user-driven, so they double as a cheap
+ * sweep trigger — free hosts do not offer cron jobs for a background timer.
+ */
+async function maybeRecoverStaleExports(now: Date): Promise<void> {
+  if (now.getTime() - lastRecoverySweepAt < RECOVERY_SWEEP_INTERVAL_MS) return;
+  lastRecoverySweepAt = now.getTime();
+  await recoverStaleAgencyExports(now).catch((error) => {
+    console.warn('Agency export recovery failed:', error);
+  });
+}
+
 export async function listAgencyExports(input: {
   agencyId: string;
   tripId: string;
@@ -574,6 +659,8 @@ export async function listAgencyExports(input: {
   limit?: number;
   now?: Date;
 }): Promise<AgencyExportProjection[]> {
+  await maybeRecoverStaleExports(input.now ?? new Date());
+
   const limit = Math.min(50, Math.max(1, Number(input.limit) || 20));
   const jobs = await AgencyExport.find({
     agencyId: input.agencyId,

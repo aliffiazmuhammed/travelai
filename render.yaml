@@ -42,9 +42,19 @@ services:
       # simulated pilot; set to "false" as the emergency kill switch.
       - key: AGENCY_WORKSPACE_ENABLED
         value: "true"
-      # Optional but strongly recommended: without Cloudinary, uploaded avatars
-      # and receipts live on Render's ephemeral disk and vanish on redeploy.
+      # Optional but strongly recommended: without Cloudinary, uploaded avatars,
+      # receipts, agency brand assets, template sources and rendered export
+      # PDFs live on Render's ephemeral disk and vanish on redeploy.
       # Accepts the single CLOUDINARY_URL form (cloudinary://key:secret@cloud).
       - key: CLOUDINARY_URL
+        sync: false
+      # A5 PDF rendering. Render's free Node runtime ships no browser, so
+      # exports POST the self-contained document to a Gotenberg service.
+      # Leave the URL unset to fall back to a locally installed Chrome (dev/CI).
+      - key: AGENCY_PDF_RENDERER_URL
+        value: https://travelai-pdf-renderer.onrender.com
+      - key: AGENCY_PDF_RENDERER_USERNAME
+        sync: false
+      - key: AGENCY_PDF_RENDERER_PASSWORD
         sync: false
 
