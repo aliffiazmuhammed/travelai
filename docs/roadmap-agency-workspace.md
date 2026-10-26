@@ -6,6 +6,8 @@
 
 **A0 artifacts:** `docs/adr/0001-agency-workspace-boundary.md`, `docs/agency-a0-test-plan.md`, `docs/agency-a0-wireframes.md`, feature flag `AGENCY_WORKSPACE_ENABLED` (default false) and read-only `GET /api/agency/status`.
 
+**Account model update:** `docs/roadmap-platform-admin.md` plans PA0-PA5: separate personal, tenant-scoped agency, and platform account realms, plus platform-admin provisioning. A0-A9 remain the current running baseline until PA0 ships; PA0 replaces the shared-login and self-service onboarding assumptions below.
+
 **A1 artifacts:** tenant models (`Agency`, `AgencyMember`, `AgencyInvite`), hashed agency invites, tenant guards, `/api/agency` onboarding/team endpoints and the `/agency` shell with onboarding, switcher, team and settings. See `docs/agency-a1-test-plan.md`.
 
 **A2 artifacts:** agency trip fields and indexes, tenant trip list/create/assignment/trash routes, agency-aware trip guard, agency wizard mode, `/agency/trips` library and client-invite listing. See `docs/agency-a2-test-plan.md`.
@@ -42,7 +44,7 @@ The agency product is a separate front door:
 - agency-owned trips and agency-level roles
 - agency branding, commercial quote fields, custom PDF templates and export history
 
-A user who belongs to an agency can use both products, but the two workspaces do not mix lists, navigation or authorization.
+A person may use both products, but under the PA0 account model they do so through separate personal and tenant-scoped agency accounts. The two workspaces never share a session, list, navigation or authorization. Until PA0 ships, the A9 baseline still authenticates both through the shared login while keeping workspace authorization separate.
 
 **Non-negotiable:** the individual product must remain usable with no agency account, no extra required fields and no new team concepts.
 
@@ -63,7 +65,7 @@ A user who belongs to an agency can use both products, but the two workspaces do
 | Document formats | HTML first, DOCX later, PDF background as a bridge | HTML preserves layout and supports variable day counts |
 | Template onboarding | Managed templates first, self-serve theme editor later | Agencies can supply a design but cannot reliably author a safe template |
 | Agency domain | `/agency` path first, subdomain later | Faster to ship; same-origin CSP and cookies already work |
-| Agency onboarding | Invite-only pilot, then self-serve | Limits support load and template onboarding cost |
+| Agency onboarding | Platform-admin provisioned; owner invites staff | TravelAI onboards paying agencies; replaces the A1 self-serve onboarding in PA3 |
 
 **Explicitly rejected for v1:** filling arbitrary PDFs, automatic conversion of any PDF/Canva/Figma file into a template, and AI-generated legal or cancellation text.
 

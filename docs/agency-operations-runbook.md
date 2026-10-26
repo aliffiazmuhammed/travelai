@@ -66,6 +66,14 @@ never by URL guessability. `/api/health` reports the active choice as
 
 ## 3. Agency onboarding runbook
 
+> **Planned change (PA0/PA3):** this section describes the current A9
+> procedure. `docs/roadmap-platform-admin.md` replaces steps 2-3 with
+> platform-admin tenant provisioning and a tenant-scoped agency account. The
+> owner will sign in at `/agency/login?workspace=<slug>` with a separate agency
+> password, not a personal signup. PA0 removes self-service creation, so no new
+> tenants can be onboarded between PA0 and PA3 - schedule those milestones
+> back-to-back. Update this runbook when PA3 ships.
+
 Prereqs: the flag is on (§1), `AGENCY_OPS_KEY` is set for ops, a renderer
 binary is installed, and the ops team has a plan tier decided.
 
@@ -74,8 +82,10 @@ binary is installed, and the ops team has a plan tier decided.
    body `{ "tierId": "<tier>", "seats": N, "monthlyExports": N, "storageMb": N }`.
    Overrides are optional per field; unresolved fields come from the tier.
    Verify with `GET /api/agency/:agencyId/usage` (admin/owner token).
-2. **Agency signup.** The agency owner signs up, creates the agency and lands
-   in the workspace. The owner is the first member with `owner` rank.
+2. **Agency signup (current A9).** The agency owner signs up, creates the agency
+   and lands in the workspace. The owner is the first member with `owner` rank.
+   PA0/PA3 replace this with platform-admin provisioning and a tenant-scoped
+   agency login.
 3. **Seats.** The owner/admin invites staff from Members/Settings. Seat
    capacity is enforced on invite; plan upgrades come from ops (§3.1).
 4. **Branding (A3).** Settings → Brand & Assets: agency name, contact,
