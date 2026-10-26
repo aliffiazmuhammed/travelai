@@ -92,8 +92,8 @@ async function main() {
       name: 'Anisha Planner',
     });
 
-    const agency = await Agency.create({ name: 'A8 Smoke Travel', createdBy: userId });
-    const otherAgency = await Agency.create({ name: 'A8 Other Tenant', createdBy: userId });
+    const agency = await Agency.create({ name: 'A8 Smoke Travel', slug: 'a8-smoke-travel', createdBy: userId });
+    const otherAgency = await Agency.create({ name: 'A8 Other Tenant', slug: 'a8-other-tenant', createdBy: userId });
     const agencyId = String(agency._id);
     const otherAgencyId = String(otherAgency._id);
 

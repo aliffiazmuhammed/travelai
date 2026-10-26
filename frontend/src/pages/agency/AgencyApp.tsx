@@ -1,21 +1,28 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { Building2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { AgencyProvider } from '@/context/AgencyContext';
+import { useAgencyAuth } from '@/context/AgencyAuthContext';
 import { useAgencyEnabled } from '@/hooks/useAgencyEnabled';
 import AgencyLayout from './AgencyLayout';
+import AgencyPasswordChange from './AgencyPasswordChange';
 
 /**
- * `/agency/*` gate. The backend flag is authoritative; while the probe is in
- * flight we show a neutral loader, and when it is off we never mount the shell
- * or call any agency API.
+ * `/agency/*` gate (PA0).
+ *
+ * The backend feature flag is authoritative; while the probe is in flight we
+ * show a neutral loader, and when it is off we never mount the shell or call
+ * any agency API. Access requires an *agency* session — a personal session
+ * alone is not enough. A provisioned owner with a temporary password must set
+ * a new one before the tenant API becomes reachable.
  */
 const AgencyApp: React.FC = () => {
   const enabled = useAgencyEnabled();
+  const { isAuthenticated, loading, mustChangePassword } = useAgencyAuth();
 
-  if (enabled === null) {
+  if (enabled === null || loading) {
     return (
       <div className="grid min-h-screen place-items-center bg-slate-50 dark:bg-slate-950">
         <div className="flex items-center gap-2 text-sm text-slate-500">
@@ -48,6 +55,14 @@ const AgencyApp: React.FC = () => {
         </Card>
       </div>
     );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/agency/login" replace />;
+  }
+
+  if (mustChangePassword) {
+    return <AgencyPasswordChange forced />;
   }
 
   return (

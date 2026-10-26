@@ -1,5 +1,7 @@
 /** Agency Workspace A1 client types. */
 
+import type { User } from './auth';
+
 export type AgencyRole = 'owner' | 'admin' | 'planner' | 'viewer';
 export type AgencyInvitableRole = Exclude<AgencyRole, 'owner'>;
 export type AgencyAssetKind = 'logo' | 'mascot' | 'font' | 'image';
@@ -35,8 +37,57 @@ export interface Agency {
   /** The caller's role in this agency. */
   role: AgencyRole;
   memberCount: number;
+  /** PA0: URL-safe tenant id used at `/agency/login?workspace=<slug>`. */
+  slug?: string;
+  /** PA0: suspended tenants cannot sign in or use agency routes. */
+  status?: 'active' | 'suspended';
   createdAt: string;
   updatedAt: string;
+}
+
+/* -------------------------------------------------------------------------- */
+/*  PA0 account realms                                                        */
+/* -------------------------------------------------------------------------- */
+
+/** Public tenant lookup for the agency login page (no account data). */
+export interface AgencyPublicTenant {
+  _id: string;
+  name: string;
+  slug: string;
+  logoUrl?: string;
+}
+
+export interface AgencyLoginContext {
+  success: boolean;
+  agency: AgencyPublicTenant;
+}
+
+/**
+ * The agency account is a separate realm record. It is not a personal `User`
+ * with extra fields: `accountType` and `mustChangePassword` are part of the
+ * session contract and drive the client guard.
+ */
+export interface AgencySessionUser extends User {
+  accountType: 'agency';
+  mustChangePassword: boolean;
+}
+
+/** The single tenant this agency account belongs to (no switcher). */
+export interface AgencySessionAgency {
+  _id: string;
+  name: string;
+  slug: string;
+  logoUrl?: string;
+  primaryColor?: string;
+  status: 'active' | 'suspended';
+  role: AgencyRole;
+}
+
+/** Response shape of agency signin, `/me`, and invite activation. */
+export interface AgencyAuthSession {
+  success: boolean;
+  user: AgencySessionUser;
+  agency: AgencySessionAgency;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -278,13 +329,14 @@ export interface AgencyInvite {
   createdAt: string;
 }
 
+/**
+ * PA0 public preview. The token holder learns only which tenant invited them,
+ * the role and the expiry — never the bound email or the inviter.
+ */
 export interface AgencyInvitePreview {
-  agency: { _id: string; name: string };
+  agency: AgencyPublicTenant;
   role: AgencyInvitableRole;
-  kind: 'link' | 'email';
-  invitedBy?: string;
   expiresAt: string;
-  emailBoundTo?: string;
 }
 
 export interface AgencyHealth {

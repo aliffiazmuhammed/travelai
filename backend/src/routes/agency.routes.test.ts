@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import agencyRouter from './agency.routes.js';
-import { protect } from '../middleware/auth.middleware.js';
+import { protectAgency } from '../middleware/auth.middleware.js';
 import {
   AGENCY_MEMBER_GUARD_TAG,
   AGENCY_ROLE_GUARD_TAG,
@@ -78,8 +78,6 @@ test('A1-A8 agency API exposes the expected route table', () => {
     '/proposals/:token GET',
     '/proposals/:token/accept POST',
     '/proposals/:token/pdf GET',
-    '/ GET',
-    '/ POST',
     '/:agencyId GET',
     '/:agencyId PATCH',
     '/:agencyId/assets GET',
@@ -135,13 +133,18 @@ test('A1-A8 agency API exposes the expected route table', () => {
   ]);
 });
 
-// A7 public proposal routes are deliberately unauthenticated: the token is
-// the capability. Everything else in the namespace must sit behind `protect`.
+// PA0: invite preview/activation are public (the token is the capability and
+// activation requires email + password). A7 proposal routes are token-only.
+// The plan route is ops-key-only (break-glass, no session). Everything else in
+// the namespace must sit behind `protectAgency`.
 const PUBLIC_ROUTES = new Set([
   '/status',
+  '/invites/:token',
+  '/invites/:token/accept',
   '/proposals/:token',
   '/proposals/:token/accept',
   '/proposals/:token/pdf',
+  '/:agencyId/plan',
 ]);
 
 test('the status probe advertises the latest agency milestone', () => {
@@ -167,22 +170,25 @@ test('the status probe advertises the latest agency milestone', () => {
   });
 });
 
-test('every route except the token-authenticated public paths requires authentication', () => {
+test('every route except the documented public paths requires an agency session', () => {
   for (const layer of routeLayers()) {
     if (PUBLIC_ROUTES.has(pathOf(layer))) continue;
     assert.ok(
-      handlesOf(layer).includes(protect),
-      `${methodsOf(layer).join(',')} ${pathOf(layer)} is missing protect`
+      handlesOf(layer).includes(protectAgency),
+      `${methodsOf(layer).join(',')} ${pathOf(layer)} is missing protectAgency`
     );
   }
 });
 
-test('only the three proposal paths are public', () => {
+test('only token, activation and ops-key paths are public', () => {
   const publicPaths = routeLayers()
-    .filter((layer) => !handlesOf(layer).includes(protect))
+    .filter((layer) => !handlesOf(layer).includes(protectAgency))
     .map(pathOf)
     .filter((path) => path !== '/status');
   assert.deepEqual(publicPaths.sort(), [
+    '/:agencyId/plan',
+    '/invites/:token',
+    '/invites/:token/accept',
     '/proposals/:token',
     '/proposals/:token/accept',
     '/proposals/:token/pdf',

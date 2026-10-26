@@ -92,12 +92,17 @@ export async function updateDisplayName(userId: string, rawName: unknown): Promi
  * Verifies the current password and replaces it. Wrong current password and a
  * missing account both answer 401/404 — the caller already proved a session, so
  * "wrong password" is the only interesting failure.
+ *
+ * PA0: a password change bumps `tokenVersion`, so every other device's token
+ * for this account is rejected on its next request, and clears the forced
+ * change flag. The caller's realm controller reissues its own cookie with the
+ * new version; the generic profile service stays realm-agnostic.
  */
 export async function changePassword(
   userId: string,
   currentPassword: unknown,
   newPassword: unknown
-): Promise<void> {
+): Promise<any> {
   const user = await loadOwnUser(userId);
 
   const matches = await bcrypt.compare(String(currentPassword ?? ''), user.password);
@@ -114,7 +119,11 @@ export async function changePassword(
   }
 
   user.password = await bcrypt.hash(next, 12);
+  user.passwordChangedAt = new Date();
+  user.mustChangePassword = false;
+  user.tokenVersion = Number(user.tokenVersion ?? 0) + 1;
   await user.save();
+  return user;
 }
 
 /**

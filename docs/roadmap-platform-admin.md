@@ -882,6 +882,19 @@ If agency data must be retained:
 - Run the whole migration against a staging fixture and compare row counts and
   references before touching production.
 
+The membership part is implemented as an explicit, non-destructive mode:
+
+```bash
+npm run migrate:account-realms -- --preserve-legacy-memberships --dry-run
+npm run migrate:account-realms -- --preserve-legacy-memberships
+```
+
+It creates one separate agency account per `{ agency, personal user }`, copies
+the existing bcrypt hash once with `mustChangePassword`, and repoints the
+membership plus every agency-owned `createdBy`/actor/trip-member reference. No
+rows are deleted, and re-running is a no-op. E2EE chat envelopes are deliberately
+left untouched (see the note above), and the run warns when one exists.
+
 **Do not ship a production-preserving migration without a staging rehearsal.**
 
 ### 10.4 Index migration

@@ -29,6 +29,29 @@ test('AgencyMember has a unique (agencyId, userId) index', () => {
   assert.ok(uniqueMembership, 'the compound membership index must be unique');
 });
 
+test('AgencyMember declares one unique userId index and no legacy switcher', () => {
+  const indexes = AgencyMember.schema.indexes();
+  const userIdIndexes = indexes.filter(
+    ([keys]) => Object.keys(keys).length === 1 && keys.userId === 1
+  );
+  assert.equal(userIdIndexes.length, 1, 'userId must have exactly one index declaration');
+  assert.equal(userIdIndexes[0][1]?.unique, true, 'the userId index must be unique');
+
+  // Field-level `index: true` + schema.index({ userId: 1 }) made Mongoose race a
+  // non-unique `userId_1` against the unique one on real data (PA0 migration).
+  assert.notEqual(
+    AgencyMember.schema.path('userId').options.index,
+    true,
+    'do not duplicate the userId index via field options'
+  );
+
+  const legacySwitcher = indexes.find(([keys]) => {
+    const fields = Object.keys(keys);
+    return fields.length === 2 && fields.includes('userId') && fields.includes('createdAt');
+  });
+  assert.equal(legacySwitcher, undefined, 'the old userId + createdAt switcher index is gone');
+});
+
 test('AgencyInvite stores a unique token hash and expires via TTL', () => {
   const indexes = AgencyInvite.schema.indexes();
   assert.ok(
@@ -168,6 +191,7 @@ test('AgencyAsset rejects an unknown kind and a missing owner', async () => {
 test('Agency branding stores mascot, typography and GSTIN', async () => {
   const agency = new Agency({
     name: 'Brand Co',
+    slug: 'brand-co',
     gstin: '27aapfu0939f1zv',
     branding: {
       mascotUrl: `/api/agency/${'a'.repeat(24)}/assets/${'b'.repeat(24)}/content`,
@@ -187,6 +211,7 @@ test('Agency branding stores mascot, typography and GSTIN', async () => {
 test('Agency starts with empty quote defaults and hides its sequence', () => {
   const agency = new Agency({
     name: 'Defaults Co',
+    slug: 'defaults-co',
     createdBy: new Types.ObjectId(),
   });
 

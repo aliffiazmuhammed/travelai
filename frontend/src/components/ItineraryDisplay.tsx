@@ -38,6 +38,7 @@ import { CommentsTab } from "./dashboard/CommentsTab";
 import { DiscussionDrawer } from "./dashboard/DiscussionDrawer";
 import { useTripComments } from "@/hooks/useTripComments";
 import { useTripChatCrypto } from "@/hooks/useTripChatCrypto";
+import type { ChatRealm } from "@/lib/chatCrypto";
 import { useTripEvents, type PresenceUser } from "@/hooks/useTripEvents";
 import { endDateFromStart, itineraryAnchor, zipWeatherToDays } from "@/lib/weather";
 import { swapDayPlans } from "@/lib/weatherRouting";
@@ -109,6 +110,14 @@ interface ItineraryDisplayProps {
   /** A2: agency trips hide ownership transfer; staff never "leave" a tenant trip. */
   agencyTrip?: boolean;
   agencyStaff?: boolean;
+  /**
+   * PA0: which account realm owns this trip's E2EE chat identity. Agency trips
+   * pass `agency` so device keys are stored per tenant and published to
+   * `/api/agency/auth/chat-key`; personal trips keep the original key.
+   */
+  chatRealm?: ChatRealm;
+  /** Tenant scope for agency chat identities (`agency:<agencyId>`). */
+  chatIdentityScope?: string;
 }
 
 /** Debounce window (ms) for automatic background saving of local edits. */
@@ -158,6 +167,8 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
   onNewPlan,
   agencyTrip = false,
   agencyStaff = false,
+  chatRealm = "personal",
+  chatIdentityScope,
 }) => {
   // Legacy AI payloads miss whole sections of the prompt contract (Milestone 2
   // shape evolved); normalize once here so no downstream read can crash.
@@ -282,7 +293,9 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
   const chatCrypto = useTripChatCrypto(
     showCommentsTab ? tripId : undefined,
     currentUserId,
-    showCommentsTab
+    showCommentsTab,
+    chatRealm,
+    chatIdentityScope
   );
   const commentsIngestRef = useRef(commentsController.ingest);
   commentsIngestRef.current = commentsController.ingest;

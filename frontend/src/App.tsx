@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./context/UserContext";
+import { AgencyAuthProvider } from "./context/AgencyAuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { queryClient } from "./lib/queryClient";
@@ -19,6 +20,8 @@ const ProposalShare = lazy(() => import("./pages/ProposalShare"));
 const InviteAccept = lazy(() => import("./pages/InviteAccept"));
 const Profile = lazy(() => import("./pages/Profile"));
 const AgencyApp = lazy(() => import("./pages/agency/AgencyApp"));
+const AgencyLogin = lazy(() => import("./pages/agency/AgencyLogin"));
+const AgencyAccount = lazy(() => import("./pages/agency/AgencyAccount"));
 const AgencyOverview = lazy(() => import("./pages/agency/AgencyOverview"));
 const AgencyOnboarding = lazy(() => import("./pages/agency/AgencyOnboarding"));
 const AgencyTeam = lazy(() => import("./pages/agency/AgencyTeam"));
@@ -74,20 +77,35 @@ const App = () => (
                     </ProtectedRoute>
                   }
                 />
+                {/* PA0: agency pages use the separate `agency_token` realm. A
+                    personal session is never accepted as an agency session. */}
+                <Route
+                  path="/agency/login"
+                  element={
+                    <AgencyAuthProvider>
+                      <AgencyLogin />
+                    </AgencyAuthProvider>
+                  }
+                />
                 <Route
                   path="/agency/invite/:token"
-                  element={<AgencyInviteAccept />}
+                  element={
+                    <AgencyAuthProvider>
+                      <AgencyInviteAccept />
+                    </AgencyAuthProvider>
+                  }
                 />
                 <Route
                   path="/agency"
                   element={
-                    <ProtectedRoute>
+                    <AgencyAuthProvider>
                       <AgencyApp />
-                    </ProtectedRoute>
+                    </AgencyAuthProvider>
                   }
                 >
                   <Route index element={<AgencyOverview />} />
                   <Route path="onboarding" element={<AgencyOnboarding />} />
+                  <Route path="account" element={<AgencyAccount />} />
                   <Route path="trips" element={<AgencyTrips />} />
                   <Route path="trips/new" element={<AgencyTripPlanner />} />
                   <Route path="trips/:tripId" element={<AgencyTrips />} />

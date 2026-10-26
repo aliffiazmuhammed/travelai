@@ -108,7 +108,9 @@ async function loadPinnedRows(link: IAgencyProposalLink) {
     AgencyQuote.findOne({ _id: link.quoteId, agencyId, tripId }),
     AgencyExport.findOne({ _id: link.exportId, agencyId, tripId }),
   ]);
-  if (!agency || !trip || !job) {
+  if (!agency || agency.status !== 'active' || !trip || !job) {
+    // A suspended tenant fails closed, and a public link must not reveal
+    // whether the tenant exists at all.
     throw new AppError('Proposal not found', 404);
   }
   const quote = quoteRow ? await reconcileQuoteExpiry(quoteRow) : null;

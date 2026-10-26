@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { Request, Response, NextFunction } from 'express';
+import { ALL_SESSION_COOKIES } from '../services/auth/realm.js';
 
 /**
  * CSRF defense for cookie-based auth (Milestone 6 E1.0 — flaw F1).
@@ -35,11 +36,15 @@ const CSRF_EXEMPT_PATHS = [
   '/api/auth/signin',
   '/api/auth/logout',
   '/api/auth/csrf',
+  // PA0 agency realm bootstrap. Each realm's signin/logout/csrf are exempt;
+  // leaving one out would silently CSRF-exempt its cookie-authenticated writes.
+  '/api/agency/auth/signin',
+  '/api/agency/auth/logout',
+  '/api/agency/auth/csrf',
   '/api/health',
 ];
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
-const SESSION_COOKIE = 'token';
 
 function csrfCookieOptions() {
   return {
@@ -100,11 +105,13 @@ export const verifyCsrf = (req: Request, res: Response, next: NextFunction) => {
 
   if (CSRF_EXEMPT_PATHS.some((path) => req.path.startsWith(path))) return next();
 
-  const sessionCookie = req.cookies?.[SESSION_COOKIE];
+  const sessionCookie = ALL_SESSION_COOKIES.some((name) => Boolean(req.cookies?.[name]));
   const cookieToken = req.cookies?.[CSRF_COOKIE] as string | undefined;
   const headerToken = (req.get(CSRF_HEADER) || '') as string;
 
   // A request logged-in via cookie (the CSRF target) must prove possession.
+  // Every realm cookie counts: an agency or platform session must not inherit
+  // the personal realm's exemption.
   if (sessionCookie) {
     if (cookieToken && safeEqual(cookieToken, headerToken)) {
       return next();

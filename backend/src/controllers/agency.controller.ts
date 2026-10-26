@@ -1,10 +1,11 @@
 import { Response } from 'express';
-import User from '../models/User.js';
 import { catchAsync } from '../utils/catchAsync.js';
 import { AppError } from '../utils/AppError.js';
 import { AuthenticatedRequest } from '../types/index.js';
 import { agencyContext, type AgencyAccessRequest } from '../middleware/agencyAccess.middleware.js';
 import { linkOriginHints } from '../services/collab/invites.js';
+import { setRealmCookie } from '../services/auth/realm.js';
+import { projectAgencySession } from '../services/agency/auth.js';
 import { listAgencyAudit } from '../services/agency/audit.js';
 import {
   agencyUsage,
@@ -14,8 +15,6 @@ import {
 } from '../services/agency/plan.js';
 import {
   agencyMemberCount,
-  createAgencyForUser,
-  listAgenciesForUser,
   projectAgency,
   updateAgencyDetails,
 } from '../services/agency/agencies.js';
@@ -25,11 +24,11 @@ import {
   removeAgencyMember,
 } from '../services/agency/members.js';
 import {
+  activateAgencyInvite,
   createAgencyInvite,
   listAgencyInvites,
   previewAgencyInvite,
   projectAgencyInvite,
-  redeemAgencyInvite,
   revokeAgencyInvite,
 } from '../services/agency/invites.js';
 import {
@@ -96,27 +95,6 @@ import type { AgencyTemplateAssetSelection } from '../services/agency/exports/te
 import { sanitizeTripFor } from '../utils/sanitizeTrip.js';
 
 /** Agency Workspace A1 HTTP handlers. */
-
-export const listAgencies = catchAsync(
-  async (req: AuthenticatedRequest, res: Response) => {
-    if (!req.userId) throw new AppError('Please sign in to access this feature.', 401);
-    const agencies = await listAgenciesForUser(req.userId);
-    res.json({ success: true, agencies });
-  }
-);
-
-export const createAgency = catchAsync(
-  async (req: AuthenticatedRequest, res: Response) => {
-    if (!req.userId) throw new AppError('Please sign in to access this feature.', 401);
-    const agency = await createAgencyForUser({
-      userId: req.userId,
-      name: req.body?.name,
-      gstin: req.body?.gstin,
-      branding: req.body?.branding,
-    });
-    res.status(201).json({ success: true, agency });
-  }
-);
 
 export const getAgency = catchAsync(
   async (req: AgencyAccessRequest, res: Response) => {
@@ -227,7 +205,6 @@ export const revokeAgencyInviteHandler = catchAsync(
 
 export const getAgencyInvitePreview = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    if (!req.userId) throw new AppError('Please sign in to access this feature.', 401);
     const preview = await previewAgencyInvite(String(req.params.token || ''));
     res.json({ success: true, ...preview });
   }
@@ -235,23 +212,19 @@ export const getAgencyInvitePreview = catchAsync(
 
 export const acceptAgencyInvite = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    if (!req.userId) throw new AppError('Please sign in to access this feature.', 401);
-    const user = await User.findById(req.userId).select('email').lean();
-    if (!user) {
-      throw new AppError('Your account could not be found. Please sign in again.', 401);
-    }
-
-    const result = await redeemAgencyInvite(String(req.params.token || ''), {
-      id: req.userId,
-      email: user.email,
+    const session = await activateAgencyInvite(String(req.params.token || ''), {
+      email: req.body?.email,
+      password: req.body?.password,
+      name: req.body?.name,
     });
+
+    setRealmCookie(res, 'agency', session.token);
 
     res.json({
       success: true,
-      agencyId: result.agencyId,
-      role: result.role,
-      alreadyMember: result.alreadyMember,
-      message: result.alreadyMember
+      ...projectAgencySession(session),
+      alreadyMember: session.alreadyMember,
+      message: session.alreadyMember
         ? 'You are already part of this agency.'
         : 'Welcome to the agency team.',
     });

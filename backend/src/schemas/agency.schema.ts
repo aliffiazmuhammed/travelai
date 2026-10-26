@@ -438,3 +438,32 @@ export const updateAgencyPlanSchema = z
     storageMb: z.number().int().nonnegative().optional(),
   })
   .strict();
+
+/* -------------------------------------------------------------------------- */
+/*  PA0 account realm                                                         */
+/* -------------------------------------------------------------------------- */
+
+export const agencySigninSchema = z
+  .object({
+    workspace: z
+      .string()
+      .trim()
+      .min(1, 'Enter your workspace.')
+      .max(40, 'Workspace names are 40 characters or fewer.'),
+    email: z.string().trim().email('Enter a valid email address.'),
+    password: z.string().min(1, 'Enter your password.'),
+  })
+  .strict();
+
+/**
+ * Invite activation creates (or signs into) an agency account for the invite's
+ * tenant. The password is always required: a forwarded link must not be enough
+ * to take over an existing account.
+ */
+export const activateAgencyInviteSchema = z
+  .object({
+    email: z.string().trim().email('Enter a valid email address.'),
+    password: z.string().min(6, 'Choose a password with at least 6 characters.'),
+    name: z.string().trim().max(40, 'Names must be 40 characters or fewer.').optional(),
+  })
+  .strict();

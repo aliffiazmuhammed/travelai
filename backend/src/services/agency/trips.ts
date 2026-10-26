@@ -325,6 +325,11 @@ export async function authorizeAgencyGeneration(
     Agency.findById(agencyId),
     AgencyMember.findOne({ agencyId, userId }),
   ]);
+  if (agency && agency.status !== 'active') {
+    // Suspended tenants fail closed even if a long-lived route bypasses the
+    // per-request guard (PA0 §4.4).
+    throw new AppError('Agency not found', 404);
+  }
   const decision = decideAgencyAccess(agency, member, 'planner');
   if (decision.status === 404) throw new AppError('Agency not found', 404);
   if (decision.status === 403) {

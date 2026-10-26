@@ -8,11 +8,17 @@ import {
   generateConversationKey,
   memberDeviceKeysOf,
   mergeMemberKeys,
+  publishChatKey,
   slotIsUsable,
   unwrapMyEnvelope,
   wrapEnvelope,
 } from '@/lib/chatCrypto';
-import type { ChatIdentity, MemberKeyMap, MemberKeyMapMulti } from '@/lib/chatCrypto';
+import type {
+  ChatIdentity,
+  ChatRealm,
+  MemberKeyMap,
+  MemberKeyMapMulti,
+} from '@/lib/chatCrypto';
 import type { ChatKeysState } from '@/types/trip';
 
 /**
@@ -100,7 +106,14 @@ const PLACEHOLDER = '';
 export function useTripChatCrypto(
   tripId: string | undefined,
   currentUserId: string | undefined,
-  enabled: boolean
+  enabled: boolean,
+  /**
+   * PA0: which account realm owns this chat identity. Agency chats use a
+   * tenant-scoped device key and publish it through `/api/agency/auth/chat-key`,
+   * never through the personal endpoint.
+   */
+  realm: ChatRealm = 'personal',
+  identityScope?: string
 ): ChatCryptoApi {
   const [status, setStatus] = useState<ChatCryptoStatus>('starting');
   const [error, setError] = useState<string | undefined>(undefined);
@@ -264,7 +277,7 @@ export function useTripChatCrypto(
     setKeylessReason(undefined);
 
     try {
-      const identity = await ensureIdentity();
+      const identity = await ensureIdentity(realm, identityScope);
       if (!identity) {
         setStatus('off');
         return;
@@ -272,7 +285,7 @@ export function useTripChatCrypto(
       if (currentUserId) {
         // Deterministic publish (ensureIdentity retries silently, but a fresh
         // bootstrap needs EVERY envelope — including our own — to exist).
-        await api.setMyChatKey(identity.pubKey).catch(() => undefined);
+        await publishChatKey(identity.pubKey, realm).catch(() => undefined);
       }
 
       const state = await api.getTripChatKeys(tripId);
@@ -347,7 +360,7 @@ export function useTripChatCrypto(
         err?.message || (typeof err === 'string' && err) || String(err) || 'Chat encryption is unavailable right now.';
       markError(message);
     }
-  }, [tripId, currentUserId, markError, adoptEnvelope, healSlots]);
+  }, [tripId, currentUserId, realm, identityScope, markError, adoptEnvelope, healSlots]);
 
   /** Re-runs the whole key flow in place — the banner's Retry medicine. */
   const retry = useCallback(() => {
@@ -371,14 +384,14 @@ export function useTripChatCrypto(
       setStatus('ready');
       return;
     }
-    const identity = await ensureIdentity();
+    const identity = await ensureIdentity(realm, identityScope);
     if (!identity) {
       throw new Error('This browser cannot set up the secure chat.');
     }
     setStatus('bootstrap');
     setError(undefined);
     try {
-      await api.setMyChatKey(identity.pubKey).catch(() => undefined);
+      await publishChatKey(identity.pubKey, realm).catch(() => undefined);
       const state = await api.getTripChatKeys(tripId);
       const conversationKey = await generateConversationKey();
       const envelopes: Record<string, string> = {};
@@ -413,7 +426,7 @@ export function useTripChatCrypto(
       }
       throw new Error(err?.message || 'Could not start a new chat on this device.');
     }
-  }, [tripId, currentUserId, healSlots]);
+  }, [tripId, currentUserId, realm, identityScope, healSlots]);
 
   /**
    * Quiet re-check (never flickers through 'starting'): while keyless it tries
@@ -424,7 +437,7 @@ export function useTripChatCrypto(
   const refreshKey = useCallback(async () => {
     if (!tripId) return;
     try {
-      const identity = await ensureIdentity();
+      const identity = await ensureIdentity(realm, identityScope);
       if (!identity) return;
       const state = await api.getTripChatKeys(tripId);
       if (!state.epoch) return;
@@ -445,7 +458,7 @@ export function useTripChatCrypto(
     } catch {
       /* the next poll retries */
     }
-  }, [tripId, adoptEnvelope, healSlots]);
+  }, [tripId, realm, identityScope, adoptEnvelope, healSlots]);
 
   useEffect(() => {
     if (!enabled || !tripId) return;

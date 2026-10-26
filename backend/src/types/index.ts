@@ -1,8 +1,32 @@
 import { Request } from 'express';
 import { Types } from 'mongoose';
 
+/** PA0 account realms. `platform_token` is never accepted by shared routes. */
+export type AccountRealm = 'personal' | 'agency' | 'platform';
+
+/** JWT payload shape. Legacy personal tokens lack `realm`/`ver` (treated as personal/0). */
+export interface RealmTokenClaims {
+  userId: string;
+  realm: AccountRealm;
+  agencyId?: string;
+  role?: 'super_admin';
+  ver: number;
+}
+
+/** One verified realm identity on a shared trip request. */
+export interface RealmIdentity {
+  userId: string;
+  realm: AccountRealm;
+  agencyId?: string;
+  mustChangePassword?: boolean;
+}
+
 export interface AuthenticatedRequest extends Request {
   userId?: string;
+  /** Set by the realm guards; shared trip routes may hold both candidates. */
+  realm?: AccountRealm;
+  agencyId?: string;
+  sessionCandidates?: RealmIdentity[];
 }
 
 export interface TripPreferencesInput {

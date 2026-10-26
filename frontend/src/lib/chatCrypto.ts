@@ -26,8 +26,21 @@ import {
 
 export * from './chatCryptoCore';
 
-/** One per browser: the loaded identity for this tab's lifetime. */
-let identityPromise: Promise<ChatIdentity> | null = null;
+/** PA0 realms publish device keys through their own auth endpoint. */
+export type ChatRealm = 'personal' | 'agency';
+
+/** One per storage scope: the loaded identity for this tab's lifetime. */
+const identityPromises = new Map<string, Promise<ChatIdentity | null>>();
+
+/** Publishes this device's public half through the caller's realm. */
+export function publishChatKey(
+  pubKey: string,
+  realm: ChatRealm = 'personal'
+): Promise<{ success: boolean }> {
+  return realm === 'agency'
+    ? api.setAgencyChatKey(pubKey)
+    : api.setMyChatKey(pubKey);
+}
 
 /**
  * The module's identity: loaded from storage or minted once, and ALWAYS
@@ -35,23 +48,36 @@ let identityPromise: Promise<ChatIdentity> | null = null;
  * server-side wipe without user interaction. A fresh identity (cleared storage,
  * another browser) simply publishes a new device key; the trip key reaches it
  * through the normal healing flow, same as any second device.
+ *
+ * PA0: agency identities are stored under a tenant-scoped key and published to
+ * `/api/agency/auth/chat-key`. A browser signed into personal and agency
+ * accounts therefore holds two unrelated device keys.
  */
-export async function ensureIdentity(): Promise<ChatIdentity | null> {
+export async function ensureIdentity(
+  realm: ChatRealm = 'personal',
+  scope?: string
+): Promise<ChatIdentity | null> {
   if (!isCryptoAvailable()) return null;
-  if (!identityPromise) {
-    identityPromise = (async () => {
-      const stored = await loadStoredIdentity();
-      const identity = stored ?? (await mintAndStoreIdentity());
+
+  const storageScope = realm === 'agency' ? scope ?? 'agency' : undefined;
+  const cacheKey = storageScope ?? 'personal';
+
+  let promise = identityPromises.get(cacheKey);
+  if (!promise) {
+    promise = (async () => {
+      const stored = await loadStoredIdentity(storageScope);
+      const identity = stored ?? (await mintAndStoreIdentity(storageScope));
       try {
-        await api.setMyChatKey(identity.pubKey);
+        await publishChatKey(identity.pubKey, realm);
       } catch {
         /* publication retries on the next chat open; envelopes only need it */
       }
       return identity;
     })().catch(() => {
-      identityPromise = null;
+      identityPromises.delete(cacheKey);
       throw new Error('chat identity bootstrap failed');
     });
+    identityPromises.set(cacheKey, promise);
   }
-  return identityPromise;
+  return promise;
 }

@@ -18,7 +18,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useAgency } from '@/context/AgencyContext';
 import { agencyRoleBadgeClass, agencyRoleLabel } from '@/lib/agency';
 import { cn } from '@/lib/utils';
-import AgencyOnboarding from './AgencyOnboarding';
 
 const toolCards = [
   {
@@ -60,7 +59,20 @@ const AgencyOverview: React.FC = () => {
   }
 
   if (!activeAgency) {
-    return <AgencyOnboarding />;
+    return (
+      <Card className="border-slate-200 dark:border-slate-800">
+        <CardContent className="space-y-2 p-8 text-center">
+          <h1 className="text-lg font-semibold">Workspace unavailable</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            We could not load this agency workspace. Refresh the page, or sign in
+            again at the workspace login link.
+          </p>
+          <Button asChild className="mt-2">
+            <Link to="/agency/login">Go to agency sign in</Link>
+          </Button>
+        </CardContent>
+      </Card>
+    );
   }
 
   const accent = activeAgency.branding.accentColor || '#0f766e';

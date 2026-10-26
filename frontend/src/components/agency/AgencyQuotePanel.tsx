@@ -29,7 +29,7 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useAgency } from '@/context/AgencyContext';
-import { useAuth } from '@/context/UserContext';
+import { useAgencyAuth } from '@/context/AgencyAuthContext';
 import { formatAgencyDate } from '@/lib/agency';
 import { cn } from '@/lib/utils';
 import { api } from '@/services/api';
@@ -408,7 +408,7 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
   tripEndDate,
 }) => {
   const { activeAgency, canManage } = useAgency();
-  const { user } = useAuth();
+  const { user } = useAgencyAuth();
   const role = activeAgency?.role;
   const canPlan = canManage || role === 'planner';
   const canSeeMargin = canPlan;

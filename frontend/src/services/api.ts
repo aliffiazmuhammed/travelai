@@ -31,6 +31,7 @@ import type {
   ChatKeysState,
   AssistantProposal,
   Agency,
+  AgencyAuthSession,
   AgencyAsset,
   AgencyAssetKind,
   AgencyBranding,
@@ -39,6 +40,7 @@ import type {
   AgencyInvite,
   AgencyInvitePreview,
   AgencyInvitableRole,
+  AgencyLoginContext,
   AgencyMember,
   AgencyQuote,
   AgencyQuoteInput,
@@ -352,18 +354,60 @@ class ApiClient {
     return this.request('/api/health');
   }
 
-  async getAgencies(): Promise<{ success: boolean; agencies: Agency[] }> {
-    return this.request('/api/agency');
+  // PA0 agency realm auth. Login resolves the tenant from the workspace slug,
+  // then authenticates the tenant-scoped agency account. These calls use the
+  // separate `agency_token` cookie and never touch the personal session.
+  async getAgencyLoginContext(workspace: string): Promise<AgencyLoginContext> {
+    return this.request(
+      `/api/agency/auth/context?workspace=${encodeURIComponent(workspace.trim().toLowerCase())}`
+    );
   }
 
-  async createAgency(payload: {
-    name: string;
-    gstin?: string;
-    branding?: Partial<AgencyBranding>;
-  }): Promise<{ success: boolean; agency: Agency }> {
-    return this.request('/api/agency', {
+  async signinAgency(
+    workspace: string,
+    email: string,
+    password: string
+  ): Promise<AgencyAuthSession> {
+    return this.request('/api/agency/auth/signin', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        workspace: workspace.trim().toLowerCase(),
+        email: email.trim().toLowerCase(),
+        password,
+      }),
+    });
+  }
+
+  async getAgencyMe(): Promise<AgencyAuthSession> {
+    return this.request('/api/agency/auth/me');
+  }
+
+  async logoutAgency(): Promise<{ success: boolean; message: string }> {
+    return this.request('/api/agency/auth/logout', { method: 'POST' });
+  }
+
+  async updateAgencyProfile(name: string): Promise<AgencyAuthSession> {
+    return this.request('/api/agency/auth/profile', {
+      method: 'PATCH',
+      body: JSON.stringify({ name }),
+    });
+  }
+
+  async changeAgencyPassword(
+    currentPassword: string,
+    newPassword: string
+  ): Promise<{ success: boolean; message: string }> {
+    return this.request('/api/agency/auth/password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+  }
+
+  /** Agency accounts publish their own M7 chat identity keys. */
+  async setAgencyChatKey(pubKey: string): Promise<{ success: boolean }> {
+    return this.request('/api/agency/auth/chat-key', {
+      method: 'PUT',
+      body: JSON.stringify({ pubKey }),
     });
   }
 
@@ -1054,16 +1098,31 @@ class ApiClient {
     return this.request(`/api/agency/invites/${encodeURIComponent(token)}`);
   }
 
-  async acceptAgencyInvite(token: string): Promise<{
-    success: boolean;
-    agencyId: string;
-    role: AgencyInvitableRole;
-    alreadyMember: boolean;
-    message: string;
-  }> {
+  /**
+   * PA0 activation: the invite token authorizes creating (or signing into) an
+   * agency account for that tenant. A password is always required so a
+   * forwarded link cannot take over an existing account. Never attaches or
+   * converts a personal account.
+   */
+  async acceptAgencyInvite(
+    token: string,
+    credentials: { email: string; password: string; name?: string }
+  ): Promise<
+    AgencyAuthSession & {
+      alreadyMember: boolean;
+      message: string;
+    }
+  > {
     return this.request(
       `/api/agency/invites/${encodeURIComponent(token)}/accept`,
-      { method: 'POST' }
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          email: credentials.email.trim().toLowerCase(),
+          password: credentials.password,
+          ...(credentials.name?.trim() ? { name: credentials.name.trim() } : {}),
+        }),
+      }
     );
   }
 

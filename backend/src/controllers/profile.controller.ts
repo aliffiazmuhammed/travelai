@@ -7,6 +7,7 @@ import {
   replaceAvatar,
   updateDisplayName,
 } from '../services/user/profile.js';
+import { setRealmCookie, signSessionForAccount } from '../services/auth/realm.js';
 
 /**
  * Profile editing (Milestone 7, F14). Every handler answers with the caller's
@@ -21,11 +22,14 @@ export const updateProfile = catchAsync(async (req: AuthenticatedRequest, res: R
 
 /** POST /api/auth/password — current password plus the new one. */
 export const changePassword = catchAsync(async (req: AuthenticatedRequest, res: Response) => {
-  await changeOwnPassword(
+  const user = await changeOwnPassword(
     String(req.userId),
     req.body?.currentPassword,
     req.body?.newPassword
   );
+  // The password change bumped tokenVersion; reissue THIS realm's cookie so the
+  // caller stays signed in while every other device is signed out.
+  setRealmCookie(res, 'personal', signSessionForAccount(user, 'personal'));
   res.status(200).json({
     success: true,
     message: 'Your password has been updated.',

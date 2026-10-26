@@ -6,7 +6,7 @@ import {
   updateProfile,
   uploadAvatar,
 } from '../controllers/profile.controller.js';
-import { protect } from '../middleware/auth.middleware.js';
+import { protectPersonal } from '../middleware/auth.middleware.js';
 import { issueCsrfCookie } from '../middleware/csrf.middleware.js';
 import { validate } from '../middleware/validate.middleware.js';
 import { signupSchema, signinSchema } from '../schemas/auth.schema.js';
@@ -29,16 +29,16 @@ router.post('/logout', logout);
 // cookie is issued app-wide by `issueCsrfCookie`; this route just re-issues
 // when missing and echoes the value.
 router.get('/csrf', issueCsrfCookie, getCsrfToken);
-router.get('/me', protect, getMe);
+router.get('/me', protectPersonal, getMe);
 // Chat identity (Milestone 7, F10): the browser publishes ONLY its public
 // ECDH key half. The private half never travels — that is the E2EE premise.
-router.put('/chat-key', protect, validate(publishChatKeySchema), publishChatKey);
+router.put('/chat-key', protectPersonal, validate(publishChatKeySchema), publishChatKey);
 
-// Profile (Milestone 7, F14). `protect` runs first on every route so the
+// Profile (Milestone 7, F14). `protectPersonal` runs first on every route so the
 // user-keyed limiters below can key on the account, not on a shared IP.
-router.patch('/profile', protect, validate(updateProfileSchema), updateProfile);
-router.post('/avatar', protect, avatarUploadLimiter, handleAvatarUpload, uploadAvatar);
-router.delete('/avatar', protect, removeAvatar);
-router.post('/password', protect, passwordChangeLimiter, validate(changePasswordSchema), changePassword);
+router.patch('/profile', protectPersonal, validate(updateProfileSchema), updateProfile);
+router.post('/avatar', protectPersonal, avatarUploadLimiter, handleAvatarUpload, uploadAvatar);
+router.delete('/avatar', protectPersonal, removeAvatar);
+router.post('/password', protectPersonal, passwordChangeLimiter, validate(changePasswordSchema), changePassword);
 
 export default router;

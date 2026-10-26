@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getInvitePreview, acceptInvite } from '../controllers/collab.controller.js';
-import { protect } from '../middleware/auth.middleware.js';
+import { protectPersonal } from '../middleware/auth.middleware.js';
 import { invitePreviewLimiter, inviteAcceptLimiter } from '../middleware/rateLimiter.middleware.js';
 
 /**
@@ -14,7 +14,7 @@ import { invitePreviewLimiter, inviteAcceptLimiter } from '../middleware/rateLim
  */
 const router = Router();
 
-router.get('/:token', protect, invitePreviewLimiter, getInvitePreview);
-router.post('/:token/accept', protect, inviteAcceptLimiter, acceptInvite);
+router.get('/:token', protectPersonal, invitePreviewLimiter, getInvitePreview);
+router.post('/:token/accept', protectPersonal, inviteAcceptLimiter, acceptInvite);
 
 export default router;

@@ -45,7 +45,7 @@ import AgencyExportPanel from '@/components/agency/AgencyExportPanel';
 import AgencyQuotePanel from '@/components/agency/AgencyQuotePanel';
 import { MyTripsView } from '@/components/dashboard/MyTripsView';
 import { useAgency } from '@/context/AgencyContext';
-import { useAuth } from '@/context/UserContext';
+import { useAgencyAuth } from '@/context/AgencyAuthContext';
 import { useTripAccess } from '@/hooks/useTripAccess';
 import { agencyRoleBadgeClass, agencyRoleLabel } from '@/lib/agency';
 import { isRevConflict, toastConflict } from '@/lib/conflicts';
@@ -74,7 +74,7 @@ const AgencyTrips: React.FC = () => {
   const navigate = useNavigate();
   const { tripId } = useParams<{ tripId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { user } = useAuth();
+  const { user } = useAgencyAuth();
   const { activeAgency, activeAgencyId, canManage } = useAgency();
 
   const tabParam = searchParams.get('tab');
@@ -625,6 +625,10 @@ const AgencyTrips: React.FC = () => {
               }
               agencyTrip
               agencyStaff={Boolean(selectedTrip.agencyRole)}
+              chatRealm="agency"
+              chatIdentityScope={
+                activeAgencyId ? `agency:${activeAgencyId}` : undefined
+              }
             />
           </div>
 

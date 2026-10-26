@@ -4,8 +4,8 @@ import mongoose, { Document, Schema, Types } from 'mongoose';
  * A B2B tenant (Agency Workspace A1).
  *
  * The agency is the hard tenant boundary for staff, clients, trips, quotes and
- * exports. It is deliberately separate from a User: a person may belong to
- * several agencies, and an agency has its own team roles.
+ * exports. It is deliberately separate from a User: each agency account belongs
+ * to exactly one tenant (PA0), and an agency has its own team roles.
  */
 export interface IAgencyBranding {
   /**
@@ -49,8 +49,23 @@ export interface IAgencyPlan {
   storageMb?: number;
 }
 
+export const AGENCY_STATUSES = ['active', 'suspended'] as const;
+export type AgencyStatus = (typeof AGENCY_STATUSES)[number];
+
+/** Platform-side billing metadata (PA0 stores it; PA3 edits it). */
+export interface IAgencyBilling {
+  contactName?: string;
+  contactEmail?: string;
+  renewalDate?: Date;
+  notes?: string;
+}
+
 export interface IAgency extends Document {
   name: string;
+  /** Workspace slug used in `/agency/login?workspace=<slug>`. Immutable. */
+  slug: string;
+  /** Suspension blocks agency sessions, invites and public proposal links. */
+  status: AgencyStatus;
   branding: IAgencyBranding;
   /** Indian tax id for quotes/invoices; optional until A4/A5. */
   gstin?: string;
@@ -62,6 +77,14 @@ export interface IAgency extends Document {
    */
   quoteCounter: number;
   plan?: IAgencyPlan;
+  /** Platform account that provisioned the tenant (PA3). */
+  provisionedBy?: Types.ObjectId;
+  provisionedAt?: Date;
+  billing?: IAgencyBilling;
+  /**
+   * Agency-side creator: the owner agency account. For a self-service legacy
+   * row this is the personal account that created it before PA0.
+   */
   createdBy: Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
@@ -102,6 +125,16 @@ const agencyPlanSchema = new Schema<IAgencyPlan>(
   { _id: false }
 );
 
+const agencyBillingSchema = new Schema<IAgencyBilling>(
+  {
+    contactName: { type: String, trim: true, maxlength: 120 },
+    contactEmail: { type: String, trim: true, lowercase: true, maxlength: 160 },
+    renewalDate: { type: Date },
+    notes: { type: String, trim: true, maxlength: 2000 },
+  },
+  { _id: false }
+);
+
 const agencySchema = new Schema<IAgency>(
   {
     name: {
@@ -110,6 +143,23 @@ const agencySchema = new Schema<IAgency>(
       trim: true,
       minlength: 2,
       maxlength: 80,
+    },
+    slug: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
+      lowercase: true,
+      minlength: 3,
+      maxlength: 40,
+      match: /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
+      immutable: true,
+    },
+    status: {
+      type: String,
+      enum: [...AGENCY_STATUSES],
+      default: 'active',
+      required: true,
     },
     branding: {
       type: brandingSchema,
@@ -134,6 +184,16 @@ const agencySchema = new Schema<IAgency>(
     plan: {
       type: agencyPlanSchema,
     },
+    provisionedBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    provisionedAt: {
+      type: Date,
+    },
+    billing: {
+      type: agencyBillingSchema,
+    },
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',
@@ -143,5 +203,8 @@ const agencySchema = new Schema<IAgency>(
   },
   { timestamps: true }
 );
+
+// Admin directory filters and dashboard counts (PA1/PA3).
+agencySchema.index({ status: 1, createdAt: -1 });
 
 export default mongoose.model<IAgency>('Agency', agencySchema);

@@ -2,12 +2,14 @@ import mongoose, { Document, Schema, Types } from 'mongoose';
 import { AGENCY_ROLES, type AgencyRole } from '../services/agency/access.js';
 
 /**
- * The join table between a User and an Agency (Agency Workspace A1).
+ * The join table between an agency account and its Agency (Agency Workspace A1,
+ * tightened by PA0).
  *
- * The compound unique index is the tenant boundary in the database: the same
- * user can be in many agencies, but only once per agency. Every agency query
- * must filter by `agencyId`; there is no "current agency" implicit in the
- * document.
+ * PA0 makes the account tenant-scoped: `userId` must reference a User with
+ * `accountType: 'agency'` and the same `agencyId` as this row. The unique
+ * `{ userId }` index makes "one account, one tenant membership" structural;
+ * `{ agencyId, userId }` remains the guard lookup. Services enforce the account
+ * realm invariant on every membership write.
  */
 export interface IAgencyMember extends Document {
   agencyId: Types.ObjectId;
@@ -31,7 +33,10 @@ const agencyMemberSchema = new Schema<IAgencyMember>(
       type: Schema.Types.ObjectId,
       ref: 'User',
       required: true,
-      index: true,
+      // No `index: true` here: the explicit unique `{ userId: 1 }` index below
+      // is the single source of truth. Declaring both made Mongoose race a
+      // non-unique `userId_1` against the unique one (the PA0 migration saw the
+      // non-unique winner on real data).
     },
     role: {
       type: String,
@@ -52,10 +57,12 @@ const agencyMemberSchema = new Schema<IAgencyMember>(
   { timestamps: true }
 );
 
-// One membership per person per agency; also the lookup used by the guard.
+// One membership per account per agency; also the lookup used by the guard.
 agencyMemberSchema.index({ agencyId: 1, userId: 1 }, { unique: true });
-// The agency switcher lists every membership for a user.
-agencyMemberSchema.index({ userId: 1, createdAt: 1 });
+// PA0: an agency account belongs to exactly one tenant, so one membership per
+// account is structural. The old { userId, createdAt } switcher index is gone
+// with the switcher itself.
+agencyMemberSchema.index({ userId: 1 }, { unique: true });
 // Team counts and owner checks.
 agencyMemberSchema.index({ agencyId: 1, role: 1 });
 

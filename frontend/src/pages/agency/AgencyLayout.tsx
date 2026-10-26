@@ -1,16 +1,16 @@
 import React from 'react';
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft,
   BriefcaseBusiness,
   Building2,
-  ChevronDown,
   FileText,
   Gauge,
+  Home,
   LayoutDashboard,
   LogOut,
   Map,
   Settings,
+  UserRound,
   Users,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -24,7 +24,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { useAuth } from '@/context/UserContext';
+import { useAgencyAuth } from '@/context/AgencyAuthContext';
 import { useAgency } from '@/context/AgencyContext';
 import { avatarSrc, initialsFor } from '@/lib/avatar';
 import { agencyRoleBadgeClass, agencyRoleLabel } from '@/lib/agency';
@@ -47,22 +47,15 @@ const navItems = [
 ];
 
 /**
- * The agency product shell (A1). This layout is intentionally separate from
- * the personal Navbar/Dashboard: agencies get their own tenant switcher,
- * navigation and future trip/client/template surfaces.
+ * The agency product shell (PA0). This layout is intentionally separate from
+ * the personal Navbar/Dashboard. An agency account belongs to exactly one
+ * tenant, so there is a tenant badge instead of a switcher, and signing out
+ * here leaves the personal session untouched.
  */
 const AgencyLayout: React.FC = () => {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
-  const {
-    agencies,
-    activeAgency,
-    activeAgencyId,
-    setActiveAgency,
-    loading,
-    error,
-    canManage,
-  } = useAgency();
+  const { user, agency: sessionAgency, logout } = useAgencyAuth();
+  const { activeAgency, loading, error, canManage } = useAgency();
 
   const visibleNavItems = navItems.filter(
     (item) => !('adminOnly' in item && item.adminOnly) || canManage
@@ -70,10 +63,13 @@ const AgencyLayout: React.FC = () => {
 
   const displayName =
     user?.name?.trim() || user?.label || user?.email?.split('@')[0] || 'You';
+  const tenantName = activeAgency?.name ?? sessionAgency?.name ?? 'Agency workspace';
+  const tenantSlug = sessionAgency?.slug;
+  const role = activeAgency?.role ?? sessionAgency?.role;
 
   const handleLogout = async () => {
     await logout();
-    navigate('/');
+    navigate('/agency/login', { replace: true });
   };
 
   return (
@@ -94,60 +90,29 @@ const AgencyLayout: React.FC = () => {
 
           <div className="mx-2 h-7 w-px bg-slate-200 dark:bg-slate-800" />
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="flex min-w-0 items-center gap-2 rounded-lg px-2 py-1.5 text-left transition hover:bg-slate-100 dark:hover:bg-slate-900"
-                disabled={loading && agencies.length === 0}
+          {/* One tenant per account: this is a label, not a switcher. */}
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-semibold">
+                {tenantName}
+              </span>
+              <span className="block truncate text-[11px] text-slate-500 dark:text-slate-400">
+                {loading && !activeAgency
+                  ? 'Loading workspace...'
+                  : [tenantSlug ? `workspace: ${tenantSlug}` : null, role ? agencyRoleLabel(role) : null]
+                      .filter(Boolean)
+                      .join(' · ')}
+              </span>
+            </span>
+            {role ? (
+              <Badge
+                variant="outline"
+                className={cn('hidden shrink-0 text-[10px] sm:inline-flex', agencyRoleBadgeClass(role))}
               >
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-semibold">
-                    {activeAgency?.name ??
-                      (loading ? 'Loading workspace...' : 'Choose agency')}
-                  </span>
-                  {activeAgency ? (
-                    <span className="block text-[11px] text-slate-500 dark:text-slate-400">
-                      {agencyRoleLabel(activeAgency.role)} ·{' '}
-                      {activeAgency.memberCount}{' '}
-                      {activeAgency.memberCount === 1 ? 'member' : 'members'}
-                    </span>
-                  ) : null}
-                </span>
-                <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-64">
-              <DropdownMenuLabel>Your agencies</DropdownMenuLabel>
-              {agencies.length === 0 ? (
-                <DropdownMenuItem disabled>No agencies yet</DropdownMenuItem>
-              ) : (
-                agencies.map((agency) => (
-                  <DropdownMenuItem
-                    key={agency._id}
-                    onSelect={() => setActiveAgency(agency._id)}
-                    className="flex items-center justify-between gap-2"
-                  >
-                    <span className="truncate">{agency.name}</span>
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        'shrink-0 text-[10px]',
-                        agencyRoleBadgeClass(agency.role)
-                      )}
-                    >
-                      {agencyRoleLabel(agency.role)}
-                    </Badge>
-                  </DropdownMenuItem>
-                ))
-              )}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => navigate('/agency/onboarding')}>
-                <Building2 className="mr-2 h-4 w-4" />
-                Create another agency
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+                {agencyRoleLabel(role)}
+              </Badge>
+            ) : null}
+          </div>
 
           <div className="ml-auto flex items-center gap-2">
             <Button
@@ -156,9 +121,9 @@ const AgencyLayout: React.FC = () => {
               size="sm"
               className="hidden text-slate-600 sm:inline-flex dark:text-slate-300"
             >
-              <Link to="/dashboard">
-                <ArrowLeft className="mr-1.5 h-4 w-4" />
-                Personal
+              <Link to="/">
+                <Home className="mr-1.5 h-4 w-4" />
+                TravelAI home
               </Link>
             </Button>
 
@@ -177,7 +142,7 @@ const AgencyLayout: React.FC = () => {
                   </Avatar>
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuContent align="end" className="w-60">
                 <DropdownMenuLabel className="font-normal">
                   <span className="block truncate text-sm font-semibold">
                     {displayName}
@@ -185,20 +150,25 @@ const AgencyLayout: React.FC = () => {
                   <span className="block truncate text-xs text-slate-500">
                     {user?.email}
                   </span>
+                  {tenantSlug ? (
+                    <span className="mt-1 block truncate text-[11px] text-teal-600 dark:text-teal-400">
+                      Agency account · {tenantSlug}
+                    </span>
+                  ) : null}
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => navigate('/dashboard')}>
-                  <ArrowLeft className="mr-2 h-4 w-4" />
-                  Personal workspace
+                <DropdownMenuItem onSelect={() => navigate('/agency/account')}>
+                  <UserRound className="mr-2 h-4 w-4" />
+                  Agency account
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => navigate('/profile')}>
-                  <Settings className="mr-2 h-4 w-4" />
-                  Profile settings
+                <DropdownMenuItem onSelect={() => navigate('/')}>
+                  <Home className="mr-2 h-4 w-4" />
+                  TravelAI home
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onSelect={() => void handleLogout()}>
                   <LogOut className="mr-2 h-4 w-4" />
-                  Sign out
+                  Sign out of agency
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -233,11 +203,7 @@ const AgencyLayout: React.FC = () => {
             {error}
           </div>
         ) : null}
-        {activeAgencyId ? (
-          <Outlet />
-        ) : (
-          <Outlet context={{ loading }} />
-        )}
+        <Outlet />
       </main>
     </div>
   );

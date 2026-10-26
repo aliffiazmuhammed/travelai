@@ -13,6 +13,7 @@ import itineraryRoutes from './routes/itinerary.routes.js';
 import invitesRoutes from './routes/invites.routes.js';
 import geoRoutes from './routes/geo.routes.js';
 import agencyRoutes from './routes/agency.routes.js';
+import agencyAuthRoutes from './routes/agencyAuth.routes.js';
 import { errorHandler } from './middleware/error.middleware.js';
 import { isCloudinaryConfigured, uploadDir } from './services/finance/receipt.js';
 import { agencyStorageProvider } from './services/agency/cloudStorage.js';
@@ -186,6 +187,10 @@ app.use('/api/itinerary', itineraryRoutes);
 app.use('/api/invites', invitesRoutes);
 app.use('/api/geo', geoRoutes);
 // Agency Workspace (A0): read-only placeholder namespace, gated per request.
+// PA0 auth lives under the same gate, before the tenant routes — it is public
+// bootstrap (`/context`, `/csrf`, `/signin`, `/logout`) plus agency-session
+// self-service, so it must not inherit the tenant `:agencyId` guard chain.
+app.use('/api/agency/auth', agencyAuthRoutes);
 app.use('/api/agency', agencyRoutes);
 
 // Uploaded receipt files (Milestone 5.5). Registered before the SPA fallback so

@@ -85,26 +85,32 @@ async function main() {
   await mongoose.connect(smokeMongoUri());
 
   try {
+    const agencyA = await Agency.create({ name: 'A9 Alpha', slug: 'a9-alpha' });
+    const agencyB = await Agency.create({ name: 'A9 Beta', slug: 'a9-beta' });
+    const A = String(agencyA._id);
+    const B = String(agencyB._id);
+
     const userA = await User.create({
       email: 'alpha.owner@smoke.test',
       password: 'not-a-real-hash',
       name: 'Alpha Owner',
+      accountType: 'agency',
+      agencyId: agencyA._id,
     });
     const plannerA = await User.create({
       email: 'alpha.planner@smoke.test',
       password: 'not-a-real-hash',
       name: 'Alpha Planner',
+      accountType: 'agency',
+      agencyId: agencyA._id,
     });
     const userB = await User.create({
       email: 'beta.owner@smoke.test',
       password: 'not-a-real-hash',
       name: 'Beta Owner',
+      accountType: 'agency',
+      agencyId: agencyB._id,
     });
-
-    const agencyA = await Agency.create({ name: 'A9 Alpha', createdBy: userA._id });
-    const agencyB = await Agency.create({ name: 'A9 Beta', createdBy: userB._id });
-    const A = String(agencyA._id);
-    const B = String(agencyB._id);
 
     await AgencyMember.create([
       { agencyId: agencyA._id, userId: userA._id, role: 'owner', joinedAt: new Date() },

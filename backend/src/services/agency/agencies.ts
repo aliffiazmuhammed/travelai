@@ -48,83 +48,8 @@ export function projectAgency(
   };
 }
 
-/** Every agency the caller belongs to, newest membership first. */
-export async function listAgenciesForUser(userId: string): Promise<AgencySummary[]> {
-  const memberships = await AgencyMember.find({ userId })
-    .sort({ createdAt: -1 })
-    .lean();
-
-  if (memberships.length === 0) return [];
-
-  const agencyIds = memberships.map((membership) => membership.agencyId);
-  const agencies = await Agency.find({ _id: { $in: agencyIds } }).lean();
-  const byId = new Map(agencies.map((agency) => [String(agency._id), agency]));
-
-  const counts = await AgencyMember.aggregate<{ _id: unknown; count: number }>([
-    { $match: { agencyId: { $in: agencyIds } } },
-    { $group: { _id: '$agencyId', count: { $sum: 1 } } },
-  ]);
-  const countById = new Map(counts.map((row) => [String(row._id), row.count]));
-
-  return memberships
-    .map((membership) => {
-      const agency = byId.get(String(membership.agencyId));
-      if (!agency) return null;
-      return projectAgency(
-        agency,
-        membership.role as AgencyRole,
-        countById.get(String(membership.agencyId)) ?? 0
-      );
-    })
-    .filter((agency): agency is AgencySummary => agency !== null);
-}
-
 export async function agencyMemberCount(agencyId: string): Promise<number> {
   return AgencyMember.countDocuments({ agencyId });
-}
-
-export interface CreateAgencyInput {
-  userId: string;
-  name: string;
-  gstin?: string;
-  branding?: Record<string, unknown>;
-}
-
-/**
- * Creates the tenant and its first owner.
- *
- * Mongo standalone does not support multi-document transactions, so the
- * compensating action is explicit: if the owner row cannot be written, the
- * orphan agency is removed. The unique (agencyId, userId) index makes a
- * duplicate owner impossible.
- */
-export async function createAgencyForUser(input: CreateAgencyInput): Promise<AgencySummary> {
-  const name = String(input.name || '').trim();
-  if (name.length < 2) {
-    throw new AppError('Agency name must be at least 2 characters.', 400);
-  }
-  const gstin = String(input.gstin ?? '').trim().toUpperCase();
-
-  const agency = await Agency.create({
-    name,
-    ...(gstin ? { gstin } : {}),
-    branding: input.branding ?? {},
-    createdBy: input.userId,
-  });
-
-  try {
-    await AgencyMember.create({
-      agencyId: agency._id,
-      userId: input.userId,
-      role: 'owner',
-      joinedAt: new Date(),
-    });
-  } catch (error) {
-    await Agency.deleteOne({ _id: agency._id });
-    throw error;
-  }
-
-  return projectAgency(agency, 'owner', 1);
 }
 
 export interface UpdateAgencyInput {

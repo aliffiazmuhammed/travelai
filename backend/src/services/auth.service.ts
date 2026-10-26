@@ -1,30 +1,50 @@
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
-import { env } from '../config/env.js';
 import { AppError } from '../utils/AppError.js';
 import { mergePubKeyList } from './collab/chatKeys.js';
 import { publicUser } from './user/profile.js';
+import { signSessionForAccount } from './auth/realm.js';
+
+/**
+ * Personal auth service (PA0 scoping).
+ *
+ * Both signup and signin filter `accountType: 'personal'`. Without that filter
+ * an email lookup could resolve an agency or platform account after the global
+ * email index is replaced by realm-scoped partial indexes — a personal
+ * credential must never open another realm.
+ */
+
+const PERSONAL = 'personal' as const;
 
 export const signup = async (email: string, password: string) => {
   const normalizedEmail = email.trim().toLowerCase();
-  const existingUser = await User.findOne({ email: normalizedEmail });
+  const existingUser = await User.findOne({
+    email: normalizedEmail,
+    accountType: PERSONAL,
+  });
   if (existingUser) {
     throw new AppError('An account with this email already exists. Please sign in instead.', 400);
   }
 
   const hashedPassword = await bcrypt.hash(password, 12);
-  const user = new User({ email: normalizedEmail, password: hashedPassword });
+  const user = new User({
+    email: normalizedEmail,
+    password: hashedPassword,
+    accountType: PERSONAL,
+  });
   await user.save();
 
-  const token = jwt.sign({ userId: user._id }, env.JWT_SECRET, { expiresIn: '7d' });
+  const token = signSessionForAccount(user, 'personal');
 
   return { user: publicUser(user), token };
 };
 
 export const signin = async (email: string, password: string) => {
   const normalizedEmail = email.trim().toLowerCase();
-  const user = await User.findOne({ email: normalizedEmail });
+  const user = await User.findOne({
+    email: normalizedEmail,
+    accountType: PERSONAL,
+  });
   if (!user) {
     throw new AppError('Incorrect email or password. Please check your credentials and try again.', 401);
   }
@@ -33,8 +53,13 @@ export const signin = async (email: string, password: string) => {
   if (!isMatch) {
     throw new AppError('Incorrect email or password. Please check your credentials and try again.', 401);
   }
+  if (user.status !== 'active') {
+    // Same generic answer as a bad password: disabled is not enumerable.
+    throw new AppError('Incorrect email or password. Please check your credentials and try again.', 401);
+  }
 
-  const token = jwt.sign({ userId: user._id }, env.JWT_SECRET, { expiresIn: '7d' });
+  await User.updateOne({ _id: user._id }, { $set: { lastLoginAt: new Date() } });
+  const token = signSessionForAccount(user, 'personal');
 
   return { user: publicUser(user), token };
 };
@@ -48,7 +73,10 @@ export const signin = async (email: string, password: string) => {
  * dump, so the shape is now explicit and shared with the other auth responses.
  */
 export const getUserById = async (userId: string) => {
-  const user = await User.findById(userId).select('email name avatarUrl createdAt');
+  const user = await User.findOne({
+    _id: userId,
+    accountType: PERSONAL,
+  }).select('email name avatarUrl createdAt');
   if (!user) {
     throw new AppError('User profile not found.', 404);
   }

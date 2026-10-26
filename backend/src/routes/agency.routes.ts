@@ -8,7 +8,6 @@ import {
   archiveAgencyTripHandler,
   cancelAgencyQuoteHandler,
   changeAgencyMemberRoleHandler,
-  createAgency,
   createAgencyClientHandler,
   createAgencyExportHandler,
   createAgencyInviteHandler,
@@ -26,7 +25,6 @@ import {
   getAgencyQuoteHandler,
   getAgencyTripHandler,
   getAgencyUsageHandler,
-  listAgencies,
   listAgencyAssetsHandler,
   listAgencyAuditHandler,
   listAgencyClientsHandler,
@@ -57,7 +55,7 @@ import {
   unarchiveAgencyTripHandler,
   uploadAgencyAssetHandler,
 } from '../controllers/agency.controller.js';
-import { protect } from '../middleware/auth.middleware.js';
+import { protectAgency } from '../middleware/auth.middleware.js';
 import { deleteTrip, purgeTrip, restoreTrip } from '../controllers/itinerary.controller.js';
 import { requireAgencyWorkspace } from '../middleware/agencyWorkspace.middleware.js';
 import {
@@ -72,13 +70,13 @@ import {
 import { validate } from '../middleware/validate.middleware.js';
 import {
   addAgencyTemplateVersionSchema,
+  activateAgencyInviteSchema,
   changeAgencyMemberRoleSchema,
   createAgencyAssetSchema,
   createAgencyClientSchema,
   createAgencyExportSchema,
   createAgencyInviteSchema,
   createAgencyProposalLinkSchema,
-  createAgencySchema,
   createAgencyTemplateSchema,
   createAgencyTripSchema,
   previewAgencyTemplateVersionSchema,
@@ -92,7 +90,6 @@ import {
 import {
   agencyAssetUploadAgencyLimiter,
   agencyAssetUploadLimiter,
-  agencyCreateLimiter,
   agencyExportLimiter,
   agencyInviteCreateLimiter,
   agencyTemplateUploadLimiter,
@@ -128,12 +125,15 @@ router.get('/status', (_req, res) => {
 });
 
 // Token-identified invitation endpoints. Declared before `/:agencyId` so
-// "invites" is never interpreted as an agency id.
-router.get('/invites/:token', protect, invitePreviewLimiter, getAgencyInvitePreview);
+// "invites" is never interpreted as an agency id. PA0 makes the preview public
+// (tenant name/logo/role/expiry only) and turns acceptance into activation:
+// the invite token plus the invitee's chosen credentials create or sign in the
+// tenant's agency account. Personal accounts are never touched.
+router.get('/invites/:token', invitePreviewLimiter, getAgencyInvitePreview);
 router.post(
   '/invites/:token/accept',
-  protect,
   inviteAcceptLimiter,
+  validate(activateAgencyInviteSchema),
   acceptAgencyInvite
 );
 
@@ -157,21 +157,14 @@ router.get(
   downloadAgencyProposalHandler
 );
 
-// The caller's agencies + onboarding.
-router.get('/', protect, listAgencies);
-router.post(
-  '/',
-  protect,
-  agencyCreateLimiter,
-  validate(createAgencySchema),
-  createAgency
-);
+// PA0: self-service agency creation is gone. Tenants are provisioned by the
+// platform admin (PA3); until then `GET /` and `POST /` stay removed.
 
 // Tenant-scoped read/update.
-router.get('/:agencyId', protect, requireAgencyMember(), getAgency);
+router.get('/:agencyId', protectAgency, requireAgencyMember(), getAgency);
 router.patch(
   '/:agencyId',
-  protect,
+  protectAgency,
   requireAgencyRole('admin'),
   validate(updateAgencySchema),
   updateAgency
@@ -182,13 +175,13 @@ router.patch(
 // works without a tenant membership check.
 router.get(
   '/:agencyId/assets',
-  protect,
+  protectAgency,
   requireAgencyMember(),
   listAgencyAssetsHandler
 );
 router.post(
   '/:agencyId/assets',
-  protect,
+  protectAgency,
   requireAgencyRole('admin'),
   agencyAssetUploadLimiter,
   agencyAssetUploadAgencyLimiter,
@@ -198,13 +191,13 @@ router.post(
 );
 router.delete(
   '/:agencyId/assets/:assetId',
-  protect,
+  protectAgency,
   requireAgencyRole('admin'),
   deleteAgencyAssetHandler
 );
 router.get(
   '/:agencyId/assets/:assetId/content',
-  protect,
+  protectAgency,
   requireAgencyMember(),
   getAgencyAssetContentHandler
 );
@@ -213,27 +206,27 @@ router.get(
 // it. Directory records never grant trip access.
 router.get(
   '/:agencyId/clients',
-  protect,
+  protectAgency,
   requireAgencyMember(),
   listAgencyClientsHandler
 );
 router.post(
   '/:agencyId/clients',
-  protect,
+  protectAgency,
   requireAgencyRole('planner'),
   validate(createAgencyClientSchema),
   createAgencyClientHandler
 );
 router.patch(
   '/:agencyId/clients/:clientId',
-  protect,
+  protectAgency,
   requireAgencyRole('planner'),
   validate(updateAgencyClientSchema),
   updateAgencyClientHandler
 );
 router.delete(
   '/:agencyId/clients/:clientId',
-  protect,
+  protectAgency,
   requireAgencyRole('planner'),
   deleteAgencyClientHandler
 );
@@ -246,13 +239,13 @@ router.delete(
 // a browser process, so both paths stay behind their own rate limits.
 router.get(
   '/:agencyId/templates',
-  protect,
+  protectAgency,
   requireAgencyMember(),
   listAgencyTemplatesHandler
 );
 router.post(
   '/:agencyId/templates',
-  protect,
+  protectAgency,
   requireAgencyRole('admin'),
   agencyTemplateUploadLimiter,
   handleAgencyTemplateUpload,
@@ -261,20 +254,20 @@ router.post(
 );
 router.patch(
   '/:agencyId/templates/:templateId',
-  protect,
+  protectAgency,
   requireAgencyRole('admin'),
   validate(updateAgencyTemplateSchema),
   updateAgencyTemplateHandler
 );
 router.get(
   '/:agencyId/templates/:templateId/versions',
-  protect,
+  protectAgency,
   requireAgencyRole('admin'),
   listAgencyTemplateVersionsHandler
 );
 router.post(
   '/:agencyId/templates/:templateId/versions',
-  protect,
+  protectAgency,
   requireAgencyRole('admin'),
   agencyTemplateUploadLimiter,
   handleAgencyTemplateUpload,
@@ -283,39 +276,39 @@ router.post(
 );
 router.post(
   '/:agencyId/templates/:templateId/versions/:version/preview',
-  protect,
+  protectAgency,
   requireAgencyRole('admin'),
   validate(previewAgencyTemplateVersionSchema),
   previewAgencyTemplateVersionHandler
 );
 router.post(
   '/:agencyId/templates/:templateId/versions/:version/activate',
-  protect,
+  protectAgency,
   requireAgencyRole('admin'),
   activateAgencyTemplateVersionHandler
 );
 router.post(
   '/:agencyId/templates/:templateId/archive',
-  protect,
+  protectAgency,
   requireAgencyRole('admin'),
   archiveAgencyTemplateHandler
 );
 router.post(
   '/:agencyId/templates/:templateId/default',
-  protect,
+  protectAgency,
   requireAgencyRole('admin'),
   setDefaultAgencyTemplateHandler
 );
 router.get(
   '/:agencyId/trips/:tripId/exports',
-  protect,
+  protectAgency,
   requireAgencyMember(),
   requireAgencyTripRole('viewer'),
   listAgencyExportsHandler
 );
 router.post(
   '/:agencyId/trips/:tripId/exports/preview',
-  protect,
+  protectAgency,
   requireAgencyRole('planner'),
   requireAgencyTripRole('planner'),
   agencyExportLimiter,
@@ -325,7 +318,7 @@ router.post(
 );
 router.post(
   '/:agencyId/trips/:tripId/exports',
-  protect,
+  protectAgency,
   requireAgencyRole('planner'),
   requireAgencyTripRole('planner'),
   agencyExportLimiter,
@@ -335,7 +328,7 @@ router.post(
 );
 router.post(
   '/:agencyId/trips/:tripId/exports/:exportId/retry',
-  protect,
+  protectAgency,
   requireAgencyRole('planner'),
   requireAgencyTripRole('planner'),
   agencyExportLimiter,
@@ -346,7 +339,7 @@ router.post(
 // tenant boundary is membership + the service's agencyId scope + signature.
 router.get(
   '/:agencyId/exports/:exportId/download',
-  protect,
+  protectAgency,
   requireAgencyMember(),
   downloadAgencyExportHandler
 );
@@ -356,7 +349,7 @@ router.get(
 // follow the same ranks as export history.
 router.post(
   '/:agencyId/trips/:tripId/exports/:exportId/share',
-  protect,
+  protectAgency,
   requireAgencyRole('planner'),
   requireAgencyTripRole('planner'),
   agencyExportLimiter,
@@ -366,14 +359,14 @@ router.post(
 );
 router.get(
   '/:agencyId/trips/:tripId/shares',
-  protect,
+  protectAgency,
   requireAgencyMember(),
   requireAgencyTripRole('viewer'),
   listAgencyProposalLinksHandler
 );
 router.delete(
   '/:agencyId/trips/:tripId/shares/:shareId',
-  protect,
+  protectAgency,
   requireAgencyRole('planner'),
   requireAgencyTripRole('planner'),
   revokeAgencyProposalLinkHandler
@@ -383,33 +376,33 @@ router.delete(
 // planner rank; the trash is admin-only because only they can restore/purge.
 router.get(
   '/:agencyId/trips',
-  protect,
+  protectAgency,
   requireAgencyMember(),
   listAgencyTripsHandler
 );
 router.post(
   '/:agencyId/trips',
-  protect,
+  protectAgency,
   requireAgencyRole('planner'),
   validate(createAgencyTripSchema),
   createAgencyTripHandler
 );
 router.get(
   '/:agencyId/trash',
-  protect,
+  protectAgency,
   requireAgencyRole('admin'),
   listAgencyDeletedTripsHandler
 );
 router.get(
   '/:agencyId/trips/:tripId',
-  protect,
+  protectAgency,
   requireAgencyMember(),
   requireAgencyTripRole('viewer'),
   getAgencyTripHandler
 );
 router.patch(
   '/:agencyId/trips/:tripId',
-  protect,
+  protectAgency,
   requireAgencyRole('planner'),
   requireAgencyTripRole('planner'),
   validate(updateAgencyTripSchema),
@@ -420,21 +413,21 @@ router.patch(
 // already narrowed them to this agency's trip.
 router.delete(
   '/:agencyId/trips/:tripId',
-  protect,
+  protectAgency,
   requireAgencyRole('admin'),
   requireAgencyTripRole('admin'),
   deleteTrip
 );
 router.post(
   '/:agencyId/trips/:tripId/restore',
-  protect,
+  protectAgency,
   requireAgencyRole('admin'),
   requireAgencyTripRole('admin', { includeDeleted: true, onlyDeleted: true }),
   restoreTrip
 );
 router.delete(
   '/:agencyId/trips/:tripId/purge',
-  protect,
+  protectAgency,
   requireAgencyRole('admin'),
   requireAgencyTripRole('admin', { includeDeleted: true, onlyDeleted: true }),
   purgeTrip
@@ -443,14 +436,14 @@ router.delete(
 // already owns /restore, so unarchive takes its own path.
 router.post(
   '/:agencyId/trips/:tripId/archive',
-  protect,
+  protectAgency,
   requireAgencyRole('admin'),
   requireAgencyTripRole('viewer'),
   archiveAgencyTripHandler
 );
 router.post(
   '/:agencyId/trips/:tripId/unarchive',
-  protect,
+  protectAgency,
   requireAgencyRole('admin'),
   requireAgencyTripRole('viewer'),
   unarchiveAgencyTripHandler
@@ -461,21 +454,21 @@ router.post(
 // narrowed to one tenant trip.
 router.get(
   '/:agencyId/trips/:tripId/quote',
-  protect,
+  protectAgency,
   requireAgencyMember(),
   requireAgencyTripRole('viewer'),
   getAgencyQuoteHandler
 );
 router.get(
   '/:agencyId/trips/:tripId/quote/versions',
-  protect,
+  protectAgency,
   requireAgencyMember(),
   requireAgencyTripRole('viewer'),
   listAgencyQuoteVersionsHandler
 );
 router.put(
   '/:agencyId/trips/:tripId/quote',
-  protect,
+  protectAgency,
   requireAgencyRole('planner'),
   requireAgencyTripRole('planner'),
   validate(saveAgencyQuoteSchema),
@@ -483,21 +476,21 @@ router.put(
 );
 router.post(
   '/:agencyId/trips/:tripId/quote/send',
-  protect,
+  protectAgency,
   requireAgencyRole('planner'),
   requireAgencyTripRole('planner'),
   sendAgencyQuoteHandler
 );
 router.post(
   '/:agencyId/trips/:tripId/quote/accept',
-  protect,
+  protectAgency,
   requireAgencyRole('planner'),
   requireAgencyTripRole('planner'),
   acceptAgencyQuoteHandler
 );
 router.post(
   '/:agencyId/trips/:tripId/quote/cancel',
-  protect,
+  protectAgency,
   requireAgencyRole('planner'),
   requireAgencyTripRole('planner'),
   cancelAgencyQuoteHandler
@@ -506,20 +499,20 @@ router.post(
 // Team management.
 router.get(
   '/:agencyId/members',
-  protect,
+  protectAgency,
   requireAgencyMember(),
   listAgencyMembersHandler
 );
 router.patch(
   '/:agencyId/members/:userId',
-  protect,
+  protectAgency,
   requireAgencyRole('admin'),
   validate(changeAgencyMemberRoleSchema),
   changeAgencyMemberRoleHandler
 );
 router.delete(
   '/:agencyId/members/:userId',
-  protect,
+  protectAgency,
   requireAgencyRole('admin'),
   removeAgencyMemberHandler
 );
@@ -528,13 +521,13 @@ router.delete(
 // the delivery mechanism.
 router.get(
   '/:agencyId/invites',
-  protect,
+  protectAgency,
   requireAgencyRole('admin'),
   listAgencyInvitesHandler
 );
 router.post(
   '/:agencyId/invites',
-  protect,
+  protectAgency,
   requireAgencyRole('admin'),
   inviteManageLimiter,
   agencyInviteCreateLimiter,
@@ -543,31 +536,31 @@ router.post(
 );
 router.delete(
   '/:agencyId/invites/:inviteId',
-  protect,
+  protectAgency,
   requireAgencyRole('admin'),
   revokeAgencyInviteHandler
 );
 
 // A8 operations. Usage and audit are owner/admin read surfaces. The plan
-// route deliberately carries no membership guard: TravelAI ops is not a
-// member; the service gates on the ops secret instead.
+// route deliberately carries no session or membership guard: TravelAI ops is
+// not a member, and the `X-TravelAI-Ops` secret is the entire capability. PA0
+// keeps it as the break-glass path while agency accounts have their own realm.
 router.get(
   '/:agencyId/usage',
-  protect,
+  protectAgency,
   requireAgencyMember(),
   requireAgencyRole('admin'),
   getAgencyUsageHandler
 );
 router.get(
   '/:agencyId/audit',
-  protect,
+  protectAgency,
   requireAgencyMember(),
   requireAgencyRole('admin'),
   listAgencyAuditHandler
 );
 router.patch(
   '/:agencyId/plan',
-  protect,
   validate(updateAgencyPlanSchema),
   updateAgencyPlanHandler
 );

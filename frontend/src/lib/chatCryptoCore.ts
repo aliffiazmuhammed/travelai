@@ -37,7 +37,13 @@
 /*  Constants + tiny helpers                                                   */
 /* -------------------------------------------------------------------------- */
 
-const IDENTITY_STORE = 'chatai.identity.v1';
+/**
+ * Personal accounts keep the original storage key. Agency accounts use a
+ * realm/tenant-scoped key (PA0) so a browser that holds both a personal and an
+ * agency session never shares one E2EE device identity between them.
+ */
+const IDENTITY_STORE = (scope?: string) =>
+  scope ? `chatai.identity.${scope}.v1` : 'chatai.identity.v1';
 const MEMBER_KEYS_CACHE = (tripId: string) => `chatai.trip.${tripId}.memberkeys.v1`;
 const HKDF_INFO = new TextEncoder().encode('travelai-chat-key-v1');
 /** v2 envelopes bind their slot into the AEAD (see the header). */
@@ -102,10 +108,10 @@ async function importIdentityPriv(privJwk: JsonWebKey): Promise<CryptoKey> {
 }
 
 /** Reads the stored identity (JWK → import). Returns null when absent/corrupt. */
-export async function loadStoredIdentity(): Promise<ChatIdentity | null> {
+export async function loadStoredIdentity(scope?: string): Promise<ChatIdentity | null> {
   if (!isCryptoAvailable()) return null;
   try {
-    const raw = localStorage.getItem(IDENTITY_STORE);
+    const raw = localStorage.getItem(IDENTITY_STORE(scope));
     if (!raw) return null;
     const stored = JSON.parse(raw) as IdentityJwk;
     if (!stored?.priv || !stored?.pubKey) return null;
@@ -122,18 +128,19 @@ export async function loadStoredIdentity(): Promise<ChatIdentity | null> {
  */
 export async function persistIdentityFromPrivJwk(
   privJwk: JsonWebKey,
-  pubKey: string
+  pubKey: string,
+  scope?: string
 ): Promise<ChatIdentity> {
   const priv = await importIdentityPriv(privJwk);
   localStorage.setItem(
-    IDENTITY_STORE,
+    IDENTITY_STORE(scope),
     JSON.stringify({ v: 1, priv: privJwk, pubKey } satisfies { v: number } & IdentityJwk)
   );
   return { priv, pubKey };
 }
 
 /** Mints a fresh identity, stores it as a re-openable JWK, returns handles. */
-export async function mintAndStoreIdentity(): Promise<ChatIdentity> {
+export async function mintAndStoreIdentity(scope?: string): Promise<ChatIdentity> {
   if (!isCryptoAvailable()) throw new Error('Web crypto is unavailable in this browser.');
   const pair = (await subtle!.generateKey(
     { name: 'ECDH', namedCurve: 'P-256' },
@@ -142,7 +149,7 @@ export async function mintAndStoreIdentity(): Promise<ChatIdentity> {
   )) as CryptoKeyPair;
   const privJwk = await subtle!.exportKey('jwk', pair.privateKey);
   const spki = await subtle!.exportKey('spki', pair.publicKey);
-  return persistIdentityFromPrivJwk(privJwk, b64(spki));
+  return persistIdentityFromPrivJwk(privJwk, b64(spki), scope);
 }
 
 /**

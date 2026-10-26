@@ -13,6 +13,23 @@ export const authLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+/**
+ * PA0: each realm signs in through its own limiter instance. Separate stores
+ * mean an attacker burning personal attempts cannot lock out agency staff (and
+ * vice versa), and the plan requires per-realm throttling.
+ */
+export const agencyAuthLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: {
+    success: false,
+    error: 'Too many workspace sign-in attempts. Please try again after 15 minutes.',
+    message: 'Too many workspace sign-in attempts. Please try again after 15 minutes.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 export const generateLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 20,

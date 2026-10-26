@@ -80,6 +80,7 @@ async function main() {
     const userId = new Types.ObjectId();
     const agency = await Agency.create({
       name: 'A5 Smoke Travel',
+      slug: 'a5-smoke-travel',
       createdBy: userId,
       branding: {
         primaryColor: '#0F766E',

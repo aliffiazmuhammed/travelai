@@ -3,7 +3,7 @@ import Trip from '../models/Trip.js';
 import AgencyMember from '../models/AgencyMember.js';
 import { catchAsync } from '../utils/catchAsync.js';
 import { AppError } from '../utils/AppError.js';
-import { AuthenticatedRequest } from '../types/index.js';
+import { AuthenticatedRequest, RealmIdentity } from '../types/index.js';
 import { TripRole, can, roleOf } from '../services/collab/access.js';
 import {
   mapAgencyRoleToTripRole,
@@ -16,7 +16,7 @@ import {
  *
  * Applied on the router, never inside controllers:
  *
- *   router.put('/:id', protect, requireTripRole('owner'), updateTrip)
+ *   router.put('/:id', protectSession, requireTripRole('owner'), updateTrip)
  *
  * Responsibilities:
  * 1. Load the trip by id, rejecting soft-deleted documents unless the route
@@ -131,8 +131,19 @@ export function requireTripRole(
     res: Response,
     next: NextFunction
   ): Promise<unknown> => {
-    // `protect` runs first on every guarded route; enforce the ordering.
-    if (!req.userId) {
+    // `protectSession` runs first on every guarded route; enforce the ordering.
+    const candidates: RealmIdentity[] = req.sessionCandidates?.length
+      ? req.sessionCandidates
+      : req.userId
+        ? [
+            {
+              userId: req.userId,
+              realm: req.realm ?? 'personal',
+              agencyId: req.agencyId,
+            },
+          ]
+        : [];
+    if (candidates.length === 0) {
       throw new AppError('Please sign in to access this feature.', 401);
     }
 
@@ -148,26 +159,50 @@ export function requireTripRole(
     // through `members[]` below. When the caller is an agency member, that
     // mapping takes precedence over any trip membership row; non-members are
     // treated as clients using the normal invite roles.
-    let role = trip ? roleOf(trip, req.userId) : null;
+    //
+    // PA0: a browser may hold both `token` and `agency_token`. The trip's
+    // tenant decides which identity applies — never the cookie order.
+    let role = null as TripRole | null;
     let agencyRole: AgencyRole | undefined;
     let agencyStaff = false;
+    let identity: RealmIdentity | undefined;
 
     if (trip && trip.workspace === 'agency' && trip.agencyId) {
-      const member = await AgencyMember.findOne({
-        agencyId: trip.agencyId,
-        userId: req.userId,
-      })
-        .select('role')
-        .lean();
+      const tenantIdentity = candidates.find(
+        (candidate) =>
+          candidate.realm === 'agency' &&
+          String(candidate.agencyId) === String(trip.agencyId)
+      );
+      if (tenantIdentity) {
+        const member = await AgencyMember.findOne({
+          agencyId: trip.agencyId,
+          userId: tenantIdentity.userId,
+        })
+          .select('role')
+          .lean();
 
-      if (member) {
-        agencyRole = member.role as AgencyRole;
-        agencyStaff = true;
-        role = mapAgencyRoleToTripRole(agencyRole);
+        if (member) {
+          identity = tenantIdentity;
+          agencyRole = member.role as AgencyRole;
+          agencyStaff = true;
+          role = mapAgencyRoleToTripRole(agencyRole);
+        }
       }
     }
 
-    if (!trip || !role) {
+    if (!identity) {
+      // Personal collaborator, or an agency account that was invited directly.
+      for (const candidate of candidates) {
+        const candidateRole = roleOf(trip, candidate.userId);
+        if (candidateRole) {
+          identity = candidate;
+          role = candidateRole;
+          break;
+        }
+      }
+    }
+
+    if (!trip || !role || !identity) {
       throw new AppError('Trip not found', 404);
     }
 
@@ -216,6 +251,11 @@ export function requireTripRole(
     req.tripRole = role;
     req.agencyRole = agencyRole;
     req.agencyStaff = agencyStaff;
+    // Controllers and services act as the identity the trip authorized, not
+    // whichever realm cookie happened to be first.
+    req.userId = identity.userId;
+    req.realm = identity.realm;
+    req.agencyId = identity.agencyId;
     return next();
   };
 

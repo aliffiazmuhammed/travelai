@@ -14,7 +14,8 @@
  * PDF rendering needs a Chrome/Edge binary (AGENCY_CHROME_PATH override).
  */
 import 'dotenv/config';
-import mongoose, { Types } from 'mongoose';
+import bcrypt from 'bcryptjs';
+import mongoose from 'mongoose';
 import Agency from '../src/models/Agency.js';
 import AgencyAsset from '../src/models/AgencyAsset.js';
 import AgencyAudit from '../src/models/AgencyAudit.js';
@@ -27,14 +28,12 @@ import AgencyInvite from '../src/models/AgencyInvite.js';
 import AgencyProposalLink from '../src/models/AgencyProposalLink.js';
 import AgencyQuote from '../src/models/AgencyQuote.js';
 import Trip from '../src/models/Trip.js';
+import User from '../src/models/User.js';
 import { AppError } from '../src/utils/AppError.js';
-import {
-  createAgencyForUser,
-  updateAgencyDetails,
-} from '../src/services/agency/agencies.js';
+import { updateAgencyDetails } from '../src/services/agency/agencies.js';
 import { listAgencyAudit } from '../src/services/agency/audit.js';
 import { changeAgencyPlan, assertExportQuota, assertSeatAvailable, assertStorageQuota } from '../src/services/agency/plan.js';
-import { createAgencyInvite, previewAgencyInvite, redeemAgencyInvite } from '../src/services/agency/invites.js';
+import { activateAgencyInvite, createAgencyInvite, previewAgencyInvite } from '../src/services/agency/invites.js';
 import { uploadAgencyAsset, getAgencyAsset, readAgencyAssetContent } from '../src/services/agency/assets.js';
 import { removeAgencyAssetFile } from '../src/services/agency/assetStorage.js';
 import {
@@ -108,6 +107,40 @@ const TINY_PNG = Buffer.from(
   'base64'
 );
 
+/**
+ * PA0 provisioning fixture. Self-service agency creation is gone, so the pilot
+ * creates a tenant the way PA3 will: an Agency plus its first agency account
+ * (never a personal account) and an owner membership.
+ */
+async function provisionAgency(input: {
+  name: string;
+  slug: string;
+  email: string;
+  password: string;
+  ownerName: string;
+}) {
+  const agency = await Agency.create({
+    name: input.name,
+    slug: input.slug,
+    status: 'active',
+  });
+  const user = await User.create({
+    email: input.email,
+    password: await bcrypt.hash(input.password, 12),
+    accountType: 'agency',
+    agencyId: agency._id,
+    status: 'active',
+    name: input.ownerName,
+  });
+  await AgencyMember.create({
+    agencyId: agency._id,
+    userId: user._id,
+    role: 'owner',
+    joinedAt: new Date(),
+  });
+  return { agency, user };
+}
+
 async function main() {
   if (process.env.NODE_ENV === 'production') {
     throw new Error('Refusing to run the A9 pilot against production.');
@@ -122,18 +155,24 @@ async function main() {
   await mongoose.connect(smokeMongoUri());
 
   const createdFiles: Array<() => Promise<void>> = [];
-  const ownerId = new Types.ObjectId();
-  const plannerId = new Types.ObjectId();
-  const foreignOwnerId = new Types.ObjectId();
+  const plannerLogin = {
+    email: 'planner.a9@pilot.test',
+    password: 'pilot-planner-1',
+  };
+  let plannerId = '';
 
   try {
-    /* 1. Onboarding: agency + first owner. */
-    const agency = await createAgencyForUser({
-      userId: String(ownerId),
+    /* 1. Onboarding: agency + first owner (PA0: tenant-scoped agency account). */
+    const pilot = await provisionAgency({
       name: 'A9 Pilot Himalayan Trails',
+      slug: 'a9-pilot-himalayan-trails',
+      email: 'owner.a9@pilot.test',
+      password: 'pilot-owner-1',
+      ownerName: 'Pilot Owner',
     });
-    const agencyId = agency._id;
-    check('the pilot agency is created with its owner', Boolean(agencyId) && agency.role === 'owner');
+    const agencyId = String(pilot.agency._id);
+    const ownerId = String(pilot.user._id);
+    check('the pilot agency is created with its owner', Boolean(agencyId));
 
     /* 2. Ops plan provisioning (secret-gated, like production). */
     const plan = await changeAgencyPlan({
@@ -208,11 +247,15 @@ async function main() {
     const rawToken = inviteResult.link.split('/').pop() as string;
     const preview = await previewAgencyInvite(rawToken);
     check('an invite previews with the agency name before redemption', preview.agency.name === 'A9 Pilot Himalayan Trails');
-    const redeemed = await redeemAgencyInvite(rawToken, { id: String(plannerId) });
+    const activated = await activateAgencyInvite(rawToken, plannerLogin);
+    plannerId = String(activated.user._id);
     check(
-      'the planner redeems the invite and becomes a member',
-      redeemed.agencyId === agencyId && redeemed.role === 'planner' && !redeemed.alreadyMember,
-      redeemed
+      'the planner activates the invite and becomes a member',
+      String(activated.agency._id) === agencyId &&
+        activated.role === 'planner' &&
+        !activated.alreadyMember &&
+        activated.user.accountType === 'agency',
+      activated
     );
     check(
       'a third seat is refused at 2/2 with an actionable message',
@@ -460,10 +503,15 @@ async function main() {
     );
 
     /* 12. Cross-tenant probes answer 404 (deep coverage lives in smoke-a9-security). */
-    const foreignAgency = await createAgencyForUser({
-      userId: String(foreignOwnerId),
+    const foreign = await provisionAgency({
       name: 'A9 Pilot Foreign Tenant',
+      slug: 'a9-pilot-foreign-tenant',
+      email: 'owner.foreign@pilot.test',
+      password: 'pilot-foreign-1',
+      ownerName: 'Foreign Owner',
     });
+    const foreignAgency = foreign.agency;
+    const foreignOwnerId = String(foreign.user._id);
     const foreignTripDoc = await createAgencyTrip({
       agencyId: foreignAgency._id,
       userId: String(foreignOwnerId),
