@@ -1,7 +1,20 @@
 import React from "react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Search, Sparkles, Check } from "lucide-react";
+import {
+  MapPin,
+  Search,
+  Sparkles,
+  Check,
+  Map,
+  Palmtree,
+  Mountain,
+  Landmark,
+  Trees,
+  MoonStar,
+  Flame,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface PopularDestination {
@@ -9,7 +22,7 @@ interface PopularDestination {
   name: string;
   state: string;
   tagline: string;
-  emoji: string;
+  icon: LucideIcon;
   tags: string[];
   gradient: string;
 }
@@ -20,7 +33,7 @@ const POPULAR_DESTINATIONS: PopularDestination[] = [
     name: "Goa",
     state: "Goa",
     tagline: "Sun-kissed beaches, coastal cafes & vibrant nightlife",
-    emoji: "🏖️",
+    icon: Palmtree,
     tags: ["Beaches", "Nightlife", "Seafood"],
     gradient: "from-amber-500/10 via-orange-500/10 to-rose-500/10",
   },
@@ -29,7 +42,7 @@ const POPULAR_DESTINATIONS: PopularDestination[] = [
     name: "Manali",
     state: "Himachal Pradesh",
     tagline: "Snow peaks, Solang Valley adventure & mountain breeze",
-    emoji: "🏔️",
+    icon: Mountain,
     tags: ["Mountains", "Adventure", "Snow"],
     gradient: "from-blue-500/10 via-cyan-500/10 to-teal-500/10",
   },
@@ -38,7 +51,7 @@ const POPULAR_DESTINATIONS: PopularDestination[] = [
     name: "Jaipur",
     state: "Rajasthan",
     tagline: "Royal palaces, majestic forts & vibrant bazaars",
-    emoji: "🏰",
+    icon: Landmark,
     tags: ["Heritage", "Culture", "Royal"],
     gradient: "from-rose-500/10 via-pink-500/10 to-amber-500/10",
   },
@@ -47,7 +60,7 @@ const POPULAR_DESTINATIONS: PopularDestination[] = [
     name: "Kerala (Munnar & Alleppey)",
     state: "Kerala",
     tagline: "Lush tea hills, tranquil backwaters & Ayurveda",
-    emoji: "🌴",
+    icon: Trees,
     tags: ["Nature", "Backwaters", "Relaxation"],
     gradient: "from-emerald-500/10 via-green-500/10 to-teal-500/10",
   },
@@ -56,7 +69,7 @@ const POPULAR_DESTINATIONS: PopularDestination[] = [
     name: "Leh Ladakh",
     state: "Ladakh",
     tagline: "Pangong Tso, high passes, monasteries & raw landscapes",
-    emoji: "🌌",
+    icon: MoonStar,
     tags: ["Biking", "Lakes", "Stargazing"],
     gradient: "from-indigo-500/10 via-purple-500/10 to-blue-500/10",
   },
@@ -65,7 +78,7 @@ const POPULAR_DESTINATIONS: PopularDestination[] = [
     name: "Varanasi",
     state: "Uttar Pradesh",
     tagline: "Spiritual ghats, Ganga Aarti & timeless heritage",
-    emoji: "🪔",
+    icon: Flame,
     tags: ["Spiritual", "Ghats", "Culture"],
     gradient: "from-orange-500/10 via-amber-500/10 to-yellow-500/10",
   },
@@ -94,7 +107,7 @@ export const StepWhere: React.FC<StepWhereProps> = ({
       <div className="text-center space-y-2">
         <h2 className="text-2xl font-bold tracking-tight text-foreground flex items-center justify-center gap-2">
           <span>Where are you dreaming of going?</span>
-          <span className="text-2xl">🗺️</span>
+          <Map className="w-6 h-6 text-primary" aria-hidden="true" />
         </h2>
         <p className="text-sm text-muted-foreground max-w-lg mx-auto">
           Choose a trending Indian hotspot or type any city, hill station, or country you want to explore.
@@ -130,9 +143,9 @@ export const StepWhere: React.FC<StepWhereProps> = ({
       {/* Popular Trending Destinations Grid */}
       <div className="space-y-3 pt-2">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <div className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-muted-foreground">
             <Sparkles className="w-3.5 h-3.5 text-primary" />
-            <span>Popular Trending Destinations</span>
+            <span>Popular destinations</span>
           </div>
           <span className="text-xs text-muted-foreground">Click to select</span>
         </div>
@@ -155,8 +168,8 @@ export const StepWhere: React.FC<StepWhereProps> = ({
               >
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <span className="text-2xl p-1 bg-white/70 dark:bg-card/70 rounded-lg shadow-2xs">
-                      {dest.emoji}
+                    <span className="p-2 bg-white/70 dark:bg-card/70 rounded-lg shadow-2xs flex items-center justify-center">
+                      <dest.icon className="w-5 h-5 text-primary" />
                     </span>
                     <div>
                       <h4 className="font-bold text-foreground text-sm flex items-center gap-1.5">

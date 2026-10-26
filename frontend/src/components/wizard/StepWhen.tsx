@@ -4,8 +4,22 @@ import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
-import { CalendarIcon, Clock, Sparkles, AlertCircle } from "lucide-react";
-import { format, addDays, differenceInCalendarDays, isBefore, startOfToday } from "date-fns";
+import {
+  CalendarIcon,
+  CalendarDays,
+  Clock,
+  Sparkles,
+  AlertCircle,
+  Zap,
+  Leaf,
+  Umbrella,
+  Mountain,
+  Map,
+  Sun,
+  Backpack,
+} from "lucide-react";
+import { addDays, differenceInCalendarDays, isBefore, startOfToday } from "date-fns";
+import { formatDate, formatDateShort, formatDateWithWeekday } from "@/lib/date";
 import { cn } from "@/lib/utils";
 
 interface StepWhenProps {
@@ -41,11 +55,11 @@ export const StepWhen: React.FC<StepWhenProps> = ({
   };
 
   const presets = [
-    { label: "Weekend Getaway", days: 3, icon: "⚡" },
-    { label: "5-Day Recharge", days: 5, icon: "🌿" },
-    { label: "1-Week Vacation", days: 7, icon: "🏖️" },
-    { label: "10-Day Deep Dive", days: 10, icon: "🏔️" },
-    { label: "2-Week Explorer", days: 14, icon: "🗺️" },
+    { label: "Weekend Getaway", days: 3, icon: Zap },
+    { label: "5-Day Recharge", days: 5, icon: Leaf },
+    { label: "1-Week Vacation", days: 7, icon: Umbrella },
+    { label: "10-Day Deep Dive", days: 10, icon: Mountain },
+    { label: "2-Week Explorer", days: 14, icon: Map },
   ];
 
   return (
@@ -53,7 +67,7 @@ export const StepWhen: React.FC<StepWhenProps> = ({
       <div className="text-center space-y-2">
         <h2 className="text-2xl font-bold tracking-tight text-foreground flex items-center justify-center gap-2">
           <span>When are you planning to travel?</span>
-          <span className="text-2xl">🗓️</span>
+          <CalendarDays className="w-6 h-6 text-primary" aria-hidden="true" />
         </h2>
         <p className="text-sm text-muted-foreground max-w-lg mx-auto">
           Choose your travel dates or pick a quick duration preset to plan your schedule.
@@ -62,13 +76,14 @@ export const StepWhen: React.FC<StepWhenProps> = ({
 
       {/* Quick Presets */}
       <div className="space-y-2.5">
-        <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <div className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-muted-foreground">
           <Sparkles className="w-3.5 h-3.5 text-primary" />
-          <span>Quick Duration Presets</span>
+          <span>Quick duration presets</span>
         </div>
         <div className="flex flex-wrap gap-2">
           {presets.map((preset) => {
             const isSelected = durationDays === preset.days;
+            const PresetIcon = preset.icon;
             return (
               <Button
                 key={preset.days}
@@ -83,7 +98,7 @@ export const StepWhen: React.FC<StepWhenProps> = ({
                     : "border-border/70 hover:border-primary/50 hover:bg-primary/5"
                 )}
               >
-                <span className="mr-1.5">{preset.icon}</span>
+                <PresetIcon className="mr-1.5 w-3.5 h-3.5" />
                 <span>{preset.label}</span>
                 <span className="ml-1.5 text-[11px] opacity-80 font-normal">
                   ({preset.days}d)
@@ -99,7 +114,7 @@ export const StepWhen: React.FC<StepWhenProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Start Date */}
           <div className="space-y-2">
-            <Label className="text-xs font-semibold text-foreground uppercase tracking-wider">
+            <Label className="text-xs font-semibold text-foreground tracking-wide">
               Departure / Start Date
             </Label>
             <Popover>
@@ -116,7 +131,7 @@ export const StepWhen: React.FC<StepWhenProps> = ({
                   {startDate ? (
                     <div>
                       <div className="font-semibold text-foreground">
-                        {format(startDate, "EEE, dd MMM yyyy")}
+                        {formatDateWithWeekday(startDate)}
                       </div>
                       <div className="text-[11px] text-muted-foreground">
                         Trip begins
@@ -146,7 +161,7 @@ export const StepWhen: React.FC<StepWhenProps> = ({
 
           {/* End Date */}
           <div className="space-y-2">
-            <Label className="text-xs font-semibold text-foreground uppercase tracking-wider">
+            <Label className="text-xs font-semibold text-foreground tracking-wide">
               Return / End Date
             </Label>
             <Popover>
@@ -163,7 +178,7 @@ export const StepWhen: React.FC<StepWhenProps> = ({
                   {endDate ? (
                     <div>
                       <div className="font-semibold text-foreground">
-                        {format(endDate, "EEE, dd MMM yyyy")}
+                        {formatDateWithWeekday(endDate)}
                       </div>
                       <div className="text-[11px] text-muted-foreground">
                         Trip concludes
@@ -206,16 +221,24 @@ export const StepWhen: React.FC<StepWhenProps> = ({
                   {durationDays} Days / {durationDays > 1 ? durationDays - 1 : 1} Nights
                 </h4>
                 <p className="text-xs text-muted-foreground">
-                  {startDate && format(startDate, "MMM d")} - {endDate && format(endDate, "MMM d, yyyy")}
+                  {startDate && formatDateShort(startDate)} - {endDate && formatDate(endDate)}
                 </p>
               </div>
             </div>
-            <Badge variant="secondary" className="px-3 py-1 text-xs font-semibold">
-              {durationDays <= 3
-                ? "⚡ Short Break"
-                : durationDays <= 7
-                ? "🌟 Ideal Holiday"
-                : "🎒 Extended Adventure"}
+            <Badge variant="secondary" className="px-3 py-1 text-xs font-semibold gap-1.5">
+              {durationDays <= 3 ? (
+                <>
+                  <Zap className="w-3 h-3" /> Short break
+                </>
+              ) : durationDays <= 7 ? (
+                <>
+                  <Sun className="w-3 h-3" /> Ideal holiday
+                </>
+              ) : (
+                <>
+                  <Backpack className="w-3 h-3" /> Extended adventure
+                </>
+              )}
             </Badge>
           </div>
         ) : null}

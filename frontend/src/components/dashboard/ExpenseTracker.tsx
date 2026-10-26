@@ -55,6 +55,7 @@ import {
   Image as ImageIcon,
 } from "lucide-react";
 import { ExpenseEditor } from "./ExpenseEditor";
+import { formatDate } from "@/lib/date";
 import type {
   ExpenseInput,
   ItineraryData,
@@ -433,7 +434,7 @@ export const ExpenseTracker: React.FC<ExpenseTrackerProps> = ({
               <span className="text-[11px] text-muted-foreground">
                 {ratesCount > 0
                   ? `${ratesCount} rates cached${
-                      ratesAt ? ` · ${new Date(ratesAt).toLocaleDateString()}` : ""
+                      ratesAt ? ` · ${formatDate(ratesAt)}` : ""
                     }`
                   : "No rates cached yet"}
               </span>
@@ -577,7 +578,7 @@ export const ExpenseTracker: React.FC<ExpenseTrackerProps> = ({
             <div className="space-y-2">
               <p className="text-xs font-bold text-foreground">Suggested transfers</p>
               {settlement.transfers.length === 0 ? (
-                <p className="text-xs text-muted-foreground">Everyone is settled up. 🎉</p>
+                <p className="text-xs text-muted-foreground">Everyone is settled up.</p>
               ) : (
                 settlement.transfers.map((transfer, index) => (
                   <div

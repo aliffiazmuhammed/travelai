@@ -178,14 +178,6 @@ All colors MUST be HSL.
   .transition-smooth {
     transition: var(--transition-smooth);
   }
-  
-  .hover-lift {
-    @apply transition-smooth;
-  }
-  
-  .hover-lift:hover {
-    @apply -translate-y-1 shadow-hover;
-  }
 }
 
 /* Print optimization styles for clean PDF export and paper printing */

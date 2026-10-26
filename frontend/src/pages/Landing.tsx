@@ -1,4 +1,3 @@
-import { useAuth } from "@/context/UserContext";
 import Navbar from "@/components/Navbar";
 import Hero from "@/components/Hero";
 import FeatureCard from "@/components/FeatureCard";
@@ -116,8 +115,6 @@ const trustRows: { icon: LucideIcon; title: string; body: string }[] = [
 ];
 
 const Landing = () => {
-  const { isAuthenticated } = useAuth();
-
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
@@ -127,7 +124,7 @@ const Landing = () => {
       <section className="py-16 sm:py-20 px-4" aria-labelledby="how-it-works">
         <div className="container mx-auto">
           <div className="text-center mb-10 sm:mb-14 space-y-3">
-            <h2 id="how-it-works" className="text-2xl sm:text-4xl font-bold tracking-tight">
+            <h2 id="how-it-works" className="font-display text-2xl sm:text-4xl font-semibold tracking-tight">
               Three steps, and you're packed
             </h2>
             <p className="text-sm sm:text-lg text-muted-foreground max-w-2xl mx-auto px-2">
@@ -139,13 +136,13 @@ const Landing = () => {
             {steps.map((step, index) => (
               <li
                 key={step.title}
-                className="relative rounded-3xl border border-border/70 bg-card p-6 sm:p-7 shadow-card hover-lift space-y-3"
+                className="relative rounded-3xl border border-border/70 bg-card p-6 sm:p-7 shadow-card space-y-3"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-sky-500 to-primary text-white flex items-center justify-center shadow-md shadow-sky-500/25">
+                  <div className="w-11 h-11 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
                     <step.icon className="h-5 w-5" />
                   </div>
-                  <span className="text-[11px] font-black uppercase tracking-wider text-primary/80">
+                  <span className="text-[11px] font-semibold tracking-wider text-primary/80">
                     Step {index + 1}
                   </span>
                 </div>
@@ -164,9 +161,9 @@ const Landing = () => {
       <section className="py-16 sm:py-24 px-4 bg-muted/30 border-y border-border/60" aria-labelledby="meet-travelai">
         <div className="container mx-auto">
           <div className="text-center mb-10 sm:mb-14 space-y-3">
-            <h2 id="meet-travelai" className="text-2xl sm:text-4xl font-bold tracking-tight">
+            <h2 id="meet-travelai" className="font-display text-2xl sm:text-4xl font-semibold tracking-tight">
               Meet TravelAI,
-              <span className="block bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+              <span className="block text-primary">
                 the helper in your trip chat
               </span>
             </h2>
@@ -183,9 +180,9 @@ const Landing = () => {
       <section className="py-16 sm:py-24 px-4" aria-labelledby="features">
         <div className="container mx-auto">
           <div className="text-center mb-12 sm:mb-16 space-y-4">
-            <h2 id="features" className="text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight">
+            <h2 id="features" className="font-display text-2xl sm:text-4xl md:text-5xl font-semibold tracking-tight">
               Everything you need,
-              <span className="block bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+              <span className="block text-primary">
                 minus the confusion
               </span>
             </h2>
@@ -226,25 +223,21 @@ const Landing = () => {
       {/* CTA Section */}
       <section className="py-12 sm:py-24 px-4">
         <div className="container mx-auto">
-          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-sky-600 via-primary to-sky-700 p-8 sm:p-14 md:p-16 text-center shadow-2xl text-white">
-            {/* Ambient decorative lighting */}
-            <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-white/10 blur-3xl pointer-events-none" />
-            <div className="absolute -bottom-24 -left-24 w-72 h-72 rounded-full bg-sky-300/20 blur-3xl pointer-events-none" />
-
+          <div className="relative overflow-hidden rounded-3xl bg-primary p-8 sm:p-14 md:p-16 text-center shadow-2xl text-white">
             <div className="relative z-10 max-w-3xl mx-auto space-y-4 sm:space-y-6">
-              <h2 className="text-2xl sm:text-4xl md:text-5xl font-black tracking-tight text-white drop-shadow-sm">
+              <h2 className="font-display text-2xl sm:text-4xl md:text-5xl font-semibold tracking-tight text-white drop-shadow-sm">
                 Ready for your next trip?
               </h2>
               <p className="text-sm sm:text-lg md:text-xl text-sky-100 font-medium max-w-2xl mx-auto px-2">
                 Type it out, watch the plan come together, and share it with whoever's coming.
               </p>
               <div className="pt-2 sm:pt-4">
-                <Link to={isAuthenticated ? "/dashboard" : "/auth"}>
+                <Link to="/plan">
                   <Button
                     size="xl"
                     className="bg-white text-sky-950 hover:bg-white/90 shadow-xl font-bold text-base sm:text-lg rounded-2xl px-8 sm:px-10 h-12 sm:h-14 hover:scale-[1.02] transition-transform w-full sm:w-auto"
                   >
-                    {isAuthenticated ? "Go to Dashboard" : "Start Planning Now"}
+                    Start Planning Now
                   </Button>
                 </Link>
               </div>
@@ -261,17 +254,6 @@ const Landing = () => {
               <p className="text-sm text-muted-foreground">
                 © 2026 TravelAI. Built with love for travelers.
               </p>
-            </div>
-            <div className="flex gap-6">
-              <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-smooth">
-                Privacy
-              </a>
-              <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-smooth">
-                Terms
-              </a>
-              <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-smooth">
-                Contact
-              </a>
             </div>
           </div>
         </div>

@@ -12,7 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { relativeTime } from "@/lib/relativeTime";
+import { formatRelative } from "@/lib/date";
 import type { TripPoll } from "@/types/trip";
 import type { DecodedPoll } from "@/hooks/useDecodedPolls";
 
@@ -126,7 +126,7 @@ export const PollCard: React.FC<PollCardProps> = ({
           <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
             <span className="font-bold">{mine ? "You" : poll.createdByLabel}</span>
             <span aria-hidden>·</span>
-            <span>{relativeTime(poll.createdAt)}</span>
+            <span>{formatRelative(poll.createdAt)}</span>
             {closed && (
               <Badge variant="outline" className="h-3.5 px-1 py-0 text-[9px] font-semibold">
                 Closed

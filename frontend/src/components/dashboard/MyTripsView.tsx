@@ -37,6 +37,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatDate } from "@/lib/date";
 import type { Trip } from "@/types/trip";
 import type { AgencyMember } from "@/types";
 import {
@@ -304,13 +305,8 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
     }
   };
 
-  const deletedDate = (trip: Trip): string => {
-    const raw = trip.deletedAt || trip.updatedAt;
-    const parsed = raw ? new Date(raw) : null;
-    return parsed && !Number.isNaN(parsed.getTime())
-      ? parsed.toLocaleDateString()
-      : "recently";
-  };
+  const deletedDate = (trip: Trip): string =>
+    formatDate(trip.deletedAt || trip.updatedAt || "") || "recently";
 
   return (
     <div className="space-y-6 animate-fade-in max-w-6xl mx-auto">
@@ -461,7 +457,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
                 : emptyBody ??
                   (isAgency
                     ? "Plan a client trip with AI, then refine it with your team and invite the client from the People tab."
-                    : "Start planning your first unforgettable journey with our AI assistant!")}
+                    : "Plan your first trip and it will show up here.")}
             </p>
           </div>
           <Button
@@ -535,7 +531,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
                       {title}
                     </h3>
                     <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border/60">
-                      <span>Created {new Date(trip.createdAt).toLocaleDateString()}</span>
+                      <span>Created {formatDate(trip.createdAt)}</span>
                       {isAgency ? (
                         <span
                           className="max-w-[45%] truncate font-semibold text-foreground"
@@ -682,7 +678,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
                         <span>{statusInfo.label}</span>
                       </Badge>
                       <span className="text-xs text-muted-foreground">
-                        {new Date(trip.createdAt).toLocaleDateString()}
+                        {formatDate(trip.createdAt)}
                       </span>
                     </div>
                     <h4 className="font-extrabold text-sm sm:text-base text-foreground group-hover:text-primary transition-colors line-clamp-1">
@@ -792,7 +788,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
         <div className="space-y-3">
           <div className="flex items-center gap-2 pt-2">
             <Users className="w-4 h-4 text-primary" />
-            <h3 className="text-sm font-black uppercase tracking-wider text-foreground">
+            <h3 className="text-sm font-semibold tracking-wide text-foreground">
               Shared with me
             </h3>
             <Badge variant="outline" className="text-[10px]">
@@ -836,7 +832,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
                         {trip.role}
                       </Badge>
                       <span className="text-xs text-muted-foreground">
-                        {new Date(trip.createdAt).toLocaleDateString()}
+                        {formatDate(trip.createdAt)}
                       </span>
                     </div>
                     <h4 className="font-extrabold text-sm sm:text-base text-foreground group-hover:text-primary transition-colors line-clamp-1">
@@ -895,7 +891,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
             aria-expanded={showDeleted}
           >
             <Archive className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm font-black uppercase tracking-wider text-foreground">
+            <span className="text-sm font-semibold tracking-wide text-foreground">
               Recently deleted
             </span>
             <Badge variant="outline" className="text-[10px]">

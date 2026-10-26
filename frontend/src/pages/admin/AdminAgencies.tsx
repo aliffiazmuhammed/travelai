@@ -490,7 +490,7 @@ const AdminAgencies: React.FC = () => {
             <CardDescription>
               {list
                 ? `${list.counts.all} tenant${list.counts.all === 1 ? '' : 's'} · ${list.counts.active} active · ${list.counts.suspended} suspended`
-                : 'Loading tenants…'}
+                : 'Fetching tenants…'}
             </CardDescription>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -667,7 +667,7 @@ const AdminAgencies: React.FC = () => {
             <p className="text-xs text-slate-500">
               {list
                 ? `${list.total} tenant${list.total === 1 ? '' : 's'} · page ${list.page} of ${list.totalPages}`
-                : 'Loading…'}
+                : 'Loading tenants…'}
             </p>
             <div className="flex items-center gap-2">
               <Button

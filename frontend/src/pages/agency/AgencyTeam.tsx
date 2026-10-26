@@ -210,13 +210,13 @@ const AgencyTeam: React.FC = () => {
   };
 
   if (contextLoading && !activeAgency) {
-    return <LoadingRow label="Loading agency..." />;
+    return <LoadingRow label="Opening agency…" />;
   }
   if (!activeAgencyId) {
     return <Navigate to="/agency" replace />;
   }
   if (loading) {
-    return <LoadingRow label="Loading team..." />;
+    return <LoadingRow label="Loading team…" />;
   }
 
   return (

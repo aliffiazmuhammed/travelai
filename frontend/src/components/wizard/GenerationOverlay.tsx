@@ -13,6 +13,10 @@ import {
   AlertCircle,
   RefreshCw,
   X,
+  Wallet,
+  Sunrise,
+  CarTaxiFront,
+  Backpack,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -57,11 +61,26 @@ const STAGES = [
 ];
 
 const TRAVEL_TIPS = [
-  "💡 Pro Tip: Most mountain towns in India prefer offline UPI or cash due to patchy mobile connectivity at high passes.",
-  "✨ AI Insight: Scheduling morning temple visits avoids tourist queues and midday heat.",
-  "🛺 Transit Tip: Always verify auto-rickshaw meter rates or negotiate before beginning local rides.",
-  "🍲 Foodie Tip: Look for bustling local dhabas with high local footfall for the freshest, safest regional dishes.",
-  "🎒 Packing Tip: Layering is essential for North Indian hill stations as temperatures swing drastically between day and night.",
+  {
+    icon: Wallet,
+    text: "Most mountain towns in India prefer offline UPI or cash — mobile connectivity is patchy at high passes.",
+  },
+  {
+    icon: Sunrise,
+    text: "Scheduling morning temple visits avoids tourist queues and midday heat.",
+  },
+  {
+    icon: CarTaxiFront,
+    text: "Always verify auto-rickshaw meter rates or agree the fare before starting a local ride.",
+  },
+  {
+    icon: Utensils,
+    text: "Busy local dhabas with a steady local crowd usually serve the freshest regional food.",
+  },
+  {
+    icon: Backpack,
+    text: "Layers matter in the northern hills — temperatures swing sharply between day and night.",
+  },
 ];
 
 export const GenerationOverlay: React.FC<GenerationOverlayProps> = ({
@@ -205,8 +224,11 @@ export const GenerationOverlay: React.FC<GenerationOverlayProps> = ({
 
         {/* Rotating Travel Tip Box */}
         {!error && progress < 100 && (
-          <div className="p-3 bg-card/60 border border-border/60 rounded-xl text-[11px] text-muted-foreground italic transition-all duration-300">
-            {TRAVEL_TIPS[tipIndex]}
+          <div className="flex items-start gap-2.5 p-3 bg-card/60 border border-border/60 rounded-xl text-[11px] text-muted-foreground transition-all duration-300">
+            {React.createElement(TRAVEL_TIPS[tipIndex].icon, {
+              className: "w-4 h-4 shrink-0 mt-px text-primary",
+            })}
+            <span className="leading-relaxed">{TRAVEL_TIPS[tipIndex].text}</span>
           </div>
         )}
 

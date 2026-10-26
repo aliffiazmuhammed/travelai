@@ -1,6 +1,5 @@
 import { lazy, Suspense } from "react";
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
+import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
@@ -48,7 +47,7 @@ const PageLoader = () => (
     <div className="flex flex-col items-center gap-3">
       <div className="w-9 h-9 border-3 border-sky-500/20 border-t-sky-500 rounded-full animate-spin" />
       <p className="text-sm font-medium text-muted-foreground animate-pulse">
-        Loading TravelAI...
+        Opening TravelAI…
       </p>
     </div>
   </div>
@@ -59,14 +58,20 @@ const App = () => (
     <ErrorBoundary>
       <TooltipProvider>
         <Toaster />
-        <Sonner />
         <BrowserRouter>
           <AuthProvider>
             <Suspense fallback={<PageLoader />}>
               <Routes>
                 <Route path="/" element={<Landing />} />
                 <Route path="/auth" element={<Auth />} />
-                <Route path="/plan" element={<TripPlanner />} />
+                <Route
+                  path="/plan"
+                  element={
+                    <ProtectedRoute>
+                      <TripPlanner />
+                    </ProtectedRoute>
+                  }
+                />
                 <Route path="/shared/:shareId" element={<SharedTrip />} />
                 <Route path="/proposal/:token" element={<ProposalShare />} />
                 <Route path="/invite/:token" element={<InviteAccept />} />

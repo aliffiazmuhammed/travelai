@@ -327,7 +327,7 @@ const AdminAudit: React.FC = () => {
             <p className="text-xs text-slate-500">
               {data
                 ? `${data.total} event${data.total === 1 ? '' : 's'} · page ${data.page} of ${data.totalPages}`
-                : 'Loading…'}
+                : 'Loading audit log…'}
             </p>
             <div className="flex items-center gap-2">
               <Button

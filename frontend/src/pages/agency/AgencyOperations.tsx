@@ -22,6 +22,7 @@ import {
 import { api } from '@/services/api';
 import { useAgency } from '@/context/AgencyContext';
 import { cn } from '@/lib/utils';
+import { formatDateTime } from '@/lib/date';
 import type {
   AgencyAuditEntry,
   AgencyUsage,
@@ -379,7 +380,7 @@ const AgencyOperations: React.FC = () => {
                       <td className="whitespace-nowrap py-2.5 pr-3 text-muted-foreground">
                         <span className="flex items-center gap-1">
                           <Clock3 className="h-3 w-3 shrink-0" />
-                          {new Date(entry.createdAt).toLocaleString()}
+                          {formatDateTime(entry.createdAt)}
                         </span>
                       </td>
                       <td className="py-2.5 pr-3 font-semibold">

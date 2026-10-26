@@ -31,7 +31,7 @@ import {
 } from "lucide-react";
 import { api } from "@/services/api";
 import { cn } from "@/lib/utils";
-import { relativeTime } from "@/lib/relativeTime";
+import { formatRelative } from "@/lib/date";
 import { avatarSrc, initialsFor } from "@/lib/avatar";
 import type { TripComment, TripDecision, TripPoll, TripRole } from "@/types/trip";
 import type {
@@ -1244,7 +1244,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
           ? !canWrite
             ? "No messages yet."
             : isChat
-              ? "No messages yet — say hi 👋"
+              ? "No messages yet — say hi"
               : "No messages yet — start the conversation above."
           : "Nothing on this day yet."}
       </div>
@@ -1558,7 +1558,7 @@ const DecisionCard: React.FC<DecisionCardProps> = ({ row, canUnmark, isBusy, onU
       <div className="flex items-center gap-1.5 flex-wrap mt-0.5 text-[10px] text-muted-foreground">
         <span className="font-bold">{row.label}</span>
         <span aria-hidden>·</span>
-        <span>{relativeTime(row.createdAt)}</span>
+        <span>{formatRelative(row.createdAt)}</span>
         {row.day !== undefined && (
           <Badge
             variant="outline"
@@ -1628,7 +1628,7 @@ const DecisionsStrip: React.FC<DecisionsStripProps> = ({
           className="flex w-full items-center gap-1.5 px-3 py-2 text-left"
         >
           <Pin className="w-3.5 h-3.5 text-primary shrink-0" />
-          <span className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground shrink-0">
+          <span className="text-[10px] font-semibold tracking-wide text-muted-foreground shrink-0">
             Decisions
           </span>
           <Badge variant="outline" className="shrink-0 text-[10px]">
@@ -1667,7 +1667,7 @@ const DecisionsStrip: React.FC<DecisionsStripProps> = ({
     <div className="space-y-1.5">
       <div className="flex items-center gap-1.5">
         <Pin className="w-3.5 h-3.5 text-primary" />
-        <span className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">
+        <span className="text-[10px] font-semibold tracking-wide text-muted-foreground">
           Decisions
         </span>
         <Badge variant="outline" className="text-[10px]">
@@ -1972,7 +1972,7 @@ const CommentRow: React.FC<CommentRowProps> = ({
           )}
         >
           {row.editedAt && <span className="italic">(edited)</span>}
-          <span>{relativeTime(row.createdAt)}</span>
+          <span>{formatRelative(row.createdAt)}</span>
         </div>
       </div>
 

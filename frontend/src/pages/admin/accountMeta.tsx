@@ -1,6 +1,7 @@
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { formatDateTime } from '@/lib/date';
 import type { PlatformAccountStatus, PlatformAccountType } from '@/types';
 
 /**
@@ -46,12 +47,7 @@ export const StatusBadge: React.FC<{ status: PlatformAccountStatus }> = ({ statu
 /** Locale date/time for the console; an em dash when the value is absent. */
 export function formatAdminDate(value?: string): string {
   if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleString(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  });
+  return formatDateTime(value) || '—';
 }
 
 export function accountDisplayName(account: {

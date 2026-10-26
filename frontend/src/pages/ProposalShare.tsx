@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/services/api";
 import { formatMoney } from "@/lib/currency";
+import { formatDate } from "@/lib/date";
 import type { AgencyProposalView } from "@/types/agency";
 import {
   AlertCircle,
@@ -92,11 +93,7 @@ const ProposalShare: React.FC = () => {
 
   const quote = proposal?.quote ?? null;
   const expiryLabel = proposal?.expiresAt
-    ? new Date(proposal.expiresAt).toLocaleDateString(undefined, {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      })
+    ? formatDate(proposal.expiresAt)
     : null;
 
   const statusBadge = () => {
@@ -207,10 +204,7 @@ const ProposalShare: React.FC = () => {
                     {proposal.acceptedAt ? (
                       <p className="text-[11px] opacity-80">
                         Accepted on{" "}
-                        {new Date(proposal.acceptedAt).toLocaleDateString(
-                          undefined,
-                          { year: "numeric", month: "short", day: "numeric" }
-                        )}
+                        {formatDate(proposal.acceptedAt)}
                       </p>
                     ) : null}
                   </div>
@@ -344,10 +338,7 @@ const ProposalShare: React.FC = () => {
                       <div className="flex justify-between text-[11px] text-muted-foreground">
                         <span>Quote valid until</span>
                         <span>
-                          {new Date(quote.validUntil).toLocaleDateString(
-                            undefined,
-                            { year: "numeric", month: "short", day: "numeric" }
-                          )}
+                          {formatDate(quote.validUntil)}
                         </span>
                       </div>
                     ) : null}

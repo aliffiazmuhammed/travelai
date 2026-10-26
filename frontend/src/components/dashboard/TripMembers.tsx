@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { avatarSrc } from "@/lib/avatar";
+import { formatDate } from "@/lib/date";
 import { roleLabel } from "@/hooks/useTripAccess";
 import type {
   TripInviteInfo,
@@ -304,7 +305,7 @@ export const TripMembers: React.FC<TripMembersProps> = ({
                         <p className="text-[11px] text-muted-foreground">
                           {member.label && member.email ? `${member.email} · ` : ""}
                           {member.joinedAt
-                            ? `Joined ${new Date(member.joinedAt).toLocaleDateString()}`
+                            ? `Joined ${formatDate(member.joinedAt)}`
                             : ""}
                         </p>
                       </div>
@@ -432,7 +433,7 @@ export const TripMembers: React.FC<TripMembersProps> = ({
                         </div>
                         <p className="text-[11px] text-muted-foreground mt-1">
                           {invite.usedCount}/{invite.maxUses} used · expires{" "}
-                          {new Date(invite.expiresAt).toLocaleDateString()}
+                          {formatDate(invite.expiresAt)}
                         </p>
                       </div>
                       <div className="shrink-0">

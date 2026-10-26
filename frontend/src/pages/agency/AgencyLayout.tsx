@@ -98,7 +98,7 @@ const AgencyLayout: React.FC = () => {
               </span>
               <span className="block truncate text-[11px] text-slate-500 dark:text-slate-400">
                 {loading && !activeAgency
-                  ? 'Loading workspace...'
+                  ? 'Opening your workspace…'
                   : [tenantSlug ? `workspace: ${tenantSlug}` : null, role ? agencyRoleLabel(role) : null]
                       .filter(Boolean)
                       .join(' · ')}

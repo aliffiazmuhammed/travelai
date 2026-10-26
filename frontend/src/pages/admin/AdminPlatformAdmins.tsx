@@ -382,7 +382,7 @@ const AdminPlatformAdmins: React.FC = () => {
             <p className="text-xs text-slate-500">
               {data
                 ? `${data.total} platform admin${data.total === 1 ? '' : 's'} · page ${data.page} of ${data.totalPages}`
-                : 'Loading…'}
+                : 'Loading admins…'}
             </p>
             <div className="flex items-center gap-2">
               <Button

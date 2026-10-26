@@ -64,14 +64,14 @@ const Navbar = () => {
             className="flex items-center gap-2.5 group select-none min-h-[44px]"
             aria-label="TravelAI Home"
           >
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-sky-500 to-primary text-white flex items-center justify-center shadow-md shadow-sky-500/25 group-hover:scale-105 transition-all">
-              <Plane className="h-5 w-5 fill-white/20 stroke-[2.2]" />
+            <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center group-hover:scale-105 transition-all">
+              <Plane className="h-5 w-5 fill-primary/20 stroke-[2.2]" />
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="text-xl font-black bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+              <span className="text-xl font-black text-foreground">
                 TravelAI
               </span>
-              <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/25">
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/25">
                 Assistant
               </span>
             </div>
@@ -188,7 +188,7 @@ const Navbar = () => {
                 </SheetTrigger>
                 <SheetContent side="right" className="w-[300px] p-6 space-y-6">
                   <div className="flex items-center gap-2.5 pt-2">
-                    <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-sky-500 to-primary text-white flex items-center justify-center shadow-md shadow-sky-500/25">
+                    <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
                       <Plane className="h-5 w-5" />
                     </div>
                     <span className="text-lg font-black text-foreground">

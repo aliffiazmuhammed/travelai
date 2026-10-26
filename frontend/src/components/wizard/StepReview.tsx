@@ -15,8 +15,10 @@ import {
   Gauge,
   Languages,
   UtensilsCrossed,
+  ClipboardCheck,
 } from "lucide-react";
-import { format, differenceInCalendarDays } from "date-fns";
+import { differenceInCalendarDays } from "date-fns";
+import { formatDate, formatDateShort } from "@/lib/date";
 import type { TripLanguage, TravelPace } from "@/types/trip";
 
 const LANGUAGE_LABELS: Record<TripLanguage, string> = {
@@ -85,7 +87,7 @@ export const StepReview: React.FC<StepReviewProps> = ({
       <div className="text-center space-y-2">
         <h2 className="text-2xl font-bold tracking-tight text-foreground flex items-center justify-center gap-2">
           <span>Review your trip details</span>
-          <span className="text-2xl">📋</span>
+          <ClipboardCheck className="w-6 h-6 text-primary" aria-hidden="true" />
         </h2>
         <p className="text-sm text-muted-foreground max-w-lg mx-auto">
           Everything is set! Check your preferences below before our AI crafts your personalized day-by-day itinerary.
@@ -112,7 +114,7 @@ export const StepReview: React.FC<StepReviewProps> = ({
                 <MapPin className="w-5 h-5" />
               </div>
               <div>
-                <span className="text-xs uppercase font-semibold text-muted-foreground">
+                <span className="text-xs font-semibold tracking-wide text-muted-foreground">
                   Destination
                 </span>
                 <h3 className="text-base font-bold text-foreground">
@@ -140,15 +142,15 @@ export const StepReview: React.FC<StepReviewProps> = ({
                 <Calendar className="w-5 h-5" />
               </div>
               <div>
-                <span className="text-xs uppercase font-semibold text-muted-foreground">
+                <span className="text-xs font-semibold tracking-wide text-muted-foreground">
                   Duration & Dates
                 </span>
                 <h3 className="text-base font-bold text-foreground">
                   {durationDays} Days / {durationDays > 1 ? durationDays - 1 : 1} Nights
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {startDate && format(startDate, "dd MMM")} →{" "}
-                  {endDate && format(endDate, "dd MMM yyyy")}
+                  {startDate && formatDateShort(startDate)} →{" "}
+                  {endDate && formatDate(endDate)}
                 </p>
               </div>
             </div>
@@ -172,7 +174,7 @@ export const StepReview: React.FC<StepReviewProps> = ({
                 <Users className="w-5 h-5" />
               </div>
               <div>
-                <span className="text-xs uppercase font-semibold text-muted-foreground">
+                <span className="text-xs font-semibold tracking-wide text-muted-foreground">
                   Group & Travelers
                 </span>
                 <h3 className="text-base font-bold text-foreground">
@@ -203,7 +205,7 @@ export const StepReview: React.FC<StepReviewProps> = ({
                 <IndianRupee className="w-5 h-5" />
               </div>
               <div>
-                <span className="text-xs uppercase font-semibold text-muted-foreground">
+                <span className="text-xs font-semibold tracking-wide text-muted-foreground">
                   Budget Allocation
                 </span>
                 <h3 className="text-base font-bold text-primary">
@@ -231,7 +233,7 @@ export const StepReview: React.FC<StepReviewProps> = ({
       {/* Style & Preferences Card */}
       <div className="p-5 rounded-2xl border border-border/80 bg-card/60 backdrop-blur-sm space-y-3">
         <div className="flex items-center justify-between">
-          <span className="text-xs uppercase font-semibold text-muted-foreground">
+          <span className="text-xs font-semibold tracking-wide text-muted-foreground">
             Travel Style & Interests
           </span>
           <Button
@@ -304,7 +306,7 @@ export const StepReview: React.FC<StepReviewProps> = ({
           ) : (
             <>
               <Sparkles className="w-5 h-5 mr-2" />
-              Generate My Travel Itinerary ✨
+              Generate My Travel Itinerary
             </>
           )}
         </Button>

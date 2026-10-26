@@ -30,7 +30,7 @@ const LandingChat = () => {
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border/60 bg-muted/40">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-sky-500 to-primary text-white flex items-center justify-center shadow-sm">
+            <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
               <Users className="h-5 w-5" />
             </div>
             <div>
@@ -61,7 +61,7 @@ const LandingChat = () => {
 
           {/* AI reply */}
           <div className="flex items-start gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-sky-500 to-primary text-white flex items-center justify-center shrink-0 shadow-sm">
+            <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
               <Sparkles className="h-4 w-4" />
             </div>
             <div className="max-w-[88%] rounded-2xl rounded-tl-md bg-primary/5 border border-primary/20 px-4 py-2.5 shadow-xs">

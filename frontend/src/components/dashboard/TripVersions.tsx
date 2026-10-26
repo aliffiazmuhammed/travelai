@@ -25,6 +25,7 @@ import {
 import { toast } from "sonner";
 import { api } from "@/services/api";
 import { isRevConflict, toastConflict } from "@/lib/conflicts";
+import { formatRelative } from "@/lib/date";
 import type { Trip, TripVersionSummary } from "@/types/trip";
 
 interface TripVersionsProps {
@@ -34,21 +35,6 @@ interface TripVersionsProps {
   /** Restore is an editor action on the server (Milestone 6 §3.3). */
   canRestore?: boolean;
   onRestored: (trip: Trip) => void;
-}
-
-/** Human friendly relative time (e.g. "3 min ago", "2 days ago"). */
-function relativeTime(iso: string): string {
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return "Unknown time";
-  const diff = Date.now() - then;
-  const mins = Math.round(diff / 60000);
-  if (mins < 1) return "Just now";
-  if (mins < 60) return `${mins} min ago`;
-  const hours = Math.round(mins / 60);
-  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
-  const days = Math.round(hours / 24);
-  if (days < 30) return `${days} day${days === 1 ? "" : "s"} ago`;
-  return new Date(iso).toLocaleDateString();
 }
 
 export const TripVersions: React.FC<TripVersionsProps> = ({
@@ -246,7 +232,7 @@ export const TripVersions: React.FC<TripVersionsProps> = ({
                       <span className="text-sm font-black text-foreground">Version {v.version}</span>
                       <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground font-medium">
                         <Clock className="w-3 h-3" />
-                        {relativeTime(v.savedAt)}
+                        {formatRelative(v.savedAt)}
                       </span>
                     </div>
                     <p className="text-[11px] text-muted-foreground line-clamp-1 max-w-md">

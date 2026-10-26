@@ -1,13 +1,30 @@
 import React from "react";
 import { Badge } from "@/components/ui/badge";
-import { Check, Sparkles, Languages, Gauge, UtensilsCrossed } from "lucide-react";
+import {
+  Check,
+  Sparkles,
+  Languages,
+  Gauge,
+  UtensilsCrossed,
+  Mountain,
+  Landmark,
+  Waves,
+  Trees,
+  Camera,
+  Music,
+  ShoppingBag,
+  Coffee,
+  Footprints,
+  Zap,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { TripLanguage, TravelPace } from "@/types/trip";
 
 interface TravelStyleOption {
   id: string;
   name: string;
-  emoji: string;
+  icon: LucideIcon;
   description: string;
   tags: string[];
 }
@@ -16,56 +33,56 @@ const STYLE_OPTIONS: TravelStyleOption[] = [
   {
     id: "Adventure",
     name: "Adventure & Thrill",
-    emoji: "🏔️",
+    icon: Mountain,
     description: "Trekking, water sports, paragliding, high passes & river rafting",
     tags: ["Trekking", "Rafting", "Outdoor"],
   },
   {
     id: "Culture",
     name: "Culture & Heritage",
-    emoji: "🏛️",
+    icon: Landmark,
     description: "Forts, royal palaces, UNESCO temples, heritage walks & folklore",
     tags: ["Heritage", "Monuments", "History"],
   },
   {
     id: "Relaxation",
     name: "Relaxation & Wellness",
-    emoji: "🧘",
+    icon: Waves,
     description: "Serene beaches, tranquil backwaters, Ayurvedic massage & slow pace",
     tags: ["Spa", "Beaches", "Peaceful"],
   },
   {
     id: "Food",
     name: "Food & Culinary Trail",
-    emoji: "🍲",
+    icon: UtensilsCrossed,
     description: "Authentic local dhabas, street food walks, traditional thalis & cafes",
     tags: ["Street Food", "Regional Thalis", "Cafes"],
   },
   {
     id: "Nature",
     name: "Nature & Wildlife",
-    emoji: "🌿",
+    icon: Trees,
     description: "Lush tea gardens, wildlife safaris, misty waterfalls & lakes",
     tags: ["Safaris", "Flora", "Scenic"],
   },
   {
     id: "Photography",
     name: "Photography & Views",
-    emoji: "📸",
+    icon: Camera,
     description: "Breathtaking viewpoints, sunrise spots, vibrant streets & golden hours",
     tags: ["Landscape", "Golden Hour", "Insta-spots"],
   },
   {
     id: "Nightlife",
     name: "Nightlife & Social",
-    emoji: "🎉",
+    icon: Music,
     description: "Beach shacks, rooftop lounges, live music & vibrant evening markets",
     tags: ["Music", "Clubs", "Evening Vibe"],
   },
   {
     id: "Shopping",
     name: "Shopping & Souvenirs",
-    emoji: "🛍️",
+    icon: ShoppingBag,
     description: "Local artisan bazaars, spice markets, textiles & authentic crafts",
     tags: ["Handicrafts", "Spices", "Bazaars"],
   },
@@ -86,12 +103,12 @@ const LANGUAGE_OPTIONS: { id: TripLanguage; label: string; native: string }[] = 
 const PACE_OPTIONS: {
   id: TravelPace;
   label: string;
-  emoji: string;
+  icon: LucideIcon;
   description: string;
 }[] = [
-  { id: "relaxed", label: "Relaxed", emoji: "🐢", description: "Fewer activities, long breaks" },
-  { id: "balanced", label: "Balanced", emoji: "🚶", description: "Highlights plus downtime" },
-  { id: "packed", label: "Action-packed", emoji: "🏃", description: "See as much as possible" },
+  { id: "relaxed", label: "Relaxed", icon: Coffee, description: "Fewer activities, long breaks" },
+  { id: "balanced", label: "Balanced", icon: Footprints, description: "Highlights plus downtime" },
+  { id: "packed", label: "Action-packed", icon: Zap, description: "See as much as possible" },
 ];
 
 const DIETARY_OPTIONS = ["Vegetarian", "Vegan", "Jain", "Halal", "Gluten-free"];
@@ -126,7 +143,7 @@ export const StepStyle: React.FC<StepStyleProps> = ({
       <div className="text-center space-y-2">
         <h2 className="text-2xl font-bold tracking-tight text-foreground flex items-center justify-center gap-2">
           <span>What travel style inspires you?</span>
-          <span className="text-2xl">✨</span>
+          <Sparkles className="w-6 h-6 text-primary" aria-hidden="true" />
         </h2>
         <p className="text-sm text-muted-foreground max-w-lg mx-auto">
           Choose the experiences that match your vibe. Select one or more to personalize daily activities.
@@ -166,6 +183,7 @@ export const StepStyle: React.FC<StepStyleProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
         {STYLE_OPTIONS.map((style) => {
           const isSelected = selectedInterests.includes(style.id);
+          const StyleIcon = style.icon;
           return (
             <div
               key={style.id}
@@ -179,8 +197,8 @@ export const StepStyle: React.FC<StepStyleProps> = ({
             >
               <div className="flex items-start justify-between mb-2">
                 <div className="flex items-center gap-2.5">
-                  <span className="text-2xl p-1 bg-card rounded-lg border border-border/50 shadow-2xs">
-                    {style.emoji}
+                  <span className="p-2 bg-card rounded-lg border border-border/50 shadow-2xs flex items-center justify-center">
+                    <StyleIcon className="w-5 h-5 text-primary" />
                   </span>
                   <div>
                     <h4 className="font-bold text-foreground text-sm">
@@ -230,6 +248,7 @@ export const StepStyle: React.FC<StepStyleProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {PACE_OPTIONS.map((option) => {
             const isActive = pace === option.id;
+            const PaceIcon = option.icon;
             return (
               <button
                 type="button"
@@ -243,7 +262,7 @@ export const StepStyle: React.FC<StepStyleProps> = ({
                 )}
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-lg">{option.emoji}</span>
+                  <PaceIcon className="w-5 h-5 text-primary" />
                   {isActive && <Check className="w-4 h-4 text-primary stroke-[3]" />}
                 </div>
                 <p className="mt-1 text-sm font-bold text-foreground">{option.label}</p>

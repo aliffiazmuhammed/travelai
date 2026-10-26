@@ -2,7 +2,8 @@ import React, { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
-import { IndianRupee, Sparkles, Check } from "lucide-react";
+import { IndianRupee, Sparkles, Check, Backpack, Coffee, Gem, Crown } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface StepBudgetProps {
@@ -17,7 +18,7 @@ interface BudgetTier {
   min: number;
   max: number;
   preset: number;
-  icon: string;
+  icon: LucideIcon;
   tagline: string;
   color: string;
 }
@@ -29,7 +30,7 @@ const BUDGET_TIERS: BudgetTier[] = [
     min: 3000,
     max: 8000,
     preset: 6000,
-    icon: "🎒",
+    icon: Backpack,
     tagline: "Social hostels, street eats & local public transit",
     color: "border-blue-500/40 text-blue-600 bg-blue-500/10",
   },
@@ -39,7 +40,7 @@ const BUDGET_TIERS: BudgetTier[] = [
     min: 8001,
     max: 20000,
     preset: 15000,
-    icon: "☕",
+    icon: Coffee,
     tagline: "Cozy 3★ hotels, authentic dining & app cabs / autos",
     color: "border-emerald-500/40 text-emerald-600 bg-emerald-500/10",
   },
@@ -49,7 +50,7 @@ const BUDGET_TIERS: BudgetTier[] = [
     min: 20001,
     max: 45000,
     preset: 30000,
-    icon: "✨",
+    icon: Gem,
     tagline: "Boutique 4★ stays, private car hire & premier cafes",
     color: "border-purple-500/40 text-purple-600 bg-purple-500/10",
   },
@@ -59,7 +60,7 @@ const BUDGET_TIERS: BudgetTier[] = [
     min: 45001,
     max: 150000,
     preset: 60000,
-    icon: "👑",
+    icon: Crown,
     tagline: "5★ heritage palaces, private chauffeur & bespoke tours",
     color: "border-amber-500/40 text-amber-600 bg-amber-500/10",
   },
@@ -100,7 +101,7 @@ export const StepBudget: React.FC<StepBudgetProps> = ({
       <div className="text-center space-y-2">
         <h2 className="text-2xl font-bold tracking-tight text-foreground flex items-center justify-center gap-2">
           <span>What is your budget?</span>
-          <span className="text-2xl">💰</span>
+          <IndianRupee className="w-6 h-6 text-primary" aria-hidden="true" />
         </h2>
         <p className="text-sm text-muted-foreground max-w-lg mx-auto">
           AI will allocate expenses realistically across stays, food, permits, activities, and transit.
@@ -180,14 +181,15 @@ export const StepBudget: React.FC<StepBudgetProps> = ({
 
       {/* Preset Budget Tiers */}
       <div className="space-y-3">
-        <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <div className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-muted-foreground">
           <Sparkles className="w-3.5 h-3.5 text-primary" />
-          <span>Recommended Budget Tiers</span>
+          <span>Recommended budget tiers</span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {BUDGET_TIERS.map((tier) => {
             const isSelected = activeTier?.id === tier.id;
+            const TierIcon = tier.icon;
             return (
               <div
                 key={tier.id}
@@ -201,7 +203,7 @@ export const StepBudget: React.FC<StepBudgetProps> = ({
               >
                 <div className="flex items-start justify-between mb-1.5">
                   <div className="flex items-center gap-2">
-                    <span className="text-xl">{tier.icon}</span>
+                    <TierIcon className="w-5 h-5 text-primary shrink-0" />
                     <div>
                       <h4 className="text-xs font-bold text-foreground">
                         {tier.name}

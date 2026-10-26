@@ -3,10 +3,9 @@ import { useLocation, useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { api } from "@/services/api";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
 import ItineraryDisplay from "@/components/ItineraryDisplay";
 import { MyTripsView } from "@/components/dashboard/MyTripsView";
-import { TripsGridSkeleton } from "@/components/dashboard/TripSkeletons";
+import { TripsGridSkeleton, ItinerarySkeleton } from "@/components/dashboard/TripSkeletons";
 import { useAuth } from "@/context/UserContext";
 import { useTripAccess } from "@/hooks/useTripAccess";
 import { isRevConflict, toastConflict } from "@/lib/conflicts";
@@ -360,11 +359,12 @@ const Dashboard: React.FC = () => {
       <Navbar />
 
       <main className="flex-1 container mx-auto px-4 pt-24 pb-16">
-        {/* E5 (F16): opening a card fetches the full document — keep the list
-            visible under a lightweight veil instead of flashing a skeleton. */}
+        {/* E5 (F16): opening a card fetches the full document. Show the shape
+            of the itinerary that is about to render instead of a spinner veil,
+            so the transition feels like the page loading, not a stall. */}
         {openingDetail && (
-          <div className="fixed inset-0 z-50 bg-background/60 backdrop-blur-sm flex items-center justify-center">
-            <Loader2 className="w-10 h-10 animate-spin text-primary" />
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-background/80 backdrop-blur-sm px-4 pt-24">
+            <ItinerarySkeleton />
           </div>
         )}
         {loading ? (

@@ -13,6 +13,10 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+        display: ["Fraunces", "ui-serif", "Georgia", "serif"],
+      },
       backgroundImage: {
         "gradient-sky": "var(--gradient-sky)",
         "gradient-sunrise": "var(--gradient-sunrise)",

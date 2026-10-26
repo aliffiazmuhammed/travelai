@@ -61,10 +61,10 @@ const SharedTrip: React.FC = () => {
             <Loader2 className="w-10 h-10 text-primary animate-spin" />
             <div className="text-center space-y-1">
               <h3 className="text-base font-bold text-foreground">
-                Loading Shared Adventure...
+                Opening the shared trip…
               </h3>
               <p className="text-xs text-muted-foreground">
-                Retrieving itinerary details and maps
+                Fetching the itinerary and map
               </p>
             </div>
           </div>

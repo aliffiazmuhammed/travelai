@@ -316,7 +316,7 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
             <div key={dayData.day} className="relative space-y-6">
               {/* Day Milestone Marker */}
               <div className="absolute -left-12 sm:-left-16 top-0 w-8 sm:w-10 flex items-center justify-center">
-                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-tr from-sky-500 to-primary text-white flex items-center justify-center font-black text-xs sm:text-sm shadow-md ring-4 ring-background">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs sm:text-sm ring-4 ring-background">
                   {dayData.day}
                 </div>
               </div>
@@ -325,7 +325,7 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/60 pb-3">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-extrabold uppercase tracking-wider text-primary">
+                    <span className="text-xs font-semibold tracking-wide text-primary">
                       Day {dayData.day}
                     </span>
                     {commentCount(dayData.day) > 0 && (

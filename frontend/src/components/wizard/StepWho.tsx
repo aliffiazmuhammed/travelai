@@ -77,7 +77,7 @@ export const StepWho: React.FC<StepWhoProps> = ({
       <div className="text-center space-y-2">
         <h2 className="text-2xl font-bold tracking-tight text-foreground flex items-center justify-center gap-2">
           <span>Who is traveling with you?</span>
-          <span className="text-2xl">👥</span>
+          <Users className="w-6 h-6 text-primary" aria-hidden="true" />
         </h2>
         <p className="text-sm text-muted-foreground max-w-lg mx-auto">
           We tune activity paces, accommodation sizes, and food suggestions based on your traveling group.
@@ -130,7 +130,7 @@ export const StepWho: React.FC<StepWhoProps> = ({
       {/* Traveler Counts Box */}
       <div className="p-6 rounded-2xl border border-border/80 bg-card/60 backdrop-blur-sm space-y-4">
         <div className="flex items-center justify-between pb-2 border-b border-border/50">
-          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <span className="text-xs font-semibold tracking-wide text-muted-foreground">
             Traveler Details
           </span>
           <Badge variant="secondary" className="font-semibold">

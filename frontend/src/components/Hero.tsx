@@ -29,7 +29,7 @@ const Hero = () => {
             </span>
           </div>
 
-          <h1 className="text-3xl sm:text-5xl md:text-6xl font-extrabold leading-tight tracking-tight text-foreground">
+          <h1 className="font-display text-3xl sm:text-5xl md:text-6xl font-semibold leading-tight tracking-tight text-foreground">
             Say where you want to go.
             <br />
             <span className="bg-gradient-to-r from-primary via-sky-500 to-accent bg-clip-text text-transparent">

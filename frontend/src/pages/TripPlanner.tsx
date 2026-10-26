@@ -7,6 +7,16 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ArrowLeft, ArrowRight, RotateCcw, Sparkles } from "lucide-react";
 import { API_BASE_URL } from "@/config";
 import { WizardProgress, WizardStep } from "@/components/wizard/WizardProgress";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { StepWhere } from "@/components/wizard/StepWhere";
 import { StepWhen } from "@/components/wizard/StepWhen";
 import { StepWho } from "@/components/wizard/StepWho";
@@ -27,6 +37,7 @@ const WIZARD_STEPS: WizardStep[] = [
 ];
 
 const LOCAL_STORAGE_KEY = "travelai_trip_wizard_draft_v1";
+const LAST_PREFS_KEY = "travelai_trip_wizard_last_prefs_v1";
 
 const ALL_STYLES = [
   "Adventure",
@@ -57,6 +68,7 @@ const TripPlanner: React.FC<TripPlannerProps> = ({
 
   // Wizard Navigation
   const [currentStep, setCurrentStep] = useState<number>(1);
+  const [resetOpen, setResetOpen] = useState<boolean>(false);
 
   // Form State
   const [destination, setDestination] = useState<string>("");
@@ -92,6 +104,20 @@ const TripPlanner: React.FC<TripPlannerProps> = ({
         if (parsed.destination) setDestination(parsed.destination);
         if (parsed.startDate) setStartDate(new Date(parsed.startDate));
         if (parsed.endDate) setEndDate(new Date(parsed.endDate));
+        if (parsed.groupType) setGroupType(parsed.groupType);
+        if (typeof parsed.adultsCount === "number") setAdultsCount(parsed.adultsCount);
+        if (typeof parsed.childrenCount === "number") setChildrenCount(parsed.childrenCount);
+        if (typeof parsed.budgetPerPerson === "number") setBudgetPerPerson(parsed.budgetPerPerson);
+        if (Array.isArray(parsed.selectedInterests)) setSelectedInterests(parsed.selectedInterests);
+        if (parsed.language) setLanguage(parsed.language);
+        if (parsed.pace) setPace(parsed.pace);
+        if (Array.isArray(parsed.dietary)) setDietary(parsed.dietary);
+      } else {
+        // No draft: carry over the group and style choices from the last trip
+        // so a repeat traveler never re-enters the same preferences.
+        const lastPrefs = localStorage.getItem(LAST_PREFS_KEY);
+        if (!lastPrefs) return;
+        const parsed = JSON.parse(lastPrefs);
         if (parsed.groupType) setGroupType(parsed.groupType);
         if (typeof parsed.adultsCount === "number") setAdultsCount(parsed.adultsCount);
         if (typeof parsed.childrenCount === "number") setChildrenCount(parsed.childrenCount);
@@ -203,21 +229,19 @@ const TripPlanner: React.FC<TripPlannerProps> = ({
   };
 
   const handleReset = () => {
-    if (confirm("Reset the form and start over?")) {
-      localStorage.removeItem(LOCAL_STORAGE_KEY);
-      setDestination("");
-      setStartDate(addDays(new Date(), 7));
-      setEndDate(addDays(new Date(), 12));
-      setGroupType("Couple");
-      setAdultsCount(2);
-      setChildrenCount(0);
-      setBudgetPerPerson(20000);
-      setSelectedInterests(["Culture", "Food", "Nature"]);
-      setLanguage("en");
-      setPace("balanced");
-      setDietary([]);
-      setCurrentStep(1);
-    }
+    localStorage.removeItem(LOCAL_STORAGE_KEY);
+    setDestination("");
+    setStartDate(addDays(new Date(), 7));
+    setEndDate(addDays(new Date(), 12));
+    setGroupType("Couple");
+    setAdultsCount(2);
+    setChildrenCount(0);
+    setBudgetPerPerson(20000);
+    setSelectedInterests(["Culture", "Food", "Nature"]);
+    setLanguage("en");
+    setPace("balanced");
+    setDietary([]);
+    setCurrentStep(1);
   };
 
   // Interests Handlers
@@ -295,6 +319,23 @@ const TripPlanner: React.FC<TripPlannerProps> = ({
           setStreamProgress(100);
           setStreamMessage("Your personalized itinerary is ready!");
           localStorage.removeItem(LOCAL_STORAGE_KEY);
+          try {
+            localStorage.setItem(
+              LAST_PREFS_KEY,
+              JSON.stringify({
+                groupType,
+                adultsCount,
+                childrenCount,
+                budgetPerPerson,
+                selectedInterests,
+                language,
+                pace,
+                dietary,
+              })
+            );
+          } catch (e) {
+            console.warn("Could not save trip preferences", e);
+          }
           setTimeout(() => {
             setIsOverlayOpen(false);
             setLoading(false);
@@ -339,8 +380,8 @@ const TripPlanner: React.FC<TripPlannerProps> = ({
         <div className="text-center space-y-3 mb-6 sm:mb-8">
           <div className="inline-flex items-center gap-2 bg-primary/10 backdrop-blur-sm border border-primary/20 rounded-full px-4 sm:px-5 py-1.5 shadow-2xs">
             <Sparkles className="w-4 h-4 text-primary shrink-0" />
-            <span className="text-xs font-semibold text-primary uppercase tracking-wider">
-              {isAgencyMode ? "Agency Trip Planner" : "Smart Trip Planner"}
+            <span className="text-xs font-semibold text-primary tracking-wide">
+              {isAgencyMode ? "Agency trip planner" : "Smart trip planner"}
             </span>
           </div>
           <h1 className="text-2xl sm:text-4xl md:text-5xl font-extrabold text-foreground tracking-tight px-1">
@@ -351,7 +392,7 @@ const TripPlanner: React.FC<TripPlannerProps> = ({
               ? `Generate a working draft for ${
                   agencyName || "your agency"
                 }, then refine it with your team and invite the client.`
-              : "Answer a few quick questions and let our AI craft an unforgettable, optimized itinerary."}
+              : "Answer a few quick questions and get a day-by-day plan you can actually follow."}
           </p>
         </div>
 
@@ -462,7 +503,7 @@ const TripPlanner: React.FC<TripPlannerProps> = ({
                   <Button
                     type="button"
                     variant="ghost"
-                    onClick={handleReset}
+                    onClick={() => setResetOpen(true)}
                     className="rounded-xl text-xs text-muted-foreground hover:text-foreground gap-1.5 h-11 px-3"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
@@ -491,7 +532,7 @@ const TripPlanner: React.FC<TripPlannerProps> = ({
                   <Button
                     type="button"
                     variant="ghost"
-                    onClick={handleReset}
+                    onClick={() => setResetOpen(true)}
                     className="rounded-xl text-xs text-muted-foreground hover:text-foreground gap-1.5 h-11 px-3"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
@@ -519,6 +560,31 @@ const TripPlanner: React.FC<TripPlannerProps> = ({
           onRetry={handleRetryOverlay}
           onCancel={handleCancelOverlay}
         />
+
+        <AlertDialog open={resetOpen} onOpenChange={setResetOpen}>
+          <AlertDialogContent className="rounded-3xl max-w-md w-[92vw] sm:w-full p-5 sm:p-6">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-lg font-bold">
+                Start over?
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-xs leading-relaxed">
+                Everything you've entered so far will be cleared. Trips you
+                already generated are saved and won't be affected.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="gap-2 sm:gap-0">
+              <AlertDialogCancel className="rounded-xl text-xs font-semibold h-10">
+                Keep my answers
+              </AlertDialogCancel>
+              <AlertDialogAction
+                className="rounded-xl text-xs font-bold h-10"
+                onClick={handleReset}
+              >
+                Clear and restart
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </main>
     </div>
   );

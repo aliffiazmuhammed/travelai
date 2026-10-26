@@ -1,4 +1,5 @@
 import type { AgencyInvitableRole, AgencyRole } from '@/types/agency';
+import { formatDate } from '@/lib/date';
 
 export const AGENCY_ROLE_LABELS: Record<AgencyRole, string> = {
   owner: 'Owner',
@@ -31,11 +32,5 @@ export function agencyRoleBadgeClass(role: AgencyRole | AgencyInvitableRole | st
 }
 
 export function formatAgencyDate(value: string | Date): string {
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleDateString(undefined, {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
+  return formatDate(value);
 }

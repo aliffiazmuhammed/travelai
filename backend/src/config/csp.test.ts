@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import {
   buildCspDirectives,
   CSP_CONNECT_ORIGINS,
+  CSP_FONT_ORIGINS,
   CSP_IMAGE_ORIGINS,
+  CSP_STYLE_ORIGINS,
 } from './csp.js';
 
 /**
@@ -27,6 +29,14 @@ test('CSP: image allow-list covers covers, avatars and both tile providers', () 
   assert.ok(CSP_IMAGE_ORIGINS.includes('https://res.cloudinary.com'));
   assert.ok(CSP_IMAGE_ORIGINS.includes('https://*.basemaps.cartocdn.com'));
   assert.ok(CSP_IMAGE_ORIGINS.includes('https://server.arcgisonline.com'));
+});
+
+test('CSP: Google Fonts CSS and font files are allow-listed', () => {
+  assert.deepEqual(CSP_STYLE_ORIGINS, ['https://fonts.googleapis.com']);
+  assert.deepEqual(CSP_FONT_ORIGINS, ['https://fonts.gstatic.com']);
+  const prod = buildCspDirectives(false) as Record<string, unknown>;
+  assert.ok(JSON.stringify(prod.styleSrc).includes('fonts.googleapis.com'));
+  assert.ok(JSON.stringify(prod.fontSrc).includes('fonts.gstatic.com'));
 });
 
 test('CSP: browser connections stay same-origin plus Nominatim', () => {

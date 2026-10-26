@@ -8,6 +8,7 @@ import { api } from "@/services/api";
 import { toast } from "sonner";
 import { Loader2, MapPin, CalendarClock, AlertTriangle, Sparkles, Users } from "lucide-react";
 import { roleLabel } from "@/hooks/useTripAccess";
+import { formatDateTime } from "@/lib/date";
 import type { InvitePreview } from "@/types/trip";
 import Navbar from "@/components/Navbar";
 
@@ -208,7 +209,7 @@ const InviteAccept: React.FC = () => {
                   <span>
                     This invitation is valid until{" "}
                     <strong className="text-foreground">
-                      {new Date(preview.expiresAt).toLocaleString()}
+                      {formatDateTime(preview.expiresAt)}
                     </strong>
                     {preview.kind === "email" ? " and is reserved for " : ""}
                     {preview.kind === "email" && (

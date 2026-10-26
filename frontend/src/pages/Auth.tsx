@@ -6,13 +6,20 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Plane, AlertCircle } from "lucide-react";
 import { useAuth } from "@/context/UserContext";
+import { cn } from "@/lib/utils";
+
+type FieldErrors = {
+  email?: string;
+  password?: string;
+  confirmPassword?: string;
+};
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [formError, setFormError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const { signup, signin, loading, error, clearError, isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
@@ -29,41 +36,52 @@ const Auth = () => {
   const handleToggleMode = () => {
     setIsLogin(!isLogin);
     clearError();
-    setFormError(null);
+    setFieldErrors({});
     setConfirmPassword('');
   };
 
-  const handleInputChange = (setter: (val: string) => void) => (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (
+    field: keyof FieldErrors,
+    setter: (val: string) => void
+  ) => (e: React.ChangeEvent<HTMLInputElement>) => {
     setter(e.target.value);
-    if (formError) setFormError(null);
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
+    }
     if (error) clearError();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setFormError(null);
+    setFieldErrors({});
     clearError();
 
     const trimmedEmail = email.trim();
+    const next: FieldErrors = {};
+
     if (!trimmedEmail) {
-      setFormError("Please enter your email address.");
-      return;
+      next.email = "Enter your email address.";
+    } else if (!/^\S+@\S+\.\S+$/.test(trimmedEmail)) {
+      next.email = "That email doesn't look right — check for typos.";
     }
 
     if (!password) {
-      setFormError("Please enter your password.");
-      return;
+      next.password = "Enter your password.";
+    } else if (!isLogin && password.length < 6) {
+      next.password = "Use at least 6 characters.";
     }
 
     if (!isLogin) {
-      if (password.length < 6) {
-        setFormError("Password must be at least 6 characters long.");
-        return;
+      if (!confirmPassword) {
+        next.confirmPassword = "Re-enter your password to confirm it.";
+      } else if (password !== confirmPassword) {
+        next.confirmPassword = "These don't match the password above.";
       }
-      if (password !== confirmPassword) {
-        setFormError("Passwords do not match. Please verify and try again.");
-        return;
-      }
+    }
+
+    if (Object.keys(next).length > 0) {
+      setFieldErrors(next);
+      return;
     }
 
     try {
@@ -77,16 +95,14 @@ const Auth = () => {
     }
   };
 
-  const activeError = formError || error;
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-hero px-4">
       <div className="w-full max-w-md">
         <Link to="/" className="flex items-center justify-center gap-2.5 mb-8 group">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-sky-500 to-primary text-white flex items-center justify-center shadow-md shadow-sky-500/25 group-hover:scale-105 transition-all">
+          <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center group-hover:scale-105 transition-all">
             <Plane className="h-5 w-5" />
           </div>
-          <span className="text-xl font-extrabold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+          <span className="text-xl font-extrabold text-foreground">
             TravelAI
           </span>
         </Link>
@@ -99,24 +115,24 @@ const Auth = () => {
             <CardDescription>
               {isLogin
                 ? "Sign in to access your trips and continue planning"
-                : "Create your account and start planning amazing trips"
+                : "Create an account to turn your travel ideas into a day-by-day plan"
               }
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form className="space-y-4" onSubmit={handleSubmit}>
-              {activeError && (
+              {error && (
                 <div className="p-3.5 rounded-xl bg-destructive/10 border border-destructive/25 text-destructive text-sm font-medium flex items-start gap-2.5 animate-fade-in">
                   <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-destructive" />
                   <div className="flex-1 space-y-1">
-                    <p>{activeError}</p>
-                    {activeError.toLowerCase().includes("already exists") && !isLogin && (
+                    <p>{error}</p>
+                    {error.toLowerCase().includes("already exists") && !isLogin && (
                       <button
                         type="button"
                         onClick={() => {
                           setIsLogin(true);
                           clearError();
-                          setFormError(null);
+                          setFieldErrors({});
                         }}
                         className="text-xs font-bold underline hover:opacity-80 block text-primary mt-1"
                       >
@@ -133,10 +149,17 @@ const Auth = () => {
                   id="email"
                   type="email"
                   placeholder="you@example.com"
-                  className="h-11"
+                  className={cn("h-11", fieldErrors.email && "border-destructive focus-visible:ring-destructive")}
                   value={email}
-                  onChange={handleInputChange(setEmail)}
+                  onChange={handleInputChange("email", setEmail)}
+                  aria-invalid={Boolean(fieldErrors.email)}
+                  aria-describedby={fieldErrors.email ? "email-error" : undefined}
                 />
+                {fieldErrors.email && (
+                  <p id="email-error" className="text-xs font-medium text-destructive">
+                    {fieldErrors.email}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -145,10 +168,17 @@ const Auth = () => {
                   id="password"
                   type="password"
                   placeholder="••••••••"
-                  className="h-11"
+                  className={cn("h-11", fieldErrors.password && "border-destructive focus-visible:ring-destructive")}
                   value={password}
-                  onChange={handleInputChange(setPassword)}
+                  onChange={handleInputChange("password", setPassword)}
+                  aria-invalid={Boolean(fieldErrors.password)}
+                  aria-describedby={fieldErrors.password ? "password-error" : undefined}
                 />
+                {fieldErrors.password && (
+                  <p id="password-error" className="text-xs font-medium text-destructive">
+                    {fieldErrors.password}
+                  </p>
+                )}
               </div>
 
               {!isLogin && (
@@ -158,15 +188,22 @@ const Auth = () => {
                     id="confirm-password"
                     type="password"
                     placeholder="••••••••"
-                    className="h-11"
+                    className={cn("h-11", fieldErrors.confirmPassword && "border-destructive focus-visible:ring-destructive")}
                     value={confirmPassword}
-                    onChange={handleInputChange(setConfirmPassword)}
+                    onChange={handleInputChange("confirmPassword", setConfirmPassword)}
+                    aria-invalid={Boolean(fieldErrors.confirmPassword)}
+                    aria-describedby={fieldErrors.confirmPassword ? "confirm-password-error" : undefined}
                   />
+                  {fieldErrors.confirmPassword && (
+                    <p id="confirm-password-error" className="text-xs font-medium text-destructive">
+                      {fieldErrors.confirmPassword}
+                    </p>
+                  )}
                 </div>
               )}
 
               <Button variant="hero" size="lg" className="w-full font-bold" disabled={loading}>
-                {loading ? 'Please wait...' : (isLogin ? "Sign In" : "Create Account")}
+                {loading ? (isLogin ? 'Signing you in…' : 'Creating your account…') : (isLogin ? "Sign In" : "Create Account")}
               </Button>
 
               <div className="text-center text-sm text-muted-foreground">
