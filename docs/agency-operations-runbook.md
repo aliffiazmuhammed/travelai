@@ -1,8 +1,11 @@
-# Agency Workspace — Operations runbook and launch policies
+# Agency Workspace and Platform Admin — Operations runbook and launch policies
 
 Companion to `agency-a9-test-plan.md`. This is the operating manual for the
-Agency Workspace (A1-A9): onboarding, support, backups/retention/deletion,
-rollback and the feature-flag kill switch.
+Agency Workspace (A1-A9) plus the platform admin console (PA0-PA5): onboarding,
+support, backups/retention/deletion, rollback and the feature-flag kill
+switches. Realm and migration details live in
+`docs/roadmap-platform-admin.md`, `docs/agency-identity-migration.md` and
+`docs/platform-admin-test-plan.md`.
 
 ---
 
@@ -30,11 +33,22 @@ the gate. Re-enable, restart, then run the smoke pair
 (`scripts/smoke-a9-security.mts` and `scripts/smoke-a8.mts`) before
 announcing.
 
-**Rollback plan (deploy-level):** redeploy the previous commit. There is no
-schema-destructive migration in A1-A9 (all new collections, no rewrites of
-individual-product data), so a rollback restores the pre-launch state without
-data repair. If a rollback is needed while the flag was on, flip the flag off
-first so a half-rolled-back deploy never serves a mixed surface.
+The platform admin console has its own flag, `PLATFORM_ADMIN_ENABLED`
+(default `false`). When false, `/api/admin/*` answers `404` and the SPA renders
+`/admin` as unavailable; `/api/health` reports `platform.enabled: false`.
+
+**Platform kill switch:** set `PLATFORM_ADMIN_ENABLED=false` and restart. This
+cuts off platform sign-in and every admin route without touching personal or
+agency data. The last platform session is inert while the flag is off. Re-enable
+and verify `GET /api/admin/overview` with a fresh platform sign-in before
+announcing.
+
+**Rollback plan (deploy-level):** redeploy the previous commit. A1-A9 shipped no
+schema-destructive migration, so agency rollback alone needs no data repair. For
+PA0-PA4, the realm split *does* change identity rows; roll back the flags first
+and restore the pre-migration backup as described in
+`docs/agency-identity-migration.md` §7. Never run a half-rolled-back deploy with
+`AGENCY_WORKSPACE_ENABLED` on.
 
 ---
 
@@ -43,7 +57,8 @@ first so a half-rolled-back deploy never serves a mixed surface.
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `AGENCY_WORKSPACE_ENABLED` | `false` | Master feature gate (§1). The production blueprint sets `true`; use `false` as the kill switch. |
-| `AGENCY_OPS_KEY` | *(unset)* | Secret that authorises `PATCH /api/agency/:id/plan`. TravelAI ops only; agencies can never change their own plan. Unset means nobody can change plans over HTTP. |
+| `PLATFORM_ADMIN_ENABLED` | `false` | Platform console gate (§1). Keep `false` until the first super-admin is bootstrapped; `false` is also the emergency kill switch. |
+| `AGENCY_OPS_KEY` | *(unset)* | Break-glass secret for `PATCH /api/agency/:id/plan`. The admin console is now the normal path; keep the key unset unless an operator needs the legacy route during an incident. |
 | `AGENCY_PLAN_TIERS` | starter {seats 3, monthlyExports 10, storageMb 100} | JSON map of plan tiers. Used by quota and seat checks. |
 | `AGENCY_PLAN_DEFAULT` | `starter` | Tier applied to agencies without an override. |
 | `AGENCY_PROPOSAL_TTL_DAYS` | `30` (max 90) | Default lifetime of a public proposal share link. |
@@ -66,28 +81,26 @@ never by URL guessability. `/api/health` reports the active choice as
 
 ## 3. Agency onboarding runbook
 
-> **Planned change (PA0/PA3):** this section describes the current A9
-> procedure. `docs/roadmap-platform-admin.md` replaces steps 2-3 with
-> platform-admin tenant provisioning and a tenant-scoped agency account. The
-> owner will sign in at `/agency/login?workspace=<slug>` with a separate agency
-> password, not a personal signup. PA0 removes self-service creation, so no new
-> tenants can be onboarded between PA0 and PA3 - schedule those milestones
-> back-to-back. Update this runbook when PA3 ships.
+Prereqs: `AGENCY_WORKSPACE_ENABLED=true`, `PLATFORM_ADMIN_ENABLED=true`, a
+renderer binary is installed, a plan tier is decided, and at least one platform
+super-admin exists (§3A.1). Provisioning creates three separate rows in one
+transaction-like flow: the `Agency`, the owner's **agency** account, and the
+owner membership. It never converts or attaches a personal account.
 
-Prereqs: the flag is on (§1), `AGENCY_OPS_KEY` is set for ops, a renderer
-binary is installed, and the ops team has a plan tier decided.
-
-1. **Provision the plan.** From ops tooling (not the app UI):
-   `PATCH /api/agency/:agencyId/plan` with header `x-travelai-ops: <key>` and
-   body `{ "tierId": "<tier>", "seats": N, "monthlyExports": N, "storageMb": N }`.
-   Overrides are optional per field; unresolved fields come from the tier.
-   Verify with `GET /api/agency/:agencyId/usage` (admin/owner token).
-2. **Agency signup (current A9).** The agency owner signs up, creates the agency
-   and lands in the workspace. The owner is the first member with `owner` rank.
-   PA0/PA3 replace this with platform-admin provisioning and a tenant-scoped
-   agency login.
+1. **Provision the tenant.** Sign in at `/admin/login`, open **Agencies**, and
+   use **Provision agency**. Enter the tenant name, slug (or leave it to
+   generate), plan tier, optional billing contacts, owner email and owner name.
+   The wizard warns if a personal or platform account already uses that email;
+   the warning is informational - the new agency account is separate.
+2. **Hand off credentials.** The success dialog shows the workspace URL,
+   `ownerEmail` and a one-time `Tv!` temporary password. Copy them into the
+   handoff channel and close the dialog; the password is not retrievable later.
+   The owner signs in at `/agency/login?workspace=<slug>`, is forced to choose a
+   new password, and lands in the tenant. The old temporary session is
+   invalidated.
 3. **Seats.** The owner/admin invites staff from Members/Settings. Seat
-   capacity is enforced on invite; plan upgrades come from ops (§3.1).
+   capacity is enforced on invite; the platform admin can raise it from the
+   tenant drawer (plan/override) or the owner can request an upgrade.
 4. **Branding (A3).** Settings → Brand & Assets: agency name, contact,
    colours, logo/mascot uploads, fonts. Assets are private and tenant-scoped;
    a wrong file type/size is rejected at upload.
@@ -110,11 +123,93 @@ binary is installed, and the ops team has a plan tier decided.
 
 ### 3.1 Plan/seat changes
 
-- Plan changes are **ops-only** via the secret-gated route above; each change
-  is audited (`plan.changed`) without an actor.
-- Seat exhaustion → invite fails with the current plan; ops raises `seats`.
+- The normal path is the platform console: **Agencies → tenant → Plan**. It
+  reuses the same tier table as the tenant service; blank override fields
+  inherit the tier. Changes are audited as `agency.plan_changed` plus the
+  tenant `plan.changed`.
+- The secret-gated `PATCH /api/agency/:id/plan` (`x-travelai-ops`) remains a
+  break-glass route only. Keep `AGENCY_OPS_KEY` unset unless an incident needs
+  it.
+- Seat exhaustion → invite fails with the current plan; raise `seats`.
 - Monthly export exhaustion → new exports answer 409 until the 1st of the
-  month; ops raises `monthlyExports` if the agency is healthy.
+  month; raise `monthlyExports` if the agency is healthy.
+
+---
+
+## 3A. Platform admin console operations
+
+The console is a third realm at `/admin/login`. It never shares a cookie with the
+personal or agency product, and it never reads tenant content (no trips, quotes,
+clients or chat).
+
+### 3A.1 Bootstrap the first super-admin
+
+Run once from the backend host with database access:
+
+```bash
+cd backend
+npm run bootstrap:platform-admin -- --email ops@example.com --name "Ops"
+```
+
+The command prints a `Tv!...` temporary password once. Store it in the
+password manager, sign in at `/admin/login`, and replace it immediately. The
+temporary session can only reach `/api/admin/auth/me`, `/password`, `/logout`
+and `/csrf` until the change. Treat terminal output as a secret.
+
+The command refuses to overwrite an existing platform account for that email.
+Create additional super-admins from **Platform admins** in the console.
+
+### 3A.2 Account recovery
+
+- A platform admin who forgot a password uses another super-admin: **Platform
+  admins → Reset password**. The reset returns a one-time password and forces a
+  change.
+- If every super-admin is locked out, bootstrap a new email with the CLI
+  (existing rows are never overwritten), sign in, and disable the locked rows.
+- If the last active super-admin would be disabled, the API returns `409`.
+  Self-disable returns `400`. Create/promote another admin first.
+
+### 3A.3 Tenant lifecycle
+
+- **Suspend:** **Agencies → tenant → Suspend**. It immediately invalidates every
+  agency session in that tenant, blocks login/context/tenant routes, and makes
+  public proposal links fail closed (`404`). Personal accounts and other
+  tenants are unaffected. The action is audited (`agency.suspended` plus the
+  tenant `agency.suspended`).
+- **Reactivate:** **Agencies → tenant → Reactivate**. Staff must sign in again;
+  old tokens stay invalid by design.
+- **Reset an agency password:** **Agencies → tenant → member → Reset password**.
+  It returns a one-time `Tv!` password and forces a change. A personal account
+  with the same email is untouched.
+- **Plan/override:** **Agencies → tenant → Plan**. Blank fields inherit the
+  tier; unknown tiers/fields and out-of-range overrides are `400`. Usage reads
+  the effective plan immediately.
+- **Members:** invite, change role, transfer owner, remove. The last owner
+  cannot be removed or demoted (`409`). Owner transfer promotes the heir and
+  demotes the previous owner to admin.
+- **Tenant content is support-visible only to the tenant.** The console shows
+  metadata, usage and platform audit; it cannot open a quote, trip or client.
+  Escalate a content question to the tenant owner.
+
+### 3A.4 Audit
+
+`/admin/audit` filters platform events by action, target type/id, date and
+literal search, with pagination and facets. Rows never contain passwords,
+tokens, hashes or raw headers. Tenant-visible platform changes also appear in
+the tenant's own audit (`plan.changed`, `member.*`, owner transfer, password
+reset with `issuedByPlatform: true`). The admin viewer deliberately does not
+expose tenant audit rows.
+
+### 3A.5 Cutover and rollback
+
+Use `docs/agency-identity-migration.md` for the full checklist. In short:
+
+1. Back up; disable both flags; rehearse on a copy.
+2. Run the migration (`--indexes-only` repairs indexes).
+3. Bootstrap the first platform admin; enable `PLATFORM_ADMIN_ENABLED`.
+4. Provision the pilot tenant; enable `AGENCY_WORKSPACE_ENABLED`.
+5. Roll back by disabling both flags, redeploying the previous build and
+   restoring the pre-migration backup. Do not attempt an in-place down-migration.
 
 ---
 
@@ -122,10 +217,11 @@ binary is installed, and the ops team has a plan tier decided.
 
 Run this when an agency reports trouble, in order.
 
-1. **Scope.** `GET /api/agency/:id/usage` (admin token) — seats, exports this
-   month, storage. Compare against the plan; most "it stopped working" cases
-   are a limit (409 monthly export quota, 409 seat limit, 409 storage quota,
-   429 hourly rate limits).
+1. **Scope.** `GET /api/agency/:id/usage` (agency owner/admin token) — seats,
+   exports this month, storage. The platform console shows the same usage on
+   **Agencies → tenant**. Compare against the plan; most "it stopped working"
+   cases are a limit (409 monthly export quota, 409 seat limit, 409 storage
+   quota, 429 hourly rate limits).
 2. **Exports failing.** `GET /api/agency/:id/audit?action=export` — every job
    leaves `export.requested` / `export.completed` / `export.failed` with a
    stored error. Common causes:
@@ -193,13 +289,17 @@ Run this when an agency reports trouble, in order.
 
 ---
 
-## 6. Pilot acceptance checklist (simulated pilot)
+## 6. Pilot acceptance checklist
 
 Used by the simulated pilot script (`scripts/smoke-a9-pilot.mts`); run it
-verbatim for the real pilot with 2-3 pilot agencies.
+verbatim for the real pilot with 2-3 pilot agencies. For the platform-admin
+path, §9.4 of `docs/platform-admin-test-plan.md` is the authoritative pilot
+gate.
 
-- [ ] Agency created and owner onboarded without developer help.
-- [ ] Plan provisioned via the ops-secret route; usage reads back correctly.
+- [ ] Agency provisioned from `/admin/agencies` and owner onboarded without
+      developer help or database edits.
+- [ ] Plan set from the tenant drawer (or inherited from the tier); usage reads
+      back correctly.
 - [ ] Second member invited/joined within the seat limit; a third invite
       beyond seats is refused with an actionable message.
 - [ ] Branding configured; logo/mascot/font assets uploaded and shown in

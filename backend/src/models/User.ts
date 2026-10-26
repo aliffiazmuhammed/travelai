@@ -170,6 +170,11 @@ userSchema.index(
   }
 );
 userSchema.index({ accountType: 1, status: 1 }, { name: 'account_type_status' });
+// Stable newest-first pagination for the platform account directory.
+userSchema.index(
+  { createdAt: -1, _id: -1 },
+  { name: 'createdAt_-1__id_-1' }
+);
 userSchema.index(
   { platformRole: 1 },
   {

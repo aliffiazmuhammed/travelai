@@ -91,7 +91,7 @@ async function dropIndexIfExists(
   return true;
 }
 
-/** Drops a legacy index matched by its key, regardless of its generated name. */
+/** Drops a legacy index matched by its exact key, regardless of its generated name. */
 async function dropIndexByKey(
   collection: mongoose.mongo.Collection,
   keys: Record<string, number>
@@ -99,9 +99,10 @@ async function dropIndexByKey(
   let dropped = false;
   for (const index of await collection.indexes()) {
     if (!index.key || !index.name || index.name === '_id_') continue;
-    const matches = Object.entries(keys).every(
-      ([field, order]) => (index.key as Record<string, number>)[field] === order
-    );
+    const indexKeys = index.key as Record<string, number>;
+    const matches =
+      Object.keys(indexKeys).length === Object.keys(keys).length &&
+      Object.entries(keys).every(([field, order]) => indexKeys[field] === order);
     if (!matches) continue;
     if (DRY_RUN) {
       log(`would drop index ${collection.collectionName}.${index.name}`);
@@ -646,6 +647,11 @@ async function run(): Promise<void> {
     { accountType: 1, status: 1 },
     { name: 'account_type_status' }
   );
+  await ensureIndex(
+    users,
+    { createdAt: -1, _id: -1 },
+    { name: 'createdAt_-1__id_-1' }
+  );
   // Deliberately NOT unique: the platform realm needs more than one
   // super-admin (PA2 creates them from the console). Uniqueness is enforced by
   // `platform_email_unique` instead; this index only makes role lookups cheap.
@@ -666,10 +672,50 @@ async function run(): Promise<void> {
     { slug: 1 },
     { name: 'slug_1', unique: true }
   );
+  // The old `{ status, createdAt }` index matched the filter but not the
+  // `{ createdAt, _id }` pagination sort, forcing a blocking sort. Replace it
+  // with the exact plans the directory uses.
+  await dropIndexByKey(agencies, { status: 1, createdAt: -1 });
   await ensureIndex(
     agencies,
-    { status: 1, createdAt: -1 },
-    { name: 'status_1_createdAt_-1' }
+    { createdAt: -1, _id: -1 },
+    { name: 'createdAt_-1__id_-1' }
+  );
+  await ensureIndex(
+    agencies,
+    { status: 1, createdAt: -1, _id: -1 },
+    { name: 'status_1_createdAt_-1__id_-1' }
+  );
+
+  // Platform audit viewer: same stable newest-first order for every filter.
+  const platformAudits = db.collection('platformaudits');
+  await dropIndexByKey(platformAudits, { createdAt: -1 });
+  await dropIndexByKey(platformAudits, { action: 1, createdAt: -1 });
+  await dropIndexByKey(platformAudits, {
+    targetType: 1,
+    targetId: 1,
+    createdAt: -1,
+  });
+  await dropIndexByKey(platformAudits, { actorId: 1 });
+  await ensureIndex(
+    platformAudits,
+    { createdAt: -1, _id: -1 },
+    { name: 'createdAt_-1__id_-1' }
+  );
+  await ensureIndex(
+    platformAudits,
+    { action: 1, createdAt: -1, _id: -1 },
+    { name: 'action_1_createdAt_-1__id_-1' }
+  );
+  await ensureIndex(
+    platformAudits,
+    { targetType: 1, targetId: 1, createdAt: -1, _id: -1 },
+    { name: 'targetType_1_targetId_1_createdAt_-1__id_-1' }
+  );
+  await ensureIndex(
+    platformAudits,
+    { actorId: 1, createdAt: -1, _id: -1 },
+    { name: 'actorId_1_createdAt_-1__id_-1' }
   );
 
   // The legacy A1 switcher index was `{ userId, createdAt }`; different builds

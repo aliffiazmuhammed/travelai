@@ -85,6 +85,20 @@ test('each realm bootstrap path is exempt', () => {
   }
 });
 
+test('a lookalike bootstrap path is not exempt', () => {
+  for (const path of [
+    '/api/auth/signin-evil',
+    '/api/agency/auth/signin/extra',
+    '/api/admin/auth/signin/../agencies',
+  ]) {
+    const result = check(
+      request({ path, cookies: { token: 'session', csrf: 'expected-token' } })
+    );
+    assert.equal(result.status, 403, `${path} must not be exempt`);
+    assert.equal(result.next, false);
+  }
+});
+
 test('safe methods and Bearer callers skip the check', () => {
   assert.equal(check(request({ method: 'GET', cookies: { token: 's' } })).next, true);
   assert.equal(

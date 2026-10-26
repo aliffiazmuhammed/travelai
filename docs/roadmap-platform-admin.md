@@ -1,8 +1,9 @@
 # Platform Admin and Account Realms - implementation milestone plan
 
-**Status:** PA0, PA1, PA2, PA3 and PA4 implemented (2026-10-26); PA5 planned. The plan was
-revised 2026-10-26 after a code review added the shared trip-surface, CSRF, and
-realm-scoped email-lookup rules.
+**Status:** PA0-PA5 implemented and rehearsed locally (2026-10-26); the real-agency
+pilot and production cutover are pending. The plan was revised 2026-10-26 after
+a code review added the shared trip-surface, CSRF, and realm-scoped email-lookup
+rules.
 
 **Supersedes:** the account and onboarding assumptions in
 `docs/roadmap-agency-workspace.md`. A0-A9 remain the running agency baseline,
@@ -76,7 +77,7 @@ never merge them.
 | Shared trip surface | `/api/itinerary/*` trip-scoped routes and generation accept either realm via `protectSession`; collection endpoints stay personal-only | Agency trips already run on the shared `Trip` model and the M7 chat/collab routes; forking the API would fork tenant authorization |
 | CSRF | One double-submit cookie; every realm session cookie is a CSRF target | A realm-only exemption would silently drop CSRF from agency and admin writes |
 | E2EE chat | Agency accounts publish their own chat keys; personal keys are never reused | Agency trips already use the M7 end-to-end chat, so keys are part of the realm split |
-| Ops plan changes | Keep `X-TravelAI-Ops`/`AGENCY_OPS_KEY` as break-glass; the admin panel reuses the same plan service | One already-tested credential path stays available; PA5 decides whether to retire the ops key |
+| Ops plan changes | Keep `X-TravelAI-Ops`/`AGENCY_OPS_KEY` as break-glass; the admin panel reuses the same plan service | One already-tested credential path stays available; PA5 reviewed it and keeps the route, unset by default (see the operations runbook) |
 | Admin visibility | Account and tenant metadata only | No personal trips, chats, receipts, or tenant content in the admin panel |
 | Billing | Plan/status/billing metadata only | No payment gateway in this release |
 | Pilot migration | Reset/re-seed agency test data | A9 is locally verified with a simulated pilot; this avoids an unsafe E2EE key migration |
@@ -468,7 +469,8 @@ platform admin endpoint creates tenants.
   - Transfer/assign owner.
   - Change plan through the admin endpoint, reusing the existing plan service
     and writing `plan.changed`. The `X-TravelAI-Ops` secret route remains as a
-    break-glass path in v1; PA5 reviews retiring it.
+    break-glass path (PA5 reviewed it); keep `AGENCY_OPS_KEY` unset unless an
+    incident needs it.
   - Suspend/reactivate the tenant.
   - Reset an agency account password.
   - Archive (deferred unless needed for v1).
@@ -1043,6 +1045,66 @@ already bumped its agency sessions' `tokenVersion`).
 - Pilot with one real agency.
 - Update the agency operations runbook and A9 documentation.
 
+**Implemented and rehearsed locally (2026-10-26):**
+
+- **Migration rehearsal.** Copied `travelai` to `travelai_pa5_stage`, rewound
+  the copied schema to the pre-PA0 shape (global `email_1`, legacy membership
+  index, no slug index), and injected a legacy fixture: one user without realm
+  fields, two slug-less agencies (one colliding), two memberships for the same
+  user in different tenants, a pending invite, an agency trip with owner/member
+  references, a trip comment, a client, an audit row, and a chat envelope wrapped
+  for the personal id. The dry run reported the planned writes and made none.
+  The full `--preserve-legacy-memberships` run created two agency accounts
+  (same email, different tenants), copied the hash once with a forced change,
+  repointed 8 + 2 agency references, revoked the invite, and warned about the
+  chat envelope. All 29 target checks passed, including realm backfill, slug
+  allocation/collision handling, reference rewrites, the untouched E2EE
+  envelope, and the index swap. A second run was a no-op with identical counts
+  (users 10, agencies 4, memberships 4, invites 1, trips 5, chat keys 12,
+  comments 9, clients 2, audits 30). Restoring a logical pre-migration snapshot
+  returned the exact legacy shape, and re-running the migration from it passed
+  all 29 checks again. Record:
+  `docs/agency-identity-migration.md`.
+- **Index hardening.** Every admin directory and audit query sorts
+  `{ createdAt: -1, _id: -1 }`, but the previous indexes stopped at `createdAt`
+  and forced a blocking in-memory sort. Added `users.createdAt_-1__id_-1`,
+  `agencies.createdAt_-1__id_-1` and
+  `agencies.status_1_createdAt_-1__id_-1`, and replaced the four audit indexes
+  with `_id`-terminated compounds. The migration drops the superseded keys by
+  exact key match and creates the new ones.
+- **Load result.** At 20,000 rows per collection the directory/audit queries
+  went from 20,000 documents examined plus a blocking `SORT` (16-34 ms) to 25
+  documents (41 for the personal filter) and 0-11 ms; the plans are now
+  `LIMIT`-only.
+- **CSRF hardening.** Exemptions were matched with `startsWith`, so
+  `/api/auth/signin-evil` inherited the bootstrap exemption. They are now
+  exact paths (one trailing slash tolerated), with a regression test for the
+  lookalike paths.
+- **Security review.** Confirmed the three separate signin limiters (personal
+  10/15 min, agency 10/15 min, platform 5/15 min), the server-side
+  `mustChangePassword` gate with its exact exempt list, `tokenVersion`
+  invalidation on password change/reset/disable/suspend, sanitized platform
+  audit metadata, and that temporary passwords are returned once and never
+  logged.
+- **Documentation.** Added `docs/platform-admin-test-plan.md` (acceptance and
+  security matrix, E2E scenarios, release gate), `docs/agency-identity-migration.md`
+  (paths, reference matrix, E2EE decision, index table, rehearsal record,
+  rollback, cutover checklist, limitations) and `docs/adr/0002-account-realms.md`
+  (accepted realm/tenant/platform decisions). Updated
+  `docs/agency-operations-runbook.md` with platform bootstrap, tenant
+  lifecycle, support and cutover/rollback procedures.
+
+**Verification:** backend `559/559`, backend `tsc --noEmit` clean, frontend
+`tsc` and production build clean (final run 2026-10-26). No production migration
+has been run.
+
+**Still pending (operational, not local):**
+
+- Onboard one real agency from the console and complete §9.4 of the test plan.
+- Run the migration and rollback against production during the agreed window.
+- Record the E2EE re-key/accepted-loss decision for any agency trip that has
+  chat keys.
+
 **Exit criteria:**
 
 - A real agency is onboarded without an engineer touching the database.
@@ -1312,13 +1374,17 @@ left untouched (see the note above), and the run warns when one exists.
 
 ## 16. Follow-up documents
 
-- `docs/platform-admin-test-plan.md` *(to be created)* - PA0-PA4 acceptance and
-  security matrix.
-- `docs/agency-identity-migration.md` *(to be created)* - migration mapping,
-  reference checklist, E2EE decision, and rollback.
-- `docs/adr/0002-account-realms.md` *(to be created)* - record the realm,
-  tenant-scoped agency, shared trip surface, and platform-admin decisions.
-- `docs/agency-operations-runbook.md` - updated: §3 carries the planned-change
-  note; finish the replacement when PA3 ships.
+- `docs/platform-admin-test-plan.md` - PA0-PA5 acceptance and security matrix,
+  E2E scenarios, load results, and the release gate. **Created 2026-10-26.**
+- `docs/agency-identity-migration.md` - migration mapping, reference checklist,
+  E2EE decision, index table, rehearsal record, and rollback. **Created
+  2026-10-26.**
+- `docs/adr/0002-account-realms.md` - records the realm, tenant-scoped agency,
+  shared trip surface, and platform-admin decisions. **Created 2026-10-26.**
+- `docs/agency-operations-runbook.md` - updated: §1 both kill switches, §2 env
+  table, §3 console-based onboarding, §3A platform admin operations, §4 support,
+  §6 pilot. **Updated 2026-10-26.**
 - `docs/roadmap-agency-workspace.md` - updated: account-model note and the
   platform-admin onboarding decision.
+- `docs/agency-a9-test-plan.md` - superseded for account/onboarding by this
+  plan; A1-A9 feature coverage still applies.

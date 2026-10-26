@@ -31,7 +31,7 @@ export const CSRF_COOKIE = 'csrf';
 export const CSRF_HEADER = 'x-csrf-token';
 
 /** Always exempt regardless of method — no session exists yet / self-healing. */
-const CSRF_EXEMPT_PATHS = [
+const CSRF_EXEMPT_PATHS = new Set([
   '/api/auth/signup',
   '/api/auth/signin',
   '/api/auth/logout',
@@ -47,7 +47,14 @@ const CSRF_EXEMPT_PATHS = [
   '/api/admin/auth/logout',
   '/api/admin/auth/csrf',
   '/api/health',
-];
+]);
+
+/** Exact match, minus one trailing slash, so `/signin-evil` is never exempt. */
+function isCsrfExemptPath(path: string): boolean {
+  const normalized =
+    path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path;
+  return CSRF_EXEMPT_PATHS.has(normalized);
+}
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
@@ -108,7 +115,7 @@ export const verifyCsrf = (req: Request, res: Response, next: NextFunction) => {
   // Bearer-token callers are not CSRF targets and may not have cookie access.
   if (req.get?.('authorization')?.startsWith('Bearer ')) return next();
 
-  if (CSRF_EXEMPT_PATHS.some((path) => req.path.startsWith(path))) return next();
+  if (isCsrfExemptPath(req.path)) return next();
 
   const sessionCookie = ALL_SESSION_COOKIES.some((name) => Boolean(req.cookies?.[name]));
   const cookieToken = req.cookies?.[CSRF_COOKIE] as string | undefined;

@@ -204,7 +204,16 @@ const agencySchema = new Schema<IAgency>(
   { timestamps: true }
 );
 
-// Admin directory filters and dashboard counts (PA1/PA3).
-agencySchema.index({ status: 1, createdAt: -1 });
+// Admin directory filters and dashboard counts (PA1/PA3). The `_id` tie-break
+// matches the stable `{ createdAt: -1, _id: -1 }` pagination order; without it
+// MongoDB sorts the whole filtered set in memory.
+agencySchema.index(
+  { createdAt: -1, _id: -1 },
+  { name: 'createdAt_-1__id_-1' }
+);
+agencySchema.index(
+  { status: 1, createdAt: -1, _id: -1 },
+  { name: 'status_1_createdAt_-1__id_-1' }
+);
 
 export default mongoose.model<IAgency>('Agency', agencySchema);

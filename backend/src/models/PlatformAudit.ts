@@ -26,7 +26,6 @@ const platformAuditSchema = new Schema<IPlatformAudit>(
       type: Schema.Types.ObjectId,
       ref: 'User',
       required: true,
-      index: true,
     },
     action: {
       type: String,
@@ -67,8 +66,23 @@ const platformAuditSchema = new Schema<IPlatformAudit>(
   { versionKey: false }
 );
 
-platformAuditSchema.index({ createdAt: -1 });
-platformAuditSchema.index({ action: 1, createdAt: -1 });
-platformAuditSchema.index({ targetType: 1, targetId: 1, createdAt: -1 });
+// Every viewer query sorts `{ createdAt: -1, _id: -1 }`; including the tie-break
+// in each compound index keeps pagination index-only instead of a blocking sort.
+platformAuditSchema.index(
+  { createdAt: -1, _id: -1 },
+  { name: 'createdAt_-1__id_-1' }
+);
+platformAuditSchema.index(
+  { action: 1, createdAt: -1, _id: -1 },
+  { name: 'action_1_createdAt_-1__id_-1' }
+);
+platformAuditSchema.index(
+  { targetType: 1, targetId: 1, createdAt: -1, _id: -1 },
+  { name: 'targetType_1_targetId_1_createdAt_-1__id_-1' }
+);
+platformAuditSchema.index(
+  { actorId: 1, createdAt: -1, _id: -1 },
+  { name: 'actorId_1_createdAt_-1__id_-1' }
+);
 
 export default mongoose.model<IPlatformAudit>('PlatformAudit', platformAuditSchema);

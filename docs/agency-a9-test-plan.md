@@ -6,6 +6,17 @@
 
 **Production status:** the production blueprint enables the workspace; a real-agency pilot and production smoke checks remain pending.
 
+> **Superseded for accounts and onboarding.** Platform admin PA0-PA5 replaced
+> the self-service agency signup/account model this plan assumes. Agency owners
+> are now provisioned from `/admin/agencies` and sign in at
+> `/agency/login?workspace=<slug>` with a tenant-scoped agency account; the
+> personal account with the same email is separate. Use
+> `docs/platform-admin-test-plan.md` for realm isolation, onboarding, tenant
+> lifecycle, migration and the release gate, and
+> `docs/agency-identity-migration.md` for cutover/rollback. The A1-A9 feature
+> checks in this document still apply, except where they describe agency
+> signup, personal-to-agency account reuse, or `AGENCY_OPS_KEY` plan changes.
+
 ---
 
 ## 1. Scope
