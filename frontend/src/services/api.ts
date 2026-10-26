@@ -122,6 +122,7 @@ function auditQueryString(params: PlatformAuditQuery): string {
   if (params.q) search.set('q', params.q);
   if (params.action) search.set('action', params.action);
   if (params.targetType) search.set('targetType', params.targetType);
+  if (params.targetId) search.set('targetId', params.targetId);
   if (params.actorId) search.set('actorId', params.actorId);
   if (params.from) search.set('from', params.from);
   if (params.to) search.set('to', params.to);

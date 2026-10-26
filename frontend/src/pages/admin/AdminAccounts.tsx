@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
   Eye,
@@ -87,6 +88,7 @@ const AdminAccounts: React.FC = () => {
   } | null>(null);
 
   const [detailOpen, setDetailOpen] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [detail, setDetail] = useState<PlatformAccountDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
@@ -145,6 +147,12 @@ const AdminAccounts: React.FC = () => {
       setDetailLoading(false);
     }
   };
+
+  // Deep link from the platform audit console (`?account=<id>`).
+  useEffect(() => {
+    const requested = searchParams.get('account');
+    if (requested) void openDetail(requested);
+  }, [searchParams]);
 
   const confirmStatusChange = async () => {
     if (!statusTarget) return;
@@ -540,7 +548,14 @@ const AdminAccounts: React.FC = () => {
 
       <AdminAccountDetail
         open={detailOpen}
-        onOpenChange={setDetailOpen}
+        onOpenChange={(next) => {
+          setDetailOpen(next);
+          if (!next && searchParams.has('account')) {
+            const nextParams = new URLSearchParams(searchParams);
+            nextParams.delete('account');
+            setSearchParams(nextParams, { replace: true });
+          }
+        }}
         account={detail}
         loading={detailLoading}
         error={detailError}

@@ -91,6 +91,7 @@ test('audit filters search safely and bound the date range', () => {
       q: 'agency.(created)',
       action: 'agency.created',
       targetType: 'agency',
+      targetId: '507f1f77bcf86cd799439012',
       actorId: '507f1f77bcf86cd799439011',
       from: '2026-01-01',
       to: '2026-01-31',
@@ -99,6 +100,7 @@ test('audit filters search safely and bound the date range', () => {
 
   assert.equal(filter.action, 'agency.created');
   assert.equal(filter.targetType, 'agency');
+  assert.equal(filter.targetId, '507f1f77bcf86cd799439012');
   assert.equal(String(filter.actorId), '507f1f77bcf86cd799439011');
   assert.ok(filter.$or);
   const firstOr = (filter.$or as Array<Record<string, unknown>>)[0];

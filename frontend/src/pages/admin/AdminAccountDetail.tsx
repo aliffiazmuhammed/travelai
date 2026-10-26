@@ -151,6 +151,42 @@ const AdminAccountDetail: React.FC<AdminAccountDetailProps> = ({
             </section>
 
             <section>
+              <SectionTitle icon={<UserRound className="h-4 w-4 text-indigo-400" />}>
+                Related accounts with this email
+              </SectionTitle>
+              {account.relatedAccounts.length === 0 ? (
+                <p className="mt-2 text-xs text-slate-500">
+                  No other realm or tenant uses this email.
+                </p>
+              ) : (
+                <ul className="mt-2 space-y-2">
+                  {account.relatedAccounts.map((related) => (
+                    <li
+                      key={related._id}
+                      className="rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-2"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <RealmBadge realm={related.accountType} />
+                        <StatusBadge status={related.status} />
+                        <span className="text-xs text-slate-400">
+                          {related.accountType === 'agency' && related.agency
+                            ? `${related.agency.name} (${related.agency.slug})`
+                            : related.name ?? 'No display name'}
+                        </span>
+                      </div>
+                      <p className="mt-1 break-all font-mono text-[10px] text-slate-500">
+                        {related._id}
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-slate-500">
+                        Last sign-in {formatAdminDate(related.lastLoginAt)}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            <section>
               <SectionTitle icon={<ClipboardList className="h-4 w-4 text-indigo-400" />}>
                 Recent platform audit
               </SectionTitle>

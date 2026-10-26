@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
   Building2,
@@ -118,6 +118,7 @@ const AdminAgencies: React.FC = () => {
   const [planFilter, setPlanFilter] = useState('all');
   const [page, setPage] = useState(1);
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<WizardStep>(1);
@@ -125,6 +126,12 @@ const AdminAgencies: React.FC = () => {
   const [slugEdited, setSlugEdited] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Deep link from the platform audit console (`?agency=<id>`).
+  useEffect(() => {
+    const requested = searchParams.get('agency');
+    if (requested) setDetailId(requested);
+  }, [searchParams]);
 
   const [preview, setPreview] = useState<PlatformOwnerPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -568,13 +575,14 @@ const AdminAgencies: React.FC = () => {
                   <th className="px-3 py-2 font-semibold">Plan</th>
                   <th className="px-3 py-2 font-semibold">Members</th>
                   <th className="px-3 py-2 font-semibold">Renewal</th>
+                  <th className="px-3 py-2 font-semibold">Last activity</th>
                   <th className="px-3 py-2 text-right font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {listLoading && (list?.agencies.length ?? 0) === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-3 py-12 text-center text-sm text-slate-400">
+                    <td colSpan={8} className="px-3 py-12 text-center text-sm text-slate-400">
                       <span className="inline-flex items-center gap-2">
                         <Loader2 className="h-4 w-4 animate-spin" />
                         Loading agencies…
@@ -583,7 +591,7 @@ const AdminAgencies: React.FC = () => {
                   </tr>
                 ) : (list?.agencies.length ?? 0) === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-3 py-12 text-center text-sm text-slate-400">
+                    <td colSpan={8} className="px-3 py-12 text-center text-sm text-slate-400">
                       {search || statusFilter !== 'all' || planFilter !== 'all'
                         ? 'No agencies match these filters.'
                         : 'No agencies yet. Provision the first tenant to get started.'}
@@ -629,6 +637,12 @@ const AdminAgencies: React.FC = () => {
                       </td>
                       <td className="whitespace-nowrap px-3 py-3 text-xs text-slate-400">
                         {formatAdminDate(agency.billing?.renewalDate)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-3 text-xs text-slate-400">
+                        {formatAdminDate(agency.lastActivityAt)}
+                        <p className="mt-0.5 text-[11px] text-slate-500">
+                          Created {formatAdminDate(agency.createdAt)}
+                        </p>
                       </td>
                       <td className="px-3 py-3 text-right">
                         <Button
@@ -1024,7 +1038,14 @@ const AdminAgencies: React.FC = () => {
       <AdminAgencyDetail
         open={detailId !== null}
         onOpenChange={(next) => {
-          if (!next) setDetailId(null);
+          if (!next) {
+            setDetailId(null);
+            if (searchParams.has('agency')) {
+              const nextParams = new URLSearchParams(searchParams);
+              nextParams.delete('agency');
+              setSearchParams(nextParams, { replace: true });
+            }
+          }
         }}
         agencyId={detailId}
         plans={plans}

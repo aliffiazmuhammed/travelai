@@ -152,7 +152,7 @@ app.get('/api/health', (_req, res) => {
     // SPA renders `/admin` as unavailable instead of offering a login form.
     platform: {
       enabled: env.PLATFORM_ADMIN_ENABLED,
-      milestone: 'PA1',
+      milestone: 'PA5',
     },
     staticServing: {
       enabled: Boolean(shouldServeStatic && frontendDist),

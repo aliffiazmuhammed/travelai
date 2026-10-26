@@ -65,6 +65,8 @@ export interface AdminMembershipRow {
 export interface AdminAccountDetail extends AdminAccountRow {
   passwordChangedAt?: string;
   memberships: AdminMembershipRow[];
+  /** Separate rows that share this email in another realm or tenant. */
+  relatedAccounts: AdminAccountRow[];
   recentAudit: AdminAuditRow[];
 }
 
@@ -331,7 +333,7 @@ export async function getAccountDetail(id: string): Promise<AdminAccountDetail> 
 
   if (!account) throw new AppError('Account not found.', 404);
 
-  const [agencyMap, memberships, auditRows] = await Promise.all([
+  const [agencyMap, memberships, related, auditRows] = await Promise.all([
     loadAgencyMap([account]),
     AgencyMember.find({ userId: account._id })
       .select('agencyId role joinedAt')
@@ -342,6 +344,12 @@ export async function getAccountDetail(id: string): Promise<AdminAccountDetail> 
         joinedAt: Date;
       }>
     >,
+    User.find({ email: account.email, _id: { $ne: account._id } })
+      .sort({ createdAt: 1 })
+      .select(
+        'email name accountType agencyId platformRole status mustChangePassword lastLoginAt createdAt'
+      )
+      .lean() as unknown as Promise<AccountLean[]>,
     PlatformAudit.find({ targetId: String(account._id) })
       .sort({ createdAt: -1 })
       .limit(10)
@@ -352,6 +360,7 @@ export async function getAccountDetail(id: string): Promise<AdminAccountDetail> 
   const membershipAgencies = await loadAgencyMap(
     memberships.map((membership) => ({ agencyId: membership.agencyId } as AccountLean))
   );
+  const relatedAgencyMap = await loadAgencyMap(related);
 
   const row = toAccountRow(account, agencyMap);
   const detail: AdminAccountDetail = {
@@ -372,6 +381,9 @@ export async function getAccountDetail(id: string): Promise<AdminAccountDetail> 
         },
       ];
     }),
+    relatedAccounts: related.map((relatedAccount) =>
+      toAccountRow(relatedAccount, relatedAgencyMap)
+    ),
     recentAudit: await projectAuditRows(auditRows),
   };
 
@@ -412,7 +424,12 @@ export async function setAccountStatus(input: {
 
   if (account.status === input.status) {
     const detail = await getAccountDetail(input.accountId);
-    const { memberships: _memberships, recentAudit: _audit, ...row } = detail;
+    const {
+      memberships: _memberships,
+      relatedAccounts: _relatedAccounts,
+      recentAudit: _audit,
+      ...row
+    } = detail;
     return { account: row, changed: false };
   }
 
@@ -445,7 +462,12 @@ export async function setAccountStatus(input: {
   });
 
   const detail = await getAccountDetail(String(account._id));
-  const { memberships: _memberships, recentAudit: _audit, ...row } = detail;
+  const {
+    memberships: _memberships,
+    relatedAccounts: _relatedAccounts,
+    recentAudit: _audit,
+    ...row
+  } = detail;
   return { account: row, changed: true };
 }
 
@@ -681,7 +703,12 @@ export async function updatePlatformAccount(input: {
   }
 
   const detail = await getAccountDetail(String(account._id));
-  const { memberships: _memberships, recentAudit: _audit, ...row } = detail;
+  const {
+    memberships: _memberships,
+    relatedAccounts: _relatedAccounts,
+    recentAudit: _audit,
+    ...row
+  } = detail;
   return { account: row, changed };
 }
 

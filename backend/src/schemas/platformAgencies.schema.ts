@@ -139,6 +139,7 @@ export const platformAuditQuerySchema = z
     q: z.string().trim().max(120, 'Search is limited to 120 characters.').optional().default(''),
     action: z.string().trim().max(80).optional().default(''),
     targetType: z.string().trim().max(40).optional().default(''),
+    targetId: z.string().trim().max(120).optional().default(''),
     actorId: objectId.optional(),
     from: auditDate.optional(),
     to: auditDate.optional(),

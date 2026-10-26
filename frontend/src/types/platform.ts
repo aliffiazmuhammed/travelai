@@ -73,6 +73,7 @@ export interface PlatformAuditRow {
 export interface PlatformAccountDetail extends PlatformAccountRow {
   passwordChangedAt?: string;
   memberships: PlatformMembershipRow[];
+  relatedAccounts: PlatformAccountRow[];
   recentAudit: PlatformAuditRow[];
 }
 
@@ -266,6 +267,7 @@ export interface PlatformAgencyRow {
   provisionedAt: string;
   createdAt: string;
   updatedAt: string;
+  lastActivityAt: string;
 }
 
 export interface PlatformAgencyDetail extends PlatformAgencyRow {
@@ -337,6 +339,7 @@ export interface PlatformAuditQuery {
   q?: string;
   action?: string;
   targetType?: string;
+  targetId?: string;
   actorId?: string;
   from?: string;
   to?: string;

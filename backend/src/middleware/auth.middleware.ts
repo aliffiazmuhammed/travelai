@@ -1,10 +1,10 @@
 import { Response, NextFunction } from 'express';
 import User from '../models/User.js';
-import Agency from '../models/Agency.js';
 import {
   SESSION_COOKIES,
   verifyRealmToken,
 } from '../services/auth/realm.js';
+import { isAgencyActive } from '../services/agency/status.js';
 import type {
   AccountRealm,
   AuthenticatedRequest,
@@ -92,11 +92,6 @@ function bearerToken(req: AuthenticatedRequest): string | undefined {
   return token || undefined;
 }
 
-async function agencyIsActive(agencyId: string): Promise<boolean> {
-  const agency = await Agency.findById(agencyId).select('status').lean();
-  return Boolean(agency && agency.status === 'active');
-}
-
 /**
  * Loads the account behind a verified claim and applies every realm rule.
  * Returns `null` for any mismatch so callers answer one generic 401.
@@ -120,7 +115,7 @@ async function loadIdentity(
     if (!claims.agencyId || String(user.agencyId) !== String(claims.agencyId)) {
       return null;
     }
-    if (!(await agencyIsActive(String(user.agencyId)))) return null;
+    if (!(await isAgencyActive(user.agencyId))) return null;
   }
 
   if (claims.realm === 'platform') {

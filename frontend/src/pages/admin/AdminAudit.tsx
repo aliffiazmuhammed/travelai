@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   AlertTriangle,
   ClipboardList,
@@ -33,6 +34,8 @@ const AdminAudit: React.FC = () => {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [action, setAction] = useState('');
   const [targetType, setTargetType] = useState('');
+  const [targetId, setTargetId] = useState('');
+  const [actorId, setActorId] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [page, setPage] = useState(1);
@@ -60,6 +63,10 @@ const AdminAudit: React.FC = () => {
         q: debouncedSearch,
         action,
         targetType,
+        targetId: targetId.trim() || undefined,
+        // The API accepts an account ObjectId only; partial typing must not
+        // turn into a 400 while the operator is still pasting the id.
+        actorId: /^[a-f0-9]{24}$/i.test(actorId.trim()) ? actorId.trim() : undefined,
         from: from || undefined,
         to: to || undefined,
         page,
@@ -80,7 +87,7 @@ const AdminAudit: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [debouncedSearch, action, targetType, from, to, page, reloadKey]);
+  }, [debouncedSearch, action, targetType, targetId, actorId, from, to, page, reloadKey]);
 
   const entries = data?.entries ?? [];
   const actions = data?.facets.actions ?? [];
@@ -90,6 +97,8 @@ const AdminAudit: React.FC = () => {
     setSearch('');
     setAction('');
     setTargetType('');
+    setTargetId('');
+    setActorId('');
     setFrom('');
     setTo('');
     setPage(1);
@@ -131,7 +140,7 @@ const AdminAudit: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         <div className="relative xl:col-span-2">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
           <Input
@@ -182,6 +191,28 @@ const AdminAudit: React.FC = () => {
             ))}
           </SelectContent>
         </Select>
+
+        <Input
+          value={actorId}
+          onChange={(event) => {
+            setActorId(event.target.value);
+            setPage(1);
+          }}
+          placeholder="Actor account ID"
+          aria-label="Filter by actor account id"
+          className="h-9 border-slate-700 bg-slate-950 font-mono text-xs text-slate-100 placeholder:font-sans placeholder:text-slate-500"
+        />
+
+        <Input
+          value={targetId}
+          onChange={(event) => {
+            setTargetId(event.target.value);
+            setPage(1);
+          }}
+          placeholder="Target ID"
+          aria-label="Filter by target id"
+          className="h-9 border-slate-700 bg-slate-950 font-mono text-xs text-slate-100 placeholder:font-sans placeholder:text-slate-500"
+        />
 
         <Input
           type="date"
@@ -266,7 +297,16 @@ const AdminAudit: React.FC = () => {
                         </Badge>
                         {entry.targetId ? (
                           <p className="mt-1 break-all font-mono text-[10px] text-slate-500">
-                            {entry.targetId}
+                            {targetHref(entry.targetType, entry.targetId) ? (
+                              <Link
+                                to={targetHref(entry.targetType, entry.targetId)!}
+                                className="text-indigo-300 underline-offset-2 hover:text-indigo-200 hover:underline"
+                              >
+                                {entry.targetId}
+                              </Link>
+                            ) : (
+                              entry.targetId
+                            )}
                           </p>
                         ) : null}
                       </td>
@@ -317,6 +357,20 @@ const AdminAudit: React.FC = () => {
     </div>
   );
 };
+
+/**
+ * Deep-link a platform audit target to the console page that owns it. Detail
+ * views are state-driven, so the pages read `?agency=` / `?account=` on mount.
+ */
+function targetHref(targetType: string, targetId: string): string | null {
+  if (!/^[a-f0-9]{24}$/i.test(targetId)) return null;
+  const type = targetType.toLowerCase();
+  if (type === 'agency') return `/admin/agencies?agency=${targetId}`;
+  if (type === 'account' || type === 'platform_account') {
+    return `/admin/accounts?account=${targetId}`;
+  }
+  return null;
+}
 
 const contextKeys = [
   'name',

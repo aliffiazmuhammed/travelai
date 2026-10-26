@@ -9,6 +9,7 @@ import {
   mapAgencyRoleToTripRole,
   type AgencyRole,
 } from '../services/agency/access.js';
+import { isAgencyActive } from '../services/agency/status.js';
 
 /**
  * The trip-access guard — the ONLY place trip authorization happens
@@ -168,6 +169,13 @@ export function requireTripRole(
     let identity: RealmIdentity | undefined;
 
     if (trip && trip.workspace === 'agency' && trip.agencyId) {
+      // PA0 suspension: every shared trip route for a suspended tenant is
+      // closed, including personal collaborators whose realm cookie itself is
+      // still valid. A generic 404 keeps the tenant state unprobeable.
+      if (!(await isAgencyActive(trip.agencyId))) {
+        throw new AppError('Trip not found', 404);
+      }
+
       const tenantIdentity = candidates.find(
         (candidate) =>
           candidate.realm === 'agency' &&

@@ -7,6 +7,7 @@ import Agency, {
 import AgencyInvite from '../../models/AgencyInvite.js';
 import AgencyMember from '../../models/AgencyMember.js';
 import PlatformAudit, { type IPlatformAudit } from '../../models/PlatformAudit.js';
+import Trip from '../../models/Trip.js';
 import User, { type AccountStatus } from '../../models/User.js';
 import { env } from '../../config/env.js';
 import { AppError } from '../../utils/AppError.js';
@@ -90,6 +91,8 @@ export interface PlatformAgencyRow {
   provisionedAt: string;
   createdAt: string;
   updatedAt: string;
+  /** Latest tenant signal: agency update, staff sign-in or trip update. */
+  lastActivityAt: string;
 }
 
 export interface PlatformAgencyDetail extends PlatformAgencyRow {
@@ -288,16 +291,29 @@ async function projectAgencyRows(
     .select('agencyId userId role joinedAt')
     .lean()) as unknown as MembershipLean[];
 
-  const ownerUserIds = memberships
-    .filter((membership) => membership.role === 'owner')
-    .map((membership) => membership.userId);
-  const ownerUsers = ownerUserIds.length
-    ? ((await User.find({ _id: { $in: ownerUserIds } })
+  const memberUserIds = [...new Set(memberships.map((membership) => membership.userId))];
+  const memberUsers = memberUserIds.length
+    ? ((await User.find({ _id: { $in: memberUserIds } })
         .select('email name status lastLoginAt mustChangePassword')
         .lean()) as unknown as MemberUserLean[])
     : [];
-  const ownerById = new Map(
-    ownerUsers.map((user) => [String(user._id), user])
+  const memberById = new Map(
+    memberUsers.map((user) => [String(user._id), user])
+  );
+
+  const tripActivity = new Map(
+    (
+      (await Trip.aggregate<{ _id: mongoose.Types.ObjectId; last: Date }>([
+        {
+          $match: {
+            agencyId: { $in: ids },
+            workspace: 'agency',
+            isDeleted: { $ne: true },
+          },
+        },
+        { $group: { _id: '$agencyId', last: { $max: '$updatedAt' } } },
+      ])) as Array<{ _id: mongoose.Types.ObjectId; last: Date }>
+    ).map((entry) => [String(entry._id), entry.last])
   );
 
   const byAgency = new Map<
@@ -320,6 +336,15 @@ async function projectAgencyRows(
       owners: [],
     };
     const owner = sortMembers(bucket.owners)[0];
+    const lastLogin = bucket.memberships.reduce<Date | undefined>((latest, membership) => {
+      const value = memberById.get(String(membership.userId))?.lastLoginAt;
+      if (!value) return latest;
+      const at = new Date(value);
+      return !latest || at > latest ? at : latest;
+    }, undefined);
+    const lastActivity = [agency.updatedAt, agency.createdAt, lastLogin, tripActivity.get(String(agency._id))]
+      .filter((value): value is Date => Boolean(value))
+      .reduce<Date | undefined>((latest, value) => (!latest || value > latest ? value : latest), undefined);
     const row: PlatformAgencyRow = {
       _id: String(agency._id),
       name: String(agency.name),
@@ -331,13 +356,14 @@ async function projectAgencyRows(
       provisionedAt: isoRequired(agency.provisionedAt ?? agency.createdAt),
       createdAt: isoRequired(agency.createdAt),
       updatedAt: isoRequired(agency.updatedAt),
+      lastActivityAt: isoRequired(lastActivity),
     };
     const billing = projectBilling(agency.billing);
     if (billing) row.billing = billing;
     if (owner) {
       const ownerRow = projectOwner(
         owner,
-        ownerById.get(String(owner.userId))
+        memberById.get(String(owner.userId))
       );
       if (ownerRow.email) row.owner = ownerRow;
     }
@@ -962,6 +988,7 @@ export function buildPlatformAuditFilter(
   }
   if (query.action) filter.action = query.action;
   if (query.targetType) filter.targetType = query.targetType;
+  if (query.targetId) filter.targetId = query.targetId;
   if (query.actorId) filter.actorId = query.actorId;
 
   if (query.from || query.to) {

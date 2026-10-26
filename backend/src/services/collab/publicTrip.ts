@@ -1,4 +1,5 @@
 import Trip from '../../models/Trip.js';
+import { isAgencyActive } from '../agency/status.js';
 
 /**
  * Public share access (Milestone 6 E1). Centralizes the one lookup that is
@@ -12,11 +13,19 @@ import Trip from '../../models/Trip.js';
  */
 export async function findPublicSharedTrip(shareId: string): Promise<any | null> {
   if (!shareId || typeof shareId !== 'string') return null;
-  return Trip.findOne({
+  const trip = await Trip.findOne({
     shareId,
     isPublic: true,
     isDeleted: { $ne: true },
   });
+  if (!trip) return null;
+
+  // A suspended tenant's content fails closed, like its proposals and live
+  // routes. Personal trips have no tenant and are unaffected.
+  if (trip.workspace === 'agency' && trip.agencyId) {
+    if (!(await isAgencyActive(trip.agencyId))) return null;
+  }
+  return trip;
 }
 
 /**
