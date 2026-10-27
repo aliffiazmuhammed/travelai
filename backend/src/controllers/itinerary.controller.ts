@@ -42,6 +42,7 @@ import { roleOf } from '../services/collab/access.js';
 import { tripContext } from '../middleware/tripAccess.middleware.js';
 import { findPublicSharedTrip, projectPublicTrip } from '../services/collab/publicTrip.js';
 import { setTripPublication } from '../services/gallery/publish.js';
+import { cloneGalleryTrip as clonePublishedTrip } from '../services/gallery/clone.js';
 import { AuthenticatedRequest } from '../types/index.js';
 import { AppError } from '../utils/AppError.js';
 import { env } from '../config/env.js';
@@ -939,6 +940,21 @@ export const duplicateTrip = catchAsync(
 
     const responseRole = trip.workspace === 'agency' ? role : 'owner';
     res.status(201).json({ ...sanitizeTripFor(newTrip, responseRole), role: responseRole });
+  }
+);
+
+/**
+ * Clone a published gallery trip into a fresh private draft (Milestone 8 G4).
+ *
+ * Personal realm only: the copy always belongs to the caller's personal
+ * workspace, never an agency tenant. The service re-reads the source through
+ * the public projection, so the clone cannot carry money, members or private
+ * dates, and the original is never modified.
+ */
+export const cloneGalleryTrip = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const trip = await clonePublishedTrip(String(req.params.id), String(req.userId));
+    res.status(201).json({ ...sanitizeTripFor(trip, 'owner'), role: 'owner' });
   }
 );
 

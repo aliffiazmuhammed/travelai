@@ -38,9 +38,23 @@ function isTripScoped(path: string): boolean {
   return path.startsWith('/:id');
 }
 
+/**
+ * The gallery clone route is the one deliberate exception to "every `/:id`
+ * route is membership-guarded": its `:id` is a *published* trip the caller may
+ * never have belonged to, so a trip-role check would be wrong. It runs
+ * `protectPersonal` + `tripCloneLimiter`, and the service copies only the
+ * public projection. `clone.test.ts` pins both of those facts.
+ */
+const UNGUARDED_BY_DESIGN = new Set(['post /:id/clone']);
+
 test('every trip-scoped route carries a requireTripRole guard', () => {
   const layers = routeLayers();
-  const unguarded = layers.filter((layer) => isTripScoped(pathOf(layer)) && !hasGuard(layer));
+  const unguarded = layers.filter(
+    (layer) =>
+      isTripScoped(pathOf(layer)) &&
+      !hasGuard(layer) &&
+      !UNGUARDED_BY_DESIGN.has(`${methodsOf(layer).join(',')} ${pathOf(layer)}`)
+  );
   assert.deepEqual(
     unguarded.map((layer) => `${methodsOf(layer)} ${pathOf(layer)}`),
     [],

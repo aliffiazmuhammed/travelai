@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,8 @@ import { avatarSrc, initialsFor } from "@/lib/avatar";
 import { DURATION_LABELS, formatGalleryDates } from "@/lib/galleryFormat";
 import { withItineraryDefaults } from "@/lib/itineraryDefaults";
 import { applyPageMeta } from "@/lib/meta";
+import { toast } from "sonner";
+import { useAuth } from "@/context/UserContext";
 import {
   AlertCircle,
   ArrowLeft,
@@ -35,8 +37,9 @@ import type { GalleryTrip } from "@/types/gallery";
  * all: the payload does not carry them, and `withItineraryDefaults` only fills
  * zeroes that nothing displays.
  *
- * Clone (G4) and join requests (G5) are placeholders here; they are disabled
- * rather than hidden so the page communicates what comes next.
+ * Clone (G4) copies the public projection into a private draft owned by the
+ * visitor and lands them in their dashboard. Join requests (G5) remain a
+ * disabled placeholder so the page communicates what comes next.
  */
 
 const galleryDurationLabel = (days: number): string => {
@@ -48,10 +51,15 @@ const galleryDurationLabel = (days: number): string => {
 
 const GalleryTrip = () => {
   const { tripId } = useParams<{ tripId: string }>();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { isAuthenticated } = useAuth();
   const [trip, setTrip] = useState<GalleryTrip | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [cloning, setCloning] = useState(false);
+  const autoCloneRef = useRef(false);
 
   useEffect(() => {
     if (!tripId) {
@@ -121,6 +129,56 @@ const GalleryTrip = () => {
     () => (trip ? withItineraryDefaults(trip.itinerary) : null),
     [trip]
   );
+
+  /**
+   * G4: signed-in visitors get a private draft immediately; anonymous ones are
+   * sent through sign-in with the clone intent attached, so they land back on
+   * this page and the copy is created without a second click.
+   */
+  const handleClone = useCallback(async () => {
+    if (!trip) return;
+
+    if (!isAuthenticated) {
+      navigate("/auth", {
+        state: {
+          from: {
+            pathname: location.pathname,
+            state: { clone: true },
+          },
+        },
+      });
+      return;
+    }
+
+    setCloning(true);
+    try {
+      const cloned = await api.cloneGalleryTrip(trip._id);
+      toast.success("Your private copy is ready.");
+      navigate("/dashboard", { state: { tripId: cloned._id } });
+    } catch (err) {
+      console.error("Failed to clone the public trip:", err);
+      toast.error(
+        err instanceof ApiError && err.message
+          ? err.message
+          : "This trip could not be cloned right now. Please try again."
+      );
+    } finally {
+      setCloning(false);
+    }
+  }, [trip, isAuthenticated, navigate, location.pathname]);
+
+  // Resume the flow after the sign-in redirect, exactly once per history entry.
+  useEffect(() => {
+    const wantsClone = Boolean(
+      (location.state as { clone?: boolean } | null)?.clone
+    );
+    if (!wantsClone || !trip || !isAuthenticated || autoCloneRef.current) return;
+
+    autoCloneRef.current = true;
+    // Consume the intent so pressing Back never clones a second time.
+    navigate(location.pathname, { replace: true, state: null });
+    void handleClone();
+  }, [location.state, location.pathname, trip, isAuthenticated, navigate, handleClone]);
 
   if (loading) {
     return (
@@ -366,11 +424,16 @@ const GalleryTrip = () => {
                 <Button
                   type="button"
                   variant="hero"
-                  disabled
+                  disabled={cloning}
+                  onClick={handleClone}
                   className="w-full rounded-2xl h-11 text-xs font-bold gap-2"
                 >
-                  <Copy className="w-4 h-4" />
-                  Clone &amp; customize
+                  {cloning ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Copy className="w-4 h-4" />
+                  )}
+                  {cloning ? "Cloning this trip…" : "Clone & customize"}
                 </Button>
                 <Button
                   type="button"
@@ -382,8 +445,8 @@ const GalleryTrip = () => {
                   Request to join
                 </Button>
                 <p className="text-[10px] leading-relaxed text-muted-foreground text-center">
-                  Cloning and join requests arrive in an upcoming update. For now
-                  you can read this trip and plan your own.
+                  Cloning creates a private copy you own — the original stays
+                  untouched. Join requests arrive in an upcoming update.
                 </p>
               </div>
             </section>

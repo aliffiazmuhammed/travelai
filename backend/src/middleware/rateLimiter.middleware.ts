@@ -191,6 +191,28 @@ export const typingPingLimiter = rateLimit({
 });
 
 /**
+ * Milestone 8 G4: cloning a published trip writes a whole new document from a
+ * public source, so it is capped per account per day. Ten is generous for a
+ * real "save this idea" workflow and hostile to using the gallery as a bulk
+ * copy API.
+ */
+export const TRIP_CLONE_DAILY_LIMIT = 10;
+
+export const tripCloneLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000,
+  max: TRIP_CLONE_DAILY_LIMIT,
+  keyGenerator: userOrIpKey,
+  validate: false,
+  message: {
+    success: false,
+    error: 'You have cloned the maximum number of trips for today. Please try again tomorrow.',
+    message: 'You have cloned the maximum number of trips for today. Please try again tomorrow.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
  * F14 account security: a password change is a credential check, so it gets the
  * same brake shape as sign-in but keyed on the account (a shared NAT must not
  * lock everyone out). 10 tries / 15 min is generous for a human typing and

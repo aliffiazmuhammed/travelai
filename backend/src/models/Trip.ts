@@ -110,6 +110,17 @@ export interface ITripGallery {
   tags: string[];
 }
 
+/**
+ * Attribution for a trip cloned from the public gallery (Milestone 8 G4).
+ * Only the public identity needed to render "Cloned from @handle" is stored —
+ * never the source's dates, members or money.
+ */
+export interface ITripClonedFrom {
+  tripId: Types.ObjectId;
+  ownerHandle: string;
+  clonedAt: Date;
+}
+
 export interface ITrip extends Document {
   userId: Types.ObjectId;
   /**
@@ -141,6 +152,8 @@ export interface ITrip extends Document {
   publishedAt?: Date;
   /** Public card metadata, written by the publish endpoint only. */
   gallery?: ITripGallery;
+  /** Set when this draft was cloned from a published trip (M8 G4). */
+  clonedFrom?: ITripClonedFrom;
   tripDetails: Record<string, any>;
   version: number;
   hasEdited: boolean;
@@ -199,6 +212,15 @@ const tripGallerySchema = new Schema<ITripGallery>(
     hideExactDates: { type: Boolean, default: false },
     summary: { type: String, trim: true, maxlength: 280 },
     tags: { type: [String], default: [] },
+  },
+  { _id: false }
+);
+
+const tripClonedFromSchema = new Schema<ITripClonedFrom>(
+  {
+    tripId: { type: Schema.Types.ObjectId, ref: 'Trip', required: true },
+    ownerHandle: { type: String, required: true, trim: true, maxlength: 40 },
+    clonedAt: { type: Date, default: Date.now },
   },
   { _id: false }
 );
@@ -350,6 +372,10 @@ const tripSchema = new Schema<ITrip>(
     },
     gallery: {
       type: tripGallerySchema,
+      default: undefined,
+    },
+    clonedFrom: {
+      type: tripClonedFromSchema,
       default: undefined,
     },
     tripDetails: {

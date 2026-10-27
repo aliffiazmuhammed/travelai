@@ -1,6 +1,6 @@
 # Milestone 8 — Public Gallery & Traveler Profiles
 
-**Status:** G1 and G2 shipped (2026-10-27); G3 implemented and awaiting review; G4–G6 approved and not started.
+**Status:** G1 and G2 shipped (2026-10-27); G3 and G4 implemented and awaiting review; G5–G6 approved and not started.
 **Scope:** let a personal account publish a trip to a public, browsable gallery with a traveler profile; let visitors clone a published itinerary into their own draft or request to join it; keep everything monetary, membership- or identity-related off the public payload.
 
 **Locked decisions (2026-10-27):**
@@ -142,7 +142,7 @@ all trip CRUD does):
 - `lib/meta.ts`: per-page `<title>`, description and OG tags on both pages (crawlability stays deferred).
 - Tests: `services/gallery/explore.test.ts` (20 pins: eligibility, expiry cutoff, search escaping, duration/tags, cursor round-trip and rejection, dropped publishers, leak sweeps for listing and trip page) plus gallery route classification in `routes/realmCoverage.test.ts`. Backend: 650 tests, typecheck green. Frontend: typecheck and production build green.
 - Local/dev caveat: `travelai` has no public trips yet (G1 migration mapped every existing row to `unlisted`/`private`), so the nav gate stays closed until at least 5 curated trips are published. Group type is accepted by the API (`?groupType=`) for curated links but has no free-text control yet, because the value is free-form in generated itineraries.
-- Not done here: a persistent `clonedFrom`/reporting surface (G4/G6), and a browser smoke on a seeded database.
+- Not done here: clone (landed in G4) and reporting/moderation (G6), plus a browser smoke on a seeded database.
 
 ### G4 — Clone a published trip
 
@@ -153,6 +153,16 @@ all trip CRUD does):
 - Tests: ownership, no money/members copied, rate limit, unpublished target rejected.
 
 **Acceptance:** a cloned trip is fully editable and shows attribution to the original owner; the original is untouched.
+
+**Implemented 2026-10-27 (awaiting review).** Artifacts:
+
+- `services/gallery/clone.ts`: the source is re-read through `loadGalleryTrip` (the same public projection as the anonymous page), then `buildClonedTripDraft` creates a fresh `workspace: 'personal'`, `status: 'draft'`, `visibility: 'private'` trip. Money, expenses, participants, finance, members, `shareId` and `generationMeta` are structurally absent from the source payload, so they cannot be copied. Exact dates are copied only when `dates.exact`; a hidden-date source becomes "dates flexible" instead of leaking the real window. Drawn routes carry over.
+- `Trip` gains `clonedFrom { tripId, ownerHandle, clonedAt }` (attribution only). The owner-facing trip payload includes it; the dashboard renders "Cloned from @handle" with a link to the traveller profile.
+- `POST /api/itinerary/:id/clone` (`controllers/itinerary.controller.ts`, `routes/itinerary.routes.ts`) — codebase convention for the spec's `/api/trips/:id/clone`. It runs `protectPersonal` + new `tripCloneLimiter` (10/day/account, user-keyed) and intentionally skips `requireTripRole`: the source is a public trip the caller need not belong to. `routerCoverage.test.ts` documents that one exception; `realmCoverage.test.ts` classifies it as personal.
+- `frontend/src/pages/GalleryTrip.tsx`: "Clone & customize" is live. Signed-in visitors get the draft and land in the dashboard with it opened; anonymous visitors are sent through sign-in with the clone intent and the copy is created on return. The join button stays a G5 placeholder.
+- `api.cloneGalleryTrip` + `Trip.clonedFrom` type.
+- Tests: `services/gallery/clone.test.ts` (9 pins: cloner ownership, attribution, no money/members/private metadata, exact dates, hidden dates, routes, original untouched, unpublished/expired/agency 404, rate-limit/guard wiring). Backend: 659 tests, typecheck green. Frontend: typecheck and production build green.
+- Not done here: an in-product browser smoke on a seeded public trip (the `test` database still has zero public trips) and a bulk-copy reporting surface (G6).
 
 ### G5 — Join requests and blocking
 

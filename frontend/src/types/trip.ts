@@ -383,6 +383,13 @@ export interface RouteResult {
   provider: string;
 }
 
+/** M8 G4: attribution for a draft cloned from a published trip. */
+export interface TripClonedFrom {
+  tripId: string;
+  ownerHandle: string;
+  clonedAt?: string;
+}
+
 export interface Trip {
   _id: string;
   title?: string;
@@ -416,6 +423,8 @@ export interface Trip {
   publishedAt?: string | null;
   /** Gallery copy and the hide-exact-dates switch (absent until first publish). */
   gallery?: TripGallery;
+  /** M8 G4: the public trip this draft was cloned from, if any. */
+  clonedFrom?: TripClonedFrom;
   /** Optimistic-concurrency counter (Milestone 6 §3.6) — moves on every write. */
   rev?: number;
   /** The caller's role on this trip (Milestone 6). Absent for legacy payloads. */

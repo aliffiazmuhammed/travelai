@@ -21,6 +21,7 @@ import {
   restoreTrip,
   purgeTrip,
   duplicateTrip,
+  cloneGalleryTrip,
   shareTrip,
   revokeShareTrip,
   getSharedTrip,
@@ -112,6 +113,7 @@ import {
   generateLimiter,
   inviteManageLimiter,
   publicShareLimiter,
+  tripCloneLimiter,
   typingPingLimiter,
 } from '../middleware/rateLimiter.middleware.js';
 import { handleReceiptUpload } from '../middleware/upload.middleware.js';
@@ -205,6 +207,13 @@ router.put(
 
 // Duplicating only needs read access; the copy becomes the caller's own trip.
 router.post('/:id/duplicate', protectSession, requireTripRole('viewer'), duplicateTrip);
+
+// Gallery clone (Milestone 8 G4) is personal-realm only: the source is a
+// *published* trip the caller may not belong to, so there is no trip-role guard.
+// Ownership is "whoever calls" — the service copies only the public projection
+// and the new draft is owned by the caller. 10 clones/day/account.
+router.post('/:id/clone', protectPersonal, tripCloneLimiter, cloneGalleryTrip);
+
 router.post('/:id/share', protectSession, requireTripRole('owner'), shareTrip);
 router.delete('/:id/share', protectSession, requireTripRole('owner'), revokeShareTrip);
 

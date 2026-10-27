@@ -1833,6 +1833,17 @@ class ApiClient {
     return this.request(`/api/explore/${encodeURIComponent(tripId)}`);
   }
 
+  /**
+   * Milestone 8 G4 — copy a published trip into a fresh private draft owned by
+   * the caller. The server reads only the public projection, records
+   * `clonedFrom` attribution and caps clones at 10/day/account.
+   */
+  async cloneGalleryTrip(tripId: string): Promise<Trip> {
+    return this.request(`/api/itinerary/${encodeURIComponent(tripId)}/clone`, {
+      method: 'POST',
+    });
+  }
+
   // Collaboration (Milestone 6: members, invites, ownership)
   async getTripMembers(id: string): Promise<{ success: boolean; members: TripMember[] }> {
     return this.request(`/api/itinerary/${id}/members`);

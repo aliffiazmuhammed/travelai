@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Copy } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { api } from "@/services/api";
 import { toast } from "sonner";
@@ -394,6 +395,23 @@ const Dashboard: React.FC = () => {
         ) : selectedTrip ? (
           /* SINGLE TRIP DETAIL VIEW */
           <div className="space-y-6">
+            {selectedTrip.clonedFrom && (
+              <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 text-xs text-foreground/80">
+                <Copy className="h-4 w-4 shrink-0 text-primary" />
+                <span>
+                  Cloned from{" "}
+                  <Link
+                    to={`/travelers/${encodeURIComponent(
+                      selectedTrip.clonedFrom.ownerHandle
+                    )}`}
+                    className="font-bold text-primary hover:underline"
+                  >
+                    @{selectedTrip.clonedFrom.ownerHandle}
+                  </Link>
+                  ’s published itinerary. This copy is yours to edit.
+                </span>
+              </div>
+            )}
             <ItineraryDisplay
               data={selectedTrip.tripDetails}
               tripId={selectedTrip._id}
