@@ -404,6 +404,24 @@ export const addAgencyTemplateVersionSchema = z
   })
   .strict();
 
+/**
+ * In-app editing sends the full fragment as JSON. The 512 KiB cap is enforced
+ * on bytes by the template validator; the character cap here is only a coarse
+ * guard so an oversized body is rejected before validation runs.
+ */
+export const saveAgencyTemplateSourceSchema = z
+  .object({
+    baseVersion: z.coerce
+      .number()
+      .int()
+      .min(1, 'Choose the version you are editing.'),
+    source: z
+      .string()
+      .min(1, 'Add the template HTML before saving a version.')
+      .max(512 * 1024, 'Templates must be smaller than 512 KB.'),
+  })
+  .strict();
+
 export const updateAgencyTemplateSchema = z
   .object({
     name: z

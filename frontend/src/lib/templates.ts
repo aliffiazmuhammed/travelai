@@ -10,6 +10,9 @@ export const TEMPLATE_STATUS_LABELS: Record<AgencyTemplateStatus, string> = {
   archived: 'Archived',
 };
 
+/** Mirrors the backend template contract: one HTML fragment, up to 512 KiB. */
+export const TEMPLATE_SOURCE_MAX_BYTES = 512 * 1024;
+
 export function templateStatusLabel(status: AgencyTemplateStatus): string {
   return TEMPLATE_STATUS_LABELS[status] ?? status;
 }

@@ -3,6 +3,7 @@ import {
   Archive,
   AlertTriangle,
   CheckCircle2,
+  Code2,
   Eye,
   Loader2,
   RefreshCw,
@@ -38,6 +39,7 @@ import type {
 } from '@/types';
 import { toast } from 'sonner';
 import TemplatePreviewDialog from './TemplatePreviewDialog';
+import TemplateSourceEditorDialog from './TemplateSourceEditorDialog';
 import TemplateUploadDialog from './TemplateUploadDialog';
 
 const errorMessage = (error: unknown, fallback: string): string =>
@@ -88,6 +90,9 @@ const TemplateManagerDialog: React.FC<TemplateManagerDialogProps> = ({
   const [previewVersionNumber, setPreviewVersionNumber] = useState<
     number | null
   >(null);
+  const [editVersionNumber, setEditVersionNumber] = useState<number | null>(
+    null
+  );
 
   const loadVersions = useCallback(
     async (showSpinner = true) => {
@@ -127,6 +132,7 @@ const TemplateManagerDialog: React.FC<TemplateManagerDialogProps> = ({
     if (!open) {
       setUploadOpen(false);
       setPreviewVersionNumber(null);
+      setEditVersionNumber(null);
     }
   }, [open]);
 
@@ -134,6 +140,12 @@ const TemplateManagerDialog: React.FC<TemplateManagerDialogProps> = ({
     previewVersionNumber === null
       ? null
       : versions.find((version) => version.version === previewVersionNumber) ??
+        null;
+
+  const editVersion =
+    editVersionNumber === null
+      ? null
+      : versions.find((version) => version.version === editVersionNumber) ??
         null;
 
   const saveDetails = async () => {
@@ -263,7 +275,7 @@ const TemplateManagerDialog: React.FC<TemplateManagerDialogProps> = ({
             <DialogDescription>
               {templateAudienceLabel(template.audience)} template · version{' '}
               {template.activeVersion ?? template.version} ·{' '}
-              {template.builtinKey ? 'Built-in' : 'Custom upload'}
+              {template.builtinKey ? 'Built-in' : 'Custom template'}
             </DialogDescription>
           </DialogHeader>
 
@@ -336,7 +348,8 @@ const TemplateManagerDialog: React.FC<TemplateManagerDialogProps> = ({
               <div>
                 <h3 className="text-sm font-semibold">Versions</h3>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Versions are immutable. Exports pin the version they used.
+                  Versions are immutable. Edit HTML saves a new version; exports
+                  pin the version they used.
                 </p>
               </div>
               <Button
@@ -436,6 +449,22 @@ const TemplateManagerDialog: React.FC<TemplateManagerDialogProps> = ({
                           </p>
                         </div>
                         <div className="flex flex-wrap items-center gap-1.5">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              setEditVersionNumber(version.version)
+                            }
+                            disabled={busy || template.status === 'archived'}
+                            title={
+                              template.status === 'archived'
+                                ? 'Restore this template before editing its source.'
+                                : 'Edit this HTML and save it as a new version.'
+                            }
+                          >
+                            <Code2 className="mr-1.5 h-3.5 w-3.5" />
+                            Edit HTML
+                          </Button>
                           <Button
                             variant="outline"
                             size="sm"
@@ -551,6 +580,24 @@ const TemplateManagerDialog: React.FC<TemplateManagerDialogProps> = ({
           template={template}
           version={previewVersion}
           onPreviewed={() => loadVersions(false)}
+        />
+      ) : null}
+
+      {editVersion ? (
+        <TemplateSourceEditorDialog
+          open
+          onOpenChange={(next) => {
+            if (!next) setEditVersionNumber(null);
+          }}
+          agencyId={agencyId}
+          template={template}
+          version={editVersion}
+          onSaved={async (result) => {
+            setEditVersionNumber(null);
+            onTemplateChanged(result.template);
+            await onRefreshTemplates();
+            await loadVersions(false);
+          }}
         />
       ) : null}
     </>

@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { TEMPLATE_SOURCE_MAX_BYTES } from '@/lib/templates';
 import { api } from '@/services/api';
 import type {
   AgencyAsset,
@@ -37,7 +38,6 @@ import type {
 } from '@/types';
 import { toast } from 'sonner';
 
-export const MAX_TEMPLATE_BYTES = 512 * 1024;
 const MAX_DAY_ASSETS = 30;
 const NONE_VALUE = '__none__';
 
@@ -181,7 +181,7 @@ const TemplateUploadDialog: React.FC<TemplateUploadDialogProps> = ({
   }, [open, template?._id, template?.audience, template?.description, template?.name]);
 
   const chooseFile = (selected: File | null) => {
-    if (selected && selected.size > MAX_TEMPLATE_BYTES) {
+    if (selected && selected.size > TEMPLATE_SOURCE_MAX_BYTES) {
       toast.error('Templates must be smaller than 512 KB.');
       if (fileInputRef.current) fileInputRef.current.value = '';
       setFile(null);

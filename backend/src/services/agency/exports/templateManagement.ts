@@ -18,17 +18,20 @@ import { getLatestQuote, reconcileQuoteExpiry } from '../quotes.js';
 import { renderCustomTemplateHtml } from './customTemplate.js';
 import { buildExportDocument } from './document.js';
 import {
+  carryOverTemplateAssetSnapshots,
   snapshotAgencyTemplateAssets,
   type AgencyTemplateAssetSelection,
 } from './templateAssets.js';
 import { resolveAgencyTemplateVersion } from './templateResolver.js';
 import {
   buildAgencyTemplateStorageKey,
+  readAgencyTemplateFile,
   removeAgencyTemplateVersionFiles,
   writeAgencyTemplateFile,
 } from './templateStorage.js';
 import {
   AGENCY_TEMPLATE_SCHEMA_VERSION,
+  templateSourceChecksum,
   validateAgencyTemplateSource,
 } from './templateValidation.js';
 import {
@@ -357,6 +360,183 @@ export async function addAgencyTemplateVersion(
     targetId: String(template._id),
     metadata: {
       version: nextVersion,
+      audience: template.audience,
+      pageCount: validated.pageCount,
+      assets: assets.map((asset) => asset.slot),
+    },
+  });
+
+  return {
+    template: projectAgencyTemplate(template),
+    version: projectAgencyTemplateVersion(version, template.activeVersion),
+  };
+}
+
+export interface AgencyTemplateSourceView {
+  template: AgencyTemplateProjection;
+  version: AgencyTemplateVersionProjection;
+  source: string;
+  checksum: string;
+  schemaVersion: number;
+}
+
+/** Reads one version's private source for the in-app editor (admin only). */
+export async function getAgencyTemplateSource(input: {
+  agencyId: string;
+  role: AgencyRole;
+  templateId: string;
+  version: unknown;
+}): Promise<AgencyTemplateSourceView> {
+  assertAdmin(input.role);
+  const template = await loadCustomTemplate(input.agencyId, input.templateId);
+  const version = await loadVersion(
+    input.agencyId,
+    String(template._id),
+    input.version
+  );
+  const source = await readAgencyTemplateFile(version.storageKey);
+  if (templateSourceChecksum(source) !== version.checksum) {
+    throw new AppError(
+      'The stored source no longer matches this approved version. Upload a new version instead.',
+      409
+    );
+  }
+
+  return {
+    template: projectAgencyTemplate(template),
+    version: projectAgencyTemplateVersion(version, template.activeVersion),
+    source,
+    checksum: version.checksum,
+    schemaVersion: Number(
+      version.schemaVersion ?? AGENCY_TEMPLATE_SCHEMA_VERSION
+    ),
+  };
+}
+
+export interface SaveAgencyTemplateSourceInput {
+  agency: any;
+  actorId: string;
+  role: AgencyRole;
+  templateId: string;
+  baseVersion: unknown;
+  source: unknown;
+}
+
+/**
+ * Saves edited HTML as the next immutable version. The base version's asset
+ * snapshots are copied forward, so editing cannot silently swap a client's
+ * cover or fonts; preview and activation still gate publication.
+ */
+export async function saveAgencyTemplateSource(
+  input: SaveAgencyTemplateSourceInput
+): Promise<{
+  template: AgencyTemplateProjection;
+  version: AgencyTemplateVersionProjection;
+}> {
+  assertAdmin(input.role);
+  const agencyId = String(input.agency._id);
+  const template = await loadCustomTemplate(agencyId, input.templateId);
+  if (template.status === 'archived') {
+    throw new AppError(
+      'This template is archived. Restore it by activating a version before editing it.',
+      409
+    );
+  }
+
+  const base = await loadVersion(
+    agencyId,
+    String(template._id),
+    input.baseVersion
+  );
+  const raw = typeof input.source === 'string' ? input.source : '';
+  if (!raw.trim()) {
+    throw new AppError('Add the template HTML before saving a version.', 400);
+  }
+
+  const validated = validateAgencyTemplateSource(Buffer.from(raw, 'utf8'), {
+    audience: template.audience,
+  });
+
+  const baseSource = await readAgencyTemplateFile(base.storageKey);
+  const baseChecksum = templateSourceChecksum(baseSource);
+  if (baseChecksum !== base.checksum) {
+    throw new AppError(
+      'The stored source no longer matches this approved version. Upload a new version instead.',
+      409
+    );
+  }
+  if (validated.checksum === baseChecksum) {
+    throw new AppError(
+      'The HTML is unchanged. Edit the source before saving a new version.',
+      400
+    );
+  }
+  await assertStorageQuota(agencyId, validated.bytes);
+
+  const latest = await AgencyTemplateVersion.findOne({
+    agencyId,
+    templateId: template._id,
+  })
+    .sort({ version: -1 })
+    .select('version')
+    .lean();
+  const nextVersion = Number(latest?.version ?? 0) + 1;
+
+  const versionId = new Types.ObjectId();
+  const storageKey = buildAgencyTemplateStorageKey(agencyId, versionId);
+  let version: IAgencyTemplateVersion | null = null;
+  let assets: IAgencyTemplateVersionAsset[] = [];
+  try {
+    assets = await carryOverTemplateAssetSnapshots({
+      agencyId,
+      sourceVersionId: String(base._id),
+      targetVersionId: String(versionId),
+      usedTokens: validated.tokens,
+      assets: base.assets,
+    });
+    await writeAgencyTemplateFile(storageKey, validated.source);
+
+    version = await AgencyTemplateVersion.create({
+      _id: versionId,
+      agencyId,
+      templateId: template._id,
+      version: nextVersion,
+      engine: 'html',
+      schemaVersion: AGENCY_TEMPLATE_SCHEMA_VERSION,
+      audience: template.audience,
+      storageKey,
+      checksum: validated.checksum,
+      sourceBytes: validated.bytes,
+      pageCount: validated.pageCount,
+      tokens: validated.tokens,
+      assets,
+      createdBy: input.actorId,
+    });
+  } catch (error) {
+    if (version?._id) {
+      await AgencyTemplateVersion.deleteOne({ _id: version._id }).catch(
+        () => undefined
+      );
+    }
+    await cleanupVersionFiles(storageKey, assets);
+    if (duplicateKey(error)) {
+      throw new AppError(
+        'Another version was saved at the same time. Please retry.',
+        409
+      );
+    }
+    throw error;
+  }
+
+  await recordAgencyAudit({
+    agencyId,
+    actorId: input.actorId,
+    action: 'template.version_edited',
+    targetType: 'AgencyTemplate',
+    targetId: String(template._id),
+    metadata: {
+      version: nextVersion,
+      baseVersion: base.version,
       audience: template.audience,
       pageCount: validated.pageCount,
       assets: assets.map((asset) => asset.slot),

@@ -139,7 +139,10 @@ owner membership. It never converts or attaches a personal account.
 5. **Templates (A6).** Either keep the built-in brochure/internal templates
    or upload an HTML template (Settings → Templates), choose brand assets,
    and **preview against a real trip before activating a version** — the
-   activation guard refuses unpinned versions.
+   activation guard refuses unpinned versions. Admins can also open a version
+   and use **Edit HTML** to save corrected source as a new version; the base
+   version's brand assets carry over and the old version stays pinned to its
+   exports.
 6. **First trip (A2).** Create a trip in the workspace; every member sees it,
    planners and above can edit, admins archive/restore.
 7. **Client + quote (A4).** Add the client to the trip, save the quote

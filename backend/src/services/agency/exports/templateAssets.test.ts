@@ -20,6 +20,7 @@ import {
   AGENCY_TEMPLATE_MAX_DAY_ASSETS,
   agencyAssetIdFromContentUrl,
   assertTemplateAssetCoverage,
+  carryOverTemplateAssetSnapshots,
   loadAgencyTemplateVersionAssets,
   normalizeAgencyTemplateAssetSelection,
   snapshotAgencyTemplateAssets,
@@ -347,6 +348,117 @@ test('failed versions can remove their source and snapshots', async () => {
     );
     await assert.rejects(
       () => readAgencyTemplateAssetFile(assetKey),
+      (error) => error instanceof AppError && error.statusCode === 409
+    );
+  });
+});
+
+test('edited versions carry snapshots forward byte-for-byte', async () => {
+  await withTemplateRoot(async () => {
+    const agencyId = new Types.ObjectId().toString();
+    const sourceVersionId = new Types.ObjectId().toString();
+    const targetVersionId = new Types.ObjectId().toString();
+    const logoKey = buildAgencyTemplateAssetStorageKey(
+      agencyId,
+      sourceVersionId,
+      'logo',
+      'png'
+    );
+    const fontKey = buildAgencyTemplateAssetStorageKey(
+      agencyId,
+      sourceVersionId,
+      'heading-font',
+      'woff2'
+    );
+    await writeAgencyTemplateAssetFile(logoKey, PNG);
+    await writeAgencyTemplateAssetFile(fontKey, WOFF2);
+    const logoAssetId = new Types.ObjectId();
+
+    const carried = await carryOverTemplateAssetSnapshots({
+      agencyId,
+      sourceVersionId,
+      targetVersionId,
+      usedTokens: ['assets.logoDataUrl'],
+      assets: [
+        {
+          ...snapshot('logo', logoKey, 'image/png', PNG.byteLength),
+          assetId: logoAssetId,
+        },
+        snapshot(
+          'heading-font',
+          fontKey,
+          'font/woff2',
+          WOFF2.byteLength,
+          'Fraunces'
+        ),
+      ],
+    });
+
+    assert.equal(carried.length, 2);
+    const logo = carried.find((asset) => asset.slot === 'logo');
+    assert.ok(logo);
+    assert.equal(
+      logo.storageKey,
+      `${agencyId}/${targetVersionId}/logo.png`
+    );
+    assert.equal(String(logo.assetId), String(logoAssetId));
+    assert.deepEqual(await readAgencyTemplateAssetFile(logo.storageKey), PNG);
+
+    const loaded = await loadAgencyTemplateVersionAssets(carried);
+    assert.match(loaded.images.logo, /^data:image\/png;base64,/);
+    assert.equal(loaded.headingFont?.family, 'Fraunces');
+    // The approved source version keeps its own snapshots untouched.
+    assert.deepEqual(await readAgencyTemplateAssetFile(logoKey), PNG);
+  });
+});
+
+test('editing fails loudly when a snapshot is missing or unmapped', async () => {
+  await withTemplateRoot(async () => {
+    const agencyId = new Types.ObjectId().toString();
+    const sourceVersionId = new Types.ObjectId().toString();
+    const targetVersionId = new Types.ObjectId().toString();
+    const logoKey = buildAgencyTemplateAssetStorageKey(
+      agencyId,
+      sourceVersionId,
+      'logo',
+      'png'
+    );
+    await writeAgencyTemplateAssetFile(logoKey, PNG);
+
+    const missingKey = buildAgencyTemplateAssetStorageKey(
+      agencyId,
+      sourceVersionId,
+      'day-1',
+      'png'
+    );
+    await assert.rejects(
+      () =>
+        carryOverTemplateAssetSnapshots({
+          agencyId,
+          sourceVersionId,
+          targetVersionId,
+          assets: [snapshot('day-1', missingKey, 'image/png', PNG.byteLength)],
+        }),
+      (error) => error instanceof AppError && error.statusCode === 409
+    );
+
+    // A source that newly needs a cover cannot silently publish without one.
+    await assert.rejects(
+      () =>
+        carryOverTemplateAssetSnapshots({
+          agencyId,
+          sourceVersionId,
+          targetVersionId,
+          usedTokens: ['assets.coverImageDataUrl'],
+          assets: [snapshot('logo', logoKey, 'image/png', PNG.byteLength)],
+        }),
+      (error) => error instanceof AppError && error.statusCode === 400
+    );
+    await assert.rejects(
+      () =>
+        readAgencyTemplateAssetFile(
+          `${agencyId}/${targetVersionId}/logo.png`
+        ),
       (error) => error instanceof AppError && error.statusCode === 409
     );
   });

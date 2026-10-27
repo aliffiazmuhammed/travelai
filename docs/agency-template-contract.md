@@ -297,6 +297,8 @@ to another agency resolves as `404`. Custom-template management is
 | `POST /:agencyId/templates` | Multipart upload: `file`, `name`, `description`, `audience`, `assets` (JSON). Creates a draft template and version 1. |
 | `PATCH /:agencyId/templates/:templateId` | Rename or re-describe a custom template. |
 | `GET /:agencyId/templates/:templateId/versions` | List versions with the active marker. |
+| `GET /:agencyId/templates/:templateId/versions/:version/source` | Returns the private HTML source plus checksum and schema version for the in-app editor. `409` if the stored bytes no longer match the approved checksum. |
+| `POST /:agencyId/templates/:templateId/versions/from-source` | JSON `{ baseVersion, source }`. Validates the edited fragment and saves it as the next immutable version, carrying the base version's asset snapshots forward. `409` when archived or when the stored base source fails its checksum. |
 | `POST /:agencyId/templates/:templateId/versions` | Multipart upload of the next version; the template audience is reused. `409` when archived. |
 | `POST /:agencyId/templates/:templateId/versions/:version/preview` | JSON `{ tripId, quoteId? }`; renders against a real tenant trip and records `previewedAt`, `previewedBy`, `previewTripId`. |
 | `POST /:agencyId/templates/:templateId/versions/:version/activate` | Makes the previewed version active for new exports. `409` without a preview. |
@@ -307,6 +309,13 @@ Lifecycle rules:
 
 - Upload and version upload validate the source and snapshot assets before any
   row is written; a failed upload leaves no template, version or files behind.
+- In-app editing is the same lifecycle with a textarea: the editor reads one
+  version's source, and saving writes a **new** version. The base version's
+  snapshots are copied byte-for-byte into the new version (so replacing or
+  deleting the A3 asset cannot change the imagery), the saved version starts
+  un-previewed, and archived templates must be restored first. Saving the
+  unchanged source is rejected. Editing is `admin`-only; source bytes are never
+  exposed to members or clients.
 - A preview is required before activation and is re-verified at activation
   (source checksum plus snapshots). The preview uses the same renderer as the
   PDF, so a version that previews successfully is the version that exports.
@@ -322,11 +331,12 @@ Lifecycle rules:
   and activating it; a version that was never previewed can be previewed
   while the template is archived.
 - Every management action writes a tenant-scoped `AgencyAudit` event
-  (`template.created`, `template.version_uploaded`, `template.previewed`,
-  `template.activated`, `template.archived`, `template.default_set`,
-  `template.updated`).
-- Uploads are rate-limited per member and agency (30 per hour), and each file
-  is held in memory only up to the 512 KiB contract limit.
+  (`template.created`, `template.version_uploaded`, `template.version_edited`,
+  `template.previewed`, `template.activated`, `template.archived`,
+  `template.default_set`, `template.updated`).
+- Uploads and in-app source saves are rate-limited per member and agency (30
+  per hour), and each source is held in memory only up to the 512 KiB contract
+  limit.
 
 ## 10. Contract changes
 

@@ -86,8 +86,10 @@ import {
   addAgencyTemplateVersion,
   archiveAgencyTemplate,
   createAgencyTemplate,
+  getAgencyTemplateSource,
   listAgencyTemplateVersions,
   previewAgencyTemplateVersion,
+  saveAgencyTemplateSource,
   setDefaultAgencyTemplate,
   updateAgencyTemplateDetails,
 } from '../services/agency/exports/templateManagement.js';
@@ -684,6 +686,39 @@ export const listAgencyTemplateVersionsHandler = catchAsync(
       templateId: String(req.params.templateId || ''),
     });
     res.json({ success: true, ...result });
+  }
+);
+
+export const getAgencyTemplateSourceHandler = catchAsync(
+  async (req: AgencyAccessRequest, res: Response) => {
+    const { agency, role } = agencyContext(req);
+    const result = await getAgencyTemplateSource({
+      agencyId: String(agency._id),
+      role,
+      templateId: String(req.params.templateId || ''),
+      version: req.params.version,
+    });
+    res.json({ success: true, ...result });
+  }
+);
+
+export const saveAgencyTemplateSourceHandler = catchAsync(
+  async (req: AgencyAccessRequest, res: Response) => {
+    const { agency, role } = agencyContext(req);
+    const result = await saveAgencyTemplateSource({
+      agency,
+      actorId: req.userId!,
+      role,
+      templateId: String(req.params.templateId || ''),
+      baseVersion: req.body?.baseVersion,
+      source: req.body?.source,
+    });
+    res.status(201).json({
+      success: true,
+      message: 'Version saved as a draft. Preview it before activating.',
+      template: result.template,
+      version: result.version,
+    });
   }
 );
 

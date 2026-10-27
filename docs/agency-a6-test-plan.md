@@ -41,10 +41,10 @@ cd frontend && npm run typecheck
 cd frontend && npm run build
 ```
 
-Last local run (2026-10-23):
+Last local run (2026-10-27, includes A6e):
 
-- backend suite: **456 tests, 456 pass, 0 fail**
-- A6 focused suites (`templateValidation.test.ts`, `templateAssets.test.ts`, `customTemplate.test.ts`, `templateManagement.test.ts`, `models.test.ts`, `routes/agency.routes.test.ts`): **59 tests, 59 pass**
+- backend suite: **580 tests, 580 pass, 0 fail**
+- A6 focused suites (`templateValidation.test.ts`, `templateAssets.test.ts`, `customTemplate.test.ts`, `templateManagement.test.ts`, `models.test.ts`, `routes/agency.routes.test.ts`): all pass
 - frontend typecheck: clean
 - frontend production build: clean
 
@@ -60,6 +60,7 @@ A6-specific coverage:
   - corrupt/missing/type-confused snapshots fail loudly (409)
   - unmapped logo/mascot/cover/day-image slots block publishing
   - selections normalized and validated before any file read; branding URLs resolve only inside the tenant
+  - A6e: edited versions carry snapshots byte-for-byte into version-scoped keys; a missing snapshot (409) or a newly unmapped slot (400) leaves no partial files behind
 - `services/agency/exports/customTemplate.test.ts`
   - custom renderer consumes the same DTO as the built-ins; internal fields stay out of client output
 - `services/agency/exports/templateManagement.test.ts`
@@ -123,6 +124,26 @@ Limitations of this run:
 - the in-app browser was hidden, so verification used accessibility snapshots and DOM inspection rather than screenshots
 - `window.confirm` on archive wedged the in-app browser once; the archive was verified server-side and the restore fix was verified after reload
 
+### A6e in-app HTML editing (2026-10-27)
+
+`smoke-a6.mts` now also verifies the editing lifecycle: the editor reads the
+approved source (admin-only; planners get 403), saving a modified source creates
+an un-previewed next version with the base snapshots carried forward, unchanged
+source is refused (400), archived templates refuse edits (409), a tampered
+storage file fails the checksum guard (409), and the edited version previews
+with the carried assets.
+
+Browser smoke on a synthetic agency + custom template:
+
+1. **Manage → Edit HTML** loads the stored source into the monospace editor with
+   live line and byte counts.
+2. Editing enables **Discard changes** / **Save as new version**; saving showed
+   the draft toast and the manager listed **v2** (4 pages, not previewed) while
+   v1 stayed unchanged.
+3. Re-opening v2 and inserting `<script>` surfaced the server error inline
+   ("The <script> element is not allowed in templates.") and created no version.
+4. **Discard changes** restored the baseline and **Cancel** closed the editor.
+
 ---
 
 ## 5. Fixes found during verification
@@ -140,4 +161,5 @@ Limitations of this run:
 - Uploads are rate-limited per member and agency (30 per hour); each file is held in memory only up to the 512 KiB contract limit.
 - Verify `/api/health` reports the current milestone (`A9`) and `writesEnabled: true` when the flag is on.
 - Confirm template routes remain tenant-guarded and admin-only, previews never expose another agency's assets, and archived templates stay resolvable only for pinned export retries.
+- In-app editing adds two admin-only routes: `GET .../versions/:version/source` and `POST .../versions/from-source`. Both verify the stored source against the version checksum, the save route is rate-limited with the upload limiter, and archived templates always answer 409.
 - A7 must keep consuming the same DTO, projections and pinned `(templateId, templateVersion)` rather than re-rendering or re-resolving templates in the browser.

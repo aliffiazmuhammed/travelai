@@ -20,21 +20,26 @@ import AgencyAudit from '../src/models/AgencyAudit.js';
 import AgencyExport from '../src/models/AgencyExport.js';
 import AgencyQuote from '../src/models/AgencyQuote.js';
 import AgencyTemplate from '../src/models/AgencyTemplate.js';
+import AgencyTemplateVersion from '../src/models/AgencyTemplateVersion.js';
 import Trip from '../src/models/Trip.js';
 import { AppError } from '../src/utils/AppError.js';
 import { uploadAgencyAsset } from '../src/services/agency/assets.js';
 import { createAgencyExport, processAgencyExport } from '../src/services/agency/exports/exports.js';
 import { findChromeExecutable } from '../src/services/agency/exports/pdf.js';
 import { removeAgencyExportFile } from '../src/services/agency/exports/storage.js';
+import { loadAgencyTemplateVersionAssets } from '../src/services/agency/exports/templateAssets.js';
 import {
   activateAgencyTemplateVersion,
   addAgencyTemplateVersion,
   archiveAgencyTemplate,
   createAgencyTemplate,
+  getAgencyTemplateSource,
   listAgencyTemplateVersions,
   previewAgencyTemplateVersion,
+  saveAgencyTemplateSource,
   setDefaultAgencyTemplate,
 } from '../src/services/agency/exports/templateManagement.js';
+import { writeAgencyTemplateFile } from '../src/services/agency/exports/templateStorage.js';
 import {
   ensureBuiltinTemplates,
   getAgencyTemplate,
@@ -139,10 +144,17 @@ async function main() {
     throw new Error('Refusing to run the A6 smoke against production.');
   }
   const chrome = await findChromeExecutable();
-  check('Chrome/Chromium/Edge executable found', Boolean(chrome), chrome);
-  if (!chrome) {
+  const remoteRenderer = Boolean(
+    String(process.env.AGENCY_PDF_RENDERER_URL ?? '').trim()
+  );
+  check(
+    'a PDF renderer is available (local Chrome or remote renderer)',
+    Boolean(chrome) || remoteRenderer,
+    chrome ?? 'AGENCY_PDF_RENDERER_URL'
+  );
+  if (!chrome && !remoteRenderer) {
     throw new Error(
-      'Install Chrome or set AGENCY_CHROME_PATH before running this smoke.'
+      'Install Chrome, set AGENCY_CHROME_PATH, or set AGENCY_PDF_RENDERER_URL before running this smoke.'
     );
   }
 
@@ -485,6 +497,123 @@ async function main() {
     check('second export renders to a real PDF', job2Ready?.status === 'ready');
     if (job2Ready?.outputKey) renderedKeys.push(job2Ready.outputKey);
 
+    // 9b. In-app editing reads the approved source and saves a new version.
+    const sourceView = await getAgencyTemplateSource({
+      agencyId,
+      role: 'owner',
+      templateId,
+      version: 2,
+    });
+    check(
+      'the editor reads the approved source',
+      sourceView.source.includes('padding: 15mm') &&
+        sourceView.version.version === 2 &&
+        /^[a-f0-9]{64}$/.test(sourceView.checksum),
+      { bytes: sourceView.source.length }
+    );
+    check(
+      'source reading is admin-only',
+      await expectAppError(
+        () =>
+          getAgencyTemplateSource({
+            agencyId,
+            role: 'planner',
+            templateId,
+            version: 2,
+          }),
+        403
+      )
+    );
+
+    const editedSource = `${DAY_IMAGE_TEMPLATE.replace('14mm', '16mm')}
+<section class="page">
+  <h2>Booking</h2>
+  <p>{{contact.email}}</p>
+</section>
+`;
+    const edited = await saveAgencyTemplateSource({
+      agency,
+      actorId: String(userId),
+      role: 'owner',
+      templateId,
+      baseVersion: 2,
+      source: editedSource,
+    });
+    check(
+      'editing saves a new unpinned draft version',
+      edited.version.version === 3 &&
+        edited.version.previewedAt === undefined &&
+        edited.template.activeVersion === 2,
+      { version: edited.version.version, active: edited.template.activeVersion }
+    );
+    const v2Row = await AgencyTemplateVersion.findOne({
+      agencyId,
+      templateId,
+      version: 2,
+    });
+    const v3Row = await AgencyTemplateVersion.findOne({
+      agencyId,
+      templateId,
+      version: 3,
+    });
+    const carried = await loadAgencyTemplateVersionAssets(v3Row?.assets ?? []);
+    check(
+      'edited versions carry the base snapshots forward',
+      v3Row?.assets?.length === v2Row?.assets?.length &&
+        Boolean(carried.images.logo && carried.images['day-1']),
+      v3Row?.assets?.map((asset) => asset.slot)
+    );
+    check(
+      'saving unchanged source is refused',
+      await expectAppError(
+        () =>
+          saveAgencyTemplateSource({
+            agency,
+            actorId: String(userId),
+            role: 'owner',
+            templateId,
+            baseVersion: 3,
+            source: editedSource,
+          }),
+        400
+      )
+    );
+    check(
+      'source saving is admin-only',
+      await expectAppError(
+        () =>
+          saveAgencyTemplateSource({
+            agency,
+            actorId: String(userId),
+            role: 'planner',
+            templateId,
+            baseVersion: 3,
+            source: `${editedSource}\n<!-- planner edit -->`,
+          }),
+        403
+      )
+    );
+    const preview3 = await previewAgencyTemplateVersion({
+      agency,
+      actorId: String(userId),
+      role: 'owner',
+      templateId,
+      version: 3,
+      tripId: String(trip._id),
+      quoteId: String(quote._id),
+    });
+    check(
+      'the edited version previews with carried assets',
+      preview3.pageCount === 4 && preview3.html.includes('Booking'),
+      { pageCount: preview3.pageCount }
+    );
+    const v3Stored = await getAgencyTemplateSource({
+      agencyId,
+      role: 'owner',
+      templateId,
+      version: 3,
+    });
+
     // 10. One default per audience.
     const firstDefault = await setDefaultAgencyTemplate({
       agencyId,
@@ -601,6 +730,41 @@ async function main() {
       )
     );
     check(
+      'no source edit can be saved while archived',
+      await expectAppError(
+        () =>
+          saveAgencyTemplateSource({
+            agency,
+            actorId: String(userId),
+            role: 'owner',
+            templateId,
+            baseVersion: 3,
+            source: `${v3Stored.source}\n<!-- archived edit -->`,
+          }),
+        409
+      )
+    );
+    if (v3Row) {
+      await writeAgencyTemplateFile(
+        v3Row.storageKey,
+        `${v3Stored.source}\n<!-- tampered on disk -->`
+      );
+      check(
+        'a stored source that no longer matches its checksum is refused',
+        await expectAppError(
+          () =>
+            getAgencyTemplateSource({
+              agencyId,
+              role: 'owner',
+              templateId,
+              version: 3,
+            }),
+          409
+        )
+      );
+      await writeAgencyTemplateFile(v3Row.storageKey, v3Stored.source);
+    }
+    check(
       'an archived template cannot become the default',
       await expectAppError(
         () =>
@@ -633,9 +797,9 @@ async function main() {
     // 12. Lifecycle actions leave tenant-scoped audit rows.
     const audits = await AgencyAudit.countDocuments({
       agencyId,
-      action: { $in: ['template.created', 'template.previewed', 'template.activated', 'template.archived', 'template.default_set'] },
+      action: { $in: ['template.created', 'template.previewed', 'template.activated', 'template.archived', 'template.default_set', 'template.version_edited'] },
     });
-    check('lifecycle actions are audited', audits >= 7, audits);
+    check('lifecycle actions are audited', audits >= 8, audits);
   } finally {
     for (const key of renderedKeys) {
       await removeAgencyExportFile(key).catch(() => undefined);

@@ -53,6 +53,7 @@ import type {
   AgencyTemplateAssetSelection,
   AgencyTemplateAudience,
   AgencyTemplateListStatus,
+  AgencyTemplateSource,
   AgencyTemplateVersion,
   AgencyTemplateVersionPreview,
   AgencyProposalAcceptResult,
@@ -1155,6 +1156,34 @@ class ApiClient {
   }> {
     return this.request(
       `/api/agency/${encodeURIComponent(id)}/templates/${encodeURIComponent(templateId)}/versions`
+    );
+  }
+
+  /** A6d: the private source of one version, for the in-app editor. */
+  async getAgencyTemplateSource(
+    id: string,
+    templateId: string,
+    version: number
+  ): Promise<{ success: boolean } & AgencyTemplateSource> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(id)}/templates/${encodeURIComponent(templateId)}/versions/${encodeURIComponent(String(version))}/source`
+    );
+  }
+
+  /** Saves edited HTML as the next immutable version; assets carry over. */
+  async saveAgencyTemplateSource(
+    id: string,
+    templateId: string,
+    payload: { baseVersion: number; source: string }
+  ): Promise<{
+    success: boolean;
+    message?: string;
+    template: AgencyTemplate;
+    version: AgencyTemplateVersion;
+  }> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(id)}/templates/${encodeURIComponent(templateId)}/versions/from-source`,
+      { method: 'POST', body: JSON.stringify(payload) }
     );
   }
 

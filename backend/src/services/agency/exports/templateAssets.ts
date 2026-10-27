@@ -379,6 +379,86 @@ export async function snapshotAgencyTemplateAssets(
   }
 }
 
+/**
+ * Copies an approved version's snapshots into a new version produced by the
+ * in-app editor. Editing changes only the HTML, so the imagery and fonts must
+ * stay byte-identical even if the underlying A3 asset was replaced or deleted.
+ */
+export async function carryOverTemplateAssetSnapshots(input: {
+  agencyId: string;
+  sourceVersionId: string;
+  targetVersionId: string;
+  usedTokens?: string[];
+  assets?: IAgencyTemplateVersionAsset[] | null;
+}): Promise<IAgencyTemplateVersionAsset[]> {
+  if (
+    !OBJECT_ID.test(input.agencyId) ||
+    !OBJECT_ID.test(input.sourceVersionId) ||
+    !OBJECT_ID.test(input.targetVersionId)
+  ) {
+    throw new AppError('That template reference is not valid.', 400);
+  }
+
+  const carried: IAgencyTemplateVersionAsset[] = [];
+  let totalBytes = 0;
+  try {
+    for (const asset of input.assets ?? []) {
+      const slot = String(asset?.slot ?? '').trim();
+      if (!slot) continue;
+
+      const buffer = await readAgencyTemplateAssetFile(asset.storageKey);
+      const sniffed = sniffAgencyAssetMime(buffer);
+      if (
+        !sniffed ||
+        sniffed !== asset.mime ||
+        buffer.byteLength !== Number(asset.bytes)
+      ) {
+        throw new AppError(
+          'A template asset snapshot is no longer readable. Upload a new version to remap its assets.',
+          409
+        );
+      }
+      if (totalBytes + buffer.byteLength > AGENCY_TEMPLATE_MAX_SNAPSHOT_BYTES) {
+        throw new AppError(
+          'These assets are too large to snapshot together. Choose smaller images or fonts.',
+          413
+        );
+      }
+      const extension = extensionForAgencyAssetMime(sniffed);
+      if (!extension) {
+        throw new AppError('That asset type is not supported.', 400);
+      }
+
+      const storageKey = buildAgencyTemplateAssetStorageKey(
+        input.agencyId,
+        input.targetVersionId,
+        slot,
+        extension
+      );
+      await writeAgencyTemplateAssetFile(storageKey, buffer);
+      totalBytes += buffer.byteLength;
+      carried.push({
+        slot,
+        ...(asset.assetId ? { assetId: asset.assetId } : {}),
+        storageKey,
+        mime: sniffed,
+        bytes: buffer.byteLength,
+        ...(asset.fontFamily ? { fontFamily: asset.fontFamily } : {}),
+      });
+    }
+
+    assertTemplateAssetCoverage(input.usedTokens ?? [], carried);
+    return carried;
+  } catch (error) {
+    await Promise.all(
+      carried.map((snapshot) =>
+        removeAgencyTemplateAssetFile(snapshot.storageKey).catch(() => undefined)
+      )
+    );
+    throw error;
+  }
+}
+
 function snapshotImageUrl(
   asset: IAgencyTemplateVersionAsset,
   buffer: Buffer

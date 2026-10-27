@@ -23,6 +23,7 @@ import {
   getAgencyInvitePreview,
   getAgencyProposalHandler,
   getAgencyQuoteHandler,
+  getAgencyTemplateSourceHandler,
   getAgencyTripHandler,
   getAgencyUsageHandler,
   listAgencyAssetsHandler,
@@ -45,6 +46,7 @@ import {
   revokeAgencyProposalLinkHandler,
   acceptAgencyProposalHandler,
   saveAgencyQuoteHandler,
+  saveAgencyTemplateSourceHandler,
   sendAgencyQuoteHandler,
   setDefaultAgencyTemplateHandler,
   updateAgency,
@@ -81,6 +83,7 @@ import {
   createAgencyTripSchema,
   previewAgencyTemplateVersionSchema,
   saveAgencyQuoteSchema,
+  saveAgencyTemplateSourceSchema,
   updateAgencyClientSchema,
   updateAgencyPlanSchema,
   updateAgencySchema,
@@ -264,6 +267,20 @@ router.get(
   protectAgency,
   requireAgencyRole('admin'),
   listAgencyTemplateVersionsHandler
+);
+router.get(
+  '/:agencyId/templates/:templateId/versions/:version/source',
+  protectAgency,
+  requireAgencyRole('admin'),
+  getAgencyTemplateSourceHandler
+);
+router.post(
+  '/:agencyId/templates/:templateId/versions/from-source',
+  protectAgency,
+  requireAgencyRole('admin'),
+  agencyTemplateUploadLimiter,
+  validate(saveAgencyTemplateSourceSchema),
+  saveAgencyTemplateSourceHandler
 );
 router.post(
   '/:agencyId/templates/:templateId/versions',

@@ -219,6 +219,15 @@ export interface AgencyTemplateVersion {
   active: boolean;
 }
 
+/** The private editable source of one version; admin-only. */
+export interface AgencyTemplateSource {
+  template: AgencyTemplate;
+  version: AgencyTemplateVersion;
+  source: string;
+  checksum: string;
+  schemaVersion: number;
+}
+
 export interface AgencyTemplateAssetSelection {
   logoAssetId?: string | null;
   mascotAssetId?: string | null;

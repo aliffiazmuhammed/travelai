@@ -504,7 +504,11 @@ For the pilot:
 - Preview against a real trip before activation.
 - Version history; old exports remain tied to their template version.
 
-Self-serve HTML editing is deliberately deferred. It is a security and support burden.
+Self-serve HTML editing shipped as A6e (2026-10-27): admins edit a version's
+source in the template manager and save a new immutable version. The original
+security concern is contained by keeping the schema-v1 validator, admin-only
+access, carried-forward asset snapshots and the preview-before-activation gate.
+A visual theme editor (drag-and-drop styling without HTML) remains deferred.
 
 ---
 
@@ -1064,7 +1068,7 @@ A0 -> A1 -> A2 -> A4 -> A5 -> A6 -> A7 -> A9
 ## 13. Explicitly out of scope for the first agency release
 
 - Automatic ingestion of arbitrary PDFs, Canva, Figma or InDesign files.
-- Self-serve HTML template editing.
+- A visual template/theme editor (A6e covers HTML source editing only).
 - AI-generated prices, legal terms or cancellation policies.
 - Email delivery and notification center.
 - Full CRM (pipelines, tasks, commissions, invoices).
