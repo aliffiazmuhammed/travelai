@@ -76,7 +76,7 @@ export const getUserById = async (userId: string) => {
   const user = await User.findOne({
     _id: userId,
     accountType: PERSONAL,
-  }).select('email name avatarUrl createdAt');
+  }).select('email name avatarUrl profile createdAt');
   if (!user) {
     throw new AppError('User profile not found.', 404);
   }

@@ -24,6 +24,7 @@ import {
   shareTrip,
   revokeShareTrip,
   getSharedTrip,
+  updateTripPublication,
 } from '../controllers/itinerary.controller.js';
 import {
   listTripMembers,
@@ -97,6 +98,7 @@ import {
   transferOwnershipSchema,
 } from '../schemas/collab.schema.js';
 import { createCommentSchema, updateCommentSchema } from '../schemas/comments.schema.js';
+import { tripPublishSchema } from '../schemas/gallery.schema.js';
 import { createPollSchema, votePollSchema } from '../schemas/polls.schema.js';
 import {
   setTripChatKeysSchema,
@@ -205,6 +207,16 @@ router.put(
 router.post('/:id/duplicate', protectSession, requireTripRole('viewer'), duplicateTrip);
 router.post('/:id/share', protectSession, requireTripRole('owner'), shareTrip);
 router.delete('/:id/share', protectSession, requireTripRole('owner'), revokeShareTrip);
+
+// Gallery publish/unpublish (Milestone 8 G1) — owner-only, personal trips only
+// (the service rejects agency rows before any write).
+router.patch(
+  '/:id/publish',
+  protectSession,
+  requireTripRole('owner'),
+  validate(tripPublishSchema),
+  updateTripPublication
+);
 
 // Granular itinerary editing endpoints (Milestone 1: Trip Management & Editing)
 // E4: content mutations carry required `baseRev` so two collaborators cannot

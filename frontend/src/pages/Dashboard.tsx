@@ -10,6 +10,7 @@ import { useAuth } from "@/context/UserContext";
 import { useTripAccess } from "@/hooks/useTripAccess";
 import { isRevConflict, toastConflict } from "@/lib/conflicts";
 import type { Trip, ItineraryData, TripFeedback } from "@/types/trip";
+import type { TripPublicationState } from "@/types/gallery";
 
 const Dashboard: React.FC = () => {
   const location = useLocation();
@@ -346,6 +347,19 @@ const Dashboard: React.FC = () => {
     );
   };
 
+  /** M8 G2: keep the open trip's gallery state in sync after publish/unpublish. */
+  const handlePublicationChange = (state: TripPublicationState) => {
+    const id = selectedTrip?._id;
+    if (!id) return;
+    const patch = {
+      visibility: state.visibility,
+      publishedAt: state.publishedAt,
+      gallery: state.gallery,
+    };
+    setSelectedTrip((prev) => (prev && prev._id === id ? { ...prev, ...patch } : prev));
+    setTrips((prev) => prev.map((t) => (t._id === id ? { ...t, ...patch } : t)));
+  };
+
   // Merge a submitted rating into local state (feedback endpoint returns just the rating)
   const handleFeedbackSubmitted = (feedback: TripFeedback) => {
     setSelectedTrip((prev) => (prev ? { ...prev, feedback } : prev));
@@ -388,6 +402,16 @@ const Dashboard: React.FC = () => {
               hasEdited={selectedTrip.hasEdited}
               shareId={selectedTrip.shareId}
               onShareIdChange={handleShareIdChange}
+              publication={{
+                visibility: selectedTrip.visibility ?? "private",
+                publishedAt: selectedTrip.publishedAt ?? null,
+                gallery: selectedTrip.gallery,
+                startDate: selectedTrip.startDate,
+                endDate: selectedTrip.endDate,
+                destination: selectedTrip.generationMeta?.request?.destination,
+                durationDays: selectedTrip.tripDetails?.duration_days,
+              }}
+              onPublicationChange={handlePublicationChange}
               role={access.role ?? undefined}
               members={selectedTrip.members}
               currentUserId={user?._id}

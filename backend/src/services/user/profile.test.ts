@@ -1,9 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  assertBioAllowed,
+  assertHandleAllowed,
   assertNameAllowed,
+  checkHandleAvailability,
+  normalizeBio,
+  normalizeHandle,
   normalizeName,
   publicUser,
+  RESERVED_HANDLES,
 } from './profile.js';
 import {
   avatarExtensionForMime,
@@ -17,7 +23,8 @@ import {
   isManagedAvatarUrl,
 } from './avatar.js';
 import { userLabel, projectComment, LABEL_MAX_LEN } from '../collab/comments.js';
-import { changePasswordSchema, updateProfileSchema } from '../../schemas/profile.schema.js';
+import User from '../../models/User.js';
+import { changePasswordSchema, updateProfileSchema, agencyProfileSchema } from '../../schemas/profile.schema.js';
 
 /**
  * Pure-rule tests for profile editing (F14). The live flows — a name reaching
@@ -85,6 +92,93 @@ test('updateProfileSchema: rejects a name that normalizes over the cap', () => {
     false
   );
   assert.equal(updateProfileSchema.safeParse({ name: 42 }).success, false);
+});
+
+/* -------------------------------------------------------------------------- */
+/*  Traveler handle (Milestone 8 G1)                                           */
+/* -------------------------------------------------------------------------- */
+
+const originalUserExists = User.exists;
+
+test.after(() => {
+  (User as any).exists = originalUserExists;
+});
+
+test('normalizeHandle: trims, drops a leading @ and lowercases', () => {
+  assert.equal(normalizeHandle('  @Ada_2026 '), 'ada_2026');
+  assert.equal(normalizeHandle(undefined), '');
+  assert.equal(normalizeHandle('@@ada'), 'ada');
+});
+
+test('assertHandleAllowed: 3–24 lowercase letters, digits and underscores', () => {
+  assert.doesNotThrow(() => assertHandleAllowed('abc'));
+  assert.doesNotThrow(() => assertHandleAllowed('ada_2026'));
+  assert.doesNotThrow(() => assertHandleAllowed('a'.repeat(24)));
+  assert.throws(() => assertHandleAllowed('ab'), /3–24 characters/);
+  assert.throws(() => assertHandleAllowed('a'.repeat(25)), /3–24 characters/);
+  assert.throws(() => assertHandleAllowed('ada-lovelace'), /lowercase letters/);
+  assert.throws(() => assertHandleAllowed('Ada'), /lowercase letters/);
+  assert.throws(() => assertHandleAllowed('ada lovelace'), /lowercase letters/);
+});
+
+test('reserved handles are refused and cover the public app routes', () => {
+  for (const reserved of ['explore', 'travelers', 'admin', 'settings', 'trips']) {
+    assert.equal(RESERVED_HANDLES.has(reserved), true, `${reserved} must stay reserved`);
+    assert.throws(() => assertHandleAllowed(reserved), /reserved/);
+  }
+});
+
+test('checkHandleAvailability: invalid/reserved/taken/free, never throwing', async () => {
+  (User as any).exists = async () => null;
+  assert.deepEqual(await checkHandleAvailability('@Ada_2026'), {
+    handle: 'ada_2026',
+    available: true,
+  });
+  assert.deepEqual(await checkHandleAvailability('ab'), {
+    handle: 'ab',
+    available: false,
+    reason: 'invalid',
+  });
+  assert.deepEqual(await checkHandleAvailability('admin'), {
+    handle: 'admin',
+    available: false,
+    reason: 'reserved',
+  });
+
+  (User as any).exists = async () => ({ _id: 'someone' });
+  assert.deepEqual(await checkHandleAvailability('ada'), {
+    handle: 'ada',
+    available: false,
+    reason: 'taken',
+  });
+});
+
+test('updateProfileSchema: any single profile field is enough, empty is not', () => {
+  assert.equal(updateProfileSchema.safeParse({ handle: 'ada' }).success, true);
+  assert.equal(updateProfileSchema.safeParse({ bio: 'Slow travel' }).success, true);
+  assert.equal(updateProfileSchema.safeParse({ name: '' }).success, true);
+  assert.equal(updateProfileSchema.safeParse({}).success, false);
+  assert.equal(updateProfileSchema.safeParse({ handle: 'Ada Lovelace' }).success, false);
+  assert.equal(updateProfileSchema.safeParse({ handle: 'ab' }).success, false);
+  assert.equal(updateProfileSchema.safeParse({ bio: 'x'.repeat(281) }).success, false);
+});
+
+test('agencyProfileSchema: name only — handle and bio are stripped', () => {
+  const parsed = agencyProfileSchema.safeParse({
+    name: 'Ada',
+    handle: 'ada',
+    bio: 'Not an agency concept',
+  });
+  assert.equal(parsed.success, true);
+  assert.deepEqual(parsed.success ? Object.keys(parsed.data) : [], ['name']);
+  assert.equal(agencyProfileSchema.safeParse({}).success, false);
+});
+
+test('normalizeBio/assertBioAllowed: single-spaced and capped at 280', () => {
+  assert.equal(normalizeBio('  Slow\n travel  '), 'Slow travel');
+  assert.equal(normalizeBio(undefined), '');
+  assert.doesNotThrow(() => assertBioAllowed('x'.repeat(280)));
+  assert.throws(() => assertBioAllowed('x'.repeat(281)), /280 characters/);
 });
 
 test('changePasswordSchema: 6+ characters, and the new one must differ', () => {
@@ -204,4 +298,23 @@ test('publicUser: an account with no name still has a usable label', () => {
   assert.equal(projected.label, 'kiran');
   assert.equal('name' in projected, false);
   assert.equal('avatarUrl' in projected, false);
+});
+
+test('publicUser: carries the traveler handle and bio once claimed', () => {
+  const projected = publicUser({
+    _id: 'u3',
+    email: 'ada@example.com',
+    name: 'Ada',
+    profile: { handle: 'ada', bio: 'Slow travel' },
+  });
+  assert.deepEqual(Object.keys(projected).sort(), [
+    '_id',
+    'bio',
+    'email',
+    'handle',
+    'label',
+    'name',
+  ]);
+  assert.equal(projected.handle, 'ada');
+  assert.equal(projected.bio, 'Slow travel');
 });

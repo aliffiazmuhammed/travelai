@@ -157,9 +157,9 @@ const AgencyLayout: React.FC = () => {
                   ) : null}
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => navigate('/agency/account')}>
+                <DropdownMenuItem onSelect={() => navigate('/agency/settings')}>
                   <UserRound className="mr-2 h-4 w-4" />
-                  Agency account
+                  Account settings
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => navigate('/')}>
                   <Home className="mr-2 h-4 w-4" />

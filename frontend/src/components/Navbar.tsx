@@ -5,6 +5,7 @@ import { Menu, Plane, Sun, Moon, Sparkles, LogOut, UserCircle2 } from "lucide-re
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/context/UserContext";
+import { useGalleryEnabled } from "@/hooks/useGalleryEnabled";
 import { avatarSrc, initialsFor } from "@/lib/avatar";
 import { cn } from "@/lib/utils";
 
@@ -48,8 +49,14 @@ const Navbar = () => {
   // PA0: the personal navbar never links into the agency realm. Agency is a
   // separate front door (`/agency/login?workspace=<slug>`); a personal session
   // cannot open it and the same email may hold both accounts.
+  //
+  // Milestone 8 G3: Explore is a content gate, not a feature flag. It appears
+  // only once the gallery holds at least 5 published trips, so the link is never
+  // offered to an empty room. Direct `/explore` links keep working regardless.
+  const galleryEnabled = useGalleryEnabled();
   const navItems = [
     { label: "Home", path: "/" },
+    ...(galleryEnabled === true ? [{ label: "Explore", path: "/explore" }] : []),
     { label: "Plan Trip", path: "/plan" },
     { label: "My Trips", path: "/dashboard" },
   ];

@@ -1,5 +1,7 @@
 /**
  * Profile editing (Milestone 7, F14): display name, profile photo, password.
+ * Milestone 8 G1 adds the public traveler handle and bio — gallery identity,
+ * personal accounts only.
  *
  * Two deliberate boundaries:
  *
@@ -18,11 +20,17 @@
 
 import bcrypt from 'bcryptjs';
 import User from '../../models/User.js';
+import Trip from '../../models/Trip.js';
 import { AppError } from '../../utils/AppError.js';
 import { userLabel } from '../collab/comments.js';
 import type { AvatarMimeType } from './avatar.js';
 import { assertAvatarBytes, deleteAvatarFile, saveAvatar } from './avatar.js';
-import { NAME_MAX_LEN } from '../../schemas/profile.schema.js';
+import {
+  BIO_MAX_LEN,
+  HANDLE_MAX_LEN,
+  HANDLE_MIN_LEN,
+  NAME_MAX_LEN,
+} from '../../schemas/profile.schema.js';
 
 /** What the owner's own session may see about itself. */
 export interface PublicUser {
@@ -32,6 +40,10 @@ export interface PublicUser {
   /** The label other members will see (name, else the email local part). */
   label: string;
   avatarUrl?: string;
+  /** Public traveler handle (Milestone 8 G1), absent until one is claimed. */
+  handle?: string;
+  /** Public bio shown on the traveler page (Milestone 8 G1). */
+  bio?: string;
   createdAt?: Date;
 }
 
@@ -44,6 +56,8 @@ export function publicUser(user: any): PublicUser {
   };
   if (user.name) projected.name = String(user.name);
   if (user.avatarUrl) projected.avatarUrl = String(user.avatarUrl);
+  if (user.profile?.handle) projected.handle = String(user.profile.handle);
+  if (user.profile?.bio) projected.bio = String(user.profile.bio);
   if (user.createdAt) projected.createdAt = user.createdAt;
   return projected;
 }
@@ -60,6 +74,207 @@ export function assertNameAllowed(name: string): void {
   if (name.length > NAME_MAX_LEN) {
     throw new AppError(`Names must be ${NAME_MAX_LEN} characters or fewer.`, 400);
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Traveler handle (Milestone 8 G1)                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Handles that would shadow app routes (`/explore`, `/travelers/:handle`) or
+ * read as staff. Lowercase because the handle is a case-insensitive URL key.
+ */
+export const RESERVED_HANDLES: ReadonlySet<string> = new Set([
+  'about',
+  'account',
+  'admin',
+  'agency',
+  'api',
+  'auth',
+  'dashboard',
+  'explore',
+  'gallery',
+  'help',
+  'invite',
+  'join',
+  'login',
+  'logout',
+  'me',
+  'new',
+  'privacy',
+  'profile',
+  'settings',
+  'shared',
+  'signin',
+  'signup',
+  'support',
+  'terms',
+  'traveler',
+  'travelers',
+  'trip',
+  'trips',
+]);
+
+const HANDLE_PATTERN = /^[a-z0-9_]+$/;
+
+/** Trim, drop a leading `@`, lowercase — the one normalization used everywhere. */
+export function normalizeHandle(value: unknown): string {
+  return String(value ?? '')
+    .trim()
+    .replace(/^@+/, '')
+    .toLowerCase();
+}
+
+/** Pure rule: 3–24 chars, `[a-z0-9_]`, never a reserved word. */
+export function assertHandleAllowed(handle: string): void {
+  if (handle.length < HANDLE_MIN_LEN || handle.length > HANDLE_MAX_LEN) {
+    throw new AppError(
+      `Handles must be ${HANDLE_MIN_LEN}–${HANDLE_MAX_LEN} characters.`,
+      400
+    );
+  }
+  if (!HANDLE_PATTERN.test(handle)) {
+    throw new AppError('Handles can use lowercase letters, numbers and underscores only.', 400);
+  }
+  if (RESERVED_HANDLES.has(handle)) {
+    throw new AppError('That handle is reserved. Please choose another.', 400);
+  }
+}
+
+/** Bio normalization: single-spaced, trimmed, capped at 280 (empty clears it). */
+export function normalizeBio(value: unknown): string {
+  return String(value ?? '').replace(/\s+/g, ' ').trim();
+}
+
+export function assertBioAllowed(bio: string): void {
+  if (bio.length > BIO_MAX_LEN) {
+    throw new AppError(`Bios must be ${BIO_MAX_LEN} characters or fewer.`, 400);
+  }
+}
+
+export interface HandleAvailability {
+  handle: string;
+  available: boolean;
+  reason?: 'invalid' | 'reserved' | 'taken';
+}
+
+/** Non-throwing handle check for the live availability endpoint. */
+export async function checkHandleAvailability(raw: unknown): Promise<HandleAvailability> {
+  const handle = normalizeHandle(raw);
+  if (
+    handle.length < HANDLE_MIN_LEN ||
+    handle.length > HANDLE_MAX_LEN ||
+    !HANDLE_PATTERN.test(handle)
+  ) {
+    return { handle, available: false, reason: 'invalid' };
+  }
+  if (RESERVED_HANDLES.has(handle)) {
+    return { handle, available: false, reason: 'reserved' };
+  }
+  const taken = await User.exists({ accountType: 'personal', 'profile.handle': handle });
+  return taken ? { handle, available: false, reason: 'taken' } : { handle, available: true };
+}
+
+async function hasPublishedTrips(userId: string): Promise<boolean> {
+  return Boolean(
+    await Trip.exists({
+      userId,
+      workspace: { $ne: 'agency' },
+      visibility: 'public',
+      isDeleted: { $ne: true },
+    })
+  );
+}
+
+/**
+ * The personal PATCH /profile path: name, handle and bio may be updated
+ * independently, but only fields present in the body are touched.
+ */
+export interface PersonalProfileInput {
+  name?: unknown;
+  handle?: unknown;
+  bio?: unknown;
+}
+
+export async function updatePersonalProfile(
+  userId: string,
+  input: PersonalProfileInput
+): Promise<PublicUser> {
+  const user = await loadOwnUser(userId);
+
+  // Validate everything before the first write: a rejected handle must not
+  // leave a half-applied name/bio change behind.
+  const nextName = input.name === undefined ? undefined : normalizeName(input.name);
+  if (nextName !== undefined) assertNameAllowed(nextName);
+
+  const nextHandle = input.handle === undefined ? undefined : normalizeHandle(input.handle);
+  if (nextHandle) {
+    assertHandleAllowed(nextHandle);
+    const taken = await User.exists({
+      accountType: 'personal',
+      'profile.handle': nextHandle,
+      _id: { $ne: userId },
+    });
+    if (taken) {
+      throw new AppError('That handle is already taken.', 409);
+    }
+  }
+  if (nextHandle === '' && (await hasPublishedTrips(userId))) {
+    throw new AppError('Unpublish your trips before removing your handle.', 409);
+  }
+
+  const nextBio = input.bio === undefined ? undefined : normalizeBio(input.bio);
+  if (nextBio !== undefined) assertBioAllowed(nextBio);
+
+  if (nextName !== undefined) {
+    if (nextName) {
+      user.name = nextName;
+    } else {
+      // Mongoose ignores assignments of `undefined`; clearing needs an explicit
+      // `$unset` so the label falls back to the email local part.
+      await User.updateOne({ _id: userId }, { $unset: { name: 1 } });
+      user.name = undefined;
+    }
+  }
+
+  const profile: { handle?: string; bio?: string } = {};
+  if (user.profile?.handle) profile.handle = String(user.profile.handle);
+  if (user.profile?.bio) profile.bio = String(user.profile.bio);
+
+  if (nextHandle !== undefined) {
+    if (nextHandle) profile.handle = nextHandle;
+    else delete profile.handle;
+  }
+  if (nextBio !== undefined) {
+    if (nextBio) profile.bio = nextBio;
+    else delete profile.bio;
+  }
+
+  const profileTouched =
+    (nextHandle !== undefined && nextHandle !== (user.profile?.handle ?? '')) ||
+    (nextBio !== undefined && nextBio !== (user.profile?.bio ?? ''));
+
+  if (profileTouched) {
+    if (profile.handle || profile.bio) {
+      user.profile = profile;
+    } else {
+      await User.updateOne({ _id: userId }, { $unset: { profile: 1 } });
+      user.profile = undefined;
+    }
+  }
+
+  try {
+    await user.save();
+  } catch (error: any) {
+    // The unique index is the real gate (two tabs can race the availability
+    // check); translate the duplicate-key error into an actionable 409.
+    if (error?.code === 11000) {
+      throw new AppError('That handle is already taken.', 409);
+    }
+    throw error;
+  }
+
+  return publicUser(user);
 }
 
 export async function loadOwnUser(userId: string): Promise<any> {

@@ -3,7 +3,7 @@ import { API_BASE_URL } from '../config';
 import { queryClient } from '../lib/queryClient';
 import { api } from '../services/api';
 
-import type { User, AuthContextType } from '@/types';
+import type { User, AuthContextType, ProfileUpdateInput } from '@/types';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -78,8 +78,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const updateProfile = async (name: string) => {
-    const data = await api.updateProfile(name);
+  const updateProfile = async (input: ProfileUpdateInput) => {
+    const data = await api.updateProfile(input);
     setUser(data.user);
   };
 

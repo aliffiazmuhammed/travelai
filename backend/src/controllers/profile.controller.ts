@@ -3,22 +3,36 @@ import { catchAsync } from '../utils/catchAsync.js';
 import { AuthenticatedRequest } from '../types/index.js';
 import {
   changePassword as changeOwnPassword,
+  checkHandleAvailability,
   clearAvatar,
   replaceAvatar,
-  updateDisplayName,
+  updatePersonalProfile,
 } from '../services/user/profile.js';
 import { setRealmCookie, signSessionForAccount } from '../services/auth/realm.js';
 
 /**
- * Profile editing (Milestone 7, F14). Every handler answers with the caller's
- * own projection, so the SPA can swap its cached user in one assignment.
+ * Profile editing (Milestone 7, F14; Milestone 8 G1 adds handle + bio). Every
+ * handler answers with the caller's own projection, so the SPA can swap its
+ * cached user in one assignment.
  */
 
-/** PATCH /api/auth/profile — set (or clear) the display name. */
+/** PATCH /api/auth/profile — set (or clear) name, handle and bio. */
 export const updateProfile = catchAsync(async (req: AuthenticatedRequest, res: Response) => {
-  const user = await updateDisplayName(String(req.userId), req.body?.name);
+  const user = await updatePersonalProfile(String(req.userId), {
+    name: req.body?.name,
+    handle: req.body?.handle,
+    bio: req.body?.bio,
+  });
   res.status(200).json({ success: true, user });
 });
+
+/** GET /api/auth/profile/handle-available?handle=ada — never throws for input. */
+export const getHandleAvailability = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const availability = await checkHandleAvailability(req.query?.handle);
+    res.status(200).json({ success: true, ...availability });
+  }
+);
 
 /** POST /api/auth/password — current password plus the new one. */
 export const changePassword = catchAsync(async (req: AuthenticatedRequest, res: Response) => {

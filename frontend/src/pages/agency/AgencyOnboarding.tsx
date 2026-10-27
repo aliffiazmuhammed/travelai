@@ -57,9 +57,6 @@ const AgencyOnboarding: React.FC = () => {
             <Button asChild>
               <Link to="/agency">Back to workspace</Link>
             </Button>
-            <Button asChild variant="outline">
-              <Link to="/agency/account">Agency account</Link>
-            </Button>
           </div>
         </CardContent>
       </Card>

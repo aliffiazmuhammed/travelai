@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Dialog,
   DialogContent,
@@ -18,6 +19,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Share2,
   Copy,
@@ -27,12 +32,16 @@ import {
   Download,
   Printer,
   Globe,
+  ExternalLink,
   Loader2,
   Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/services/api";
+import { useAuth } from "@/context/UserContext";
+import { avatarSrc, initialsFor } from "@/lib/avatar";
 import type { ItineraryData } from "@/types/trip";
+import type { TripPublicationSnapshot, TripPublicationState } from "@/types/gallery";
 
 interface ShareExportModalProps {
   isOpen: boolean;
@@ -44,6 +53,85 @@ interface ShareExportModalProps {
   onShareIdChange?: (shareId?: string) => void;
   /** Creating/reading the share link is owner-only on the server (Milestone 6 §3.3). */
   canManageShare?: boolean;
+  /** Current publication state, so the form prefills on open (Milestone 8 G2). */
+  publication?: TripPublicationSnapshot;
+  /** Keeps the dashboard's trip in sync after publish/unpublish. */
+  onPublicationChange?: (state: TripPublicationState) => void;
+}
+
+const MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+
+/**
+ * Mirrors the server's date label. Hidden mode shows the month and duration
+ * only; exact mode shows the concrete range so the owner sees what is exposed.
+ * Duration follows the same precedence as `projection.durationOf` so the
+ * preview cannot claim a different day count than the published card.
+ */
+function previewDateLabel(
+  startDate: string | undefined,
+  endDate: string | undefined,
+  declaredDays: number | undefined,
+  itineraryDays: number | undefined,
+  hideExactDates: boolean
+): string {
+  if (!startDate) return "Dates flexible";
+  const start = new Date(startDate);
+  if (Number.isNaN(start.getTime())) return "Dates flexible";
+
+  const declared = Number(declaredDays);
+  const listed = Number(itineraryDays);
+  let duration = 0;
+  if (Number.isFinite(declared) && declared > 0) duration = Math.round(declared);
+  else if (Number.isFinite(listed) && listed > 0) duration = Math.round(listed);
+  else if (endDate) {
+    const end = new Date(endDate);
+    if (!Number.isNaN(end.getTime())) {
+      duration = Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1;
+    }
+  }
+  duration = Math.max(1, duration);
+
+  const unit = duration === 1 ? "day" : "days";
+  const monthLabel = `${MONTHS[start.getUTCMonth()]} ${start.getUTCFullYear()}`;
+  if (hideExactDates) return `${monthLabel} · ${duration} ${unit}`;
+
+  const end = new Date(start.getTime() + (duration - 1) * 86_400_000);
+  const formatDay = (date: Date) =>
+    `${date.getUTCDate()} ${MONTHS[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
+  return `${formatDay(start)} → ${formatDay(end)} · ${duration} ${unit}`;
+}
+
+/** Same normalization the server applies, so the preview matches the payload. */
+function parseGalleryTags(raw: string): { tags: string[]; error?: string } {
+  const tags: string[] = [];
+  for (const entry of raw.split(",")) {
+    const tag = entry
+      .trim()
+      .replace(/^#+/, "")
+      .replace(/\s+/g, "-")
+      .toLowerCase();
+    if (!tag) continue;
+    if (tag.length > 24) return { tags, error: "Tags can be 24 characters or fewer." };
+    if (!/^[a-z0-9_-]+$/.test(tag)) {
+      return { tags, error: "Tags can use letters, numbers, hyphens and underscores only." };
+    }
+    if (!tags.includes(tag)) tags.push(tag);
+  }
+  if (tags.length > 6) return { tags, error: "Add 6 tags or fewer." };
+  return { tags };
 }
 
 export const ShareExportModal: React.FC<ShareExportModalProps> = ({
@@ -54,7 +142,10 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
   initialShareId,
   onShareIdChange,
   canManageShare = true,
+  publication,
+  onPublicationChange,
 }) => {
+  const { user } = useAuth();
   const [shareId, setShareId] = useState<string | undefined>(initialShareId);
   const [loadingShare, setLoadingShare] = useState(false);
 
@@ -70,6 +161,118 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedText, setCopiedText] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
+
+  /* ------------------------------------------------------------------------ */
+  /*  Publish to gallery (Milestone 8 G2)                                      */
+  /* ------------------------------------------------------------------------ */
+
+  const initialVisibility = publication?.visibility ?? "private";
+  const initialPublishedAt = publication?.publishedAt ?? null;
+  const initialHideExactDates = publication?.gallery?.hideExactDates === true;
+  const initialSummary = publication?.gallery?.summary ?? "";
+  const initialTagInput = (publication?.gallery?.tags ?? []).join(", ");
+
+  const [published, setPublished] = useState(initialVisibility === "public");
+  const [publishedAt, setPublishedAt] = useState<string | null>(initialPublishedAt);
+  const [hideExactDates, setHideExactDates] = useState(initialHideExactDates);
+  const [summary, setSummary] = useState(initialSummary);
+  const [tagInput, setTagInput] = useState(initialTagInput);
+  const [publishBusy, setPublishBusy] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const [confirmUnpublishOpen, setConfirmUnpublishOpen] = useState(false);
+
+  // Re-open with the owner's freshest state; the modal stays mounted as trips
+  // change, so the initial values alone are not enough.
+  useEffect(() => {
+    if (!isOpen) return;
+    setPublished(initialVisibility === "public");
+    setPublishedAt(initialPublishedAt);
+    setHideExactDates(initialHideExactDates);
+    setSummary(initialSummary);
+    setTagInput(initialTagInput);
+    setPublishError(null);
+  }, [
+    isOpen,
+    tripId,
+    initialVisibility,
+    initialPublishedAt,
+    initialHideExactDates,
+    initialSummary,
+    initialTagInput,
+  ]);
+
+  const handle = user?.handle ?? "";
+  const publisherName =
+    user?.name?.trim() || user?.label || user?.email?.split("@")[0] || "Traveler";
+  const destination =
+    publication?.destination?.trim() || data.trip_title || "Untitled trip";
+  // `data` is normalized for display; the snapshot carries the persisted value
+  // so the preview uses the same duration the published card will.
+  const declaredDays = publication ? publication.durationDays : data.duration_days;
+  const datePreview = previewDateLabel(
+    publication?.startDate,
+    publication?.endDate,
+    declaredDays,
+    Array.isArray(data.day_by_day_itinerary) ? data.day_by_day_itinerary.length : undefined,
+    hideExactDates
+  );
+  const parsedTags = parseGalleryTags(tagInput);
+  const publishedOn = publishedAt
+    ? new Date(publishedAt).toLocaleDateString(undefined, {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
+    : null;
+
+  const handleSaveGallery = async (nextPublished: boolean) => {
+    if (!tripId) {
+      toast.error("Save the trip before publishing it.");
+      return;
+    }
+    setPublishError(null);
+    if (parsedTags.error) {
+      setPublishError(parsedTags.error);
+      return;
+    }
+    if (summary.trim().length > 280) {
+      setPublishError("Keep the summary to 280 characters or fewer.");
+      return;
+    }
+
+    setPublishBusy(true);
+    try {
+      const res = await api.setTripPublication(tripId, {
+        published: nextPublished,
+        hideExactDates,
+        summary: summary.trim(),
+        tags: parsedTags.tags,
+      });
+      const state = res.publication;
+      setPublished(state.visibility === "public");
+      setPublishedAt(state.publishedAt);
+      setHideExactDates(state.gallery.hideExactDates);
+      setSummary(state.gallery.summary);
+      setTagInput(state.gallery.tags.join(", "));
+      onPublicationChange?.(state);
+      setConfirmUnpublishOpen(false);
+      toast.success(
+        nextPublished
+          ? "Trip published to your traveler page."
+          : "Trip removed from the gallery."
+      );
+    } catch (err: any) {
+      console.error("Failed to update gallery publication:", err);
+      setPublishError(
+        err?.message ||
+          (nextPublished
+            ? "We could not publish this trip. Please try again."
+            : "We could not unpublish this trip. Please try again.")
+      );
+    } finally {
+      setPublishBusy(false);
+    }
+  };
 
   /** Purpose-built A4 PDF (lib/pdfExport) — replaces the old print-screen dump. */
   const handleDownloadPdf = async () => {
@@ -288,6 +491,192 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
           </p>
         </div>
 
+        {/* 1b. Publish to gallery (Milestone 8 G2) — owner only */}
+        {canManageShare && (
+          <div className="p-4 rounded-2xl bg-muted/30 border border-border/70 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                <Globe className="w-3.5 h-3.5 text-primary" />
+                <span>Publish to gallery</span>
+              </span>
+              <span className="text-[10px] text-muted-foreground">
+                {published
+                  ? publishedOn
+                    ? `Published ${publishedOn}`
+                    : "Published"
+                  : "Not published"}
+              </span>
+            </div>
+
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              Lists this trip on your public traveler page. The day-by-day places,
+              stays, transport and tips become public; budget, expenses, members,
+              chat and your email never do.
+            </p>
+
+            {!handle && (
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
+                <p className="text-[11px] font-bold text-foreground">
+                  Choose a traveler handle first
+                </p>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  A published trip needs a public @handle so it has a profile to
+                  live on.
+                </p>
+                <Button asChild variant="outline" size="sm" className="h-8 rounded-lg text-[11px] font-bold">
+                  <Link to="/profile">Open profile settings</Link>
+                </Button>
+              </div>
+            )}
+
+            {/* Exactly what the public card shows */}
+            <div className="rounded-2xl border border-border/70 bg-card p-3 space-y-2">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                Public preview
+              </p>
+              <div className="flex items-center gap-2">
+                <Avatar className="h-7 w-7 ring-1 ring-primary/20">
+                  {user?.avatarUrl && (
+                    <AvatarImage src={avatarSrc(user.avatarUrl)} alt={publisherName} />
+                  )}
+                  <AvatarFallback className="text-[10px] font-bold bg-primary/10 text-primary">
+                    {initialsFor(publisherName)}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="min-w-0">
+                  <p className="text-xs font-bold truncate text-foreground">{publisherName}</p>
+                  <p className="text-[10px] text-muted-foreground truncate">
+                    {handle ? `@${handle}` : "No handle yet"}
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-0.5">
+                <p className="text-sm font-black text-foreground leading-snug">{destination}</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {datePreview}
+                  {data.season ? ` · ${data.season}` : ""}
+                  {data.group_type ? ` · ${data.group_type}` : ""}
+                </p>
+              </div>
+              {summary.trim() && (
+                <p className="text-[11px] leading-relaxed text-foreground/80 line-clamp-3">
+                  {summary.trim()}
+                </p>
+              )}
+              {parsedTags.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {parsedTags.tags.slice(0, 6).map((tag) => (
+                    <span
+                      key={tag}
+                      className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary"
+                    >
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="gallery-summary" className="text-xs font-bold">
+                Short summary
+              </Label>
+              <Textarea
+                id="gallery-summary"
+                value={summary}
+                onChange={(event) => setSummary(event.target.value)}
+                maxLength={280}
+                rows={2}
+                placeholder="What makes this trip worth copying?"
+                className="rounded-xl text-xs resize-none bg-card"
+              />
+              <p className="text-right text-[10px] text-muted-foreground">
+                {summary.length}/280
+              </p>
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="gallery-tags" className="text-xs font-bold">
+                Tags
+              </Label>
+              <Input
+                id="gallery-tags"
+                value={tagInput}
+                onChange={(event) => setTagInput(event.target.value)}
+                placeholder="hills, slow-travel, weekend"
+                className="h-9 rounded-xl text-xs bg-card"
+              />
+              <p className="text-[10px] text-muted-foreground">
+                Comma separated, up to 6.
+              </p>
+            </div>
+
+            <div className="flex items-start justify-between gap-3 rounded-xl border border-border/60 bg-card px-3 py-2.5">
+              <div className="space-y-0.5">
+                <Label htmlFor="hide-exact-dates" className="text-xs font-bold">
+                  Hide exact dates
+                </Label>
+                <p className="text-[10px] text-muted-foreground leading-relaxed">
+                  {hideExactDates
+                    ? `Shows “${datePreview}” with no start or end date.`
+                    : `Shows the exact dates: ${datePreview}.`}
+                </p>
+              </div>
+              <Switch
+                id="hide-exact-dates"
+                checked={hideExactDates}
+                onCheckedChange={setHideExactDates}
+                className="mt-0.5"
+              />
+            </div>
+
+            {publishError && (
+              <p className="text-[11px] font-semibold text-destructive">{publishError}</p>
+            )}
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="hero"
+                size="sm"
+                disabled={publishBusy || !handle || !tripId}
+                onClick={() => void handleSaveGallery(true)}
+                className="h-9 rounded-xl text-xs font-bold gap-1.5"
+              >
+                {publishBusy ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Globe className="w-3.5 h-3.5" />
+                )}
+                <span>{published ? "Save gallery details" : "Publish to gallery"}</span>
+              </Button>
+
+              {published && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={publishBusy}
+                  onClick={() => setConfirmUnpublishOpen(true)}
+                  className="h-9 rounded-xl text-[11px] font-bold text-destructive hover:text-destructive gap-1.5"
+                >
+                  Unpublish
+                </Button>
+              )}
+
+              {handle && (
+                <Link
+                  to={`/travelers/${handle}`}
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline"
+                >
+                  View traveler page
+                  <ExternalLink className="w-3 h-3" />
+                </Link>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* 2. Export Actions Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
           {/* Download PDF — purpose-built A4 document */}
@@ -382,6 +771,37 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
               className="rounded-xl text-xs font-bold h-10 bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {revokingShare ? "Revoking…" : "Stop sharing"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Unpublishing hides the trip from the gallery immediately; the unlisted
+          share link, if any, keeps working. */}
+      <AlertDialog open={confirmUnpublishOpen} onOpenChange={setConfirmUnpublishOpen}>
+        <AlertDialogContent className="rounded-3xl max-w-md w-[92vw] sm:w-full p-5 sm:p-6">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-lg font-bold">
+              Remove this trip from the gallery?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs leading-relaxed">
+              Your traveler page stops listing it right away. If you have an
+              unlisted share link it keeps working, and you can publish the trip
+              again at any time.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-0">
+            <AlertDialogCancel className="rounded-xl text-xs font-semibold h-10">
+              Keep it published
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                void handleSaveGallery(false);
+              }}
+              className="rounded-xl text-xs font-bold h-10 bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {publishBusy ? "Unpublishing…" : "Unpublish"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

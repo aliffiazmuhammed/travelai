@@ -61,6 +61,10 @@ import type {
   TripRole,
   WeatherRoutingAnalysis,
 } from "@/types/trip";
+import type {
+  TripPublicationSnapshot,
+  TripPublicationState,
+} from "@/types/gallery";
 export type { ItineraryData } from "@/types/trip";
 
 interface ItineraryDisplayProps {
@@ -107,6 +111,9 @@ interface ItineraryDisplayProps {
   onFeedbackSubmitted?: (feedback: TripFeedbackType) => void;
   onBackToList?: () => void;
   onNewPlan?: () => void;
+  /** M8 G2: the owner's current gallery state for the publish form. */
+  publication?: TripPublicationSnapshot;
+  onPublicationChange?: (state: TripPublicationState) => void;
   /** A2: agency trips hide ownership transfer; staff never "leave" a tenant trip. */
   agencyTrip?: boolean;
   agencyStaff?: boolean;
@@ -165,6 +172,8 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
   onFeedbackSubmitted,
   onBackToList,
   onNewPlan,
+  publication,
+  onPublicationChange,
   agencyTrip = false,
   agencyStaff = false,
   chatRealm = "personal",
@@ -664,6 +673,9 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
         hasUnsavedChanges={hasUnsavedChanges}
         onBackToList={onBackToList}
         onNewPlan={onNewPlan}
+        hideShare={agencyTrip}
+        publication={publication}
+        onPublicationChange={onPublicationChange}
       />
 
       {/* Highlights Bar */}

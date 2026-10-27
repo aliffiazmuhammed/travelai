@@ -537,10 +537,38 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
     };
   };
 
+  /**
+   * Free-text client fields are upserted into the directory: an existing
+   * record is reused when the email matches, otherwise a new one is created.
+   * The quote still stores its own snapshot of the fields.
+   */
+  const ensureDirectoryClient = async (): Promise<string | null> => {
+    const name = editor.clientName.trim();
+    if (!name) return null;
+    const email = editor.clientEmail.trim().toLowerCase();
+    if (email) {
+      const existing = clients.find(
+        (entry) => entry.email?.toLowerCase() === email
+      );
+      if (existing) return existing._id;
+    }
+    const created = await api.createAgencyClient(agencyId, {
+      name,
+      ...(email ? { email } : {}),
+      ...(editor.clientPhone.trim() ? { phone: editor.clientPhone.trim() } : {}),
+    });
+    setClients((prev) => [...prev, created.client]);
+    return created.client._id;
+  };
+
   /** Returns the saved quote, or null when local validation already reported why. */
   const persist = async (): Promise<AgencyQuote | null> => {
     const payload = buildPayload();
     if (!payload) return null;
+    if (!editor.clientId) {
+      const clientId = await ensureDirectoryClient();
+      if (clientId) payload.clientId = clientId;
+    }
     const result = await api.saveAgencyQuote(agencyId, tripId, payload);
     applySavedQuote(result.quote);
     return result.quote;
@@ -639,7 +667,7 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
   };
 
   const selectClient = (value: string) => {
-    if (value === 'none') {
+    if (value === 'new') {
       setEditor((prev) => ({ ...prev, clientId: '' }));
       return;
     }
@@ -1108,14 +1136,14 @@ const QuoteEditor: React.FC<QuoteEditorProps> = ({
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="quote-client-select">Client directory</Label>
               <Select
-                value={form.clientId || 'none'}
+                value={form.clientId || 'new'}
                 onValueChange={onSelectClient}
               >
                 <SelectTrigger id="quote-client-select">
                   <SelectValue placeholder="Choose a saved client or enter one below" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">One-off client (not saved)</SelectItem>
+                  <SelectItem value="new">New client — saved to the directory</SelectItem>
                   {clients.map((client) => (
                     <SelectItem key={client._id} value={client._id}>
                       {client.name}
@@ -1125,8 +1153,9 @@ const QuoteEditor: React.FC<QuoteEditorProps> = ({
                 </SelectContent>
               </Select>
               <p className="text-[11px] text-slate-500">
-                The quote keeps a snapshot of these fields, so directory edits
-                never rewrite history.
+                Typed entries are added to the directory when you save; an
+                existing email reuses that client. The quote keeps a snapshot of
+                these fields, so directory edits never rewrite history.
               </p>
             </div>
             <div className="space-y-2">

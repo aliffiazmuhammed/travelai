@@ -68,8 +68,9 @@ interface TemplateManagerDialogProps {
 
 /**
  * A6d: the custom-template lifecycle. Details can be renamed, versions can be
- * uploaded, previewed and activated, and a template can become the audience
- * default or be archived without affecting exports already pinned to it.
+ * uploaded, previewed and activated, and a template can be archived without
+ * affecting exports already pinned to it. The audience default is set from the
+ * gallery card instead.
  */
 const TemplateManagerDialog: React.FC<TemplateManagerDialogProps> = ({
   open,
@@ -211,25 +212,6 @@ const TemplateManagerDialog: React.FC<TemplateManagerDialogProps> = ({
     } catch (error) {
       toast.error(
         errorMessage(error, 'We could not activate that template version.')
-      );
-    } finally {
-      setBusyAction(null);
-    }
-  };
-
-  const setDefault = async () => {
-    setBusyAction('default');
-    try {
-      const result = await api.setDefaultAgencyTemplate(
-        agencyId,
-        template._id
-      );
-      onTemplateChanged(result.template);
-      await onRefreshTemplates();
-      toast.success('Default updated for this audience.');
-    } catch (error) {
-      toast.error(
-        errorMessage(error, 'We could not make this the default template.')
       );
     } finally {
       setBusyAction(null);
@@ -551,21 +533,6 @@ const TemplateManagerDialog: React.FC<TemplateManagerDialogProps> = ({
 
           <DialogFooter className="flex-wrap items-center justify-between gap-2 sm:justify-between">
             <div className="flex flex-wrap gap-1.5">
-              {template.status === 'active' && !template.isDefault ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void setDefault()}
-                  disabled={busy || savingDetails}
-                >
-                  {busyAction === 'default' ? (
-                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Star className="mr-1.5 h-3.5 w-3.5" />
-                  )}
-                  Make default
-                </Button>
-              ) : null}
               {template.status !== 'archived' ? (
                 <Button
                   variant="ghost"

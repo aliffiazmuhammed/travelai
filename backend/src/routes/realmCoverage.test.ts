@@ -4,6 +4,8 @@ import authRouter from './auth.routes.js';
 import invitesRouter from './invites.routes.js';
 import itineraryRouter from './itinerary.routes.js';
 import geoRouter from './geo.routes.js';
+import travelersRouter from './travelers.routes.js';
+import exploreRouter from './explore.routes.js';
 import { AUTH_GUARD_TAG } from '../middleware/auth.middleware.js';
 
 /**
@@ -108,6 +110,31 @@ test('personal collection routes never accept a platform session', () => {
     assert.equal(guardKind(layer!), 'personal', `${path} must use protectPersonal`);
     assert.ok(guarded(layer!), `${path} must carry a realm guard`);
   }
+});
+
+test('traveler profile routes are anonymous and classified', () => {
+  const layers = routeLayers(travelersRouter);
+  assert.equal(layers.length, 1, 'The traveler surface is a single public read');
+  assert.equal(pathOf(layers[0]), '/:handle');
+  assert.deepEqual(
+    layers.filter((layer) => guardKind(layer) !== undefined).map(pathOf),
+    [],
+    'Gallery profiles must never inherit a session or platform guard'
+  );
+});
+
+test('gallery explore routes are anonymous and classified', () => {
+  const layers = routeLayers(exploreRouter);
+  assert.deepEqual(
+    layers.map(pathOf).sort(),
+    ['/', '/:tripId'],
+    'The gallery surface is the listing plus one public trip page'
+  );
+  assert.deepEqual(
+    layers.filter((layer) => guardKind(layer) !== undefined).map(pathOf),
+    [],
+    'Gallery browse must never inherit a session or platform guard'
+  );
 });
 
 test('geo routes use the shared session guard, never the platform realm', () => {

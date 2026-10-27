@@ -16,12 +16,14 @@ const Auth = lazy(() => import("./pages/Auth"));
 const TripPlanner = lazy(() => import("./pages/TripPlanner"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const SharedTrip = lazy(() => import("./pages/SharedTrip"));
+const TravelerProfile = lazy(() => import("./pages/TravelerProfile"));
+const Explore = lazy(() => import("./pages/Explore"));
+const GalleryTrip = lazy(() => import("./pages/GalleryTrip"));
 const ProposalShare = lazy(() => import("./pages/ProposalShare"));
 const InviteAccept = lazy(() => import("./pages/InviteAccept"));
 const Profile = lazy(() => import("./pages/Profile"));
 const AgencyApp = lazy(() => import("./pages/agency/AgencyApp"));
 const AgencyLogin = lazy(() => import("./pages/agency/AgencyLogin"));
-const AgencyAccount = lazy(() => import("./pages/agency/AgencyAccount"));
 const AgencyOverview = lazy(() => import("./pages/agency/AgencyOverview"));
 const AgencyOnboarding = lazy(() => import("./pages/agency/AgencyOnboarding"));
 const AgencyTeam = lazy(() => import("./pages/agency/AgencyTeam"));
@@ -73,6 +75,12 @@ const App = () => (
                   }
                 />
                 <Route path="/shared/:shareId" element={<SharedTrip />} />
+                {/* Milestone 8 G2: public traveler identity — no session needed. */}
+                <Route path="/travelers/:handle" element={<TravelerProfile />} />
+                {/* Milestone 8 G3: anonymous gallery. The nav entry waits for a
+                    content threshold; these routes stay reachable by URL. */}
+                <Route path="/explore" element={<Explore />} />
+                <Route path="/explore/:tripId" element={<GalleryTrip />} />
                 <Route path="/proposal/:token" element={<ProposalShare />} />
                 <Route path="/invite/:token" element={<InviteAccept />} />
                 <Route
@@ -119,7 +127,6 @@ const App = () => (
                 >
                   <Route index element={<AgencyOverview />} />
                   <Route path="onboarding" element={<AgencyOnboarding />} />
-                  <Route path="account" element={<AgencyAccount />} />
                   <Route path="trips" element={<AgencyTrips />} />
                   <Route path="trips/new" element={<AgencyTripPlanner />} />
                   <Route path="trips/:tripId" element={<AgencyTrips />} />

@@ -12,6 +12,8 @@ import authRoutes from './routes/auth.routes.js';
 import itineraryRoutes from './routes/itinerary.routes.js';
 import invitesRoutes from './routes/invites.routes.js';
 import geoRoutes from './routes/geo.routes.js';
+import travelersRoutes from './routes/travelers.routes.js';
+import exploreRoutes from './routes/explore.routes.js';
 import agencyRoutes from './routes/agency.routes.js';
 import agencyAuthRoutes from './routes/agencyAuth.routes.js';
 import adminAuthRoutes from './routes/adminAuth.routes.js';
@@ -216,6 +218,11 @@ app.use('/api/auth', authRoutes);
 app.use('/api/itinerary', itineraryRoutes);
 app.use('/api/invites', invitesRoutes);
 app.use('/api/geo', geoRoutes);
+// Public gallery profiles (G2): anonymous by design, projection-only payload.
+app.use('/api/travelers', travelersRoutes);
+// Public gallery listing and trip pages (G3): same rule — anonymous, and every
+// row leaves through the gallery projection rather than a raw trip document.
+app.use('/api/explore', exploreRoutes);
 // Agency Workspace (A0): read-only placeholder namespace, gated per request.
 // PA0 auth lives under the same gate, before the tenant routes — it is public
 // bootstrap (`/context`, `/csrf`, `/signin`, `/logout`) plus agency-session

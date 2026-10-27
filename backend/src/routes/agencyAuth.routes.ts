@@ -15,7 +15,7 @@ import { requireAgencyWorkspace } from '../middleware/agencyWorkspace.middleware
 import { validate } from '../middleware/validate.middleware.js';
 import { agencySigninSchema } from '../schemas/agency.schema.js';
 import { publishChatKeySchema } from '../schemas/chatKey.schema.js';
-import { changePasswordSchema, updateProfileSchema } from '../schemas/profile.schema.js';
+import { agencyProfileSchema, changePasswordSchema } from '../schemas/profile.schema.js';
 import {
   agencyAuthLimiter,
   passwordChangeLimiter,
@@ -38,7 +38,7 @@ router.post('/signin', agencyAuthLimiter, validate(agencySigninSchema), signin);
 router.post('/logout', logout);
 
 router.get('/me', protectAgency, me);
-router.patch('/profile', protectAgency, validate(updateProfileSchema), updateProfile);
+router.patch('/profile', protectAgency, validate(agencyProfileSchema), updateProfile);
 router.put('/chat-key', protectAgency, validate(publishChatKeySchema), publishChatKey);
 router.post(
   '/password',

@@ -337,6 +337,43 @@ export const publicShareLimiter = rateLimit({
 });
 
 /**
+ * Public traveler profiles (G2). Handles are short and guessable, so profile
+ * reads get the same IP brake as unlisted shares: 120 reads / 15 min covers a
+ * person browsing several profiles (and the SPA's refetches) while capping
+ * enumeration speed.
+ */
+export const publicTravelerLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 120,
+  message: {
+    success: false,
+    error: 'Too many profile requests. Please slow down and try again shortly.',
+    message: 'Too many profile requests. Please slow down and try again shortly.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
+ * Public gallery (G3). The listing is anonymous and each card is a small
+ * projection, so it is priced per IP rather than per account: 180 reads /
+ * 15 min covers a person paging through the gallery (each "load more" is one
+ * request) while still capping scripted scraping. The single-trip page shares
+ * this bucket on purpose — a scraper would walk both.
+ */
+export const publicGalleryLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 180,
+  message: {
+    success: false,
+    error: 'Too many gallery requests. Please slow down and try again shortly.',
+    message: 'Too many gallery requests. Please slow down and try again shortly.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
  * Public proposal accept (A7) — the only public write. The 256-bit token is
  * the capability, but acceptance changes commercial state, so the brake is
  * tighter than the read limiter: 20 accepts / 15 min / IP.

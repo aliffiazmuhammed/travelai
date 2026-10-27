@@ -96,6 +96,20 @@ export interface ITripMember {
 
 export type TripWorkspace = 'personal' | 'agency';
 
+/**
+ * Sharing mode (Milestone 8 G1). `unlisted` is the share-link mode; `public`
+ * adds a browsable gallery listing. `isPublic` remains the legacy share flag —
+ * share/revoke keep `visibility` in sync with it.
+ */
+export type TripVisibility = 'private' | 'unlisted' | 'public';
+
+/** Gallery-only metadata; never carries anything monetary or membership-related. */
+export interface ITripGallery {
+  hideExactDates: boolean;
+  summary?: string;
+  tags: string[];
+}
+
 export interface ITrip extends Document {
   userId: Types.ObjectId;
   /**
@@ -121,6 +135,12 @@ export interface ITrip extends Document {
   archivedAt?: Date;
   shareId?: string;
   isPublic?: boolean;
+  /** Personal-trip sharing mode (Milestone 8 G1); agency rows are never public. */
+  visibility: TripVisibility;
+  /** Set while `visibility === 'public'`; cleared on unpublish. */
+  publishedAt?: Date;
+  /** Public card metadata, written by the publish endpoint only. */
+  gallery?: ITripGallery;
   tripDetails: Record<string, any>;
   version: number;
   hasEdited: boolean;
@@ -170,6 +190,15 @@ const tripFeedbackSchema = new Schema<ITripFeedback>(
     rating: { type: String, enum: ['up', 'down'], required: true },
     comment: { type: String, trim: true, maxlength: 500 },
     submittedAt: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
+const tripGallerySchema = new Schema<ITripGallery>(
+  {
+    hideExactDates: { type: Boolean, default: false },
+    summary: { type: String, trim: true, maxlength: 280 },
+    tags: { type: [String], default: [] },
   },
   { _id: false }
 );
@@ -310,6 +339,19 @@ const tripSchema = new Schema<ITrip>(
       type: Boolean,
       default: false,
     },
+    visibility: {
+      type: String,
+      enum: ['private', 'unlisted', 'public'],
+      default: 'private',
+    },
+    publishedAt: {
+      type: Date,
+      default: undefined,
+    },
+    gallery: {
+      type: tripGallerySchema,
+      default: undefined,
+    },
     tripDetails: {
       type: Object,
       required: true,
@@ -379,6 +421,13 @@ tripSchema.index({ 'members.userId': 1, isDeleted: 1, deletedAt: -1 });
 tripSchema.index({ agencyId: 1, workspace: 1, isDeleted: 1, createdAt: -1 });
 tripSchema.index({ agencyId: 1, workspace: 1, isDeleted: 1, deletedAt: -1 });
 tripSchema.index({ agencyId: 1, assignedTo: 1, isDeleted: 1 });
+// Gallery listing (Milestone 8): published, live trips ordered by travel date.
+tripSchema.index({ visibility: 1, isDeleted: 1, startDate: 1 });
+// Explore cursor (G3): newest publication first, `_id` breaking same-millisecond
+// ties so paging never skips or repeats a row. The prefix still answers plain
+// "newest published" reads.
+tripSchema.index({ visibility: 1, publishedAt: -1, _id: -1 });
+tripSchema.index({ 'gallery.tags': 1 });
 
 /** Agency trips must name their tenant; personal trips must not acquire one. */
 tripSchema.pre('validate', function () {
@@ -387,6 +436,12 @@ tripSchema.pre('validate', function () {
   }
   if (this.workspace !== 'agency' && this.agencyId) {
     this.invalidate('agencyId', 'Only agency trips can belong to an agency.');
+  }
+  // Gallery publishing is a personal-realm surface only (Milestone 8 invariant
+  // 3). The publish service also rejects agency rows up front; this keeps the
+  // rule structural for every other write path.
+  if (this.workspace === 'agency' && this.visibility === 'public') {
+    this.invalidate('visibility', 'Agency trips cannot be published to the gallery.');
   }
 });
 

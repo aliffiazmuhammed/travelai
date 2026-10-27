@@ -41,6 +41,7 @@ import { sanitizeTripFor } from '../utils/sanitizeTrip.js';
 import { roleOf } from '../services/collab/access.js';
 import { tripContext } from '../middleware/tripAccess.middleware.js';
 import { findPublicSharedTrip, projectPublicTrip } from '../services/collab/publicTrip.js';
+import { setTripPublication } from '../services/gallery/publish.js';
 import { AuthenticatedRequest } from '../types/index.js';
 import { AppError } from '../utils/AppError.js';
 import { env } from '../config/env.js';
@@ -942,6 +943,26 @@ export const duplicateTrip = catchAsync(
 );
 
 /**
+ * Publish/unpublish a personal trip in the public gallery (Milestone 8 G1).
+ * Owner-only via the route guard; the service re-checks ownership and rejects
+ * agency rows. `visibility` is the gallery switch — the unlisted share link is
+ * a separate, independent payload.
+ */
+export const updateTripPublication = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { trip } = tripContext(req);
+    const publication = await setTripPublication(String(req.userId), {
+      tripId: String(trip._id),
+      published: req.body.published,
+      hideExactDates: req.body.hideExactDates,
+      summary: req.body.summary,
+      tags: req.body.tags,
+    });
+    res.status(200).json({ success: true, publication });
+  }
+);
+
+/**
  * Creates or refreshes the public share link (F7/F11/F20).
  *
  * - New links carry 128 bits of entropy (F11); every historical 48-bit id
@@ -960,6 +981,7 @@ export const shareTrip = catchAsync(
         try {
           trip.shareId = minted;
           trip.isPublic = true;
+          if (trip.visibility === 'private') trip.visibility = 'unlisted';
           await trip.save();
           break;
         } catch (error: any) {
@@ -971,6 +993,7 @@ export const shareTrip = catchAsync(
       }
     } else {
       trip.isPublic = true;
+      if (trip.visibility === 'private') trip.visibility = 'unlisted';
       await trip.save();
     }
 
@@ -995,6 +1018,8 @@ export const revokeShareTrip = catchAsync(
 
     trip.isPublic = false;
     trip.shareId = undefined;
+    // A published trip keeps its gallery listing; only the link goes away.
+    if (trip.visibility === 'unlisted') trip.visibility = 'private';
     await trip.save();
 
     res.status(200).json({

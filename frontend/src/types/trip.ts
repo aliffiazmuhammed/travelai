@@ -1,3 +1,5 @@
+import type { TripGallery, TripVisibility } from './gallery';
+
 export interface ActivityItem {
   name?: string;
   title?: string;
@@ -104,6 +106,11 @@ export interface TripGenerationMeta {
   qualityGrade?: 'excellent' | 'good' | 'fair' | 'poor';
   qualityIssues?: string[];
   generatedAt?: string;
+  /** The generation request; `destination` is the public gallery label. */
+  request?: {
+    destination?: string;
+    [key: string]: unknown;
+  };
 }
 
 export type ExpenseCategory =
@@ -403,6 +410,12 @@ export interface Trip {
   shareId?: string;
   /** Whether the share link is active — owner-only on the wire. */
   isPublic?: boolean;
+  /** Milestone 8: private / unlisted (share link) / public (gallery listing). */
+  visibility?: TripVisibility;
+  /** First time the trip entered the gallery; cleared on unpublish. */
+  publishedAt?: string | null;
+  /** Gallery copy and the hide-exact-dates switch (absent until first publish). */
+  gallery?: TripGallery;
   /** Optimistic-concurrency counter (Milestone 6 §3.6) — moves on every write. */
   rev?: number;
   /** The caller's role on this trip (Milestone 6). Absent for legacy payloads. */

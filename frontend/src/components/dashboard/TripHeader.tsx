@@ -24,6 +24,10 @@ import { ShareExportModal } from "./ShareExportModal";
 import { avatarSrc } from "@/lib/avatar";
 import type { PresenceUser } from "@/hooks/useTripEvents";
 import type { ItineraryData } from "@/types/trip";
+import type {
+  TripPublicationSnapshot,
+  TripPublicationState,
+} from "@/types/gallery";
 
 interface TripHeaderProps {
   data: ItineraryData;
@@ -44,6 +48,11 @@ interface TripHeaderProps {
   hasUnsavedChanges?: boolean;
   onBackToList?: () => void;
   onNewPlan?: () => void;
+  /** Agency trips share through proposal links only; hides the personal share modal. */
+  hideShare?: boolean;
+  /** Current gallery publication state for the owner's publish form (M8 G2). */
+  publication?: TripPublicationSnapshot;
+  onPublicationChange?: (state: TripPublicationState) => void;
 }
 
 // Curated high quality imagery mapping for destinations (specific hill stations prioritized before broad regions)
@@ -93,6 +102,9 @@ export const TripHeader: React.FC<TripHeaderProps> = ({
   hasUnsavedChanges,
   onBackToList,
   onNewPlan,
+  hideShare,
+  publication,
+  onPublicationChange,
 }) => {
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
@@ -237,17 +249,19 @@ export const TripHeader: React.FC<TripHeaderProps> = ({
               </Button>
             )}
 
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleShare}
-              className="bg-black/50 hover:bg-black/75 text-white border-white/20 backdrop-blur-md rounded-xl text-xs font-semibold gap-1 sm:gap-1.5 h-8 sm:h-9 px-2.5 sm:px-3"
-            >
-              <Share2 className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Share & Export</span>
-              <span className="sm:hidden">Share</span>
-            </Button>
+            {!hideShare && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleShare}
+                className="bg-black/50 hover:bg-black/75 text-white border-white/20 backdrop-blur-md rounded-xl text-xs font-semibold gap-1 sm:gap-1.5 h-8 sm:h-9 px-2.5 sm:px-3"
+              >
+                <Share2 className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Share & Export</span>
+                <span className="sm:hidden">Share</span>
+              </Button>
+            )}
 
             <Button
               type="button"
@@ -363,15 +377,19 @@ export const TripHeader: React.FC<TripHeaderProps> = ({
       </div>
 
       {/* Share & Export Modal */}
-      <ShareExportModal
-        isOpen={isShareModalOpen}
-        onClose={() => setIsShareModalOpen(false)}
-        tripId={tripId}
-        data={data}
-        initialShareId={shareId}
-        onShareIdChange={onShareIdChange}
-        canManageShare={Boolean(onStatusChange)}
-      />
+      {!hideShare && (
+        <ShareExportModal
+          isOpen={isShareModalOpen}
+          onClose={() => setIsShareModalOpen(false)}
+          tripId={tripId}
+          data={data}
+          initialShareId={shareId}
+          onShareIdChange={onShareIdChange}
+          canManageShare={Boolean(onStatusChange)}
+          publication={publication}
+          onPublicationChange={onPublicationChange}
+        />
+      )}
     </div>
   );
 };

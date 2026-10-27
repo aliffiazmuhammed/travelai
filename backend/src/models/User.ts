@@ -18,6 +18,13 @@ export type AccountStatus = (typeof ACCOUNT_STATUSES)[number];
 export const PLATFORM_ROLES = ['super_admin'] as const;
 export type PlatformRole = (typeof PLATFORM_ROLES)[number];
 
+export interface IUserProfile {
+  /** Public traveler handle (Milestone 8 G1): lowercase, 3–24 `[a-z0-9_]`. */
+  handle?: string;
+  /** Short public bio shown on `/travelers/:handle` (≤280 chars). */
+  bio?: string;
+}
+
 export interface IUser extends Document {
   email: string;
   password: string;
@@ -51,6 +58,11 @@ export interface IUser extends Document {
    */
   avatarUrl?: string;
   /**
+   * Public traveler identity (Milestone 8 G1). Personal accounts only — the
+   * handle is a URL key for the gallery, never an authorization identity.
+   */
+  profile?: IUserProfile;
+  /**
    * Chat identity public key (base64 SPKI, ECDH P-256) — Milestone 7, F10.
    * Published by the browser right after it mints the keypair; the matching
    * private key NEVER leaves the device (localStorage + a backup code). The
@@ -67,6 +79,14 @@ export interface IUser extends Document {
   createdAt: Date;
   updatedAt: Date;
 }
+
+const userProfileSchema = new Schema<IUserProfile>(
+  {
+    handle: { type: String, trim: true, lowercase: true, maxlength: 24 },
+    bio: { type: String, trim: true, maxlength: 280 },
+  },
+  { _id: false }
+);
 
 const userSchema = new Schema<IUser>(
   {
@@ -130,6 +150,11 @@ const userSchema = new Schema<IUser>(
     avatarUrl: {
       type: String,
     },
+    // Milestone 8 G1: public traveler identity (personal accounts only).
+    profile: {
+      type: userProfileSchema,
+      default: undefined,
+    },
     // Filled by PUT .../chat-key; validated there (base64, ≤512 chars).
     chatPubKey: {
       type: String,
@@ -170,6 +195,16 @@ userSchema.index(
   }
 );
 userSchema.index({ accountType: 1, status: 1 }, { name: 'account_type_status' });
+// Public traveler handles are globally unique across personal accounts. The
+// partial filter keeps agency/platform rows out of the namespace entirely.
+userSchema.index(
+  { 'profile.handle': 1 },
+  {
+    unique: true,
+    name: 'personal_profile_handle_unique',
+    partialFilterExpression: { accountType: 'personal', 'profile.handle': { $exists: true } },
+  }
+);
 // Stable newest-first pagination for the platform account directory.
 userSchema.index(
   { createdAt: -1, _id: -1 },
@@ -203,6 +238,10 @@ userSchema.pre('validate', function (next) {
   }
   if (accountType === 'platform' && !this.platformRole) {
     this.invalidate('platformRole', 'Platform accounts require a platformRole.');
+  }
+
+  if (accountType !== 'personal' && this.profile?.handle) {
+    this.invalidate('profile.handle', 'Only personal accounts may hold a public handle.');
   }
 
   next();

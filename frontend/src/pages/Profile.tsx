@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Camera,
+  ExternalLink,
+  Globe,
   Loader2,
   Mail,
   ShieldCheck,
@@ -15,8 +17,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 import Navbar from "@/components/Navbar";
 import { useAuth } from "@/context/UserContext";
+import { api } from "@/services/api";
 import { avatarSrc, initialsFor } from "@/lib/avatar";
 
 /**
@@ -31,6 +35,16 @@ import { avatarSrc, initialsFor } from "@/lib/avatar";
 /** Mirrors the server cap (`AVATAR_MAX_MB`, 2 MB default) for instant feedback. */
 const AVATAR_MAX_MB = 2;
 const AVATAR_TYPES = ["image/jpeg", "image/png", "image/webp"];
+
+function handleAvailabilityMessage(result: {
+  available: boolean;
+  reason?: "invalid" | "reserved" | "taken";
+}): string {
+  if (result.available) return "That handle is available.";
+  if (result.reason === "taken") return "That handle is already taken.";
+  if (result.reason === "reserved") return "That word is reserved. Please choose another.";
+  return "Use 3–24 lowercase letters, numbers or underscores.";
+}
 
 const Profile = () => {
   const {
@@ -59,10 +73,27 @@ const Profile = () => {
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
 
+  // Public traveler identity (Milestone 8 G2)
+  const [handle, setHandle] = useState("");
+  const [bio, setBio] = useState("");
+  const [identityBusy, setIdentityBusy] = useState(false);
+  const [identityError, setIdentityError] = useState<string | null>(null);
+  const [availabilityBusy, setAvailabilityBusy] = useState(false);
+  const [availability, setAvailability] = useState<{
+    handle: string;
+    available: boolean;
+    reason?: "invalid" | "reserved" | "taken";
+  } | null>(null);
+
   // Keep the field in sync with the session (including after a save).
   useEffect(() => {
     setName(user?.name ?? "");
   }, [user?.name]);
+
+  useEffect(() => {
+    setHandle(user?.handle ?? "");
+    setBio(user?.bio ?? "");
+  }, [user?.handle, user?.bio]);
 
   // Release the local preview object URL when it changes/unmounts.
   useEffect(() => {
@@ -70,6 +101,47 @@ const Profile = () => {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
     };
   }, [previewUrl]);
+
+  const normalizedHandle = handle.trim().replace(/^@+/, "").toLowerCase();
+  const savedHandle = (user?.handle ?? "").toLowerCase();
+  const handleChanged = normalizedHandle !== savedHandle;
+  const bioChanged = bio.trim() !== (user?.bio ?? "").trim();
+  const identityChanged = handleChanged || bioChanged;
+
+  // The same normalization the server applies; only a changed handle is checked.
+  useEffect(() => {
+    if (!normalizedHandle || normalizedHandle === savedHandle) {
+      setAvailability(null);
+      setAvailabilityBusy(false);
+      return;
+    }
+    let cancelled = false;
+    setAvailabilityBusy(true);
+    const timer = window.setTimeout(async () => {
+      try {
+        const result = await api.checkHandleAvailability(normalizedHandle);
+        if (!cancelled) setAvailability(result);
+      } catch {
+        if (!cancelled) setAvailability(null);
+      } finally {
+        if (!cancelled) setAvailabilityBusy(false);
+      }
+    }, 350);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [normalizedHandle, savedHandle]);
+
+  const availabilityMessage = !normalizedHandle || !handleChanged
+    ? null
+    : availabilityBusy
+      ? "Checking availability…"
+      : availability
+        ? handleAvailabilityMessage(availability)
+        : null;
+  const handleAvailable =
+    !availabilityBusy && Boolean(availability?.available) && handleChanged;
 
   if (loading) {
     return (
@@ -141,12 +213,56 @@ const Profile = () => {
     }
     setNameBusy(true);
     try {
-      await updateProfile(name.trim());
+      await updateProfile({ name: name.trim() });
       toast.success(name.trim() ? "Name saved." : "Name cleared — your email name is shown again.");
     } catch (error: any) {
       setNameError(error?.message || "We could not save your name. Please try again.");
     } finally {
       setNameBusy(false);
+    }
+  };
+
+  const handleSaveIdentity = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setIdentityError(null);
+
+    if (normalizedHandle) {
+      if (normalizedHandle.length < 3 || normalizedHandle.length > 24) {
+        setIdentityError("Handles must be 3–24 characters.");
+        return;
+      }
+      if (!/^[a-z0-9_]+$/.test(normalizedHandle)) {
+        setIdentityError(
+          "Handles can use lowercase letters, numbers and underscores only."
+        );
+        return;
+      }
+      if (
+        availability &&
+        !availability.available &&
+        availability.handle === normalizedHandle
+      ) {
+        setIdentityError(handleAvailabilityMessage(availability));
+        return;
+      }
+    }
+    if (bio.trim().length > 280) {
+      setIdentityError("Bios must be 280 characters or fewer.");
+      return;
+    }
+
+    setIdentityBusy(true);
+    try {
+      await updateProfile({ handle: normalizedHandle, bio: bio.trim() });
+      toast.success(
+        normalizedHandle ? "Traveler profile saved." : "Public handle removed."
+      );
+    } catch (error: any) {
+      setIdentityError(
+        error?.message || "We could not save your traveler profile. Please try again."
+      );
+    } finally {
+      setIdentityBusy(false);
     }
   };
 
@@ -307,6 +423,107 @@ const Profile = () => {
                 not available yet.
               </p>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Public traveler profile ------------------------------------------- */}
+        <Card className="rounded-3xl border-border/70">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Globe className="h-4 w-4 text-primary" />
+              Public traveler profile
+            </CardTitle>
+            <CardDescription>
+              Your handle and bio appear on every trip you publish to the gallery.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSaveIdentity} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="traveler-handle" className="text-xs font-bold">
+                  Handle
+                </Label>
+                <div className="flex items-center rounded-xl border border-border/60 bg-card focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-1">
+                  <span className="pl-3 text-sm font-semibold text-muted-foreground">@</span>
+                  <Input
+                    id="traveler-handle"
+                    value={handle}
+                    onChange={(event) => setHandle(event.target.value)}
+                    maxLength={25}
+                    placeholder="ada_travels"
+                    autoComplete="username"
+                    className="border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
+                  />
+                </div>
+                {availabilityMessage ? (
+                  <p
+                    className={`text-[11px] font-semibold ${
+                      availabilityBusy
+                        ? "text-muted-foreground"
+                        : handleAvailable
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : "text-destructive"
+                    }`}
+                  >
+                    {availabilityMessage}
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground">
+                    3–24 lowercase letters, numbers or underscores. This becomes the
+                    address of your public page.
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="traveler-bio" className="text-xs font-bold">
+                  Bio
+                </Label>
+                <Textarea
+                  id="traveler-bio"
+                  value={bio}
+                  onChange={(event) => setBio(event.target.value)}
+                  maxLength={280}
+                  rows={3}
+                  placeholder="A sentence about how you travel."
+                  className="rounded-xl resize-none"
+                />
+                <p className="text-right text-[11px] text-muted-foreground">
+                  {bio.length}/280
+                </p>
+              </div>
+
+              {identityError && (
+                <p className="text-[11px] font-semibold text-destructive">{identityError}</p>
+              )}
+
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={identityBusy || !identityChanged}
+                  className="rounded-xl text-xs font-bold h-10 px-4"
+                >
+                  {identityBusy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  Save traveler profile
+                </Button>
+                {user.handle && (
+                  <Link
+                    to={`/travelers/${user.handle}`}
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline"
+                  >
+                    View public profile
+                    <ExternalLink className="h-3 w-3" />
+                  </Link>
+                )}
+              </div>
+
+              <p className="text-[11px] text-muted-foreground">
+                {user.handle
+                  ? "Your public page lists only published, upcoming trips. Unpublish them before removing the handle."
+                  : "You need a handle before publishing a trip. Leaving it empty removes it."}
+              </p>
+            </form>
           </CardContent>
         </Card>
 

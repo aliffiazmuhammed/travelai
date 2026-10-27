@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import {
   Building2,
   Image as ImageIcon,
   ImagePlus,
   Loader2,
   Lock,
+  LogOut,
   Palette,
   Receipt,
   Save,
@@ -13,6 +14,7 @@ import {
   Trash2,
   Type,
   Upload,
+  UserRound,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -22,11 +24,13 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/services/api';
 import { useAgency } from '@/context/AgencyContext';
+import { useAgencyAuth } from '@/context/AgencyAuthContext';
 import { useAgencyAssetUrl } from '@/hooks/useAgencyAssetUrl';
 import { agencyRoleBadgeClass, agencyRoleLabel } from '@/lib/agency';
 import type { AgencyAsset, AgencyAssetKind, AgencyBranding } from '@/types';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import AgencyPasswordChange from './AgencyPasswordChange';
 
 const HEX_COLOUR = /^#[0-9a-fA-F]{6}$/;
 const IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp';
@@ -78,8 +82,15 @@ const AssetThumb: React.FC<{
 };
 
 const AgencySettings: React.FC = () => {
+  const navigate = useNavigate();
   const { activeAgency, activeAgencyId, canManage, replaceAgency, loading } =
     useAgency();
+  const {
+    user,
+    agency: sessionAgency,
+    updateProfile,
+    logout,
+  } = useAgencyAuth();
 
   const [name, setName] = useState('');
   const [gstin, setGstin] = useState('');
@@ -102,6 +113,12 @@ const AgencySettings: React.FC = () => {
   const [busy, setBusy] = useState<string | null>(null);
   const [fontFamily, setFontFamily] = useState('');
   const [licenseNote, setLicenseNote] = useState('');
+  const [accountName, setAccountName] = useState(user?.name ?? '');
+  const [savingAccount, setSavingAccount] = useState(false);
+
+  useEffect(() => {
+    setAccountName(user?.name ?? '');
+  }, [user?.name]);
 
   const logoInputRef = useRef<HTMLInputElement>(null);
   const mascotInputRef = useRef<HTMLInputElement>(null);
@@ -294,6 +311,26 @@ const AgencySettings: React.FC = () => {
     }
   };
 
+  const saveAccountName = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setSavingAccount(true);
+    try {
+      await updateProfile(accountName.trim());
+      toast.success('Your agency profile has been updated.');
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : 'We could not save your profile.'
+      );
+    } finally {
+      setSavingAccount(false);
+    }
+  };
+
+  const signOut = async () => {
+    await logout();
+    navigate('/agency/login', { replace: true });
+  };
+
   const save = async () => {
     if (!canManage || !activeAgencyId) return;
     if (name.trim().length < 2) {
@@ -410,8 +447,9 @@ const AgencySettings: React.FC = () => {
             </Badge>
           </div>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Your brand identity for client pages, quotes and exports. Uploaded
-            files are private to this agency and never listed publicly.
+            Your brand identity for client pages, quotes and exports, plus your
+            personal agency account. Uploaded files are private to this agency
+            and never listed publicly.
           </p>
         </div>
         {canManage ? (
@@ -826,6 +864,61 @@ const AgencySettings: React.FC = () => {
         </div>
 
         <div className="space-y-5">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <UserRound className="h-4 w-4 text-teal-600" />
+                Your account
+              </CardTitle>
+              <CardDescription>
+                The name your teammates see inside the agency workspace. This
+                account opens {sessionAgency?.name ?? 'this workspace'} only.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form className="space-y-4" onSubmit={saveAccountName}>
+                <div className="space-y-2">
+                  <Label>Workspace</Label>
+                  <Input value={sessionAgency?.name ?? ''} readOnly disabled />
+                </div>
+                <div className="space-y-2">
+                  <Label>Email</Label>
+                  <Input value={user?.email ?? ''} readOnly disabled />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="account-name">Display name</Label>
+                  <Input
+                    id="account-name"
+                    value={accountName}
+                    onChange={(event) => setAccountName(event.target.value)}
+                    maxLength={40}
+                    placeholder="Your name"
+                  />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="submit" disabled={savingAccount}>
+                    {savingAccount ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="mr-2 h-4 w-4" />
+                    )}
+                    Save profile
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void signOut()}
+                  >
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Sign out of agency
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+
+          <AgencyPasswordChange />
+
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">

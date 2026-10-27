@@ -7,6 +7,17 @@ export interface User {
   avatarUrl?: string;
   /** The label other members see (server-computed: name, else email local part). */
   label?: string;
+  /** Public traveler handle (Milestone 8); absent until one is claimed. */
+  handle?: string;
+  /** Public bio shown on `/travelers/:handle` (Milestone 8). */
+  bio?: string;
+}
+
+/** Fields the personal profile form may save; omitted keys are untouched. */
+export interface ProfileUpdateInput {
+  name?: string;
+  handle?: string;
+  bio?: string;
 }
 
 export interface AuthContextType {
@@ -20,8 +31,8 @@ export interface AuthContextType {
   clearError: () => void;
   /** F14: re-reads `/auth/me` (e.g. after a profile edit on another device). */
   refreshUser: () => Promise<void>;
-  /** F14: save (or clear, with an empty string) the display name. */
-  updateProfile: (name: string) => Promise<void>;
+  /** F14 + M8: save name, handle and/or bio (empty strings clear a field). */
+  updateProfile: (input: ProfileUpdateInput) => Promise<void>;
   /** F14: upload a new profile photo (image files only, capped server-side). */
   uploadAvatar: (file: File) => Promise<void>;
   /** F14: remove the photo and fall back to initials. */

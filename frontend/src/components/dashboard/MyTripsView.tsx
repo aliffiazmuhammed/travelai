@@ -50,13 +50,13 @@ import {
 
 interface MyTripsViewProps {
   trips: Trip[];
-  /** M7.7: owner-only soft-deleted trips. */
-  deletedTrips: Trip[];
+  /** M7.7: owner-only soft-deleted trips. The agency library is archive-only and passes nothing. */
+  deletedTrips?: Trip[];
   onSelectTrip: (trip: Trip) => void;
   onDuplicateTrip: (tripId: string) => Promise<void>;
-  onDeleteTrip: (tripId: string) => Promise<void>;
-  onRestoreTrip: (tripId: string) => Promise<void>;
-  onPurgeTrip: (tripId: string) => Promise<void>;
+  onDeleteTrip?: (tripId: string) => Promise<void>;
+  onRestoreTrip?: (tripId: string) => Promise<void>;
+  onPurgeTrip?: (tripId: string) => Promise<void>;
   onNewPlan: () => void;
   /** A2: the agency library reuses this view with tenant copy. */
   variant?: "personal" | "agency";
@@ -136,7 +136,7 @@ const STATUS_CONFIG = {
 
 export const MyTripsView: React.FC<MyTripsViewProps> = ({
   trips,
-  deletedTrips,
+  deletedTrips = [],
   onSelectTrip,
   onDuplicateTrip,
   onDeleteTrip,
@@ -239,7 +239,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
   };
 
   const confirmDelete = async () => {
-    if (!tripToDelete) return;
+    if (!tripToDelete || !onDeleteTrip) return;
     try {
       setActionLoadingId(tripToDelete._id);
       await onDeleteTrip(tripToDelete._id);
@@ -252,6 +252,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
   };
 
   const handleRestore = async (trip: Trip) => {
+    if (!onRestoreTrip) return;
     try {
       setActionLoadingId(trip._id);
       await onRestoreTrip(trip._id);
@@ -293,7 +294,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
   };
 
   const confirmPurge = async () => {
-    if (!tripToPurge) return;
+    if (!tripToPurge || !onPurgeTrip) return;
     try {
       setActionLoadingId(tripToPurge._id);
       await onPurgeTrip(tripToPurge._id);
@@ -452,7 +453,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
                   statusFilter !== "all" ||
                   (assigneeValue && assigneeValue !== "all")
                 ? "Try adjusting your search keywords or filters."
-                : deletedTrips.length > 0
+                : !isAgency && deletedTrips.length > 0
                 ? "Restore a trip from Recently deleted below, or start a new plan."
                 : emptyBody ??
                   (isAgency
@@ -578,7 +579,10 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
                     </Button>
                   )}
 
-                  {!showingArchived && (!canDeleteTrip || canDeleteTrip(trip)) && (
+                  {!isAgency &&
+                    !showingArchived &&
+                    onDeleteTrip &&
+                    (!canDeleteTrip || canDeleteTrip(trip)) && (
                     <Button
                       type="button"
                       size="icon"
@@ -721,7 +725,10 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
                       <Copy className="w-4 h-4" />
                     </Button>
                   )}
-                  {!showingArchived && (!canDeleteTrip || canDeleteTrip(trip)) && (
+                  {!isAgency &&
+                    !showingArchived &&
+                    onDeleteTrip &&
+                    (!canDeleteTrip || canDeleteTrip(trip)) && (
                     <Button
                       type="button"
                       size="icon"
@@ -881,8 +888,9 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
       )}
 
       {/* M7.7: Recently deleted. Only current owners ever receive these rows;
-          members without the owner role have no restore action. */}
-      {deletedTrips.length > 0 && (
+          members without the owner role have no restore action. The agency
+          library is archive-only and never renders this shelf. */}
+      {!isAgency && deletedTrips.length > 0 && (
         <div className="space-y-3 pt-3">
           <button
             type="button"

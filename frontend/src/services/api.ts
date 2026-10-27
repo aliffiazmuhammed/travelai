@@ -1,7 +1,13 @@
 import { API_BASE_URL } from '@/config';
 import type {
+  ExploreFilters,
+  ExplorePage,
+  GalleryTravelerProfile,
+  GalleryTrip,
+  ProfileUpdateInput,
   Trip,
   TripInput,
+  TripPublicationState,
   User,
   ItineraryData,
   TripVersionsResponse,
@@ -384,13 +390,25 @@ class ApiClient {
     });
   }
 
-  // Profile (Milestone 7, F14)
-  /** Saves the display name; an empty string clears it (email local part). */
-  async updateProfile(name: string): Promise<{ user: User }> {
+  // Profile (Milestone 7, F14; Milestone 8 G2 adds handle + bio)
+  /** Saves only the fields present in `input`; empty strings clear them. */
+  async updateProfile(input: ProfileUpdateInput): Promise<{ user: User }> {
     return this.request('/api/auth/profile', {
       method: 'PATCH',
-      body: JSON.stringify({ name }),
+      body: JSON.stringify(input),
     });
+  }
+
+  /** Non-throwing live check for the traveler handle field. */
+  async checkHandleAvailability(handle: string): Promise<{
+    success: boolean;
+    handle: string;
+    available: boolean;
+    reason?: 'invalid' | 'reserved' | 'taken';
+  }> {
+    return this.request(
+      `/api/auth/profile/handle-available?handle=${encodeURIComponent(handle)}`
+    );
   }
 
   /** Uploads a JPEG/PNG/WebP photo (server sniffs the bytes and caps the size). */
@@ -919,45 +937,9 @@ class ApiClient {
   }
 
   /** Owner/admin-only tenant trash. */
-  async getAgencyDeletedTrips(
-    id: string
-  ): Promise<{ success: boolean; trips: Trip[] }> {
-    return this.request(`/api/agency/${encodeURIComponent(id)}/trash`);
-  }
-
   async getAgencyTrip(agencyId: string, tripId: string): Promise<Trip> {
     return this.request(
       `/api/agency/${encodeURIComponent(agencyId)}/trips/${encodeURIComponent(tripId)}`
-    );
-  }
-
-  async deleteAgencyTrip(
-    agencyId: string,
-    tripId: string
-  ): Promise<{ success: boolean; message: string }> {
-    return this.request(
-      `/api/agency/${encodeURIComponent(agencyId)}/trips/${encodeURIComponent(tripId)}`,
-      { method: 'DELETE' }
-    );
-  }
-
-  async restoreAgencyTrip(
-    agencyId: string,
-    tripId: string
-  ): Promise<Trip> {
-    return this.request(
-      `/api/agency/${encodeURIComponent(agencyId)}/trips/${encodeURIComponent(tripId)}/restore`,
-      { method: 'POST' }
-    );
-  }
-
-  async purgeAgencyTrip(
-    agencyId: string,
-    tripId: string
-  ): Promise<{ success: boolean; message: string }> {
-    return this.request(
-      `/api/agency/${encodeURIComponent(agencyId)}/trips/${encodeURIComponent(tripId)}/purge`,
-      { method: 'DELETE' }
     );
   }
 
@@ -1800,6 +1782,55 @@ class ApiClient {
 
   async getSharedTrip(shareId: string): Promise<Trip> {
     return this.request(`/api/itinerary/shared/${shareId}`);
+  }
+
+  /** Milestone 8 G1/G2 — publish, update gallery copy, or unpublish (owner only). */
+  async setTripPublication(
+    id: string,
+    payload: {
+      published: boolean;
+      hideExactDates?: boolean;
+      summary?: string;
+      tags?: string[];
+    }
+  ): Promise<{ success: boolean; publication: TripPublicationState }> {
+    return this.request(`/api/itinerary/${id}/publish`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  /** Anonymous public profile: name, bio, avatar and published future trips. */
+  async getTravelerProfile(
+    handle: string
+  ): Promise<{ success: boolean; traveler: GalleryTravelerProfile }> {
+    return this.request(`/api/travelers/${encodeURIComponent(handle)}`);
+  }
+
+  /**
+   * Milestone 8 G3 — anonymous gallery listing. Filters map 1:1 to the server
+   * schema; `total` is the size of the whole filtered set (not the page), which
+   * is what the nav threshold in `useGalleryEnabled` reads.
+   */
+  async getExplore(
+    filters: ExploreFilters = {}
+  ): Promise<{ success: boolean } & ExplorePage> {
+    const query = new URLSearchParams();
+    if (filters.q?.trim()) query.append('q', filters.q.trim());
+    if (filters.duration) query.append('duration', filters.duration);
+    if (filters.groupType?.trim()) query.append('groupType', filters.groupType.trim());
+    if (filters.tag?.trim()) query.append('tags', filters.tag.trim());
+    if (filters.cursor) query.append('cursor', filters.cursor);
+    if (filters.limit) query.append('limit', String(filters.limit));
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    return this.request(`/api/explore${suffix}`);
+  }
+
+  /** One public trip page. 404 once unpublished, expired or deleted. */
+  async getGalleryTrip(
+    tripId: string
+  ): Promise<{ success: boolean; trip: GalleryTrip }> {
+    return this.request(`/api/explore/${encodeURIComponent(tripId)}`);
   }
 
   // Collaboration (Milestone 6: members, invites, ownership)

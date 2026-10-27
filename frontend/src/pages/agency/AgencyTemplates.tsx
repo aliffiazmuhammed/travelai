@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
+  Code2,
   FileText,
   FileType2,
   LayoutTemplate,
@@ -14,6 +15,13 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -77,6 +85,7 @@ const AgencyTemplates: React.FC = () => {
     'all' | AgencyTemplateAudience
   >('all');
   const [manageId, setManageId] = useState<string | null>(null);
+  const [uploadChoiceOpen, setUploadChoiceOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [pdfUploadOpen, setPdfUploadOpen] = useState(false);
   const [pdfDraft, setPdfDraft] = useState<PdfTemplateDraft | null>(null);
@@ -245,6 +254,12 @@ const AgencyTemplates: React.FC = () => {
     }
   };
 
+  const chooseUpload = (kind: 'html' | 'pdf') => {
+    setUploadChoiceOpen(false);
+    if (kind === 'html') setUploadOpen(true);
+    else setPdfUploadOpen(true);
+  };
+
   if (!activeAgencyId) {
     return (
       <Card className="rounded-3xl border-border/70">
@@ -275,23 +290,13 @@ const AgencyTemplates: React.FC = () => {
           </p>
         </div>
         {canManage ? (
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setPdfUploadOpen(true)}
-              title="Keep the agency's own PDF design and map TravelAI data onto it."
-            >
-              <FileType2 className="mr-1.5 h-4 w-4" />
-              Upload PDF design
-            </Button>
-            <Button
-              className="bg-teal-600 hover:bg-teal-700"
-              onClick={() => setUploadOpen(true)}
-            >
-              <Upload className="mr-1.5 h-4 w-4" />
-              Upload HTML template
-            </Button>
-          </div>
+          <Button
+            className="bg-teal-600 hover:bg-teal-700"
+            onClick={() => setUploadChoiceOpen(true)}
+          >
+            <Upload className="mr-1.5 h-4 w-4" />
+            Upload template
+          </Button>
         ) : (
           <Badge
             variant="outline"
@@ -398,24 +403,14 @@ const AgencyTemplates: React.FC = () => {
                 : 'Try another status or audience filter.'}
             </p>
             {canManage && templates.length === 0 ? (
-              <div className="flex flex-wrap justify-center gap-2">
-                <Button
-                  className="bg-teal-600 hover:bg-teal-700"
-                  size="sm"
-                  onClick={() => setUploadOpen(true)}
-                >
-                  <Upload className="mr-1.5 h-3.5 w-3.5" />
-                  Upload HTML template
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPdfUploadOpen(true)}
-                >
-                  <FileType2 className="mr-1.5 h-3.5 w-3.5" />
-                  Upload PDF design
-                </Button>
-              </div>
+              <Button
+                className="bg-teal-600 hover:bg-teal-700"
+                size="sm"
+                onClick={() => setUploadChoiceOpen(true)}
+              >
+                <Upload className="mr-1.5 h-3.5 w-3.5" />
+                Upload template
+              </Button>
             ) : null}
           </CardContent>
         </Card>
@@ -554,6 +549,55 @@ const AgencyTemplates: React.FC = () => {
 
       {canManage ? (
         <>
+          <Dialog open={uploadChoiceOpen} onOpenChange={setUploadChoiceOpen}>
+            <DialogContent className="rounded-3xl sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Upload a template</DialogTitle>
+                <DialogDescription>
+                  Bring your own design and map TravelAI data onto it. Both
+                  kinds export as proposal documents.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={() => chooseUpload('html')}
+                  className="flex w-full items-center gap-3 rounded-2xl border border-teal-200 bg-teal-50/70 p-4 text-left transition hover:border-teal-400 hover:bg-teal-50 dark:border-teal-900/60 dark:bg-teal-950/30 dark:hover:border-teal-700 dark:hover:bg-teal-950/50"
+                >
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-teal-600 text-white">
+                    <Code2 className="h-5 w-5" />
+                  </span>
+                  <span>
+                    <span className="block text-sm font-bold text-slate-900 dark:text-slate-100">
+                      HTML template
+                    </span>
+                    <span className="block text-xs text-slate-600 dark:text-slate-400">
+                      A self-contained styled page. Edit the source in-app at
+                      any time.
+                    </span>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => chooseUpload('pdf')}
+                  className="flex w-full items-center gap-3 rounded-2xl border border-border bg-card p-4 text-left transition hover:border-primary/50 hover:bg-accent/50"
+                >
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300">
+                    <FileType2 className="h-5 w-5" />
+                  </span>
+                  <span>
+                    <span className="block text-sm font-bold text-slate-900 dark:text-slate-100">
+                      PDF design
+                    </span>
+                    <span className="block text-xs text-slate-600 dark:text-slate-400">
+                      Keep the agency's own PDF and map data slots onto it
+                      visually.
+                    </span>
+                  </span>
+                </button>
+              </div>
+            </DialogContent>
+          </Dialog>
           <TemplateUploadDialog
             open={uploadOpen}
             onOpenChange={setUploadOpen}

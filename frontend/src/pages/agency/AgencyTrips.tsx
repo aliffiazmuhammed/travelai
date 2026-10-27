@@ -9,6 +9,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   Archive,
   ArchiveRestore,
+  ArrowLeft,
   Building2,
   CalendarPlus,
   FileText,
@@ -100,7 +101,6 @@ const AgencyTrips: React.FC = () => {
   };
 
   const [trips, setTrips] = useState<Trip[]>([]);
-  const [deletedTrips, setDeletedTrips] = useState<Trip[]>([]);
   const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -114,7 +114,8 @@ const AgencyTrips: React.FC = () => {
     'active'
   );
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [blankOpen, setBlankOpen] = useState(false);
+  const [newTripOpen, setNewTripOpen] = useState(false);
+  const [newTripMode, setNewTripMode] = useState<'choice' | 'blank'>('choice');
   const [blankTitle, setBlankTitle] = useState('');
   const [blankStart, setBlankStart] = useState('');
   const [blankEnd, setBlankEnd] = useState('');
@@ -124,6 +125,11 @@ const AgencyTrips: React.FC = () => {
   const role = activeAgency?.role;
   const canPlan = role === 'owner' || role === 'admin' || role === 'planner';
   const canAssign = canPlan;
+
+  const openNewTripDialog = () => {
+    setNewTripMode('choice');
+    setNewTripOpen(true);
+  };
 
   const loadTrips = useCallback(
     async (showSpinner = true) => {
@@ -154,20 +160,6 @@ const AgencyTrips: React.FC = () => {
     [activeAgencyId, debouncedSearch, statusFilter, assigneeFilter, archivedFilter]
   );
 
-  const loadDeletedTrips = useCallback(async () => {
-    if (!activeAgencyId || !canManage) {
-      setDeletedTrips([]);
-      return;
-    }
-    try {
-      const result = await api.getAgencyDeletedTrips(activeAgencyId);
-      setDeletedTrips(result.trips || []);
-    } catch (err) {
-      // Trash is additive; a failure must not hide the live library.
-      console.error('Failed to load agency trash:', err);
-    }
-  }, [activeAgencyId, canManage]);
-
   useEffect(() => {
     const timer = window.setTimeout(() => {
       setDebouncedSearch(search.trim());
@@ -177,13 +169,10 @@ const AgencyTrips: React.FC = () => {
 
   useEffect(() => {
     setTrips([]);
-    setDeletedTrips([]);
     if (!activeAgencyId) {
       setLoading(false);
-      return;
     }
-    void loadDeletedTrips();
-  }, [activeAgencyId, loadDeletedTrips]);
+  }, [activeAgencyId]);
 
   useEffect(() => {
     if (!activeAgencyId) {
@@ -227,7 +216,6 @@ const AgencyTrips: React.FC = () => {
     if (!activeAgencyId) return;
     const refresh = () => {
       void loadTrips(false);
-      void loadDeletedTrips();
     };
     const onVisibility = () => {
       if (document.visibilityState === 'visible') refresh();
@@ -240,7 +228,7 @@ const AgencyTrips: React.FC = () => {
       document.removeEventListener('visibilitychange', onVisibility);
       clearInterval(interval);
     };
-  }, [activeAgencyId, loadTrips, loadDeletedTrips]);
+  }, [activeAgencyId, loadTrips]);
 
   // Assignment labels come from the agency roster, not a client-side name map.
   // The roster also powers the list's assignee filter chips (A8).
@@ -276,7 +264,7 @@ const AgencyTrips: React.FC = () => {
         startDate: blankStart || undefined,
         endDate: blankEnd || undefined,
       });
-      setBlankOpen(false);
+      setNewTripOpen(false);
       setBlankTitle('');
       setBlankStart('');
       setBlankEnd('');
@@ -296,64 +284,6 @@ const AgencyTrips: React.FC = () => {
       toast.success('Agency trip duplicated as a new draft.');
     } catch (err) {
       toast.error(errorMessage(err, 'Could not duplicate this trip.'));
-    }
-  };
-
-  const handleDeleteTrip = async (tripIdToDelete: string) => {
-    if (!activeAgencyId) return;
-    try {
-      await api.deleteAgencyTrip(activeAgencyId, tripIdToDelete);
-      const removed = trips.find((trip) => trip._id === tripIdToDelete);
-      setTrips((prev) => prev.filter((trip) => trip._id !== tripIdToDelete));
-      if (removed) {
-        setDeletedTrips((prev) => [
-          {
-            ...removed,
-            isDeleted: true,
-            deletedAt: new Date().toISOString(),
-            shareId: undefined,
-            isPublic: false,
-          },
-          ...prev.filter((trip) => trip._id !== tripIdToDelete),
-        ]);
-      } else {
-        void loadDeletedTrips();
-      }
-      if (tripId === tripIdToDelete) {
-        navigate('/agency/trips', { replace: true });
-      }
-      toast.success('Trip moved to the agency trash.');
-    } catch (err) {
-      toast.error(errorMessage(err, 'Could not delete this trip.'));
-      throw err;
-    }
-  };
-
-  const handleRestoreTrip = async (tripIdToRestore: string) => {
-    if (!activeAgencyId) return;
-    try {
-      const restored = await api.restoreAgencyTrip(activeAgencyId, tripIdToRestore);
-      setDeletedTrips((prev) => prev.filter((trip) => trip._id !== tripIdToRestore));
-      setTrips((prev) => [
-        restored,
-        ...prev.filter((trip) => trip._id !== tripIdToRestore),
-      ]);
-      toast.success('Trip restored to the agency library.');
-    } catch (err) {
-      toast.error(errorMessage(err, 'Could not restore this trip.'));
-      throw err;
-    }
-  };
-
-  const handlePurgeTrip = async (tripIdToPurge: string) => {
-    if (!activeAgencyId) return;
-    try {
-      await api.purgeAgencyTrip(activeAgencyId, tripIdToPurge);
-      setDeletedTrips((prev) => prev.filter((trip) => trip._id !== tripIdToPurge));
-      toast.success('Trip permanently deleted.');
-    } catch (err) {
-      toast.error(errorMessage(err, 'Could not permanently delete this trip.'));
-      throw err;
     }
   };
 
@@ -620,9 +550,6 @@ const AgencyTrips: React.FC = () => {
               startDate={selectedTrip.startDate}
               onFeedbackSubmitted={handleFeedbackSubmitted}
               onBackToList={() => navigate('/agency/trips')}
-              onNewPlan={
-                canPlan ? () => navigate('/agency/trips/new') : undefined
-              }
               agencyTrip
               agencyStaff={Boolean(selectedTrip.agencyRole)}
               chatRealm="agency"
@@ -685,47 +612,30 @@ const AgencyTrips: React.FC = () => {
               </div>
             </div>
             {canPlan && (
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setBlankOpen(true)}
-                  className="rounded-2xl text-xs font-bold gap-2"
-                >
-                  <CalendarPlus className="h-4 w-4" />
-                  Start blank
-                </Button>
-                <Button
-                  type="button"
-                  variant="hero"
-                  onClick={() => navigate('/agency/trips/new')}
-                  className="rounded-2xl text-xs font-bold gap-2"
-                >
-                  <PlusCircle className="h-4 w-4" />
-                  Plan a client trip
-                </Button>
-              </div>
+              <Button
+                type="button"
+                variant="hero"
+                onClick={openNewTripDialog}
+                className="rounded-2xl text-xs font-bold gap-2"
+              >
+                <PlusCircle className="h-4 w-4" />
+                New trip
+              </Button>
             )}
           </div>
 
           <MyTripsView
             variant="agency"
             trips={trips}
-            deletedTrips={canManage ? deletedTrips : []}
             onSelectTrip={handleSelectTrip}
             onDuplicateTrip={handleDuplicateTrip}
-            onDeleteTrip={handleDeleteTrip}
-            onRestoreTrip={handleRestoreTrip}
-            onPurgeTrip={handlePurgeTrip}
-            onNewPlan={() => navigate('/agency/trips/new')}
+            onNewPlan={openNewTripDialog}
             heading="Agency trips"
             eyebrow="Agency Trip Library"
-            newPlanLabel="Plan with AI"
+            newPlanLabel="New trip"
             emptyTitle="No agency trips yet"
             emptyBody="Generate a client draft with AI, then refine it with your team and invite the client."
-            deletedHelpText="Only agency owners and admins see this list. Restoring brings back the itinerary and discussion; old share links and invites stay revoked."
             canDuplicateTrip={() => canPlan}
-            canDeleteTrip={() => canManage}
             searchValue={search}
             onSearchChange={setSearch}
             statusValue={statusFilter}
@@ -742,69 +652,140 @@ const AgencyTrips: React.FC = () => {
         </>
       )}
 
-      <Dialog open={blankOpen} onOpenChange={setBlankOpen}>
+      <Dialog
+        open={newTripOpen}
+        onOpenChange={(open) => {
+          setNewTripOpen(open);
+          if (!open) setNewTripMode('choice');
+        }}
+      >
         <DialogContent className="rounded-3xl sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Start a blank agency trip</DialogTitle>
-            <DialogDescription>
-              Create the trip shell now and fill in the itinerary manually. You
-              can also generate a draft with AI at any time.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="blank-trip-title">Working title</Label>
-              <Input
-                id="blank-trip-title"
-                value={blankTitle}
-                onChange={(event) => setBlankTitle(event.target.value)}
-                placeholder="Untitled agency trip"
-                maxLength={120}
-              />
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="blank-trip-start">Start date</Label>
-                <Input
-                  id="blank-trip-start"
-                  type="date"
-                  value={blankStart}
-                  onChange={(event) => setBlankStart(event.target.value)}
-                />
+          {newTripMode === 'choice' ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>New agency trip</DialogTitle>
+                <DialogDescription>
+                  Generate a first draft with AI, or start with an empty trip
+                  and build it manually.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewTripOpen(false);
+                    navigate('/agency/trips/new');
+                  }}
+                  className="flex w-full items-center gap-3 rounded-2xl border border-teal-200 bg-teal-50/70 p-4 text-left transition hover:border-teal-400 hover:bg-teal-50 dark:border-teal-900/60 dark:bg-teal-950/30 dark:hover:border-teal-700 dark:hover:bg-teal-950/50"
+                >
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-teal-600 text-white">
+                    <Sparkles className="h-5 w-5" />
+                  </span>
+                  <span>
+                    <span className="block text-sm font-bold text-slate-900 dark:text-slate-100">
+                      Plan with AI
+                    </span>
+                    <span className="block text-xs text-slate-600 dark:text-slate-400">
+                      Answer a few questions and get a full draft itinerary to
+                      refine with your team.
+                    </span>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewTripMode('blank')}
+                  className="flex w-full items-center gap-3 rounded-2xl border border-border bg-card p-4 text-left transition hover:border-primary/50 hover:bg-accent/50"
+                >
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                    <CalendarPlus className="h-5 w-5" />
+                  </span>
+                  <span>
+                    <span className="block text-sm font-bold text-slate-900 dark:text-slate-100">
+                      Start blank
+                    </span>
+                    <span className="block text-xs text-slate-600 dark:text-slate-400">
+                      Create an empty trip shell and fill in the itinerary
+                      manually.
+                    </span>
+                  </span>
+                </button>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="blank-trip-end">End date</Label>
-                <Input
-                  id="blank-trip-end"
-                  type="date"
-                  value={blankEnd}
-                  onChange={(event) => setBlankEnd(event.target.value)}
-                />
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>Start a blank agency trip</DialogTitle>
+                <DialogDescription>
+                  Create the trip shell now and fill in the itinerary manually.
+                  You can also generate a draft with AI at any time.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="blank-trip-title">Working title</Label>
+                  <Input
+                    id="blank-trip-title"
+                    value={blankTitle}
+                    onChange={(event) => setBlankTitle(event.target.value)}
+                    placeholder="Untitled agency trip"
+                    maxLength={120}
+                  />
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="blank-trip-start">Start date</Label>
+                    <Input
+                      id="blank-trip-start"
+                      type="date"
+                      value={blankStart}
+                      onChange={(event) => setBlankStart(event.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="blank-trip-end">End date</Label>
+                    <Input
+                      id="blank-trip-end"
+                      type="date"
+                      value={blankEnd}
+                      onChange={(event) => setBlankEnd(event.target.value)}
+                    />
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setBlankOpen(false)}
-              disabled={creatingBlank}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              onClick={() => void handleCreateBlankTrip()}
-              disabled={creatingBlank}
-            >
-              {creatingBlank ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <CalendarPlus className="mr-2 h-4 w-4" />
-              )}
-              Create trip
-            </Button>
-          </DialogFooter>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setNewTripMode('choice')}
+                  disabled={creatingBlank}
+                  className="mr-auto"
+                >
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  Back
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setNewTripOpen(false)}
+                  disabled={creatingBlank}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => void handleCreateBlankTrip()}
+                  disabled={creatingBlank}
+                >
+                  {creatingBlank ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <CalendarPlus className="mr-2 h-4 w-4" />
+                  )}
+                  Create trip
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>
