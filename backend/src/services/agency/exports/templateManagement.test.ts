@@ -79,6 +79,9 @@ test('custom templates need an activated version before export', () => {
     activeVersion: 2,
   };
   assert.doesNotThrow(() => assertRenderableTemplate(custom));
+  assert.doesNotThrow(() =>
+    assertRenderableTemplate({ ...custom, engine: 'pdf-background' })
+  );
 
   expectAppError(
     () => assertRenderableTemplate({ ...custom, activeVersion: undefined }),

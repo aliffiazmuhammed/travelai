@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { Types } from 'mongoose';
 import AgencyClient from '../../../models/AgencyClient.js';
 import AgencyQuote from '../../../models/AgencyQuote.js';
@@ -18,16 +19,36 @@ import { getLatestQuote, reconcileQuoteExpiry } from '../quotes.js';
 import { renderCustomTemplateHtml } from './customTemplate.js';
 import { buildExportDocument } from './document.js';
 import {
+  AGENCY_PDF_SLOT_MAP_SCHEMA_VERSION,
+  slotMapChecksum,
+  slotMapCoverageTokens,
+  slotMapSlotCount,
+  slotMapTokens,
+  validateAgencyPdfSlotMap,
+  type AgencyPdfSlotMap,
+} from './pdfTemplateContract.js';
+import {
+  readAgencyPdfPageSizes,
+  renderAgencyPdfTemplate,
+  sanitizeAgencyPdfTemplate,
+} from './pdfTemplateRender.js';
+import {
   carryOverTemplateAssetSnapshots,
   snapshotAgencyTemplateAssets,
   type AgencyTemplateAssetSelection,
 } from './templateAssets.js';
-import { resolveAgencyTemplateVersion } from './templateResolver.js';
 import {
+  assertPdfTemplateVersionIntegrity,
+  resolveAgencyTemplateVersion,
+} from './templateResolver.js';
+import {
+  buildAgencyTemplatePdfStorageKey,
   buildAgencyTemplateStorageKey,
   readAgencyTemplateFile,
+  readAgencyTemplatePdf,
   removeAgencyTemplateVersionFiles,
   writeAgencyTemplateFile,
+  writeAgencyTemplatePdf,
 } from './templateStorage.js';
 import {
   AGENCY_TEMPLATE_SCHEMA_VERSION,
@@ -98,7 +119,8 @@ export function projectAgencyTemplateVersion(
 
 async function loadCustomTemplate(
   agencyId: string,
-  templateId: string
+  templateId: string,
+  options: { engine?: 'html' | 'pdf-background' } = {}
 ): Promise<IAgencyTemplate> {
   if (!isObjectId(templateId)) {
     throw new AppError('Template not found', 404);
@@ -108,10 +130,68 @@ async function loadCustomTemplate(
   if (template.builtinKey) {
     throw new AppError('Built-in templates are managed by TravelAI.', 400);
   }
-  if (template.engine !== 'html') {
+  if (template.engine !== 'html' && template.engine !== 'pdf-background') {
     throw new AppError('That template engine is not supported yet.', 400);
   }
+  if (options.engine && template.engine !== options.engine) {
+    throw new AppError(
+      options.engine === 'pdf-background'
+        ? 'This template does not use an uploaded PDF design.'
+        : 'This template does not use an HTML source.',
+      400
+    );
+  }
   return template;
+}
+
+function normalizeTemplateName(value: unknown): string {
+  const name = String(value ?? '').trim();
+  if (name.length < 2) {
+    throw new AppError('Give this template a name.', 400);
+  }
+  if (name.length > 80) {
+    throw new AppError('Template names must be 80 characters or fewer.', 400);
+  }
+  return name;
+}
+
+function normalizeTemplateAudience(value: unknown): AgencyTemplateAudience {
+  const audience = String(value ?? '').trim();
+  if (audience !== 'client' && audience !== 'internal') {
+    throw new AppError('Choose a valid template audience.', 400);
+  }
+  return audience;
+}
+
+/**
+ * The PDF renderer can embed PNG and JPEG backgrounds only. Rejecting WebP
+ * snapshots at upload/save time keeps an export from failing much later.
+ */
+function assertPdfRenderableAssets(
+  slotMap: AgencyPdfSlotMap,
+  assets: IAgencyTemplateVersionAsset[]
+): void {
+  const imageTokens = new Set(
+    slotMap.pages.flatMap((page) =>
+      page.slots.filter((slot) => slot.kind === 'image').map((slot) => slot.token)
+    )
+  );
+  const neededSlots = new Set<string>();
+  if (imageTokens.has('image.logo')) neededSlots.add('logo');
+  if (imageTokens.has('image.mascot')) neededSlots.add('mascot');
+  if (imageTokens.has('image.cover')) neededSlots.add('cover');
+  const usesDayImages = imageTokens.has('day.image');
+  for (const asset of assets) {
+    const slot = String(asset.slot ?? '');
+    const isDay = /^day-\d+$/.test(slot);
+    if (!neededSlots.has(slot) && !(usesDayImages && isDay)) continue;
+    if (asset.mime === 'image/webp') {
+      throw new AppError(
+        'WebP images cannot be embedded in PDF exports. Choose a PNG or JPEG version of that image.',
+        400
+      );
+    }
+  }
 }
 
 async function loadVersion(
@@ -267,6 +347,350 @@ export async function createAgencyTemplate(
   };
 }
 
+export interface CreateAgencyPdfTemplateInput {
+  agency: any;
+  actorId: string;
+  role: AgencyRole;
+  name: unknown;
+  description?: unknown;
+  audience: unknown;
+  buffer: Buffer;
+  slotMap: unknown;
+  assets?: AgencyTemplateAssetSelection;
+}
+
+/**
+ * Creates a draft template whose design is an uploaded PDF plus a slot map.
+ * The upload is sanitised and the layout validated against its real page
+ * geometry before anything is stored, so an unrenderable combination never
+ * becomes selectable.
+ */
+export async function createAgencyPdfTemplate(
+  input: CreateAgencyPdfTemplateInput
+): Promise<{
+  template: AgencyTemplateProjection;
+  version: AgencyTemplateVersionProjection;
+}> {
+  assertAdmin(input.role);
+  const name = normalizeTemplateName(input.name);
+  const audience = normalizeTemplateAudience(input.audience);
+
+  const sanitized = await sanitizeAgencyPdfTemplate(input.buffer);
+  const slotMap = validateAgencyPdfSlotMap(input.slotMap, {
+    audience,
+    pageSizes: sanitized.pageSizes,
+  });
+  const usedTokens = slotMapCoverageTokens(slotMap);
+
+  const agencyId = String(input.agency._id);
+  const templateId = new Types.ObjectId();
+  const versionId = new Types.ObjectId();
+  const storageKey = buildAgencyTemplatePdfStorageKey(agencyId, versionId);
+
+  await assertStorageQuota(agencyId, sanitized.bytes.byteLength);
+
+  let template: IAgencyTemplate | null = null;
+  let version: IAgencyTemplateVersion | null = null;
+  let assets: IAgencyTemplateVersionAsset[] = [];
+  try {
+    assets = await snapshotAgencyTemplateAssets({
+      agencyId,
+      versionId: String(versionId),
+      branding: input.agency?.branding,
+      selection: input.assets,
+      usedTokens,
+    });
+    assertPdfRenderableAssets(slotMap, assets);
+    await writeAgencyTemplatePdf(storageKey, sanitized.bytes);
+
+    template = await AgencyTemplate.create({
+      _id: templateId,
+      agencyId,
+      name,
+      ...(typeof input.description === 'string'
+        ? { description: input.description.trim() }
+        : {}),
+      engine: 'pdf-background',
+      status: 'draft',
+      version: 1,
+      schemaVersion: AGENCY_PDF_SLOT_MAP_SCHEMA_VERSION,
+      audience,
+      isDefault: false,
+      createdBy: input.actorId,
+    });
+
+    version = await AgencyTemplateVersion.create({
+      _id: versionId,
+      agencyId,
+      templateId,
+      version: 1,
+      engine: 'pdf-background',
+      schemaVersion: AGENCY_PDF_SLOT_MAP_SCHEMA_VERSION,
+      audience,
+      storageKey,
+      checksum: sanitized.checksum,
+      sourceBytes: sanitized.bytes.byteLength,
+      pageCount: sanitized.pageCount,
+      tokens: slotMapTokens(slotMap),
+      slotMap,
+      slotMapChecksum: slotMapChecksum(slotMap),
+      assets,
+      createdBy: input.actorId,
+    });
+  } catch (error) {
+    if (version?._id) {
+      await AgencyTemplateVersion.deleteOne({ _id: version._id }).catch(
+        () => undefined
+      );
+    }
+    if (template?._id) {
+      await AgencyTemplate.deleteOne({
+        _id: template._id,
+        agencyId,
+      }).catch(() => undefined);
+    }
+    await cleanupVersionFiles(storageKey, assets);
+    throw error;
+  }
+
+  await recordAgencyAudit({
+    agencyId,
+    actorId: input.actorId,
+    action: 'template.created',
+    targetType: 'AgencyTemplate',
+    targetId: String(templateId),
+    metadata: {
+      engine: 'pdf-background',
+      audience,
+      version: 1,
+      pageCount: sanitized.pageCount,
+      slots: slotMapSlotCount(slotMap),
+      assets: assets.map((asset) => asset.slot),
+    },
+  });
+
+  return {
+    template: projectAgencyTemplate(template),
+    version: projectAgencyTemplateVersion(version, null),
+  };
+}
+
+export interface AgencyTemplateLayoutView {
+  template: AgencyTemplateProjection;
+  version: AgencyTemplateVersionProjection;
+  slotMap: AgencyPdfSlotMap;
+  slotMapChecksum: string;
+  pageCount: number;
+  checksum: string;
+}
+
+/** Reads the approved layout for the in-app mapper (admin only). */
+export async function getAgencyTemplateLayout(input: {
+  agencyId: string;
+  role: AgencyRole;
+  templateId: string;
+  version: unknown;
+}): Promise<AgencyTemplateLayoutView> {
+  assertAdmin(input.role);
+  const template = await loadCustomTemplate(input.agencyId, input.templateId, {
+    engine: 'pdf-background',
+  });
+  const version = await loadVersion(
+    input.agencyId,
+    String(template._id),
+    input.version
+  );
+  const slotMap = version.slotMap as AgencyPdfSlotMap | undefined;
+  if (
+    !slotMap ||
+    !version.slotMapChecksum ||
+    slotMapChecksum(slotMap) !== String(version.slotMapChecksum)
+  ) {
+    throw new AppError(
+      'The stored layout no longer matches this approved version. Upload a new version instead.',
+      409
+    );
+  }
+  return {
+    template: projectAgencyTemplate(template),
+    version: projectAgencyTemplateVersion(version, template.activeVersion),
+    slotMap,
+    slotMapChecksum: String(version.slotMapChecksum),
+    pageCount: Number(version.pageCount ?? 0),
+    checksum: String(version.checksum),
+  };
+}
+
+/** Streams the private background PDF for the mapper after an admin check. */
+export async function readAgencyTemplateBackground(input: {
+  agencyId: string;
+  role: AgencyRole;
+  templateId: string;
+  version: unknown;
+}): Promise<{ buffer: Buffer; filename: string }> {
+  assertAdmin(input.role);
+  const template = await loadCustomTemplate(input.agencyId, input.templateId, {
+    engine: 'pdf-background',
+  });
+  const version = await loadVersion(
+    input.agencyId,
+    String(template._id),
+    input.version
+  );
+  const buffer = await readAgencyTemplatePdf(version.storageKey);
+  assertPdfTemplateVersionIntegrity(version, buffer);
+  return {
+    buffer,
+    filename: `template-v${version.version}.pdf`,
+  };
+}
+
+export interface SaveAgencyTemplateLayoutInput {
+  agency: any;
+  actorId: string;
+  role: AgencyRole;
+  templateId: string;
+  baseVersion: unknown;
+  slotMap: unknown;
+}
+
+/**
+ * Saves an edited layout as the next immutable version. The background bytes
+ * and every asset snapshot are carried forward byte-for-byte, so moving a slot
+ * can never change the design or a client's approved imagery.
+ */
+export async function saveAgencyTemplateLayout(
+  input: SaveAgencyTemplateLayoutInput
+): Promise<{
+  template: AgencyTemplateProjection;
+  version: AgencyTemplateVersionProjection;
+}> {
+  assertAdmin(input.role);
+  const agencyId = String(input.agency._id);
+  const template = await loadCustomTemplate(agencyId, input.templateId, {
+    engine: 'pdf-background',
+  });
+  if (template.status === 'archived') {
+    throw new AppError(
+      'This template is archived. Restore it by activating a version before editing it.',
+      409
+    );
+  }
+
+  const base = await loadVersion(
+    agencyId,
+    String(template._id),
+    input.baseVersion
+  );
+  const baseSlotMap = base.slotMap as AgencyPdfSlotMap | undefined;
+  if (
+    !baseSlotMap ||
+    !base.slotMapChecksum ||
+    slotMapChecksum(baseSlotMap) !== String(base.slotMapChecksum)
+  ) {
+    throw new AppError(
+      'The stored layout no longer matches this approved version. Upload a new version instead.',
+      409
+    );
+  }
+
+  const background = await readAgencyTemplatePdf(base.storageKey);
+  assertPdfTemplateVersionIntegrity(base, background);
+  const pageSizes = await readAgencyPdfPageSizes(background);
+
+  const slotMap = validateAgencyPdfSlotMap(input.slotMap, {
+    audience: template.audience,
+    pageSizes,
+  });
+  const nextChecksum = slotMapChecksum(slotMap);
+  if (nextChecksum === String(base.slotMapChecksum)) {
+    throw new AppError(
+      'The layout is unchanged. Move or edit a slot before saving a new version.',
+      400
+    );
+  }
+  await assertStorageQuota(agencyId, background.byteLength);
+
+  const latest = await AgencyTemplateVersion.findOne({
+    agencyId,
+    templateId: template._id,
+  })
+    .sort({ version: -1 })
+    .select('version')
+    .lean();
+  const nextVersion = Number(latest?.version ?? 0) + 1;
+
+  const versionId = new Types.ObjectId();
+  const storageKey = buildAgencyTemplatePdfStorageKey(agencyId, versionId);
+  const usedTokens = slotMapCoverageTokens(slotMap);
+  let version: IAgencyTemplateVersion | null = null;
+  let assets: IAgencyTemplateVersionAsset[] = [];
+  try {
+    assets = await carryOverTemplateAssetSnapshots({
+      agencyId,
+      sourceVersionId: String(base._id),
+      targetVersionId: String(versionId),
+      usedTokens,
+      assets: base.assets,
+    });
+    assertPdfRenderableAssets(slotMap, assets);
+    await writeAgencyTemplatePdf(storageKey, background);
+
+    version = await AgencyTemplateVersion.create({
+      _id: versionId,
+      agencyId,
+      templateId: template._id,
+      version: nextVersion,
+      engine: 'pdf-background',
+      schemaVersion: AGENCY_PDF_SLOT_MAP_SCHEMA_VERSION,
+      audience: template.audience,
+      storageKey,
+      checksum: base.checksum,
+      sourceBytes: background.byteLength,
+      pageCount: pageSizes.length,
+      tokens: slotMapTokens(slotMap),
+      slotMap,
+      slotMapChecksum: nextChecksum,
+      assets,
+      createdBy: input.actorId,
+    });
+  } catch (error) {
+    if (version?._id) {
+      await AgencyTemplateVersion.deleteOne({ _id: version._id }).catch(
+        () => undefined
+      );
+    }
+    await cleanupVersionFiles(storageKey, assets);
+    if (duplicateKey(error)) {
+      throw new AppError(
+        'Another version was saved at the same time. Please retry.',
+        409
+      );
+    }
+    throw error;
+  }
+
+  await recordAgencyAudit({
+    agencyId,
+    actorId: input.actorId,
+    action: 'template.layout_saved',
+    targetType: 'AgencyTemplate',
+    targetId: String(template._id),
+    metadata: {
+      version: nextVersion,
+      baseVersion: base.version,
+      audience: template.audience,
+      slots: slotMapSlotCount(slotMap),
+      assets: assets.map((asset) => asset.slot),
+    },
+  });
+
+  return {
+    template: projectAgencyTemplate(template),
+    version: projectAgencyTemplateVersion(version, template.activeVersion),
+  };
+}
+
 export interface AddAgencyTemplateVersionInput {
   agency: any;
   actorId: string;
@@ -285,7 +709,9 @@ export async function addAgencyTemplateVersion(
 }> {
   assertAdmin(input.role);
   const agencyId = String(input.agency._id);
-  const template = await loadCustomTemplate(agencyId, input.templateId);
+  const template = await loadCustomTemplate(agencyId, input.templateId, {
+    engine: 'html',
+  });
   if (template.status === 'archived') {
     throw new AppError(
       'This template is archived. Restore it by activating a version before uploading another.',
@@ -388,7 +814,9 @@ export async function getAgencyTemplateSource(input: {
   version: unknown;
 }): Promise<AgencyTemplateSourceView> {
   assertAdmin(input.role);
-  const template = await loadCustomTemplate(input.agencyId, input.templateId);
+  const template = await loadCustomTemplate(input.agencyId, input.templateId, {
+    engine: 'html',
+  });
   const version = await loadVersion(
     input.agencyId,
     String(template._id),
@@ -435,7 +863,9 @@ export async function saveAgencyTemplateSource(
 }> {
   assertAdmin(input.role);
   const agencyId = String(input.agency._id);
-  const template = await loadCustomTemplate(agencyId, input.templateId);
+  const template = await loadCustomTemplate(agencyId, input.templateId, {
+    engine: 'html',
+  });
   if (template.status === 'archived') {
     throw new AppError(
       'This template is archived. Restore it by activating a version before editing it.',
@@ -586,7 +1016,11 @@ export interface PreviewAgencyTemplateVersionInput {
 }
 
 export interface AgencyTemplateVersionPreview {
-  html: string;
+  engine: 'html' | 'pdf-background';
+  /** Present for HTML templates; the dialog renders it in a sandboxed iframe. */
+  html?: string;
+  /** Base64 PDF for PDF designs; the dialog shows it in the browser viewer. */
+  pdf?: string;
   pageCount: number;
   audience: AgencyTemplateAudience;
   template: AgencyTemplateProjection;
@@ -644,16 +1078,29 @@ export async function previewAgencyTemplateVersion(
     quote,
     client,
   });
-  const rendered = renderCustomTemplateHtml({
-    doc,
-    template: {
-      name: resolved.template.name,
-      audience: resolved.version.audience,
-      version: resolved.version.version,
-    },
-    source: resolved.source,
-    assets: resolved.assets,
-  });
+  const rendered =
+    resolved.engine === 'pdf-background'
+      ? await renderAgencyPdfTemplate({
+          doc,
+          template: {
+            name: resolved.template.name,
+            audience: resolved.version.audience,
+            version: resolved.version.version,
+          },
+          background: resolved.background as Buffer,
+          slotMap: resolved.slotMap as AgencyPdfSlotMap,
+          assets: resolved.assets,
+        })
+      : renderCustomTemplateHtml({
+          doc,
+          template: {
+            name: resolved.template.name,
+            audience: resolved.version.audience,
+            version: resolved.version.version,
+          },
+          source: resolved.source as string,
+          assets: resolved.assets,
+        });
 
   const previewedAt = new Date();
   const previewed = await AgencyTemplateVersion.findOneAndUpdate(
@@ -686,7 +1133,10 @@ export async function previewAgencyTemplateVersion(
   });
 
   return {
-    html: rendered.html,
+    engine: resolved.engine,
+    ...(resolved.engine === 'pdf-background'
+      ? { pdf: (rendered as { pdf: Buffer }).pdf.toString('base64') }
+      : { html: (rendered as { html: string }).html }),
     pageCount: rendered.pageCount,
     audience: resolved.version.audience,
     template: projectAgencyTemplate(resolved.template),

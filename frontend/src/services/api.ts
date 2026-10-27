@@ -49,9 +49,12 @@ import type {
   AgencyExport,
   AgencyExportInput,
   AgencyExportPreview,
+  AgencyPdfSlotMap,
+  AgencyPdfTokenOption,
   AgencyTemplate,
   AgencyTemplateAssetSelection,
   AgencyTemplateAudience,
+  AgencyTemplateLayout,
   AgencyTemplateListStatus,
   AgencyTemplateSource,
   AgencyTemplateVersion,
@@ -1126,6 +1129,114 @@ class ApiClient {
     );
   }
 
+  /**
+   * A6f: upload a PDF design plus the slot map that binds TravelAI data onto
+   * it. The server sanitises the PDF and validates the layout against the
+   * real page geometry before storing anything.
+   */
+  async createAgencyPdfTemplate(
+    id: string,
+    input: {
+      file: File;
+      name: string;
+      description?: string;
+      audience: AgencyTemplateAudience;
+      slotMap: AgencyPdfSlotMap;
+      assets?: AgencyTemplateAssetSelection;
+    }
+  ): Promise<{
+    success: boolean;
+    message?: string;
+    template: AgencyTemplate;
+    version: AgencyTemplateVersion;
+  }> {
+    const form = new FormData();
+    form.append('file', input.file);
+    form.append('name', input.name);
+    form.append('audience', input.audience);
+    if (input.description?.trim()) {
+      form.append('description', input.description.trim());
+    }
+    form.append('slotMap', JSON.stringify(input.slotMap));
+    if (input.assets) form.append('assets', JSON.stringify(input.assets));
+    return this.requestForm(
+      `/api/agency/${encodeURIComponent(id)}/templates/pdf`,
+      form
+    );
+  }
+
+  /** The tokens a layout may bind for one audience. */
+  async getAgencyPdfTokenCatalog(
+    id: string,
+    audience: AgencyTemplateAudience
+  ): Promise<{
+    success: boolean;
+    audience: AgencyTemplateAudience;
+    tokens: AgencyPdfTokenOption[];
+  }> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(id)}/templates/pdf-tokens?audience=${encodeURIComponent(audience)}`
+    );
+  }
+
+  async getAgencyTemplateLayout(
+    id: string,
+    templateId: string,
+    version: number
+  ): Promise<{ success: boolean; layout: AgencyTemplateLayout }> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(id)}/templates/${encodeURIComponent(templateId)}/versions/${encodeURIComponent(String(version))}/layout`
+    );
+  }
+
+  /**
+   * The pinned background PDF is private, so it is fetched with credentials
+   * and handed to the mapper as a local blob rather than linked directly.
+   */
+  async fetchAgencyTemplateBackground(
+    id: string,
+    templateId: string,
+    version: number
+  ): Promise<Blob> {
+    const url = `/api/agency/${encodeURIComponent(id)}/templates/${encodeURIComponent(templateId)}/versions/${encodeURIComponent(String(version))}/background`;
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}${url}`, {
+        credentials: 'include',
+      });
+    } catch {
+      throw new Error('Unable to load that PDF design. Please try again shortly.');
+    }
+    if (!response.ok) {
+      let message = 'We could not load that PDF design.';
+      try {
+        const data = await response.json();
+        message = data?.error || data?.message || message;
+      } catch {
+        /* Binary or empty error body. */
+      }
+      throw new ApiError(message, response.status);
+    }
+    return response.blob();
+  }
+
+  /** Saves an edited layout as the next immutable version of the template. */
+  async saveAgencyTemplateLayout(
+    id: string,
+    templateId: string,
+    payload: { baseVersion: number; slotMap: AgencyPdfSlotMap }
+  ): Promise<{
+    success: boolean;
+    message?: string;
+    template: AgencyTemplate;
+    version: AgencyTemplateVersion;
+  }> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(id)}/templates/${encodeURIComponent(templateId)}/versions/from-layout`,
+      { method: 'POST', body: JSON.stringify(payload) }
+    );
+  }
+
   /** Uploads the next immutable version; its audience comes from the template. */
   async addAgencyTemplateVersion(
     id: string,
@@ -1349,6 +1460,29 @@ class ApiClient {
    */
   getAgencyProposalPdfUrl(token: string): string {
     return `${this.baseUrl}/api/agency/proposals/${encodeURIComponent(token)}/pdf`;
+  }
+
+  /**
+   * PDF-design proposals render the pinned export itself. The token-only route
+   * needs no session, and fetching it here keeps the document inside the app
+   * shell instead of handing the URL to a PDF viewer plugin.
+   */
+  async getAgencyProposalPdfBlob(token: string): Promise<Blob> {
+    let response: Response;
+    try {
+      response = await fetch(this.getAgencyProposalPdfUrl(token));
+    } catch {
+      throw new Error(
+        'Unable to load this proposal document. Please try again shortly.'
+      );
+    }
+    if (!response.ok) {
+      throw new ApiError(
+        'This proposal document could not be loaded.',
+        response.status
+      );
+    }
+    return response.blob();
   }
 
   async createAgencyProposalLink(

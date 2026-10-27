@@ -1,14 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
-import {
-  FileText,
-  Image as ImageIcon,
-  Loader2,
-  Plus,
-  Trash2,
-  Type,
-  Upload,
-} from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { FileText, Loader2, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -28,6 +19,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import TemplateAssetMapping, {
+  trimAssetSelection,
+  validateAssetSelection,
+} from '@/components/agency/TemplateAssetMapping';
 import { TEMPLATE_SOURCE_MAX_BYTES } from '@/lib/templates';
 import { api } from '@/services/api';
 import type {
@@ -38,9 +33,6 @@ import type {
 } from '@/types';
 import { toast } from 'sonner';
 
-const MAX_DAY_ASSETS = 30;
-const NONE_VALUE = '__none__';
-
 const errorMessage = (error: unknown, fallback: string): string =>
   error instanceof Error && error.message ? error.message : fallback;
 
@@ -49,67 +41,6 @@ function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function assetKindLabel(asset: AgencyAsset): string {
-  if (asset.kind === 'font') return 'Font';
-  if (asset.kind === 'logo') return 'Logo';
-  if (asset.kind === 'mascot') return 'Mascot';
-  return 'Image';
-}
-
-function assetOptionLabel(asset: AgencyAsset): string {
-  const name = asset.fontFamily?.trim() || asset.originalName?.trim();
-  const suffix = name ? ` · ${name}` : '';
-  return `${assetKindLabel(asset)}${suffix}`;
-}
-
-interface AssetSelectProps {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  assets: AgencyAsset[];
-  noneLabel: string;
-  disabled?: boolean;
-}
-
-const AssetSelect: React.FC<AssetSelectProps> = ({
-  label,
-  value,
-  onChange,
-  assets,
-  noneLabel,
-  disabled,
-}) => (
-  <div className="space-y-1.5">
-    {label ? (
-      <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
-        {label}
-      </span>
-    ) : null}
-    <Select
-      value={value || NONE_VALUE}
-      onValueChange={(next) => onChange(next === NONE_VALUE ? '' : next)}
-      disabled={disabled}
-    >
-      <SelectTrigger className="h-9 text-xs">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value={NONE_VALUE}>{noneLabel}</SelectItem>
-        {assets.map((asset) => (
-          <SelectItem key={asset._id} value={asset._id}>
-            {assetOptionLabel(asset)}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  </div>
-);
-
-interface DayAssetRow {
-  day: number;
-  assetId: string;
 }
 
 interface TemplateUploadDialogProps {
@@ -128,8 +59,8 @@ interface TemplateUploadDialogProps {
 }
 
 /**
- * A6d: upload a custom template or the next version of one. The asset choices
- * are explicit snapshots; logo, mascot and fonts fall back to current
+ * A6d: upload a custom HTML template or the next version of one. The asset
+ * choices are explicit snapshots; logo, mascot and fonts fall back to current
  * branding, while cover and day images must be chosen here.
  */
 const TemplateUploadDialog: React.FC<TemplateUploadDialogProps> = ({
@@ -147,23 +78,10 @@ const TemplateUploadDialog: React.FC<TemplateUploadDialogProps> = ({
   const [audience, setAudience] =
     useState<AgencyTemplateAudience>('client');
   const [file, setFile] = useState<File | null>(null);
-  const [logoAssetId, setLogoAssetId] = useState('');
-  const [mascotAssetId, setMascotAssetId] = useState('');
-  const [headingFontAssetId, setHeadingFontAssetId] = useState('');
-  const [bodyFontAssetId, setBodyFontAssetId] = useState('');
-  const [coverAssetId, setCoverAssetId] = useState('');
-  const [dayAssets, setDayAssets] = useState<DayAssetRow[]>([]);
+  const [assetSelection, setAssetSelection] =
+    useState<AgencyTemplateAssetSelection>({});
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const images = useMemo(
-    () => assets.filter((asset) => asset.kind !== 'font'),
-    [assets]
-  );
-  const fonts = useMemo(
-    () => assets.filter((asset) => asset.kind === 'font'),
-    [assets]
-  );
 
   useEffect(() => {
     if (!open) return;
@@ -171,12 +89,7 @@ const TemplateUploadDialog: React.FC<TemplateUploadDialogProps> = ({
     setDescription(template?.description ?? '');
     setAudience(template?.audience ?? 'client');
     setFile(null);
-    setLogoAssetId('');
-    setMascotAssetId('');
-    setHeadingFontAssetId('');
-    setBodyFontAssetId('');
-    setCoverAssetId('');
-    setDayAssets([]);
+    setAssetSelection({});
     if (fileInputRef.current) fileInputRef.current.value = '';
   }, [open, template?._id, template?.audience, template?.description, template?.name]);
 
@@ -190,49 +103,6 @@ const TemplateUploadDialog: React.FC<TemplateUploadDialogProps> = ({
     setFile(selected);
   };
 
-  const nextUnusedDay = (rows: DayAssetRow[]): number | null => {
-    const used = new Set(rows.map((row) => row.day));
-    for (let day = 1; day <= MAX_DAY_ASSETS; day += 1) {
-      if (!used.has(day)) return day;
-    }
-    return null;
-  };
-
-  const addDayAsset = () => {
-    const day = nextUnusedDay(dayAssets);
-    if (day === null) {
-      toast.error(`At most ${MAX_DAY_ASSETS} day images can be mapped.`);
-      return;
-    }
-    setDayAssets((prev) => [...prev, { day, assetId: '' }]);
-  };
-
-  const updateDayAsset = (index: number, patch: Partial<DayAssetRow>) => {
-    setDayAssets((prev) =>
-      prev.map((row, rowIndex) =>
-        rowIndex === index ? { ...row, ...patch } : row
-      )
-    );
-  };
-
-  const buildSelection = (): AgencyTemplateAssetSelection | undefined => {
-    const selection: AgencyTemplateAssetSelection = {};
-    if (logoAssetId) selection.logoAssetId = logoAssetId;
-    if (mascotAssetId) selection.mascotAssetId = mascotAssetId;
-    if (headingFontAssetId) {
-      selection.headingFontAssetId = headingFontAssetId;
-    }
-    if (bodyFontAssetId) selection.bodyFontAssetId = bodyFontAssetId;
-    if (coverAssetId) selection.coverAssetId = coverAssetId;
-
-    const mappedDays = dayAssets
-      .filter((row) => row.assetId)
-      .map((row) => ({ day: row.day, assetId: row.assetId }));
-    if (mappedDays.length > 0) selection.dayAssets = mappedDays;
-
-    return Object.keys(selection).length > 0 ? selection : undefined;
-  };
-
   const handleUpload = async () => {
     if (!file) {
       toast.error('Choose an HTML template file first.');
@@ -243,26 +113,15 @@ const TemplateUploadDialog: React.FC<TemplateUploadDialogProps> = ({
       return;
     }
 
-    const seenDays = new Set<number>();
-    for (const row of dayAssets) {
-      if (!Number.isInteger(row.day) || row.day < 1 || row.day > MAX_DAY_ASSETS) {
-        toast.error('Day numbers must be between 1 and 30.');
-        return;
-      }
-      if (seenDays.has(row.day)) {
-        toast.error('Each itinerary day can only map to one image.');
-        return;
-      }
-      seenDays.add(row.day);
-      if (!row.assetId) {
-        toast.error('Choose an image for every day you added.');
-        return;
-      }
+    const assetError = validateAssetSelection(assetSelection);
+    if (assetError) {
+      toast.error(assetError);
+      return;
     }
 
     setSaving(true);
     try {
-      const selectedAssets = buildSelection();
+      const selectedAssets = trimAssetSelection(assetSelection);
       if (template) {
         const result = await api.addAgencyTemplateVersion(
           agencyId,
@@ -414,180 +273,13 @@ const TemplateUploadDialog: React.FC<TemplateUploadDialogProps> = ({
             </div>
           </div>
 
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <h3 className="text-sm font-semibold">Asset mapping</h3>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Assets are copied into this version. Later changes in Settings
-                  never alter an approved proposal.
-                </p>
-              </div>
-              <Link
-                to="/agency/settings"
-                className="text-[11px] font-medium text-teal-700 hover:underline dark:text-teal-400"
-              >
-                Manage brand assets
-              </Link>
-            </div>
-
-            {assetsLoading ? (
-              <div className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-4 text-xs text-slate-500 dark:border-slate-800">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Loading brand assets...
-              </div>
-            ) : (
-              <>
-                <div className="grid gap-3 rounded-2xl border border-slate-200 p-3 dark:border-slate-800 sm:grid-cols-2">
-                  <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500 dark:text-slate-400 sm:col-span-2">
-                    <ImageIcon className="h-3.5 w-3.5" />
-                    Images
-                  </div>
-                  <AssetSelect
-                    label="Logo"
-                    value={logoAssetId}
-                    onChange={setLogoAssetId}
-                    assets={images}
-                    noneLabel="Current branding logo"
-                    disabled={saving}
-                  />
-                  <AssetSelect
-                    label="Mascot"
-                    value={mascotAssetId}
-                    onChange={setMascotAssetId}
-                    assets={images}
-                    noneLabel="Current branding mascot"
-                    disabled={saving}
-                  />
-                  <AssetSelect
-                    label="Cover image"
-                    value={coverAssetId}
-                    onChange={setCoverAssetId}
-                    assets={images}
-                    noneLabel="No cover image"
-                    disabled={saving}
-                  />
-                  <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500 dark:text-slate-400 sm:col-span-2 sm:mt-1">
-                    <Type className="h-3.5 w-3.5" />
-                    Fonts
-                  </div>
-                  <AssetSelect
-                    label="Heading font"
-                    value={headingFontAssetId}
-                    onChange={setHeadingFontAssetId}
-                    assets={fonts}
-                    noneLabel="Current branding heading font"
-                    disabled={saving}
-                  />
-                  <AssetSelect
-                    label="Body font"
-                    value={bodyFontAssetId}
-                    onChange={setBodyFontAssetId}
-                    assets={fonts}
-                    noneLabel="Current branding body font"
-                    disabled={saving}
-                  />
-                </div>
-
-                <div className="rounded-2xl border border-slate-200 p-3 dark:border-slate-800">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
-                        Day images
-                      </span>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                        One image per itinerary position, matched as Day 1,
-                        Day 2, and so on.
-                      </p>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={addDayAsset}
-                      disabled={saving || dayAssets.length >= MAX_DAY_ASSETS}
-                    >
-                      <Plus className="mr-1.5 h-3.5 w-3.5" />
-                      Add day
-                    </Button>
-                  </div>
-
-                  {dayAssets.length === 0 ? (
-                    <p className="mt-2 rounded-xl border border-dashed border-slate-200 px-3 py-4 text-center text-[11px] text-slate-500 dark:border-slate-800 dark:text-slate-400">
-                      No day images mapped. Add one for each day the template
-                      shows a photo.
-                    </p>
-                  ) : (
-                    <div className="mt-2 space-y-2">
-                      {dayAssets.map((row, index) => (
-                        <div
-                          key={`${index}-${row.day}`}
-                          className="grid grid-cols-[92px_minmax(0,1fr)_auto] items-center gap-2"
-                        >
-                          <Select
-                            value={String(row.day)}
-                            onValueChange={(value) =>
-                              updateDayAsset(index, { day: Number(value) })
-                            }
-                            disabled={saving}
-                          >
-                            <SelectTrigger className="h-9 text-xs">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {Array.from(
-                                { length: MAX_DAY_ASSETS },
-                                (_, dayIndex) => dayIndex + 1
-                              ).map((day) => (
-                                <SelectItem key={day} value={String(day)}>
-                                  Day {day}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <AssetSelect
-                            label=""
-                            value={row.assetId}
-                            onChange={(assetId) =>
-                              updateDayAsset(index, { assetId })
-                            }
-                            assets={images}
-                            noneLabel="Choose an image"
-                            disabled={saving}
-                          />
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-9 w-9 text-slate-400 hover:text-destructive"
-                            onClick={() =>
-                              setDayAssets((prev) =>
-                                prev.filter((_, rowIndex) => rowIndex !== index)
-                              )
-                            }
-                            disabled={saving}
-                            aria-label={`Remove day ${row.day} image`}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-
-            {!assetsLoading && images.length === 0 && fonts.length === 0 ? (
-              <p className="text-[11px] text-amber-700 dark:text-amber-400">
-                No brand assets are available yet. Upload images and fonts in{' '}
-                <Link to="/agency/settings" className="underline">
-                  Settings
-                </Link>{' '}
-                or use the current branding fallbacks.
-              </p>
-            ) : null}
-          </div>
+          <TemplateAssetMapping
+            assets={assets}
+            assetsLoading={assetsLoading}
+            disabled={saving}
+            value={assetSelection}
+            onChange={setAssetSelection}
+          />
         </div>
 
         <DialogFooter>

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle,
   FileText,
+  FileType2,
   LayoutTemplate,
   Loader2,
   Lock,
@@ -20,11 +21,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import PdfLayoutMapperDialog from '@/components/agency/PdfLayoutMapperDialog';
+import PdfTemplateUploadDialog, {
+  type PdfTemplateDraft,
+} from '@/components/agency/PdfTemplateUploadDialog';
 import TemplateManagerDialog from '@/components/agency/TemplateManagerDialog';
 import TemplateUploadDialog from '@/components/agency/TemplateUploadDialog';
 import { useAgency } from '@/context/AgencyContext';
 import {
   templateAudienceLabel,
+  templateEngineLabel,
   templateSourceLabel,
   templateStatusClass,
   templateStatusLabel,
@@ -34,6 +40,8 @@ import { cn } from '@/lib/utils';
 import { api } from '@/services/api';
 import type {
   AgencyAsset,
+  AgencyPdfSlotMap,
+  AgencyPdfTokenOption,
   AgencyTemplate,
   AgencyTemplateAudience,
   AgencyTemplateListStatus,
@@ -70,6 +78,10 @@ const AgencyTemplates: React.FC = () => {
   >('all');
   const [manageId, setManageId] = useState<string | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [pdfUploadOpen, setPdfUploadOpen] = useState(false);
+  const [pdfDraft, setPdfDraft] = useState<PdfTemplateDraft | null>(null);
+  const [pdfTokens, setPdfTokens] = useState<AgencyPdfTokenOption[]>([]);
+  const [pdfSaving, setPdfSaving] = useState(false);
   const [defaultingId, setDefaultingId] = useState<string | null>(null);
   const requestRef = useRef(0);
 
@@ -179,6 +191,44 @@ const AgencyTemplates: React.FC = () => {
   const managingTemplate =
     templates.find((template) => template._id === manageId) ?? null;
 
+  const startPdfUpload = async (draft: PdfTemplateDraft) => {
+    if (!activeAgencyId) return;
+    const catalog = await api.getAgencyPdfTokenCatalog(
+      activeAgencyId,
+      draft.audience
+    );
+    setPdfTokens(catalog.tokens ?? []);
+    setPdfDraft(draft);
+    setPdfUploadOpen(false);
+  };
+
+  const savePdfTemplate = async (slotMap: AgencyPdfSlotMap) => {
+    if (!activeAgencyId || !pdfDraft) return;
+    setPdfSaving(true);
+    try {
+      const result = await api.createAgencyPdfTemplate(activeAgencyId, {
+        file: pdfDraft.file,
+        name: pdfDraft.name,
+        description: pdfDraft.description,
+        audience: pdfDraft.audience,
+        slotMap,
+        assets: pdfDraft.assets,
+      });
+      toast.success(
+        result.message || 'Template uploaded as a draft. Preview it next.'
+      );
+      setPdfDraft(null);
+      await loadTemplates(false);
+      setManageId(result.template._id);
+    } catch (error) {
+      toast.error(
+        errorMessage(error, 'We could not save that PDF template.')
+      );
+    } finally {
+      setPdfSaving(false);
+    }
+  };
+
   const makeDefault = async (template: AgencyTemplate) => {
     if (!activeAgencyId) return;
     setDefaultingId(template._id);
@@ -225,13 +275,23 @@ const AgencyTemplates: React.FC = () => {
           </p>
         </div>
         {canManage ? (
-          <Button
-            className="bg-teal-600 hover:bg-teal-700"
-            onClick={() => setUploadOpen(true)}
-          >
-            <Upload className="mr-1.5 h-4 w-4" />
-            Upload template
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setPdfUploadOpen(true)}
+              title="Keep the agency's own PDF design and map TravelAI data onto it."
+            >
+              <FileType2 className="mr-1.5 h-4 w-4" />
+              Upload PDF design
+            </Button>
+            <Button
+              className="bg-teal-600 hover:bg-teal-700"
+              onClick={() => setUploadOpen(true)}
+            >
+              <Upload className="mr-1.5 h-4 w-4" />
+              Upload HTML template
+            </Button>
+          </div>
         ) : (
           <Badge
             variant="outline"
@@ -333,19 +393,29 @@ const AgencyTemplates: React.FC = () => {
             <p className="mx-auto max-w-md text-xs text-slate-500 dark:text-slate-400">
               {templates.length === 0
                 ? canManage
-                  ? 'Upload a self-contained HTML template to create the agency’s first custom proposal layout.'
+                  ? 'Upload a self-contained HTML template, or keep your own PDF design and map TravelAI data onto it.'
                   : 'Built-in and custom templates will appear here once an admin makes them active.'
                 : 'Try another status or audience filter.'}
             </p>
             {canManage && templates.length === 0 ? (
-              <Button
-                className="bg-teal-600 hover:bg-teal-700"
-                size="sm"
-                onClick={() => setUploadOpen(true)}
-              >
-                <Upload className="mr-1.5 h-3.5 w-3.5" />
-                Upload template
-              </Button>
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button
+                  className="bg-teal-600 hover:bg-teal-700"
+                  size="sm"
+                  onClick={() => setUploadOpen(true)}
+                >
+                  <Upload className="mr-1.5 h-3.5 w-3.5" />
+                  Upload HTML template
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPdfUploadOpen(true)}
+                >
+                  <FileType2 className="mr-1.5 h-3.5 w-3.5" />
+                  Upload PDF design
+                </Button>
+              </div>
             ) : null}
           </CardContent>
         </Card>
@@ -414,6 +484,17 @@ const AgencyTemplates: React.FC = () => {
                     </Badge>
                     <Badge variant="outline" className="text-[9px]">
                       {templateSourceLabel(template)}
+                    </Badge>
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        'text-[9px]',
+                        template.engine === 'pdf-background'
+                          ? 'border-violet-300 bg-violet-50 text-violet-800 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-300'
+                          : undefined
+                      )}
+                    >
+                      {templateEngineLabel(template)}
                     </Badge>
                     <Badge variant="outline" className="text-[9px]">
                       v{version}
@@ -485,6 +566,29 @@ const AgencyTemplates: React.FC = () => {
               setManageId(result.template._id);
             }}
           />
+          <PdfTemplateUploadDialog
+            open={pdfUploadOpen}
+            onOpenChange={setPdfUploadOpen}
+            assets={assets}
+            assetsLoading={assetsLoading}
+            onContinue={startPdfUpload}
+          />
+          {pdfDraft ? (
+            <PdfLayoutMapperDialog
+              open
+              onOpenChange={(next) => {
+                if (!next && !pdfSaving) setPdfDraft(null);
+              }}
+              pdfSource={pdfDraft.file}
+              audience={pdfDraft.audience}
+              tokens={pdfTokens}
+              saving={pdfSaving}
+              saveLabel="Save template"
+              title={`Map data slots · ${pdfDraft.name}`}
+              description="Add text and image boxes over the agency design, bind each one to a TravelAI field, and mark the page that should repeat for each itinerary day."
+              onSave={savePdfTemplate}
+            />
+          ) : null}
           {managingTemplate ? (
             <TemplateManagerDialog
               open

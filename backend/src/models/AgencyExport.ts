@@ -34,6 +34,8 @@ export interface IAgencyExport extends Document {
   status: AgencyExportStatus;
   outputKey?: string;
   bytes?: number;
+  /** Pages in the finished document; known only after a successful render. */
+  pageCount?: number;
   /** Safe, user-facing failure reason; never a filesystem path. */
   error?: string;
   attempts: number;
@@ -113,6 +115,10 @@ const agencyExportSchema = new Schema<IAgencyExport>(
     bytes: {
       type: Number,
       min: 0,
+    },
+    pageCount: {
+      type: Number,
+      min: 1,
     },
     error: {
       type: String,

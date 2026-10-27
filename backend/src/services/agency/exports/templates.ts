@@ -192,8 +192,8 @@ export async function getAgencyTemplate(
 export function assertRenderableTemplate(template: IAgencyTemplate | any): void {
   if (isBuiltinTemplateKey(template?.builtinKey)) return;
   if (
-    template?.engine === 'html' &&
     !template?.builtinKey &&
+    (template?.engine === 'html' || template?.engine === 'pdf-background') &&
     Number.isInteger(Number(template?.activeVersion)) &&
     Number(template.activeVersion) >= 1
   ) {

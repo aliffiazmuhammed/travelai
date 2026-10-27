@@ -36,9 +36,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import PdfDocumentViewer from '@/components/agency/PdfDocumentViewer';
 import { API_BASE_URL } from '@/config';
 import { useAgency } from '@/context/AgencyContext';
 import { formatAgencyDate } from '@/lib/agency';
+import { base64PdfToBytes } from '@/lib/pdfjs';
 import { templateVersionNumber } from '@/lib/templates';
 import { cn } from '@/lib/utils';
 import { api } from '@/services/api';
@@ -177,6 +179,11 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
     url: string;
     quoteNumber: string | null;
   } | null>(null);
+
+  const previewPdfBytes = useMemo(
+    () => (preview?.pdf ? base64PdfToBytes(preview.pdf) : null),
+    [preview?.pdf]
+  );
 
   const requestRef = useRef(0);
   const previewRequestRef = useRef(0);
@@ -1120,12 +1127,20 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
 
             {preview ? (
               <>
-                <iframe
-                  title={`${preview.template.name} preview`}
-                  srcDoc={preview.html}
-                  sandbox=""
-                  className="h-[560px] w-full rounded-2xl border border-slate-200 bg-white"
-                />
+                {preview.engine === 'pdf-background' ? (
+                  <PdfDocumentViewer
+                    source={previewPdfBytes}
+                    title={preview.template.name}
+                    className="h-[560px]"
+                  />
+                ) : (
+                  <iframe
+                    title={`${preview.template.name} preview`}
+                    srcDoc={preview.html ?? ''}
+                    sandbox=""
+                    className="h-[560px] w-full rounded-2xl border border-slate-200 bg-white"
+                  />
+                )}
                 <div className="space-y-2">
                   {watermark ? (
                     <p className="flex items-start gap-1.5 text-[11px] text-amber-700 dark:text-amber-400">

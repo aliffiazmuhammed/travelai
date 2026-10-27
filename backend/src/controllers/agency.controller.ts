@@ -85,14 +85,20 @@ import {
   activateAgencyTemplateVersion,
   addAgencyTemplateVersion,
   archiveAgencyTemplate,
+  createAgencyPdfTemplate,
   createAgencyTemplate,
+  getAgencyTemplateLayout,
   getAgencyTemplateSource,
   listAgencyTemplateVersions,
   previewAgencyTemplateVersion,
+  readAgencyTemplateBackground,
+  saveAgencyTemplateLayout,
   saveAgencyTemplateSource,
   setDefaultAgencyTemplate,
   updateAgencyTemplateDetails,
 } from '../services/agency/exports/templateManagement.js';
+import { agencyPdfSlotTokenCatalog } from '../services/agency/exports/pdfTemplateRender.js';
+import type { AgencyTemplateAudience } from '../models/AgencyTemplate.js';
 import type { AgencyTemplateAssetSelection } from '../services/agency/exports/templateAssets.js';
 import { sanitizeTripFor } from '../utils/sanitizeTrip.js';
 
@@ -802,6 +808,113 @@ export const updateAgencyTemplateHandler = catchAsync(
       description: req.body?.description,
     });
     res.json({ success: true, template });
+  }
+);
+
+function parseSlotMapField(value: unknown): unknown {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value;
+  }
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new AppError('The layout is not valid.', 400);
+  }
+  try {
+    const parsed = JSON.parse(value);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('not an object');
+    }
+    return parsed;
+  } catch {
+    throw new AppError('The layout is not valid.', 400);
+  }
+}
+
+export const createAgencyPdfTemplateHandler = catchAsync(
+  async (req: AgencyAccessRequest, res: Response) => {
+    const { agency, role } = agencyContext(req);
+    if (!req.file) {
+      throw new AppError('Choose a PDF template file to upload.', 400);
+    }
+    const result = await createAgencyPdfTemplate({
+      agency,
+      actorId: req.userId!,
+      role,
+      name: req.body?.name,
+      description: req.body?.description,
+      audience: req.body?.audience,
+      buffer: req.file.buffer,
+      slotMap: parseSlotMapField(req.body?.slotMap),
+      assets: parseTemplateAssetSelection(req.body?.assets),
+    });
+    res.status(201).json({
+      success: true,
+      message: 'Template uploaded as a draft. Preview it before activating.',
+      template: result.template,
+      version: result.version,
+    });
+  }
+);
+
+export const getAgencyPdfTokenCatalogHandler = catchAsync(
+  async (req: AgencyAccessRequest, res: Response) => {
+    const audience: AgencyTemplateAudience =
+      req.query.audience === 'internal' ? 'internal' : 'client';
+    res.json({
+      success: true,
+      audience,
+      tokens: agencyPdfSlotTokenCatalog(audience),
+    });
+  }
+);
+
+export const getAgencyTemplateLayoutHandler = catchAsync(
+  async (req: AgencyAccessRequest, res: Response) => {
+    const { agency, role } = agencyContext(req);
+    const layout = await getAgencyTemplateLayout({
+      agencyId: String(agency._id),
+      role,
+      templateId: String(req.params.templateId || ''),
+      version: req.params.version,
+    });
+    res.json({ success: true, layout });
+  }
+);
+
+export const getAgencyTemplateBackgroundHandler = catchAsync(
+  async (req: AgencyAccessRequest, res: Response) => {
+    const { agency, role } = agencyContext(req);
+    const { buffer, filename } = await readAgencyTemplateBackground({
+      agencyId: String(agency._id),
+      role,
+      templateId: String(req.params.templateId || ''),
+      version: req.params.version,
+    });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Length', String(buffer.byteLength));
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+    res.send(buffer);
+  }
+);
+
+export const saveAgencyTemplateLayoutHandler = catchAsync(
+  async (req: AgencyAccessRequest, res: Response) => {
+    const { agency, role } = agencyContext(req);
+    const result = await saveAgencyTemplateLayout({
+      agency,
+      actorId: req.userId!,
+      role,
+      templateId: String(req.params.templateId || ''),
+      baseVersion: req.body?.baseVersion,
+      slotMap: parseSlotMapField(req.body?.slotMap),
+    });
+    res.status(201).json({
+      success: true,
+      message: 'Layout saved as a draft. Preview it before activating.',
+      template: result.template,
+      version: result.version,
+    });
   }
 );
 

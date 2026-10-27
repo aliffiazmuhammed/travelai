@@ -29,6 +29,7 @@ import {
   renderHtmlToPdf,
 } from './pdf.js';
 import { renderExportHtml, type ExportRenderBrand } from './render.js';
+import { renderAgencyPdfTemplate } from './pdfTemplateRender.js';
 import { exportDownloadPath, verifyExportDownload } from './signing.js';
 import {
   resolveAgencyTemplateVersion,
@@ -180,6 +181,7 @@ export interface AgencyExportProjection {
   format: string;
   status: AgencyExportStatus;
   bytes?: number;
+  pageCount?: number;
   error?: string;
   attempts: number;
   requestedBy: string;
@@ -216,6 +218,9 @@ export function projectAgencyExport(
     format: job.format,
     status: job.status,
     ...(job.status === 'ready' && job.bytes !== undefined ? { bytes: job.bytes } : {}),
+    ...(job.status === 'ready' && job.pageCount
+      ? { pageCount: Number(job.pageCount) }
+      : {}),
     ...(job.status === 'failed' && job.error ? { error: job.error } : {}),
     attempts: Number(job.attempts ?? 1),
     requestedBy: String(job.requestedBy),
@@ -315,24 +320,63 @@ function renderTemplate(template: any) {
   };
 }
 
-function renderResolvedTemplate(
+export type RenderedExportTemplate =
+  | { engine: 'html'; html: string; pageCount: number }
+  | {
+      engine: 'pdf-background';
+      pdf: Buffer;
+      pageCount: number;
+      tokens: string[];
+    };
+
+/**
+ * HTML templates go through Chrome/Gotenberg; uploaded PDF designs are merged
+ * in-process with pdf-lib, so a free instance without a browser can still
+ * export them.
+ */
+async function renderResolvedTemplate(
   resolved: ResolvedExportTemplate,
   doc: ReturnType<typeof buildExportDocument>,
   brand: ExportRenderBrand
-) {
+): Promise<RenderedExportTemplate> {
   if (resolved.kind === 'custom' && resolved.custom) {
-    return renderCustomTemplateHtml({
+    if (resolved.custom.engine === 'pdf-background') {
+      const rendered = await renderAgencyPdfTemplate({
+        doc,
+        template: {
+          name: resolved.name,
+          audience: resolved.custom.version.audience,
+          version: resolved.custom.version.version,
+        },
+        background: resolved.custom.background as Buffer,
+        slotMap: resolved.custom.slotMap!,
+        assets: resolved.custom.assets,
+      });
+      return {
+        engine: 'pdf-background',
+        pdf: rendered.pdf,
+        pageCount: rendered.pageCount,
+        tokens: rendered.tokens,
+      };
+    }
+    const rendered = renderCustomTemplateHtml({
       doc,
       template: {
         name: resolved.name,
         audience: resolved.custom.version.audience,
         version: resolved.custom.version.version,
       },
-      source: resolved.custom.source,
+      source: resolved.custom.source as string,
       assets: resolved.custom.assets,
     });
+    return { engine: 'html', html: rendered.html, pageCount: rendered.pageCount };
   }
-  return renderExportHtml(doc, renderTemplate(resolved.template), brand);
+  const rendered = renderExportHtml(
+    doc,
+    renderTemplate(resolved.template),
+    brand
+  );
+  return { engine: 'html', html: rendered.html, pageCount: rendered.pageCount };
 }
 
 /**
@@ -382,6 +426,14 @@ export async function renderPinnedAgencyExport(input: {
     version: input.job.templateVersion,
     requireActiveTemplate: false,
   });
+  if (custom.engine === 'pdf-background') {
+    // The public proposal page serves the finished export file through its
+    // token-only PDF route; merging a second copy here would only duplicate it.
+    throw new AppError(
+      'This proposal is served from its generated PDF document.',
+      409
+    );
+  }
   const doc = buildExportDocument({
     agency: input.agency,
     trip: input.trip,
@@ -395,7 +447,7 @@ export async function renderPinnedAgencyExport(input: {
       audience: custom.version.audience,
       version: custom.version.version,
     },
-    source: custom.source,
+    source: custom.source as string,
     assets: custom.assets,
   });
 }
@@ -455,7 +507,11 @@ export interface PreviewAgencyExportInput {
 }
 
 export interface AgencyExportPreview {
-  html: string;
+  engine: 'html' | 'pdf-background';
+  /** HTML templates: sandboxed iframe source. */
+  html?: string;
+  /** PDF designs: base64 of the merged document for the browser viewer. */
+  pdf?: string;
   pageCount: number;
   audience: 'client' | 'internal';
   template: AgencyTemplateProjection;
@@ -525,10 +581,13 @@ export async function previewAgencyExport(
     client,
     ...(brand ? { brand: brand.documentAssets } : {}),
   });
-  const rendered = renderResolvedTemplate(resolved, doc, brand ?? {});
+  const rendered = await renderResolvedTemplate(resolved, doc, brand ?? {});
 
   return {
-    html: rendered.html,
+    engine: rendered.engine,
+    ...(rendered.engine === 'html'
+      ? { html: rendered.html }
+      : { pdf: rendered.pdf.toString('base64') }),
     pageCount: rendered.pageCount,
     audience: resolved.template.audience,
     template: {
@@ -803,9 +862,12 @@ export async function processAgencyExport(
       client,
       ...(brand ? { brand: brand.documentAssets } : {}),
     });
-    const rendered = renderResolvedTemplate(resolved, doc, brand ?? {});
-    const pdf = await renderHtmlToPdf(rendered.html);
-    countPdfPages(pdf);
+    const rendered = await renderResolvedTemplate(resolved, doc, brand ?? {});
+    const pdf =
+      rendered.engine === 'pdf-background'
+        ? rendered.pdf
+        : await renderHtmlToPdf(rendered.html);
+    if (rendered.engine === 'html') countPdfPages(pdf);
 
     const outputKey = buildAgencyExportStorageKey(job.agencyId, job._id);
     await writeAgencyExportFile(outputKey, pdf);
@@ -817,6 +879,7 @@ export async function processAgencyExport(
           status: 'ready',
           outputKey,
           bytes: pdf.byteLength,
+          pageCount: rendered.pageCount,
           completedAt: new Date(),
         },
         $unset: { error: 1 },

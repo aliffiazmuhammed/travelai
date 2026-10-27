@@ -1,4 +1,5 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
+import type { AgencyPdfSlotMap } from '../services/agency/exports/pdfTemplateContract.js';
 import {
   AGENCY_TEMPLATE_ENGINES,
   AGENCY_TEMPLATE_AUDIENCES,
@@ -40,6 +41,12 @@ export interface IAgencyTemplateVersion extends Document {
   sourceBytes: number;
   pageCount: number;
   tokens: string[];
+  /**
+   * Slot map for the `pdf-background` engine (schema version 1). HTML versions
+   * leave this empty; the map is immutable alongside its background bytes.
+   */
+  slotMap?: AgencyPdfSlotMap;
+  slotMapChecksum?: string;
   assets?: IAgencyTemplateVersionAsset[];
   previewedAt?: Date;
   previewedBy?: Types.ObjectId;
@@ -146,6 +153,14 @@ const agencyTemplateVersionSchema = new Schema<IAgencyTemplateVersion>(
     tokens: {
       type: [String],
       default: [],
+    },
+    slotMap: {
+      type: Schema.Types.Mixed,
+    },
+    slotMapChecksum: {
+      type: String,
+      match: /^[a-f0-9]{64}$/,
+      lowercase: true,
     },
     assets: {
       type: [agencyTemplateVersionAssetSchema],

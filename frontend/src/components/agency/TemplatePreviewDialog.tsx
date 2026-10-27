@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -22,7 +22,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import PdfDocumentViewer from '@/components/agency/PdfDocumentViewer';
 import { formatAgencyDate } from '@/lib/agency';
+import { base64PdfToBytes } from '@/lib/pdfjs';
 import { api } from '@/services/api';
 import type {
   AgencyTemplate,
@@ -66,6 +68,11 @@ const TemplatePreviewDialog: React.FC<TemplatePreviewDialogProps> = ({
   );
   const [previewing, setPreviewing] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+
+  const previewPdfBytes = useMemo(
+    () => (preview?.pdf ? base64PdfToBytes(preview.pdf) : null),
+    [preview?.pdf]
+  );
 
   const loadTrips = useCallback(async () => {
     setTripsLoading(true);
@@ -234,12 +241,19 @@ const TemplatePreviewDialog: React.FC<TemplatePreviewDialogProps> = ({
                   Previewed {formatAgencyDate(version.previewedAt ?? new Date())}
                 </span>
               </div>
-              <iframe
-                title={`${template.name} v${version.version} preview`}
-                srcDoc={preview.html}
-                sandbox=""
-                className="h-[60vh] w-full rounded-2xl border border-slate-200 bg-white"
-              />
+              {preview.engine === 'pdf-background' ? (
+                <PdfDocumentViewer
+                  source={previewPdfBytes}
+                  title={`${template.name} v${version.version}`}
+                />
+              ) : (
+                <iframe
+                  title={`${template.name} v${version.version} preview`}
+                  srcDoc={preview.html ?? ''}
+                  sandbox=""
+                  className="h-[60vh] w-full rounded-2xl border border-slate-200 bg-white"
+                />
+              )}
             </>
           ) : trips.length > 0 ? (
             <div className="flex h-[60vh] flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-6 text-center dark:border-slate-800 dark:bg-slate-900/40">

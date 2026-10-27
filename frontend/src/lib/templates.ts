@@ -13,6 +13,11 @@ export const TEMPLATE_STATUS_LABELS: Record<AgencyTemplateStatus, string> = {
 /** Mirrors the backend template contract: one HTML fragment, up to 512 KiB. */
 export const TEMPLATE_SOURCE_MAX_BYTES = 512 * 1024;
 
+/** Mirrors the backend sanitizer: an uploaded design PDF, up to 10 MiB. */
+export const PDF_TEMPLATE_MAX_BYTES = 10 * 1024 * 1024;
+/** Aligned with the backend page ceiling for uploaded designs. */
+export const PDF_TEMPLATE_MAX_PAGES = 20;
+
 export function templateStatusLabel(status: AgencyTemplateStatus): string {
   return TEMPLATE_STATUS_LABELS[status] ?? status;
 }
@@ -41,4 +46,15 @@ export function templateVersionNumber(template: AgencyTemplate): number {
 
 export function templateSourceLabel(template: AgencyTemplate): string {
   return template.builtinKey ? 'Built-in' : 'Custom';
+}
+
+export function templateEngineLabel(template: AgencyTemplate): string {
+  if (template.engine === 'pdf-background') return 'PDF design';
+  if (template.engine === 'docx') return 'DOCX';
+  return 'HTML';
+}
+
+/** Layout edits only make sense for uploaded PDF designs. */
+export function templateSupportsLayoutEdit(template: AgencyTemplate): boolean {
+  return !template.builtinKey && template.engine === 'pdf-background';
 }

@@ -1,13 +1,15 @@
-# Agency custom template contract (A6a/A6b/A6c)
+# Agency custom template contract (A6a/A6b/A6c/A6f)
 
-**Status:** locked, schema version 1 (2026-10-22)  
-**Applies to:** uploaded HTML proposal templates (`engine: "html"`) in the agency workspace.  
-**Code:** [`templateValidation.ts`](../backend/src/services/agency/exports/templateValidation.ts), [`templateStorage.ts`](../backend/src/services/agency/exports/templateStorage.ts), [`templateAssets.ts`](../backend/src/services/agency/exports/templateAssets.ts), [`customTemplate.ts`](../backend/src/services/agency/exports/customTemplate.ts), [`templateResolver.ts`](../backend/src/services/agency/exports/templateResolver.ts), [`templateManagement.ts`](../backend/src/services/agency/exports/templateManagement.ts), [`AgencyTemplateVersion.ts`](../backend/src/models/AgencyTemplateVersion.ts).
+**Status:** locked, schema version 1 for HTML (2026-10-22) and for PDF layouts (2026-10-27)  
+**Applies to:** uploaded HTML proposal templates (`engine: "html"`) and uploaded PDF designs with a slot map (`engine: "pdf-background"`).  
+**Code:** [`templateValidation.ts`](../backend/src/services/agency/exports/templateValidation.ts), [`templateStorage.ts`](../backend/src/services/agency/exports/templateStorage.ts), [`templateAssets.ts`](../backend/src/services/agency/exports/templateAssets.ts), [`customTemplate.ts`](../backend/src/services/agency/exports/customTemplate.ts), [`templateResolver.ts`](../backend/src/services/agency/exports/templateResolver.ts), [`templateManagement.ts`](../backend/src/services/agency/exports/templateManagement.ts), [`pdfTemplateContract.ts`](../backend/src/services/agency/exports/pdfTemplateContract.ts), [`pdfTemplateRender.ts`](../backend/src/services/agency/exports/pdfTemplateRender.ts), [`AgencyTemplateVersion.ts`](../backend/src/models/AgencyTemplateVersion.ts).
 
-An agency admin uploads a single self-contained HTML file. The server validates
-it, stores it privately, previews it against a real trip and only then allows
-activation. Custom templates are data, not code: there is no JavaScript, no
-remote asset loading and no arbitrary document markup.
+An agency admin uploads either a self-contained HTML file or a finished PDF
+design. The server validates it, stores it privately, previews it against a real
+trip and only then allows activation. Custom templates are data, not code: there
+is no JavaScript, no remote asset loading and no arbitrary document markup. A PDF
+upload keeps the agency's own vector design and stores a closed map of text and
+image slots on top of it (§10).
 
 ## 1. File contract
 
@@ -224,8 +226,13 @@ Fallback values are allowed.
   `AGENCY_TEMPLATE_DIR` (default `backend/agency-templates/`). Keys are
   generated server-side, files are written with mode `0600`, and nothing is
   served from the public uploads tree.
-- Validation returns `{ source, bytes, checksum, pageCount, tokens, sections }`.
-  Nothing is persisted unless the source passes every check.
+- PDF designs store the sanitised background at
+  `<agencyId>/<templateVersionId>.pdf` under the same root; the version row also
+  carries the `slotMap`, its `slotMapChecksum` and the background checksum, byte
+  size and page count (§10).
+- Validation returns `{ source, bytes, checksum, pageCount, tokens, sections }`
+  for HTML, or `{ bytes, checksum, pageCount, pageSizes }` for a PDF. Nothing is
+  persisted unless every check passes.
 
 ### Asset snapshots
 
@@ -295,6 +302,11 @@ to another agency resolves as `404`. Custom-template management is
 | --- | --- |
 | `GET /:agencyId/templates` | List templates. Non-admins always get active `client` templates; `status` (`draft`, `archived`, `all`) and `internal` are admin-only. |
 | `POST /:agencyId/templates` | Multipart upload: `file`, `name`, `description`, `audience`, `assets` (JSON). Creates a draft template and version 1. |
+| `POST /:agencyId/templates/pdf` | Multipart PDF design: `file`, `name`, `description`, `audience`, `slotMap` (JSON), `assets` (JSON). Sanitises the design and creates a draft `pdf-background` template and version 1 (§10). |
+| `GET /:agencyId/templates/pdf-tokens?audience=` | Slot-token catalogue for the mapper; internal-only tokens only for `audience=internal`. |
+| `GET /:agencyId/templates/:templateId/versions/:version/layout` | Stored slot map, slot-map checksum, background checksum and page count. `409` if the stored map no longer matches its checksum. |
+| `GET /:agencyId/templates/:templateId/versions/:version/background` | Streams the private background PDF for the visual mapper (`Content-Disposition: inline`, `no-store`). `409` if the stored bytes no longer match the version checksum. |
+| `POST /:agencyId/templates/:templateId/versions/from-layout` | JSON `{ baseVersion, slotMap }`. Validates the edited layout against the real page sizes and saves it as the next immutable version, carrying the background and asset snapshots forward. |
 | `PATCH /:agencyId/templates/:templateId` | Rename or re-describe a custom template. |
 | `GET /:agencyId/templates/:templateId/versions` | List versions with the active marker. |
 | `GET /:agencyId/templates/:templateId/versions/:version/source` | Returns the private HTML source plus checksum and schema version for the in-app editor. `409` if the stored bytes no longer match the approved checksum. |
@@ -316,6 +328,10 @@ Lifecycle rules:
   un-previewed, and archived templates must be restored first. Saving the
   unchanged source is rejected. Editing is `admin`-only; source bytes are never
   exposed to members or clients.
+- PDF layout editing follows the same rules: the mapper reads one version's
+  slot map and background, and saving writes a **new** version with the same
+  background bytes, page count and snapshots. Saving an unchanged layout is
+  rejected; the base map and stored background are re-verified before saving.
 - A preview is required before activation and is re-verified at activation
   (source checksum plus snapshots). The preview uses the same renderer as the
   PDF, so a version that previews successfully is the version that exports.
@@ -338,15 +354,162 @@ Lifecycle rules:
   per hour), and each source is held in memory only up to the 512 KiB contract
   limit.
 
-## 10. Contract changes
+## 10. PDF designs (`engine: "pdf-background"`, A6f)
 
-Schema version 1 is frozen. A change to allowed markup, tokens, escaping or
-rendering semantics requires:
+An agency may upload its finished PDF design instead of authoring HTML. The
+design is kept as a vector background and TravelAI merges trip and quote data
+into boxes that an admin maps over the pages in the browser. The upload is
+rebuilt as a passive document, so no scripts, form fields, links, attachments or
+annotations from the source can execute or reach a client.
 
-1. a new `AGENCY_TEMPLATE_SCHEMA_VERSION`;
+### 10.1 Upload contract
+
+| Rule | Value |
+| --- | --- |
+| Size | at most 10 MiB (10,485,760 bytes), non-empty |
+| Pages | 1 to 20 |
+| Format | starts with `%PDF-`; password-protected files are rejected |
+| Page boxes | `MediaBox` and `CropBox` must match within 0.5 pt |
+| Page rotation | must be 0 — rotate the page in the design tool and re-export |
+| Sanitisation | pages are copied into a fresh document; page `Annots`, `AA` and `Metadata` are dropped; the new catalog has no OpenAction, JavaScript, AcroForm or attachments |
+| Checksum | SHA-256 of the sanitised bytes, compared again on every render |
+
+The design keeps its vector content; pages are never rasterised.
+
+### 10.2 Slot map (schema version 1)
+
+```json
+{
+  "schemaVersion": 1,
+  "pages": [
+    {
+      "page": 1,
+      "slots": [
+        {
+          "id": "title", "kind": "text", "token": "trip.title",
+          "x": 40, "y": 60, "w": 500, "h": 40,
+          "font": "heading", "size": 22, "minSize": 13.2,
+          "align": "left", "color": "#0F172A",
+          "lineHeight": 1.25, "maxLines": 10
+        }
+      ]
+    },
+    {
+      "page": 2,
+      "repeat": "days",
+      "slots": [
+        { "id": "day-title", "kind": "text", "token": "day.title", "x": 40, "y": 40, "w": 440, "h": 24 }
+      ]
+    },
+    {
+      "page": 3,
+      "slots": [
+        { "id": "logo", "kind": "image", "token": "image.logo", "x": 480, "y": 40, "w": 70, "h": 70, "fit": "cover" }
+      ]
+    }
+  ]
+}
+```
+
+- Coordinates are PDF points with a **top-left origin**, relative to the page's
+  `MediaBox`. The browser mapper and the pdf-lib renderer use the same numbers;
+  the renderer converts to pdf-lib's bottom-left space.
+- Each page appears at most once; `page` is 1-based and must exist in the PDF.
+  Not every design page has to be mapped.
+- Exactly one page may set `"repeat": "days"`. It is rendered once per itinerary
+  day, in order. A layout without a repeat page renders good for fixed
+  documents but cannot show day content.
+- Total 250 slots, at most 80 per page. Each slot needs a unique id matching
+  `[A-Za-z0-9_-]{1,40}`, at least 4 pt wide and tall, and must stay inside the
+  page (0.5 pt tolerance).
+- Text slots accept `size` 6-72, `minSize` 6 to `size` (default 60% of size),
+  `lineHeight` 1-2.5, `maxLines` 1-60, `align` `left|center|right`, `color`
+  `#RRGGBB` (stored uppercase) and `font` `body|heading`. The renderer shrinks
+  text down to `minSize` to fit the box and truncates at `maxLines`.
+- Image slots accept `fit` `cover|contain`.
+- Defaults are materialised when the map is validated, so the stored map and
+  its checksum stay stable across edits and releases.
+- `slotMapChecksum` is a SHA-256 over a key-sorted serialisation of the stored
+  map. A map edited in the database no longer matches and is refused with 409.
+
+### 10.3 Slot tokens
+
+Global text tokens:
+
+```text
+agency.name  agency.address  agency.phone  agency.email  agency.website
+agency.instagram  agency.gstin
+
+trip.title  trip.destination  trip.startDate  trip.endDate
+trip.durationDays  trip.nights  trip.groupType  trip.season
+
+client.name  client.email  client.phone  client.adults  client.children
+client.rooms
+
+quote.number  quote.version  quote.statusLabel  quote.date  quote.validUntil
+quote.totalFormatted  quote.perPersonFormatted
+quote.inclusions  quote.exclusions  quote.terms
+
+recommendations  thingsToCarry  cancellationPolicy
+contact.phone  contact.email  contact.website  contact.instagram
+generatedAt  statusLabel
+```
+
+Day tokens, valid only on the page marked `"repeat": "days"`:
+
+```text
+day.number  day.date  day.title  day.summary  day.permitRequired
+day.activities  day.stays  day.food  day.transport  day.tips
+```
+
+Internal-only day tokens, rejected for `audience: "client"` layouts:
+
+```text
+day.activityCosts  day.stayPrices
+```
+
+Image tokens: `image.logo`, `image.mascot`, `image.cover` and `day.image`
+(repeat page only). Lists render as `• ` lines in the slot.
+
+### 10.4 Images and assets
+
+- Mapped image slots reuse the A6 asset snapshots (§7). A layout that maps
+  `image.logo`, `image.mascot`, `image.cover` or `day.image` must have the
+  matching snapshot, or the upload/save fails before anything is stored.
+- The PDF renderer can embed **PNG and JPEG only**. A WebP snapshot selected for
+  a mapped slot is rejected with 400 at upload/save time; pick a PNG or JPEG
+  version of that image. (The HTML engine still accepts WebP.)
+- Snapshots stay version-pinned and are copied byte-for-byte when a layout is
+  edited into a new version.
+
+### 10.5 Rendering and verification
+
+- Every render re-validates the stored map against the background's real page
+  sizes and re-checks the background checksum and byte count. A tampered row or
+  file fails with 409.
+- Text uses the brand font when one is embedded, otherwise the built-in PDF
+  face. Glyphs the built-in faces cannot encode are replaced (`₹` → `Rs. `,
+  arrows/checks simplified).
+- The output page order is the design order with the repeat page expanded in
+  place once per itinerary day. `pageCount = static mapped pages + itinerary
+  days`.
+- The renderer adds the same watermark rules as HTML: `DRAFT`, `EXPIRED` or
+  `CANCELLED` for client documents; none for sent/accepted quotes or internal
+  templates.
+- PDF exports are merged in-process with pdf-lib. They need neither Chrome nor
+  the Gotenberg renderer, so they keep working on hosts without a browser.
+- A public proposal whose pinned export used a PDF design reports
+  `documentMode: "pdf"` and serves the finished export through the token-only
+  PDF route. HTML templates keep re-rendering on the proposal page.
+
+## 11. Contract changes
+
+HTML schema version 1 and PDF slot-map schema version 1 are frozen. A change to
+allowed markup, tokens, escaping, rendering semantics, coordinates or
+sanitisation requires:
+
+1. a new `AGENCY_TEMPLATE_SCHEMA_VERSION` (HTML) or
+   `AGENCY_PDF_SLOT_MAP_SCHEMA_VERSION` (PDF);
 2. a new `engine` value if rendering semantics change;
 3. migration notes for versions already previewed or activated;
 4. validator tests covering both the new and previously stored versions.
-
-The optional PDF-background/slot bridge is not part of schema version 1 and is
-deferred until a pilot agency requires it.

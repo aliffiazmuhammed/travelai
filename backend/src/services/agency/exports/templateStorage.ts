@@ -35,7 +35,7 @@ function isHexId(value: unknown): boolean {
   return /^[a-f0-9]{24}$/i.test(String(value ?? ''));
 }
 
-const SOURCE_EXTENSIONS = new Set(['html']);
+const SOURCE_EXTENSIONS = new Set(['html', 'pdf']);
 const ASSET_EXTENSIONS = new Set([
   'png',
   'jpg',
@@ -55,6 +55,17 @@ export function buildAgencyTemplateStorageKey(
     throw new AppError('That template reference is not valid.', 400);
   }
   return `${String(agencyId)}/${String(versionId)}.html`;
+}
+
+/** Uploaded PDF backgrounds use the same tenant/version shape as HTML. */
+export function buildAgencyTemplatePdfStorageKey(
+  agencyId: unknown,
+  versionId: unknown
+): string {
+  if (!isHexId(agencyId) || !isHexId(versionId)) {
+    throw new AppError('That template reference is not valid.', 400);
+  }
+  return `${String(agencyId)}/${String(versionId)}.pdf`;
 }
 
 /** Snapshot keys are version-scoped: `<agency>/<version>/<slot>.<ext>`. */
@@ -155,6 +166,45 @@ export async function removeAgencyTemplateFile(
     await fs.unlink(agencyTemplateFilePath(storageKey));
   } catch (error: any) {
     if (error?.code !== 'ENOENT') throw error;
+  }
+}
+
+export async function writeAgencyTemplatePdf(
+  storageKey: string,
+  buffer: Buffer
+): Promise<void> {
+  if (!Buffer.isBuffer(buffer) || buffer.byteLength === 0) {
+    throw new AppError('The PDF background is empty.', 400);
+  }
+  if (agencyStorageProvider() === 'cloudinary') {
+    await cloudWriteAgencyBytes(storageKey, buffer);
+    return;
+  }
+  const target = agencyTemplateFilePath(storageKey);
+  await fs.mkdir(path.dirname(target), { recursive: true });
+  await fs.writeFile(target, buffer, { mode: 0o600 });
+}
+
+export async function readAgencyTemplatePdf(
+  storageKey: string
+): Promise<Buffer> {
+  if (agencyStorageProvider() === 'cloudinary') {
+    return cloudReadAgencyBytes(
+      storageKey,
+      'The PDF background for this version is no longer available.',
+      409
+    );
+  }
+  try {
+    return await fs.readFile(agencyTemplateFilePath(storageKey));
+  } catch (error: any) {
+    if (error?.code === 'ENOENT') {
+      throw new AppError(
+        'The PDF background for this version is no longer available.',
+        409
+      );
+    }
+    throw error;
   }
 }
 

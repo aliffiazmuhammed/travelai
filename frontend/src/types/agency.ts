@@ -238,9 +238,69 @@ export interface AgencyTemplateAssetSelection {
   dayAssets?: Array<{ day: number; assetId: string }>;
 }
 
+/**
+ * PDF-background templates (A6f). Coordinates are PDF points with a top-left
+ * origin, so the mapper can position boxes with plain percentages; the server
+ * converts them for the renderer.
+ */
+export type AgencyPdfSlotKind = 'text' | 'image';
+export type AgencyPdfSlotFont = 'body' | 'heading';
+export type AgencyPdfSlotAlign = 'left' | 'center' | 'right';
+export type AgencyPdfSlotFit = 'cover' | 'contain';
+
+export interface AgencyPdfSlot {
+  id: string;
+  kind: AgencyPdfSlotKind;
+  token: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  font?: AgencyPdfSlotFont;
+  size?: number;
+  minSize?: number;
+  align?: AgencyPdfSlotAlign;
+  color?: string;
+  lineHeight?: number;
+  maxLines?: number;
+  fit?: AgencyPdfSlotFit;
+}
+
+export interface AgencyPdfPage {
+  page: number;
+  /** The one page the renderer repeats for each itinerary day. */
+  repeat?: 'days';
+  slots: AgencyPdfSlot[];
+}
+
+export interface AgencyPdfSlotMap {
+  schemaVersion: 1;
+  pages: AgencyPdfPage[];
+}
+
+/** One bindable field, as advertised by the server. */
+export interface AgencyPdfTokenOption {
+  token: string;
+  label: string;
+  kind: AgencyPdfSlotKind;
+  day: boolean;
+}
+
+export interface AgencyTemplateLayout {
+  template: AgencyTemplate;
+  version: AgencyTemplateVersion;
+  slotMap: AgencyPdfSlotMap;
+  slotMapChecksum: string;
+  pageCount: number;
+  checksum: string;
+}
+
 /** Real-trip render that marks a version as previewed before activation. */
 export interface AgencyTemplateVersionPreview {
-  html: string;
+  engine: AgencyTemplate['engine'];
+  html?: string;
+  /** Base64 PDF bytes for PDF-background templates. */
+  pdf?: string;
   pageCount: number;
   audience: AgencyTemplateAudience;
   template: AgencyTemplate;
@@ -284,9 +344,12 @@ export interface AgencyExportQuoteSummary {
   perPerson: number;
 }
 
-/** Real renderer output for the in-app iframe preview. */
+/** Real renderer output for the in-app preview. */
 export interface AgencyExportPreview {
-  html: string;
+  engine: AgencyTemplate['engine'];
+  html?: string;
+  /** Base64 PDF bytes for PDF-background templates. */
+  pdf?: string;
   pageCount: number;
   audience: AgencyTemplateAudience;
   template: AgencyTemplate;
@@ -368,6 +431,8 @@ export interface AgencyProposalView {
   accepted: boolean;
   acceptedAt: string | null;
   html: string;
+  /** `pdf` means the viewer must show the pinned export PDF instead. */
+  documentMode: 'html' | 'pdf';
   pageCount: number;
   templateName: string;
   pdf: { bytes: number } | null;

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import Navbar from "@/components/Navbar";
+import PdfDocumentViewer from "@/components/agency/PdfDocumentViewer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/services/api";
@@ -30,6 +31,8 @@ const ProposalShare: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [accepting, setAccepting] = useState(false);
+  const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
+  const [pdfError, setPdfError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token) {
@@ -60,6 +63,29 @@ const ProposalShare: React.FC = () => {
     };
     fetchProposal();
   }, [token]);
+
+  useEffect(() => {
+    if (!token || proposal?.documentMode !== "pdf") return;
+    let cancelled = false;
+    setPdfBlob(null);
+    setPdfError(null);
+    api
+      .getAgencyProposalPdfBlob(token)
+      .then((blob) => {
+        if (!cancelled) setPdfBlob(blob);
+      })
+      .catch((err: any) => {
+        if (!cancelled) {
+          setPdfError(
+            err?.message ||
+              "This proposal document could not be loaded. Download it instead."
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, proposal?.documentMode]);
 
   const handleAccept = async () => {
     if (!token || !proposal || !proposal.canAccept) return;
@@ -423,12 +449,27 @@ const ProposalShare: React.FC = () => {
                   </a>
                 ) : null}
               </div>
-              <iframe
-                title={`${proposal.trip.title} proposal`}
-                srcDoc={proposal.html}
-                sandbox=""
-                className="h-[75vh] w-full rounded-2xl border border-slate-200 bg-white"
-              />
+              {proposal.documentMode === "pdf" ? (
+                pdfError ? (
+                  <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50/60 px-6 py-16 text-center text-xs text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-300">
+                    <AlertCircle className="h-5 w-5" />
+                    {pdfError}
+                  </div>
+                ) : (
+                  <PdfDocumentViewer
+                    source={pdfBlob}
+                    title={proposal.trip.title}
+                    className="h-[75vh]"
+                  />
+                )
+              ) : (
+                <iframe
+                  title={`${proposal.trip.title} proposal`}
+                  srcDoc={proposal.html}
+                  sandbox=""
+                  className="h-[75vh] w-full rounded-2xl border border-slate-200 bg-white"
+                />
+              )}
             </div>
 
             {/* Privacy note */}

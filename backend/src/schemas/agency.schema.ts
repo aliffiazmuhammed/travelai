@@ -405,6 +405,42 @@ export const addAgencyTemplateVersionSchema = z
   .strict();
 
 /**
+ * PDF designs send the slot map as a JSON field beside the uploaded file. The
+ * service validates every slot; this cap only stops an oversized body early.
+ */
+const templateSlotMapField = z
+  .string()
+  .trim()
+  .min(2, 'Map at least one slot before saving the layout.')
+  .max(250_000, 'The layout is too large.');
+
+export const createAgencyPdfTemplateSchema = z
+  .object({
+    name: z
+      .string()
+      .trim()
+      .min(2, 'Give this template a name.')
+      .max(80, 'Template names must be 80 characters or fewer.'),
+    description: z.string().trim().max(240).optional(),
+    audience: z.enum(['client', 'internal'], {
+      message: 'Choose a client or internal template.',
+    }),
+    assets: templateAssetsField,
+    slotMap: templateSlotMapField,
+  })
+  .strict();
+
+export const saveAgencyTemplateLayoutSchema = z
+  .object({
+    baseVersion: z.coerce
+      .number()
+      .int()
+      .min(1, 'Choose the version you are editing.'),
+    slotMap: templateSlotMapField,
+  })
+  .strict();
+
+/**
  * In-app editing sends the full fragment as JSON. The 512 KiB cap is enforced
  * on bytes by the template validator; the character cap here is only a coarse
  * guard so an oversized body is rejected before validation runs.

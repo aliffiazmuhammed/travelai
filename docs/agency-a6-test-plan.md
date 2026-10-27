@@ -1,7 +1,7 @@
 # Agency Workspace A6 - Custom Template Onboarding and Management Test Plan
 
 **Milestone:** A6 - template contract, asset snapshots, management API and gallery UI
-**Status:** implemented and verified locally (2026-10-23)
+**Status:** implemented and verified locally (2026-10-23); uploaded PDF designs added as A6f (2026-10-27)
 **Feature flag:** `AGENCY_WORKSPACE_ENABLED` defaults to `false`; the production blueprint sets it to `true` after A9 local verification. Set it to `false` for the kill switch.
 
 ---
@@ -11,6 +11,7 @@
 A6 lets an agency replace the built-in brochure with its own branded proposal layout without any code change:
 
 - validated, logic-less HTML template contract (`docs/agency-template-contract.md`): static CSS, allowlisted tokens, no scripts/remote assets/forms, `{{#days}}` required, source ≤ 512 KiB
+- A6f: uploaded PDF designs (`engine: "pdf-background"`): sanitised vector background, visual slot mapper, one repeat page per itinerary day, text/image slots, versioned layout edits and in-process pdf-lib rendering (no Chrome)
 - `AgencyTemplateVersion` rows: immutable per-version source and asset snapshots under server-generated `<agencyId>/<versionId>` private keys
 - asset mapping at upload: logo, mascot, heading/body fonts, cover image and up to 30 day images, with branding fallbacks
 - lifecycle: upload → draft → real-trip preview (records `previewedAt`) → activate → default/archive; archiving never rewrites pinned exports
@@ -27,7 +28,7 @@ Policy enforced in A6:
 - built-in templates stay TravelAI-managed; their rows cannot be renamed, archived or re-uploaded
 - the client DTO and rendered proposals never expose internal cost, markup, prepared-by, expenses or chat ciphertext
 
-Deferred: the PDF-background/slot bridge for PDF-only agencies; agencies author self-contained HTML templates instead. A public client-facing proposal page remains A7.
+Deferred: automatic conversion of arbitrary PDF/Canva/Figma files into templates, arbitrary per-client PDF filling (a design must be mapped once), and a visual theme editor for HTML. A public client-facing proposal page remains A7.
 
 ---
 
@@ -41,10 +42,10 @@ cd frontend && npm run typecheck
 cd frontend && npm run build
 ```
 
-Last local run (2026-10-27, includes A6e):
+Last local run (2026-10-27, includes A6e and A6f):
 
-- backend suite: **580 tests, 580 pass, 0 fail**
-- A6 focused suites (`templateValidation.test.ts`, `templateAssets.test.ts`, `customTemplate.test.ts`, `templateManagement.test.ts`, `models.test.ts`, `routes/agency.routes.test.ts`): all pass
+- backend suite: **590 tests, 590 pass, 0 fail**
+- A6 focused suites (`templateValidation.test.ts`, `templateAssets.test.ts`, `customTemplate.test.ts`, `templateManagement.test.ts`, `pdfTemplateContract.test.ts`, `models.test.ts`, `routes/agency.routes.test.ts`): all pass
 - frontend typecheck: clean
 - frontend production build: clean
 
@@ -65,7 +66,13 @@ A6-specific coverage:
   - custom renderer consumes the same DTO as the built-ins; internal fields stay out of client output
 - `services/agency/exports/templateManagement.test.ts`
   - version projections expose lifecycle metadata but never storage keys, checksums or tokens
-  - older versions are not marked active; custom templates need an activated version before export
+  - older versions are not marked active; custom templates (HTML and PDF designs) need an activated version before export
+- `services/agency/exports/pdfTemplateContract.test.ts` (A6f)
+  - unknown/audience-inappropriate tokens, day tokens outside the repeat page, second repeat pages, duplicate ids, out-of-page and sub-4pt slots rejected
+  - oversized page counts/slot counts, unsupported schema versions and default materialisation
+  - slot-map checksum stable across key order; coverage tokens map image slots to HTML asset tokens
+  - sanitizer rebuilds the design, drops annotations/scripts, rejects encrypted, rotated, cropped and >20-page files
+  - renderer expands the repeat page with independent content, adds the quote watermark, never renders internal-only tokens into a client document
 - `services/agency/models.test.ts`
   - `AgencyTemplateVersion` uniqueness per `(agencyId, templateId, version)`
 - `routes/agency.routes.test.ts`
@@ -101,6 +108,40 @@ Run it with the database and a Chrome installation available:
 cd backend
 npx tsx scripts/smoke-a6.mts
 ```
+
+### A6f uploaded PDF designs (2026-10-27)
+
+`backend/scripts/smoke-a6f.mts` needs no browser. It uses the throwaway
+`travelai_a6f_smoke` database and temporary template/asset/export roots, builds a
+three-page design with pdf-lib, and runs the whole vector path. Last local run:
+**42 checks, all passed.**
+
+1. Layout validation answers before anything is stored: a day token off the
+   repeat page, a slot past the page edge, an unknown token, a page that is not
+   in the PDF, an internal-only token in a client layout and a WebP snapshot for
+   a mapped image slot are all refused (400).
+2. A valid upload creates a draft `pdf-background` template and version 1 (3
+   design pages); the draft is not selectable and activation before preview is
+   refused (409).
+3. Tenant and role scoping: foreign template id and foreign preview trip are
+   404; layout and background reads are admin-only (403).
+4. The stored layout and checksum read back; the private background streams as
+   a PDF of the sanitised byte length.
+5. Preview renders a four-page PDF: cover data, one page per itinerary day from
+   the repeat page, and quote/contact data on the closing page. Client previews
+   never contain activity costs; an internal template renders them.
+6. Activation publishes version 1; the export pins it and renders entirely in
+   process (no Chrome/Gotenberg), with the merged text in the output file.
+7. Moving a slot saves version 2 with the same background checksum, page count
+   and asset snapshots while version 1 stays active; the moved coordinates
+   read back. An unchanged layout is refused (400) and saving is admin-only
+   (403). Preview + activation move to v2 and the next export pins it.
+8. A background file altered on disk fails the checksum guard (409) and is
+   restored.
+9. The public proposal reports `documentMode: "pdf"`, returns no HTML, and the
+   token-only PDF route serves the pinned four-page export.
+10. Archiving blocks layout saves (409) and new exports (404) but keeps pinned
+    exports; cross-tenant archive is 404. Lifecycle actions leave audit rows.
 
 ---
 
@@ -144,6 +185,33 @@ Browser smoke on a synthetic agency + custom template:
    ("The <script> element is not allowed in templates.") and created no version.
 4. **Discard changes** restored the baseline and **Cancel** closed the editor.
 
+### A6f uploaded PDF designs (2026-10-27)
+
+Browser smoke on a scratch agency (`travelai_a6f_browser`, synthetic owner,
+two-day trip, quote) with a three-page A4 design PDF:
+
+1. **Upload PDF design** accepted the file, name and audience; the asset step
+   mapped a Day 1 image from the agency library.
+2. **Map data slots** rendered the sanitised design into the canvas (the teal
+   header painted at the expected pixels) and reported `Page 1 of 3 ·
+   595 × 842 pt`.
+3. Slots were placed as expected: a text slot on page 1 defaulted to a global
+   field (re-bound to **Trip title**), the repeat page was enabled with
+   **Repeat per day**, and its text/image slots defaulted to **Day number ·
+   day page** and **Day image · day page**. The counter read `3 slots on 2
+   pages`.
+4. **Save template** created the draft `PDF design` template and version 1; the
+   manager opened automatically with **Preview** / **Activate** locked behind a
+   real preview.
+5. **Preview** against the two-day trip rendered **4 pages** (the repeat page
+   expanded once per day) and unlocked activation; **Activate** flipped the
+   card to Active and offered **Make default**.
+
+Also verified the guard rails: a layout that uses a Day image slot without any
+mapped day image is refused at save with "This template uses day images. Choose
+at least one day image before uploading.", and the mapper stays open so the
+slot can be removed or the upload redone.
+
 ---
 
 ## 5. Fixes found during verification
@@ -151,15 +219,18 @@ Browser smoke on a synthetic agency + custom template:
 - **Archived templates could not be restored in the UI:** activation stayed disabled because `version.active` remained true after archiving, while the banner told admins to activate a previewed version. The manager now computes liveness as `version.active && template.status !== 'archived'`, hides the Active badge while archived and offers "Restore version".
 - **Archived drafts remain recoverable:** preview stays enabled for archived versions (resolution uses `requireActiveTemplate: false`), so an archived draft can be restored via Preview → Activate. Version upload stays 409 while archived, matching the contract.
 - **Unreachable draft branch in the quote panel:** comparing `quote.status === 'draft'` after drafts were already handled caused a TS2367 narrowing error; the branch was removed with no behavior change.
+- **Activated PDF designs could not be exported:** `assertRenderableTemplate` only accepted `engine: "html"`, so `createAgencyExport` answered "That template is not ready for export" for every PDF design. It now accepts `pdf-background` too, with unit coverage in `templateManagement.test.ts`. Found by `smoke-a6f.mts`.
+- **Blank design in the PDF layout mapper:** the `ResizeObserver` attached to the page wrapper once, but the loading state replaces that element, so the observer kept measuring the detached node and the render effect saw a zero width — the canvas stayed at its default 300×150 with no error. The observer now re-attaches when loading finishes. Found by the A6f browser smoke.
 
 ---
 
 ## 6. Production rollout prerequisites
 
 - A6 acceptance is complete; the production blueprint now enables the workspace. Keep the flag available as the kill switch.
-- Provision `AGENCY_TEMPLATE_DIR` (and `AGENCY_ASSET_DIR`) on persistent private volumes; template sources and snapshots are never served from the public uploads tree.
-- Uploads are rate-limited per member and agency (30 per hour); each file is held in memory only up to the 512 KiB contract limit.
+- Provision `AGENCY_TEMPLATE_DIR` (and `AGENCY_ASSET_DIR`) on persistent private volumes; template sources, PDF backgrounds and snapshots are never served from the public uploads tree.
+- Uploads are rate-limited per member and agency (30 per hour); each HTML file is held in memory only up to the 512 KiB contract limit and each PDF design up to 10 MiB / 20 pages.
+- PDF designs need no Chrome or Gotenberg for export (pdf-lib merges in process), but their backgrounds and snapshots use the same private store/quota. Mapped image slots must be PNG/JPEG; WebP is rejected before storage.
+- In-app editing adds admin-only routes (`GET .../versions/:version/source|layout|background`, `POST .../from-source|from-layout`). All of them verify stored bytes/checksums, the save routes are rate-limited with the upload limiter, and archived templates always answer 409.
 - Verify `/api/health` reports the current milestone (`A9`) and `writesEnabled: true` when the flag is on.
 - Confirm template routes remain tenant-guarded and admin-only, previews never expose another agency's assets, and archived templates stay resolvable only for pinned export retries.
-- In-app editing adds two admin-only routes: `GET .../versions/:version/source` and `POST .../versions/from-source`. Both verify the stored source against the version checksum, the save route is rate-limited with the upload limiter, and archived templates always answer 409.
 - A7 must keep consuming the same DTO, projections and pinned `(templateId, templateVersion)` rather than re-rendering or re-resolving templates in the browser.

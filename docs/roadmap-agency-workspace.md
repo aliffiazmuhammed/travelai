@@ -1,6 +1,6 @@
 # Agency Workspace - implementation milestone plan
 
-**Status:** A0 accepted (2026-10-22); A1 implemented and verified (2026-10-22); A2 implemented and verified (2026-10-22); A3 implemented (2026-10-22); A4 implemented and verified (2026-10-22); A5 implemented and verified (2026-10-22); A6 implemented and verified (2026-10-23); A7 implemented and verified (2026-10-23); A8 implemented and verified (2026-10-23); A9 implemented and verified locally with a simulated pilot (2026-10-23).
+**Status:** A0 accepted (2026-10-22); A1 implemented and verified (2026-10-22); A2 implemented and verified (2026-10-22); A3 implemented (2026-10-22); A4 implemented and verified (2026-10-22); A5 implemented and verified (2026-10-22); A6 implemented and verified (2026-10-23) with uploaded PDF designs added as A6f (2026-10-27); A7 implemented and verified (2026-10-23); A8 implemented and verified (2026-10-23); A9 implemented and verified locally with a simulated pilot (2026-10-23).
 
 **Rollout:** the production blueprint enables the workspace (`AGENCY_WORKSPACE_ENABLED=true`, commit `158fbcf`). The real-agency pilot and production smoke checks remain operational steps; `false` remains the kill switch.
 
@@ -18,7 +18,7 @@
 
 **A5 artifacts:** versioned `ExportDocument` builder, `AgencyTemplate`/`AgencyExport`/`AgencyAudit` models, built-in `brochure` and `internal-summary` HTML renderers, headless-Chrome PDF jobs with retry, private export storage, ten-minute signed staff downloads, export rate limiting and audit events, and the trip Export tab (template picker, quote confirmation, real preview, generate/download, history). Tests live in `backend/src/services/agency/exports/exports.test.ts`, `models.test.ts`, `routes/agency.routes.test.ts` and `assets.test.ts`; see `docs/agency-a5-test-plan.md`.
 
-**A6 artifacts:** `AgencyTemplateVersion` model with immutable version rows and private source storage, the validated HTML template contract (`docs/agency-template-contract.md`), asset snapshotting (logo, mascot, fonts, cover, day images), preview-before-activation with real-trip rendering, version pinning on export jobs, one default per audience, archive/restore, and the `/agency/templates` gallery with upload, preview, manage and read-only member views. Tests live in `backend/src/services/agency/exports/templateValidation.test.ts`, `templateAssets.test.ts`, `customTemplate.test.ts`, `templateManagement.test.ts` and `scripts/smoke-a6.mts`; see `docs/agency-a6-test-plan.md`.
+**A6 artifacts:** `AgencyTemplateVersion` model with immutable version rows and private source storage, the validated HTML template contract (`docs/agency-template-contract.md`), asset snapshotting (logo, mascot, fonts, cover, day images), preview-before-activation with real-trip rendering, version pinning on export jobs, one default per audience, archive/restore, and the `/agency/templates` gallery with upload, preview, manage and read-only member views. A6e adds in-app HTML source editing; A6f adds uploaded PDF designs (`engine: "pdf-background"`): sanitised vector backgrounds, a visual slot mapper with a repeat day page, layout edits as new versions, in-process pdf-lib rendering and PDF-mode public proposals. Tests live in `backend/src/services/agency/exports/templateValidation.test.ts`, `templateAssets.test.ts`, `customTemplate.test.ts`, `templateManagement.test.ts`, `pdfTemplateContract.test.ts`, `scripts/smoke-a6.mts` and `scripts/smoke-a6f.mts`; see `docs/agency-a6-test-plan.md`.
 
 **A7 artifacts:** `AgencyProposalLink` capability-token share rows (hashed at rest, TTL-indexed, revocable), public `GET/POST /api/agency/proposals/:token[/accept|/pdf]` routes that re-render the pinned client export server-side, staff create/list/revoke share routes, the public `/proposal/:token` page (sandboxed document iframe, client-only quote summary, accept and PDF download) and share management in the export panel. Tests live in `backend/src/services/agency/proposals.test.ts`, `routes/agency.routes.test.ts` and `scripts/smoke-a7.mts`; see `docs/agency-a7-test-plan.md`.
 
@@ -62,12 +62,12 @@ A person may use both products, but under the PA0 account model they do so throu
 | Trip visibility | Agency-wide by default; optional assigned-only later | Small agencies expect shared visibility; assignment can be added without changing ownership |
 | Client access | Existing trip invites/share links, not `AgencyMember` | Clients are collaborators, not staff |
 | Renderer | HTML/CSS -> PDF via Gotenberg or Chromium worker | The attached brochure is a designed document, not a Word template |
-| Document formats | HTML first, DOCX later, PDF background as a bridge | HTML preserves layout and supports variable day counts |
-| Template onboarding | Managed templates first, self-serve theme editor later | Agencies can supply a design but cannot reliably author a safe template |
+| Document formats | HTML first, DOCX later, uploaded PDF designs via a mapped slot layer | HTML preserves layout and supports variable day counts; a mapped PDF keeps an agency's designed artwork |
+| Template onboarding | Managed templates first, self-serve HTML/layout editing later | Agencies can supply a design but cannot reliably author a safe template |
 | Agency domain | `/agency` path first, subdomain later | Faster to ship; same-origin CSP and cookies already work |
 | Agency onboarding | Platform-admin provisioned; owner invites staff | TravelAI onboards paying agencies; replaces the A1 self-serve onboarding in PA3 |
 
-**Explicitly rejected for v1:** filling arbitrary PDFs, automatic conversion of any PDF/Canva/Figma file into a template, and AI-generated legal or cancellation text.
+**Explicitly rejected for v1:** automatic conversion of any PDF/Canva/Figma file into a template, filling a different arbitrary PDF per client (a design is mapped once and reused), and AI-generated legal or cancellation text.
 
 ---
 
@@ -508,7 +508,12 @@ Self-serve HTML editing shipped as A6e (2026-10-27): admins edit a version's
 source in the template manager and save a new immutable version. The original
 security concern is contained by keeping the schema-v1 validator, admin-only
 access, carried-forward asset snapshots and the preview-before-activation gate.
-A visual theme editor (drag-and-drop styling without HTML) remains deferred.
+
+Uploaded PDF designs shipped as A6f (2026-10-27): agencies upload their finished
+design, map text/image boxes in a browser mapper, mark one page to repeat per
+itinerary day, and preview/activate like any other version. The server stores
+only a sanitised background plus a closed slot map (§7.2a). A visual theme
+editor (drag-and-drop styling without HTML) remains deferred.
 
 ---
 
@@ -575,6 +580,44 @@ Renderer options:
 3. **CloudConvert** - fastest to start, but sends client PII to a third party.
 
 Recommended: Gotenberg sidecar or a dedicated render worker. Keep the Express app out of the PDF rendering business.
+
+### 7.2a Uploaded PDF design engine (A6f)
+
+An agency can upload its finished PDF instead of authoring HTML. The upload is
+rebuilt as a passive vector background (annotations, page actions, metadata,
+OpenAction, scripts, forms and attachments dropped) and the version stores a
+closed slot map:
+
+```ts
+AgencyPdfSlotMap {
+  schemaVersion: 1
+  pages: Array<{
+    page: number                  // 1-based background page
+    repeat?: 'days'               // at most one; rendered once per itinerary day
+    slots: Array<{
+      id, kind: 'text' | 'image', token
+      x, y, w, h                  // PDF points, top-left origin
+      font?, size?, minSize?, align?, color?, lineHeight?, maxLines?  // text
+      fit?                        // image: cover | contain
+    }>
+  }>
+}
+```
+
+- The same page is both mapped and rendered in the browser with pdf.js; no
+  design file ever leaves the server except as private, admin-only bytes.
+- Limits: 10 MiB, 20 pages, 250 slots (80 per page), 4 pt minimum, text 6-72 pt.
+- The slot vocabulary mirrors the HTML token set; day tokens are valid only on
+  the repeat page, and internal-only cost/price tokens are rejected for client
+  layouts. PNG/JPEG only for mapped images (pdf-lib cannot embed WebP).
+- Layout edits save a new immutable version with the background and snapshots
+  copied byte-for-byte; unchanged layouts are rejected.
+- Rendering is pdf-lib in process, so this engine needs **no Chrome or
+  Gotenberg**. The output keeps the design vector and expands the repeat page.
+- Public proposals for a pinned PDF-design export use `documentMode: "pdf"` and
+  stream the finished export from the token-only PDF route.
+
+Contract details: `docs/agency-template-contract.md` §10.
 
 ### 7.3 The attached brochure
 
@@ -867,7 +910,7 @@ Deliverables:
 - Template upload/activation/archive/default.
 - Template version pinning on export.
 - Preview with a real trip.
-- ~~Optional PDF-background/slot bridge for PDF-only agencies~~ deferred; agencies author self-contained HTML templates.
+- ~~Optional PDF-background/slot bridge for PDF-only agencies~~ shipped as A6f (2026-10-27): uploaded PDF designs with a visual mapper, one repeat page per itinerary day and in-process rendering.
 - Asset mapping: logo, mascot, fonts, cover image, day images.
 
 Tests:
@@ -877,6 +920,9 @@ Tests:
 - Archived templates cannot be selected.
 - A preview never exposes another agency's assets.
 - Template validation rejects unknown tokens and missing assets.
+- A6f: PDF designs reject unsanitised pages, off-page/day-misplaced slots and WebP images for mapped slots; layout edits move the active version only after preview; PDF-mode proposals serve the pinned export.
+
+Run `backend/scripts/smoke-a6.mts` (HTML) and `backend/scripts/smoke-a6f.mts` (PDF) for the live lifecycle checks.
 
 Exit criteria:
 
@@ -1067,8 +1113,9 @@ A0 -> A1 -> A2 -> A4 -> A5 -> A6 -> A7 -> A9
 
 ## 13. Explicitly out of scope for the first agency release
 
-- Automatic ingestion of arbitrary PDFs, Canva, Figma or InDesign files.
-- A visual template/theme editor (A6e covers HTML source editing only).
+- Automatic ingestion of arbitrary PDFs, Canva, Figma or InDesign files into a template (an uploaded PDF must be final and mapped).
+- Filling a different arbitrary PDF for each client (a mapped design is reused for every trip).
+- A visual template/theme editor for HTML (A6e covers HTML source editing; A6f covers PDF slot mapping).
 - AI-generated prices, legal terms or cancellation policies.
 - Email delivery and notification center.
 - Full CRM (pipelines, tasks, commissions, invoices).

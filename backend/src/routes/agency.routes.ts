@@ -11,6 +11,7 @@ import {
   createAgencyClientHandler,
   createAgencyExportHandler,
   createAgencyInviteHandler,
+  createAgencyPdfTemplateHandler,
   createAgencyProposalLinkHandler,
   createAgencyTemplateHandler,
   createAgencyTripHandler,
@@ -22,7 +23,10 @@ import {
   getAgencyAssetContentHandler,
   getAgencyInvitePreview,
   getAgencyProposalHandler,
+  getAgencyPdfTokenCatalogHandler,
   getAgencyQuoteHandler,
+  getAgencyTemplateBackgroundHandler,
+  getAgencyTemplateLayoutHandler,
   getAgencyTemplateSourceHandler,
   getAgencyTripHandler,
   getAgencyUsageHandler,
@@ -46,6 +50,7 @@ import {
   revokeAgencyProposalLinkHandler,
   acceptAgencyProposalHandler,
   saveAgencyQuoteHandler,
+  saveAgencyTemplateLayoutHandler,
   saveAgencyTemplateSourceHandler,
   sendAgencyQuoteHandler,
   setDefaultAgencyTemplateHandler,
@@ -67,6 +72,7 @@ import {
 } from '../middleware/agencyAccess.middleware.js';
 import {
   handleAgencyAssetUpload,
+  handleAgencyPdfTemplateUpload,
   handleAgencyTemplateUpload,
 } from '../middleware/upload.middleware.js';
 import { validate } from '../middleware/validate.middleware.js';
@@ -78,11 +84,13 @@ import {
   createAgencyClientSchema,
   createAgencyExportSchema,
   createAgencyInviteSchema,
+  createAgencyPdfTemplateSchema,
   createAgencyProposalLinkSchema,
   createAgencyTemplateSchema,
   createAgencyTripSchema,
   previewAgencyTemplateVersionSchema,
   saveAgencyQuoteSchema,
+  saveAgencyTemplateLayoutSchema,
   saveAgencyTemplateSourceSchema,
   updateAgencyClientSchema,
   updateAgencyPlanSchema,
@@ -255,6 +263,24 @@ router.post(
   validate(createAgencyTemplateSchema),
   createAgencyTemplateHandler
 );
+// PDF-background templates (A6f). The design arrives as a PDF and the layout
+// as a slot map validated against that PDF's real page geometry. Editing a
+// layout mints a new immutable version instead of rewriting the approved one.
+router.post(
+  '/:agencyId/templates/pdf',
+  protectAgency,
+  requireAgencyRole('admin'),
+  agencyTemplateUploadLimiter,
+  handleAgencyPdfTemplateUpload,
+  validate(createAgencyPdfTemplateSchema),
+  createAgencyPdfTemplateHandler
+);
+router.get(
+  '/:agencyId/templates/pdf-tokens',
+  protectAgency,
+  requireAgencyRole('admin'),
+  getAgencyPdfTokenCatalogHandler
+);
 router.patch(
   '/:agencyId/templates/:templateId',
   protectAgency,
@@ -281,6 +307,26 @@ router.post(
   agencyTemplateUploadLimiter,
   validate(saveAgencyTemplateSourceSchema),
   saveAgencyTemplateSourceHandler
+);
+router.get(
+  '/:agencyId/templates/:templateId/versions/:version/layout',
+  protectAgency,
+  requireAgencyRole('admin'),
+  getAgencyTemplateLayoutHandler
+);
+router.get(
+  '/:agencyId/templates/:templateId/versions/:version/background',
+  protectAgency,
+  requireAgencyRole('admin'),
+  getAgencyTemplateBackgroundHandler
+);
+router.post(
+  '/:agencyId/templates/:templateId/versions/from-layout',
+  protectAgency,
+  requireAgencyRole('admin'),
+  agencyTemplateUploadLimiter,
+  validate(saveAgencyTemplateLayoutSchema),
+  saveAgencyTemplateLayoutHandler
 );
 router.post(
   '/:agencyId/templates/:templateId/versions',

@@ -68,7 +68,7 @@ and restore the pre-migration backup as described in
 | `AGENCY_PDF_RENDERER_TIMEOUT_MS` | `120000` | Per-attempt render timeout. One automatic retry absorbs a 502/503 while a sleeping renderer starts. |
 | `AGENCY_STORAGE_PROVIDER` | auto (Cloudinary when Cloudinary credentials exist, else local) | Where agency tenant bytes (brand assets, template sources/snapshots, export PDFs) live. `local` forces the file roots below even when Cloudinary is configured; `cloudinary` forces Cloudinary even without credentials (writes then fail loudly). |
 | `AGENCY_ASSET_DIR` | `backend/agency-assets` | Local fallback store for brand assets (A3). |
-| `AGENCY_TEMPLATE_DIR` | `backend/agency-templates` | Local fallback store for uploaded template sources/snapshots (A6). |
+| `AGENCY_TEMPLATE_DIR` | `backend/agency-templates` | Local fallback store for uploaded template sources, PDF design backgrounds and asset snapshots (A6/A6f). |
 | `AGENCY_EXPORT_DIR` | `backend/agency-exports` | Local fallback store for rendered proposal PDFs (A5). |
 | `AGENCY_EXPORT_SIGNING_SECRET` | falls back to `JWT_SECRET` | HMAC secret for signed export download URLs. |
 
@@ -136,13 +136,16 @@ owner membership. It never converts or attaches a personal account.
 4. **Branding (A3).** Settings → Brand & Assets: agency name, contact,
    colours, logo/mascot uploads, fonts. Assets are private and tenant-scoped;
    a wrong file type/size is rejected at upload.
-5. **Templates (A6).** Either keep the built-in brochure/internal templates
-   or upload an HTML template (Settings → Templates), choose brand assets,
-   and **preview against a real trip before activating a version** — the
-   activation guard refuses unpinned versions. Admins can also open a version
-   and use **Edit HTML** to save corrected source as a new version; the base
-   version's brand assets carry over and the old version stays pinned to its
-   exports.
+5. **Templates (A6).** Either keep the built-in brochure/internal templates,
+   upload an HTML template (Settings → Templates), or upload the agency's
+   finished **PDF design** and map its data slots. Choose brand assets and
+   **preview against a real trip before activating a version** — the activation
+   guard refuses unpinned versions. Admins can also open a version and use
+   **Edit HTML** or **Edit layout** to save a correction as a new version; the
+   base version's brand assets carry over and the old version stays pinned to
+   its exports. For a PDF design: upload at its final page size, mark exactly
+   one page to repeat for each itinerary day, and keep mapped images PNG/JPEG
+   (WebP cannot be embedded by the PDF engine).
 6. **First trip (A2).** Create a trip in the workspace; every member sees it,
    planners and above can edit, admins archive/restore.
 7. **Client + quote (A4).** Add the client to the trip, save the quote
@@ -262,13 +265,20 @@ Run this when an agency reports trouble, in order.
    stored error. Common causes:
    - 503 renderer not configured → set `AGENCY_PDF_RENDERER_URL` (preferred on
      hosts without a browser) or install Chrome and set `AGENCY_CHROME_PATH`;
-     confirm with `/api/health` → `agencyPdf.renderer`.
+     confirm with `/api/health` → `agencyPdf.renderer`. **PDF-design templates
+     do not use the renderer** (pdf-lib merges in process), so they export even
+     when `agencyPdf.renderer` is `none`.
    - 409 template/version no longer available → regenerate the export.
    - 409 snapshot unreadable → upload a new template version.
+   - 409 PDF design/layout no longer matches its checksum → the stored
+     background or slot map was altered; upload or re-map the design.
 3. **Template upload rejected.** The validator output names the problem:
    disallowed tag/attribute, remote image source, `url()`/`@import`/`expression`
-   in CSS, unknown Mustache token, >512KB source, >32MB asset snapshot.
-   Point the agency at the template contract in `agency-a6-design.md`.
+   in CSS, unknown Mustache token, >512KB source, >32MB asset snapshot. For a
+   PDF design: >10 MiB, >20 pages, password-protected, rotated or cropped pages,
+   a slot outside the page, a day token off the repeat page, an internal-only
+   token in a client layout, or a WebP image mapped to a slot. Point the agency
+   at the template contract in `agency-template-contract.md`.
 4. **Share link dead.** Links expire (`AGENCY_PROPOSAL_TTL_DAYS`); the share
    panel revokes instantly. A revoked/expired link is 404/410 by design.
 5. **Storage.** `GET /api/agency/:id/usage` `storageBytes` covers brand
@@ -287,10 +297,10 @@ Run this when an agency reports trouble, in order.
   `agencyassets`, `agencytemplates` (+versions), `agencyexports`,
   `agencyquotes`, `agencyclients`, `agencyinvites`, `agencyproposallinks`,
   `agencyaudits`, plus agency-workspace `trips`.
-- Tenant bytes (brand assets, template sources/snapshots, export PDFs): with
-  the Cloudinary provider these are private raw assets under
-  `<CLOUDINARY_FOLDER>/agency/`; with the local provider they are the three
-  private file roots (§2). Files are redundant copies of what the rows
+- Tenant bytes (brand assets, template sources, PDF design backgrounds and
+  snapshots, export PDFs): with the Cloudinary provider these are private raw
+  assets under `<CLOUDINARY_FOLDER>/agency/`; with the local provider they are
+  the three private file roots (§2). Files are redundant copies of what the rows
   reference; the rows are the source of truth.
 
 **Backups**

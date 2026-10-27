@@ -5,6 +5,7 @@ import AgencyProposalLink, {
   IAgencyProposalLink,
 } from '../../models/AgencyProposalLink.js';
 import AgencyQuote from '../../models/AgencyQuote.js';
+import AgencyTemplate from '../../models/AgencyTemplate.js';
 import Trip from '../../models/Trip.js';
 import { AppError } from '../../utils/AppError.js';
 import { env } from '../../config/env.js';
@@ -124,6 +125,12 @@ export interface AgencyProposalView {
   canAccept: boolean;
   accepted: boolean;
   acceptedAt: Date | null;
+  /**
+   * `html` re-renders the pinned HTML template; `pdf` points the page at the
+   * token-only PDF route because an uploaded PDF design is already the exact
+   * document the agency approved.
+   */
+  documentMode: 'html' | 'pdf';
   html: string;
   pageCount: number;
   templateName: string;
@@ -135,17 +142,27 @@ export async function getAgencyProposal(rawToken: unknown): Promise<AgencyPropos
   const link = await loadLink(rawToken);
   const { agency, trip, quote, job } = await loadPinnedRows(link);
 
+  // Uploaded PDF designs are served from the finished export file through the
+  // token-only PDF route; only HTML templates are re-rendered here.
+  const template = await AgencyTemplate.findOne({
+    _id: job.templateId,
+    agencyId: link.agencyId,
+  });
+  const pdfMode = template?.engine === 'pdf-background';
+
   const client = trip.clientId
     ? await AgencyClient.findOne({ _id: trip.clientId, agencyId: String(link.agencyId) })
     : null;
-  const rendered = await renderPinnedAgencyExport({
-    agencyId: String(link.agencyId),
-    job,
-    agency,
-    trip,
-    quote,
-    client,
-  });
+  const rendered = pdfMode
+    ? null
+    : await renderPinnedAgencyExport({
+        agencyId: String(link.agencyId),
+        job,
+        agency,
+        trip,
+        quote,
+        client,
+      });
 
   await AgencyProposalLink.updateOne(
     { _id: link._id },
@@ -167,8 +184,11 @@ export async function getAgencyProposal(rawToken: unknown): Promise<AgencyPropos
     canAccept: status === 'sent',
     accepted: status === 'accepted',
     acceptedAt: quote?.acceptedAt ?? link.acceptedAt ?? null,
-    html: rendered.html,
-    pageCount: rendered.pageCount,
+    documentMode: pdfMode ? 'pdf' : 'html',
+    html: rendered?.html ?? '',
+    pageCount: pdfMode
+      ? Number(job.pageCount ?? 0)
+      : rendered?.pageCount ?? 0,
     templateName: String(job.templateName ?? ''),
     pdf:
       job.status === 'ready' && job.outputKey

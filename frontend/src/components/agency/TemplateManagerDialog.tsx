@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   Code2,
   Eye,
+  LayoutPanelLeft,
   Loader2,
   RefreshCw,
   Save,
@@ -27,8 +28,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { formatAgencyDate } from '@/lib/agency';
 import {
   templateAudienceLabel,
+  templateEngineLabel,
   templateStatusClass,
   templateStatusLabel,
+  templateSupportsLayoutEdit,
 } from '@/lib/templates';
 import { cn } from '@/lib/utils';
 import { api } from '@/services/api';
@@ -38,6 +41,7 @@ import type {
   AgencyTemplateVersion,
 } from '@/types';
 import { toast } from 'sonner';
+import PdfTemplateLayoutEditorDialog from './PdfTemplateLayoutEditorDialog';
 import TemplatePreviewDialog from './TemplatePreviewDialog';
 import TemplateSourceEditorDialog from './TemplateSourceEditorDialog';
 import TemplateUploadDialog from './TemplateUploadDialog';
@@ -93,6 +97,10 @@ const TemplateManagerDialog: React.FC<TemplateManagerDialogProps> = ({
   const [editVersionNumber, setEditVersionNumber] = useState<number | null>(
     null
   );
+  const [layoutVersionNumber, setLayoutVersionNumber] = useState<number | null>(
+    null
+  );
+  const isPdfDesign = templateSupportsLayoutEdit(template);
 
   const loadVersions = useCallback(
     async (showSpinner = true) => {
@@ -133,6 +141,7 @@ const TemplateManagerDialog: React.FC<TemplateManagerDialogProps> = ({
       setUploadOpen(false);
       setPreviewVersionNumber(null);
       setEditVersionNumber(null);
+      setLayoutVersionNumber(null);
     }
   }, [open]);
 
@@ -146,6 +155,12 @@ const TemplateManagerDialog: React.FC<TemplateManagerDialogProps> = ({
     editVersionNumber === null
       ? null
       : versions.find((version) => version.version === editVersionNumber) ??
+        null;
+
+  const layoutVersion =
+    layoutVersionNumber === null
+      ? null
+      : versions.find((version) => version.version === layoutVersionNumber) ??
         null;
 
   const saveDetails = async () => {
@@ -273,7 +288,8 @@ const TemplateManagerDialog: React.FC<TemplateManagerDialogProps> = ({
               ) : null}
             </DialogTitle>
             <DialogDescription>
-              {templateAudienceLabel(template.audience)} template · version{' '}
+              {templateAudienceLabel(template.audience)} template ·{' '}
+              {templateEngineLabel(template)} · version{' '}
               {template.activeVersion ?? template.version} ·{' '}
               {template.builtinKey ? 'Built-in' : 'Custom template'}
             </DialogDescription>
@@ -348,24 +364,29 @@ const TemplateManagerDialog: React.FC<TemplateManagerDialogProps> = ({
               <div>
                 <h3 className="text-sm font-semibold">Versions</h3>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Versions are immutable. Edit HTML saves a new version; exports
-                  pin the version they used.
+                  Versions are immutable.{' '}
+                  {isPdfDesign
+                    ? 'Saving a layout creates a new version;'
+                    : 'Edit HTML saves a new version;'}{' '}
+                  exports pin the version they used.
                 </p>
               </div>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setUploadOpen(true)}
-                disabled={busy || template.status === 'archived'}
-                title={
-                  template.status === 'archived'
-                    ? 'Activate a version to restore this template before uploading a new one.'
-                    : undefined
-                }
-              >
-                <Upload className="mr-1.5 h-3.5 w-3.5" />
-                Upload version
-              </Button>
+              {!isPdfDesign ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setUploadOpen(true)}
+                  disabled={busy || template.status === 'archived'}
+                  title={
+                    template.status === 'archived'
+                      ? 'Activate a version to restore this template before uploading a new one.'
+                      : undefined
+                  }
+                >
+                  <Upload className="mr-1.5 h-3.5 w-3.5" />
+                  Upload version
+                </Button>
+              ) : null}
             </div>
 
             {versionsLoading ? (
@@ -449,22 +470,41 @@ const TemplateManagerDialog: React.FC<TemplateManagerDialogProps> = ({
                           </p>
                         </div>
                         <div className="flex flex-wrap items-center gap-1.5">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              setEditVersionNumber(version.version)
-                            }
-                            disabled={busy || template.status === 'archived'}
-                            title={
-                              template.status === 'archived'
-                                ? 'Restore this template before editing its source.'
-                                : 'Edit this HTML and save it as a new version.'
-                            }
-                          >
-                            <Code2 className="mr-1.5 h-3.5 w-3.5" />
-                            Edit HTML
-                          </Button>
+                          {isPdfDesign ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                setLayoutVersionNumber(version.version)
+                              }
+                              disabled={busy || template.status === 'archived'}
+                              title={
+                                template.status === 'archived'
+                                  ? 'Restore this template before editing its layout.'
+                                  : 'Move data boxes on this PDF design and save a new version.'
+                              }
+                            >
+                              <LayoutPanelLeft className="mr-1.5 h-3.5 w-3.5" />
+                              Edit layout
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                setEditVersionNumber(version.version)
+                              }
+                              disabled={busy || template.status === 'archived'}
+                              title={
+                                template.status === 'archived'
+                                  ? 'Restore this template before editing its source.'
+                                  : 'Edit this HTML and save it as a new version.'
+                              }
+                            >
+                              <Code2 className="mr-1.5 h-3.5 w-3.5" />
+                              Edit HTML
+                            </Button>
+                          )}
                           <Button
                             variant="outline"
                             size="sm"
@@ -594,6 +634,24 @@ const TemplateManagerDialog: React.FC<TemplateManagerDialogProps> = ({
           version={editVersion}
           onSaved={async (result) => {
             setEditVersionNumber(null);
+            onTemplateChanged(result.template);
+            await onRefreshTemplates();
+            await loadVersions(false);
+          }}
+        />
+      ) : null}
+
+      {layoutVersion ? (
+        <PdfTemplateLayoutEditorDialog
+          open
+          onOpenChange={(next) => {
+            if (!next) setLayoutVersionNumber(null);
+          }}
+          agencyId={agencyId}
+          template={template}
+          version={layoutVersion}
+          onSaved={async (result) => {
+            setLayoutVersionNumber(null);
             onTemplateChanged(result.template);
             await onRefreshTemplates();
             await loadVersions(false);

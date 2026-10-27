@@ -15,6 +15,7 @@ import {
   normalizeAgencyAssetMime,
 } from '../services/agency/assets.js';
 import { AGENCY_TEMPLATE_MAX_BYTES } from '../services/agency/exports/templateValidation.js';
+import { AGENCY_PDF_MAX_BYTES } from '../services/agency/exports/pdfTemplateContract.js';
 
 /**
  * Receipt uploads are buffered in memory (capped by `MAX_UPLOAD_MB`) so the
@@ -206,6 +207,64 @@ export const handleAgencyTemplateUpload: RequestHandler = (req, res, next) => {
       }
       if (error.code === 'LIMIT_FILE_COUNT' || error.code === 'LIMIT_UNEXPECTED_FILE') {
         next(new AppError('Attach one template file under the "file" field.', 400));
+        return;
+      }
+      next(new AppError('We could not process that upload. Please try again.', 400));
+      return;
+    }
+
+    next(error);
+  });
+};
+
+/**
+ * A6f PDF designs. The 10 MB cap matches the sanitiser; the declared MIME is
+ * advisory because browsers often send `application/octet-stream`, and the
+ * sanitiser verifies the actual `%PDF-` header before storing anything.
+ */
+const PDF_TEMPLATE_MIME_TYPES = new Set([
+  'application/pdf',
+  'application/x-pdf',
+  'application/octet-stream',
+]);
+
+const agencyPdfTemplateUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: AGENCY_PDF_MAX_BYTES, files: 1 },
+  fileFilter: (_req, file, callback) => {
+    const mime = String(file.mimetype ?? '')
+      .toLowerCase()
+      .split(';')[0]
+      .trim();
+    if (!PDF_TEMPLATE_MIME_TYPES.has(mime)) {
+      callback(new AppError('Choose a PDF design file.', 400));
+      return;
+    }
+    callback(null, true);
+  },
+}).single('file');
+
+export const handleAgencyPdfTemplateUpload: RequestHandler = (
+  req,
+  res,
+  next
+) => {
+  agencyPdfTemplateUpload(req, res, (error: unknown) => {
+    if (!error) {
+      next();
+      return;
+    }
+
+    if (error instanceof multer.MulterError) {
+      if (error.code === 'LIMIT_FILE_SIZE') {
+        next(new AppError('PDF designs must be smaller than 10 MB.', 413));
+        return;
+      }
+      if (
+        error.code === 'LIMIT_FILE_COUNT' ||
+        error.code === 'LIMIT_UNEXPECTED_FILE'
+      ) {
+        next(new AppError('Attach one PDF file under the "file" field.', 400));
         return;
       }
       next(new AppError('We could not process that upload. Please try again.', 400));
