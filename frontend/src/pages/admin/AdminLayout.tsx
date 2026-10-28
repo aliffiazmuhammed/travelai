@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   Building2,
   ClipboardList,
+  Flag,
   KeyRound,
   LayoutDashboard,
   LogOut,
@@ -29,6 +30,7 @@ const navItems = [
   { to: '/admin', label: 'Overview', icon: LayoutDashboard, end: true },
   { to: '/admin/accounts', label: 'Accounts', icon: Users },
   { to: '/admin/agencies', label: 'Agencies', icon: Building2 },
+  { to: '/admin/reports', label: 'Reported content', icon: Flag },
   { to: '/admin/audit', label: 'Audit', icon: ClipboardList },
   {
     to: '/admin/platform-admins',

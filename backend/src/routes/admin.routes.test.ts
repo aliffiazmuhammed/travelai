@@ -62,6 +62,9 @@ test('the admin directory route table is the documented PA2 surface', () => {
   );
   assert.deepEqual(routes, [
     '/overview GET',
+    '/reports GET',
+    '/reports/:targetType/:targetId/hide POST',
+    '/reports/:targetType/:targetId/dismiss POST',
     '/agencies GET',
     '/agencies/plans GET',
     '/agencies/owner-preview GET',

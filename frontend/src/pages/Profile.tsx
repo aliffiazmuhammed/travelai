@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
+  Ban,
   Camera,
   ExternalLink,
   Globe,
@@ -22,6 +23,7 @@ import Navbar from "@/components/Navbar";
 import { useAuth } from "@/context/UserContext";
 import { api } from "@/services/api";
 import { avatarSrc, initialsFor } from "@/lib/avatar";
+import type { BlockedAccount } from "@/types/gallery";
 
 /**
  * Profile editing (Milestone 7, F14).
@@ -85,6 +87,10 @@ const Profile = () => {
     reason?: "invalid" | "reserved" | "taken";
   } | null>(null);
 
+  // Block list (Milestone 8 G5) — who cannot request to join my trips.
+  const [blocks, setBlocks] = useState<BlockedAccount[]>([]);
+  const [blocksBusy, setBlocksBusy] = useState<string | null>(null);
+
   // Keep the field in sync with the session (including after a save).
   useEffect(() => {
     setName(user?.name ?? "");
@@ -94,6 +100,41 @@ const Profile = () => {
     setHandle(user?.handle ?? "");
     setBio(user?.bio ?? "");
   }, [user?.handle, user?.bio]);
+
+  // G5: load the personal block list once the session is known. Non-fatal on
+  // failure — the card simply stays hidden.
+  useEffect(() => {
+    if (!user?._id) return;
+
+    let cancelled = false;
+    api
+      .getBlocks()
+      .then((result) => {
+        if (!cancelled) setBlocks(result.blocks || []);
+      })
+      .catch(() => {
+        if (!cancelled) setBlocks([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?._id]);
+
+  const handleUnblock = async (block: BlockedAccount) => {
+    setBlocksBusy(block.userId);
+    try {
+      await api.unblockUser(block.userId);
+      setBlocks((previous) =>
+        previous.filter((row) => row.userId !== block.userId)
+      );
+      toast.success(`${block.label} can request to join your trips again.`);
+    } catch (err: any) {
+      toast.error(err?.message || "That account could not be unblocked.");
+    } finally {
+      setBlocksBusy(null);
+    }
+  };
 
   // Release the local preview object URL when it changes/unmounts.
   useEffect(() => {
@@ -526,6 +567,64 @@ const Profile = () => {
             </form>
           </CardContent>
         </Card>
+
+        {/* Blocked travellers (Milestone 8 G5) ------------------------------- */}
+        {blocks.length > 0 && (
+          <Card className="rounded-3xl border-border/70">
+            <CardHeader className="pb-4">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Ban className="h-4 w-4 text-primary" />
+                Blocked travellers
+              </CardTitle>
+              <CardDescription>
+                These accounts cannot send you join requests on any of your
+                published trips. They are never told about the block.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {blocks.map((block) => (
+                  <div
+                    key={block.userId}
+                    className="flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-background/60 p-3"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Avatar className="h-9 w-9 shrink-0">
+                        {avatarSrc(block.avatarUrl) && (
+                          <AvatarImage src={avatarSrc(block.avatarUrl)} alt={block.label} />
+                        )}
+                        <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
+                          {block.label.slice(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-bold text-foreground">
+                          {block.label}
+                        </p>
+                        <p className="truncate text-[11px] text-muted-foreground">
+                          {block.handle ? `@${block.handle}` : "Blocked account"}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={blocksBusy === block.userId}
+                      onClick={() => void handleUnblock(block)}
+                      className="h-8 shrink-0 rounded-xl text-[11px] font-bold gap-1 px-2.5"
+                    >
+                      {blocksBusy === block.userId && (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      )}
+                      Unblock
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Password ---------------------------------------------------------- */}
         <Card className="rounded-3xl border-border/70">

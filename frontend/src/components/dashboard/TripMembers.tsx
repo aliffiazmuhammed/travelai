@@ -31,10 +31,13 @@ import {
   Link2,
   Copy,
   Ban,
+  Check,
   Crown,
   Users,
   AlertCircle,
   RefreshCw,
+  UserPlus,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { avatarSrc } from "@/lib/avatar";
@@ -45,6 +48,7 @@ import type {
   TripMember,
   TripRole,
 } from "@/types/trip";
+import type { TripJoinRequest } from "@/types/gallery";
 
 interface TripMembersProps {
   tripId: string;
@@ -87,6 +91,9 @@ export const TripMembers: React.FC<TripMembersProps> = ({
   const [removeTarget, setRemoveTarget] = useState<TripMember | null>(null);
   const [revokeTarget, setRevokeTarget] = useState<TripInviteInfo | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
+  // G5: owner queue for travellers asking to join a published trip.
+  const [joinRequests, setJoinRequests] = useState<TripJoinRequest[]>([]);
+  const [blockTarget, setBlockTarget] = useState<TripJoinRequest | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -108,9 +115,20 @@ export const TripMembers: React.FC<TripMembersProps> = ({
       } catch (err: any) {
         setError(err.message || "Could not load pending invitations.");
       }
+
+      // G5: join requests only exist on personal, published trips. An agency
+      // trip has no gallery page, so there is no queue to fetch.
+      if (!agencyTrip) {
+        try {
+          const queue = await api.getJoinRequests(tripId);
+          setJoinRequests(queue.requests || []);
+        } catch (err: any) {
+          setError(err.message || "Could not load join requests.");
+        }
+      }
     }
     setLoading(false);
-  }, [tripId, isOwner]);
+  }, [tripId, isOwner, agencyTrip]);
 
   useEffect(() => {
     void load();
@@ -189,6 +207,38 @@ export const TripMembers: React.FC<TripMembersProps> = ({
       toast.success("Invitation revoked");
     } catch (err: any) {
       toast.error(err.message || "Could not revoke the invitation.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  /** G5 queue actions. Approval is commenter-only server-side, always. */
+  const runJoinRequestAction = async (
+    request: TripJoinRequest,
+    action: "approve" | "decline" | "block"
+  ) => {
+    const name = request.requester?.label || "This traveller";
+    try {
+      setBusyId(`${request._id}:${action}`);
+      if (action === "approve") {
+        await api.approveJoinRequest(tripId, request._id);
+        toast.success(`${name} can now comment on this trip`);
+      } else if (action === "decline") {
+        await api.declineJoinRequest(tripId, request._id);
+        toast.success("Request declined — they are not notified");
+      } else {
+        await api.blockJoinRequester(tripId, request._id);
+        toast.success(`${name} is blocked from your trips`);
+      }
+
+      setJoinRequests((prev) => prev.filter((row) => row._id !== request._id));
+      setBlockTarget(null);
+
+      // An approval adds a member; refresh the roster so the row appears where
+      // it belongs (the queue itself is already updated optimistically).
+      if (action === "approve") void load();
+    } catch (err: any) {
+      toast.error(err.message || "That action did not go through. Please try again.");
     } finally {
       setBusyId(null);
     }
@@ -388,6 +438,134 @@ export const TripMembers: React.FC<TripMembersProps> = ({
           )}
         </CardContent>
       </Card>
+
+      {/* G5: join-request queue — the owner's in-app notification surface */}
+      {isOwner && !agencyTrip && (
+        <Card className="rounded-3xl border-border/70 bg-card shadow-xs overflow-hidden">
+          <CardContent className="p-5 sm:p-6 space-y-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <UserPlus className="w-4 h-4 text-primary" />
+              <h3 className="font-extrabold text-foreground text-sm uppercase tracking-wider">
+                Join requests
+              </h3>
+              <Badge
+                className={cn(
+                  "text-[10px] font-bold px-2 py-0.5",
+                  joinRequests.length > 0
+                    ? "bg-primary/10 text-primary border-primary/20"
+                    : "bg-muted text-muted-foreground"
+                )}
+              >
+                {joinRequests.length} pending
+              </Badge>
+            </div>
+
+            {joinRequests.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                No one has asked to join yet. Requests from your published gallery
+                page appear here for approval.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {joinRequests.map((request) => {
+                  const requester = request.requester;
+                  const label = requester?.label || "A traveller";
+                  const busy = Boolean(busyId?.startsWith(`${request._id}:`));
+                  const approving = busyId === `${request._id}:approve`;
+
+                  return (
+                    <div
+                      key={request._id}
+                      className="rounded-2xl border border-border/60 bg-background/60 p-3 space-y-2"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <Avatar className="h-9 w-9 shrink-0">
+                            {avatarSrc(requester?.avatarUrl) && (
+                              <AvatarImage src={avatarSrc(requester?.avatarUrl)} alt={label} />
+                            )}
+                            <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
+                              {label.slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold text-foreground truncate">
+                              {label}
+                            </p>
+                            <p className="text-[11px] text-muted-foreground truncate">
+                              {requester?.handle ? `@${requester.handle} · ` : ""}
+                              Asked {formatDate(request.createdAt)}
+                            </p>
+                          </div>
+                        </div>
+                        <Badge
+                          variant="outline"
+                          className="shrink-0 text-[10px] text-muted-foreground"
+                          title="Approval can only grant a commenter seat"
+                        >
+                          Commenter only
+                        </Badge>
+                      </div>
+
+                      {request.message && (
+                        <p className="rounded-xl bg-muted/50 px-3 py-2 text-xs leading-relaxed text-foreground/85 whitespace-pre-wrap break-words">
+                          {request.message}
+                        </p>
+                      )}
+
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          disabled={busy}
+                          onClick={() => setBlockTarget(request)}
+                          className="h-8 rounded-xl text-[11px] font-bold gap-1 text-muted-foreground hover:text-destructive px-2.5"
+                        >
+                          <Ban className="w-3 h-3" />
+                          Block
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={busy}
+                          onClick={() => void runJoinRequestAction(request, "decline")}
+                          className="h-8 rounded-xl text-[11px] font-bold gap-1 px-2.5"
+                        >
+                          <X className="w-3 h-3" />
+                          Decline
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="hero"
+                          disabled={busy}
+                          onClick={() => void runJoinRequestAction(request, "approve")}
+                          className="h-8 rounded-xl text-[11px] font-bold gap-1 px-2.5"
+                        >
+                          {approving ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Check className="w-3 h-3" />
+                          )}
+                          Approve
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <p className="text-[10px] leading-relaxed text-muted-foreground">
+              Approving adds a commenter seat: they can join the discussion but
+              cannot edit the itinerary or change trip settings. Declining is
+              silent; blocking also clears their pending request.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Owner's invite list — hints only, raw tokens never come back */}
       {isOwner && (
@@ -606,6 +784,45 @@ export const TripMembers: React.FC<TripMembersProps> = ({
               className="rounded-xl text-xs font-bold h-10 bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {revokeTarget && busyId === revokeTarget._id ? "Revoking…" : "Revoke invite"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      {/* Block-from-request confirmation — one-way, and it clears the queue row */}
+      <AlertDialog
+        open={Boolean(blockTarget)}
+        onOpenChange={(open) => {
+          if (!open && !busyId?.startsWith(`${blockTarget?._id}:`)) setBlockTarget(null);
+        }}
+      >
+        <AlertDialogContent className="rounded-3xl max-w-md w-[92vw] sm:w-full p-5 sm:p-6">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-lg font-bold">
+              Block this traveller?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs leading-relaxed">
+              <strong className="text-foreground">
+                {blockTarget?.requester?.label || "This traveller"}
+              </strong>{" "}
+              can never request to join any of your trips again, and this
+              request is declined. They are not told about the block. You can
+              manage blocked accounts from your account settings.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-0">
+            <AlertDialogCancel className="rounded-xl text-xs font-semibold h-10">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                if (blockTarget) void runJoinRequestAction(blockTarget, "block");
+              }}
+              className="rounded-xl text-xs font-bold h-10 bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {blockTarget && busyId === `${blockTarget._id}:block`
+                ? "Blocking…"
+                : "Block traveller"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

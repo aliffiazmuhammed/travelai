@@ -109,22 +109,30 @@ test('only active personal accounts with that handle resolve', async () => {
   });
 });
 
-test('the trip query is scoped to published, owned, upcoming rows', async () => {
+test('the trip query reuses the shared public clauses and scopes to owned rows', async () => {
   reset();
   await loadTravelerProfile('ada');
 
-  assert.equal(tripQuery?.visibility, 'public');
-  assert.deepEqual(tripQuery?.members, {
-    $elemMatch: { userId: 'u1', role: 'owner' },
-  });
-  assert.deepEqual(tripQuery?.isDeleted, { $ne: true });
-  assert.deepEqual(tripQuery?.workspace, { $ne: 'agency' });
+  // G6: the profile page shares `publicTripClauses()`, so a hidden trip leaves
+  // the traveler page at the same time it leaves the gallery listing.
+  const scopes = tripQuery?.$and as Array<Record<string, any>>;
+  assert.ok(Array.isArray(scopes), 'the shared public clauses must be applied');
+  assert.ok(scopes.some((clause) => clause.visibility === 'public'));
+  assert.ok(scopes.some((clause) => clause.isDeleted?.$ne === true));
+  assert.ok(scopes.some((clause) => clause.workspace?.$ne === 'agency'));
+  assert.ok(scopes.some((clause) => clause.publishedAt?.$ne === null));
+  assert.ok(scopes.some((clause) => clause['moderation.hiddenAt'] === null));
 
-  const window = tripQuery?.$or as Array<Record<string, any>>;
-  assert.equal(window.length, 3);
-  assert.ok(window[0].startDate.$gte instanceof Date);
-  assert.deepEqual(window[1], { startDate: { $exists: false } });
-  assert.deepEqual(window[2], { startDate: null });
+  assert.deepEqual(scopes[scopes.length - 1], {
+    members: { $elemMatch: { userId: 'u1', role: 'owner' } },
+  });
+
+  const upcoming = scopes.find((clause) => Array.isArray(clause.$or));
+  assert.ok(upcoming, 'the upcoming window must be part of the shared clauses');
+  assert.equal(upcoming!.$or.length, 3);
+  assert.ok(upcoming!.$or[0].startDate.$gte instanceof Date);
+  assert.deepEqual(upcoming!.$or[1], { startDate: { $exists: false } });
+  assert.deepEqual(upcoming!.$or[2], { startDate: null });
 });
 
 test('the profile carries identity and card summaries only', async () => {

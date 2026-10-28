@@ -346,3 +346,77 @@ export interface PlatformAuditQuery {
   page?: number;
   limit?: number;
 }
+
+/* -------------------------------------------------------------------------- */
+/*  Reported content / moderation (Milestone 8 G6)                              */
+/* -------------------------------------------------------------------------- */
+
+export type PlatformModerationStatus = 'open' | 'hidden' | 'dismissed';
+
+export interface PlatformModerationReporter {
+  label: string;
+  email?: string;
+  handle?: string;
+}
+
+export interface PlatformModerationReport {
+  _id: string;
+  reason: 'spam' | 'harassment' | 'scam' | 'privacy' | 'other';
+  note?: string;
+  status: PlatformModerationStatus;
+  createdAt: string;
+  resolvedAt?: string;
+  reporter?: PlatformModerationReporter;
+}
+
+export interface PlatformModerationTrip {
+  _id: string;
+  title: string;
+  destination: string;
+  visibility: string;
+  publishedAt?: string;
+  startDate?: string;
+  endDate?: string;
+  publisherHandle?: string;
+  publisherName?: string;
+  hidden: boolean;
+  hiddenAt?: string;
+  hiddenSource?: 'auto_report' | 'admin' | string;
+}
+
+export interface PlatformModerationProfile {
+  _id: string;
+  name: string;
+  email?: string;
+  handle?: string;
+  status: string;
+}
+
+export interface PlatformModerationGroup {
+  targetType: 'trip' | 'profile';
+  targetId: string;
+  reportCount: number;
+  lastReportedAt: string;
+  reasons: Array<{ reason: PlatformModerationReport['reason']; count: number }>;
+  reports: PlatformModerationReport[];
+  hidden: boolean;
+  trip?: PlatformModerationTrip;
+  profile?: PlatformModerationProfile;
+}
+
+export interface PlatformModerationList {
+  success: boolean;
+  groups: PlatformModerationGroup[];
+  status: PlatformModerationStatus;
+  totals: { open: number; hidden: number; dismissed: number };
+}
+
+export interface PlatformModerationAction {
+  success: boolean;
+  targetType: 'trip' | 'profile';
+  targetId: string;
+  action: 'hide' | 'dismiss';
+  hidden: boolean;
+  resolved: number;
+  changed: boolean;
+}

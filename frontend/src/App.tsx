@@ -17,6 +17,7 @@ const TripPlanner = lazy(() => import("./pages/TripPlanner"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const SharedTrip = lazy(() => import("./pages/SharedTrip"));
 const TravelerProfile = lazy(() => import("./pages/TravelerProfile"));
+const Guidelines = lazy(() => import("./pages/Guidelines"));
 const Explore = lazy(() => import("./pages/Explore"));
 const GalleryTrip = lazy(() => import("./pages/GalleryTrip"));
 const ProposalShare = lazy(() => import("./pages/ProposalShare"));
@@ -40,6 +41,7 @@ const AdminOverview = lazy(() => import("./pages/admin/AdminOverview"));
 const AdminAccount = lazy(() => import("./pages/admin/AdminAccount"));
 const AdminAccounts = lazy(() => import("./pages/admin/AdminAccounts"));
 const AdminAgencies = lazy(() => import("./pages/admin/AdminAgencies"));
+const AdminReports = lazy(() => import("./pages/admin/AdminReports"));
 const AdminPlatformAdmins = lazy(() => import("./pages/admin/AdminPlatformAdmins"));
 const AdminAudit = lazy(() => import("./pages/admin/AdminAudit"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -77,6 +79,7 @@ const App = () => (
                 <Route path="/shared/:shareId" element={<SharedTrip />} />
                 {/* Milestone 8 G2: public traveler identity — no session needed. */}
                 <Route path="/travelers/:handle" element={<TravelerProfile />} />
+                <Route path="/guidelines" element={<Guidelines />} />
                 {/* Milestone 8 G3: anonymous gallery. The nav entry waits for a
                     content threshold; these routes stay reachable by URL. */}
                 <Route path="/explore" element={<Explore />} />
@@ -161,6 +164,7 @@ const App = () => (
                     path="agencies"
                     element={<AdminAgencies />}
                   />
+                  <Route path="reports" element={<AdminReports />} />
                   <Route
                     path="audit"
                     element={<AdminAudit />}

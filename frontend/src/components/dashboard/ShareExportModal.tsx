@@ -35,6 +35,7 @@ import {
   ExternalLink,
   Loader2,
   Sparkles,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/services/api";
@@ -219,6 +220,16 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
   const parsedTags = parseGalleryTags(tagInput);
   const publishedOn = publishedAt
     ? new Date(publishedAt).toLocaleDateString(undefined, {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
+    : null;
+  // G6: a hidden trip keeps its data and publication settings; only public
+  // reads drop it, so the owner sees this banner instead of a lost trip.
+  const moderation = publication?.moderation;
+  const hiddenOn = moderation?.hiddenAt
+    ? new Date(moderation.hiddenAt).toLocaleDateString(undefined, {
         day: "numeric",
         month: "short",
         year: "numeric",
@@ -494,6 +505,30 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
         {/* 1b. Publish to gallery (Milestone 8 G2) — owner only */}
         {canManageShare && (
           <div className="p-4 rounded-2xl bg-muted/30 border border-border/70 space-y-3">
+            {hiddenOn && (
+              <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 space-y-1">
+                <p className="flex items-center gap-1.5 text-[11px] font-bold text-foreground">
+                  <AlertTriangle className="w-3.5 h-3.5 text-destructive" />
+                  Hidden from the gallery{hiddenOn ? ` since ${hiddenOn}` : ""}
+                </p>
+                <p className="text-[11px] leading-relaxed text-muted-foreground">
+                  {moderation?.source === "admin"
+                    ? "A platform admin de-listed this trip after a review."
+                    : "This trip was hidden automatically after several reports."}{" "}
+                  Your itinerary, budget and travelers are untouched and the trip
+                  is still yours to edit. A platform admin will review the
+                  reports; if the listing is restored it reappears without you
+                  re-publishing.
+                </p>
+                <Link
+                  to="/guidelines"
+                  className="inline-block text-[11px] font-bold text-primary hover:underline"
+                >
+                  Read the community guidelines
+                </Link>
+              </div>
+            )}
+
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
                 <Globe className="w-3.5 h-3.5 text-primary" />

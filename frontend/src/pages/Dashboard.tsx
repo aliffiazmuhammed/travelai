@@ -428,6 +428,7 @@ const Dashboard: React.FC = () => {
                 endDate: selectedTrip.endDate,
                 destination: selectedTrip.generationMeta?.request?.destination,
                 durationDays: selectedTrip.tripDetails?.duration_days,
+                moderation: selectedTrip.moderation,
               }}
               onPublicationChange={handlePublicationChange}
               role={access.role ?? undefined}

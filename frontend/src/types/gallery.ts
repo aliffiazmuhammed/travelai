@@ -35,6 +35,8 @@ export interface TripPublicationSnapshot {
   destination?: string;
   /** Persisted `tripDetails.duration_days`; undefined means the card uses dates. */
   durationDays?: number;
+  /** G6: present when reports or an admin hid the public listing. */
+  moderation?: TripModeration;
 }
 
 export interface GalleryPublisher {
@@ -145,10 +147,90 @@ export interface ExploreFilters {
   limit?: number;
 }
 
-/** One cursor page of public cards. `total` ignores the cursor. */
+/** One public cursor page. `total` ignores the cursor. */
 export interface ExplorePage {
   trips: GalleryTripSummary[];
   nextCursor: string | null;
   hasMore: boolean;
   total: number;
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Moderation (Milestone 8 G6)                                                */
+/* -------------------------------------------------------------------------- */
+
+export type ReportTargetType = 'trip' | 'profile';
+export type ReportReason =
+  | 'spam'
+  | 'harassment'
+  | 'scam'
+  | 'privacy'
+  | 'other';
+export type ReportStatus = 'open' | 'hidden' | 'dismissed';
+
+/** Gallery moderation state on the owner's trip payload. */
+export interface TripModeration {
+  hiddenAt?: string;
+  hiddenBy?: string;
+  source?: 'auto_report' | 'admin';
+}
+
+/** The server's answer to `POST /api/reports`. */
+export interface ContentReport {
+  _id: string;
+  targetType: ReportTargetType;
+  targetId: string;
+  reason: ReportReason;
+  note?: string;
+  status: ReportStatus;
+  createdAt: string;
+}
+
+export interface ReportResult {
+  success: boolean;
+  report: ContentReport;
+  /** True when this report pushed the trip over the auto-hide threshold. */
+  hidden: boolean;
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Join requests & blocks (Milestone 8 G5)                                    */
+/* -------------------------------------------------------------------------- */
+
+export type JoinRequestStatus = 'pending' | 'approved' | 'declined' | 'withdrawn';
+
+/**
+ * Requester identity as the owner sees it in the queue: public name, handle and
+ * photo only — the server never sends an email on this surface.
+ */
+export interface JoinRequester {
+  id: string;
+  label: string;
+  handle?: string;
+  avatarUrl?: string;
+}
+
+export interface TripJoinRequest {
+  _id: string;
+  status: JoinRequestStatus;
+  message?: string;
+  createdAt: string;
+  decidedAt?: string | null;
+  /** Owner-facing rows only. */
+  requester?: JoinRequester;
+}
+
+/** `GET /api/itinerary/:id/join-request` — enough state for the join button. */
+export interface JoinRequestState {
+  request: TripJoinRequest | null;
+  isMember: boolean;
+  isOwner: boolean;
+}
+
+export interface BlockedAccount {
+  userId: string;
+  label: string;
+  handle?: string;
+  avatarUrl?: string;
+  createdAt: string;
 }

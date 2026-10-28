@@ -6,6 +6,8 @@ import itineraryRouter from './itinerary.routes.js';
 import geoRouter from './geo.routes.js';
 import travelersRouter from './travelers.routes.js';
 import exploreRouter from './explore.routes.js';
+import blocksRouter from './blocks.routes.js';
+import reportsRouter from './reports.routes.js';
 import { AUTH_GUARD_TAG } from '../middleware/auth.middleware.js';
 
 /**
@@ -73,7 +75,7 @@ test('every trip-invite route uses protectPersonal', () => {
 
 test('every shared trip route uses protectSession', () => {
   const PUBLIC = new Set(['/shared/:shareId']);
-  const PERSONAL = new Set(['/', '/insights', '/trash', '/:id/clone']);
+  const PERSONAL = new Set(['/', '/insights', '/trash', '/:id/clone', '/:id/join-request']);
   const SESSION = new Set(['/generate', '/generate-stream']);
 
   const offenders: string[] = [];
@@ -135,6 +137,55 @@ test('gallery explore routes are anonymous and classified', () => {
     [],
     'Gallery browse must never inherit a session or platform guard'
   );
+});
+
+test('block routes are personal-realm only', () => {
+  const layers = routeLayers(blocksRouter);
+  assert.deepEqual(
+    [...new Set(layers.map(pathOf))].sort(),
+    ['/', '/:userId'],
+    'The block surface is the list plus block/unblock'
+  );
+  assert.deepEqual(
+    layers.filter((layer) => guardKind(layer) !== 'personal').map(pathOf),
+    [],
+    'A personal block list must never accept an agency or platform session'
+  );
+});
+
+test('report routes are personal-realm only', () => {
+  const layers = routeLayers(reportsRouter);
+  assert.deepEqual(
+    layers.map((layer) => `${pathOf(layer)} ${Object.keys(layer.route?.methods ?? {})}`),
+    ['/ post'],
+    'The safety surface is one authenticated report write'
+  );
+  assert.deepEqual(
+    layers.filter((layer) => guardKind(layer) !== 'personal').map(pathOf),
+    [],
+    'Reporting is an accountable personal action, never an agency/platform one'
+  );
+});
+
+test('requester join-request routes are personal, owner queue is session', () => {
+  const layers = routeLayers(itineraryRouter);
+
+  for (const layer of layers) {
+    if (pathOf(layer) === '/:id/join-request') {
+      assert.equal(
+        guardKind(layer),
+        'personal',
+        'Asking to join a public trip is a personal-realm action'
+      );
+    }
+    if (pathOf(layer).startsWith('/:id/join-requests')) {
+      assert.equal(
+        guardKind(layer),
+        'session',
+        'The owner queue belongs to the shared trip surface'
+      );
+    }
+  }
 });
 
 test('geo routes use the shared session guard, never the platform realm', () => {

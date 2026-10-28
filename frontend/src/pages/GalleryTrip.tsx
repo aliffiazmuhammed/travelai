@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { DayTimeline } from "@/components/dashboard/DayTimeline";
 import { TravelGuideSafety } from "@/components/dashboard/TravelGuideSafety";
 import { api, ApiError } from "@/services/api";
+import { JoinRequestDialog } from "@/components/gallery/JoinRequestDialog";
+import { ReportDialog } from "@/components/gallery/ReportDialog";
 import { avatarSrc, initialsFor } from "@/lib/avatar";
 import { DURATION_LABELS, formatGalleryDates } from "@/lib/galleryFormat";
 import { withItineraryDefaults } from "@/lib/itineraryDefaults";
@@ -17,8 +19,11 @@ import {
   ArrowLeft,
   ArrowRight,
   CalendarDays,
+  CheckCircle2,
+  Clock,
   Compass,
   Copy,
+  Flag,
   Globe,
   Loader2,
   MapPin,
@@ -26,7 +31,7 @@ import {
   Sparkles,
   UserPlus,
 } from "lucide-react";
-import type { GalleryTrip } from "@/types/gallery";
+import type { GalleryTrip, JoinRequestState, TripJoinRequest } from "@/types/gallery";
 
 /**
  * Public trip page (Milestone 8 G3).
@@ -38,8 +43,9 @@ import type { GalleryTrip } from "@/types/gallery";
  * zeroes that nothing displays.
  *
  * Clone (G4) copies the public projection into a private draft owned by the
- * visitor and lands them in their dashboard. Join requests (G5) remain a
- * disabled placeholder so the page communicates what comes next.
+ * visitor and lands them in their dashboard. Join requests (G5) are a gated
+ * ask: the owner queues them in the People tab and approval can only ever add
+ * a commenter seat.
  */
 
 const galleryDurationLabel = (days: number): string => {
@@ -60,6 +66,14 @@ const GalleryTrip = () => {
   const [notFound, setNotFound] = useState(false);
   const [cloning, setCloning] = useState(false);
   const autoCloneRef = useRef(false);
+  // G5: my request state on this trip (only fetched while signed in).
+  const [joinState, setJoinState] = useState<JoinRequestState | null>(null);
+  const [joinDialogOpen, setJoinDialogOpen] = useState(false);
+  const [joinBusy, setJoinBusy] = useState(false);
+  const autoJoinRef = useRef(false);
+  // G6: reporting a published trip (personal account only).
+  const [reportOpen, setReportOpen] = useState(false);
+  const autoReportRef = useRef(false);
 
   useEffect(() => {
     if (!tripId) {
@@ -130,6 +144,31 @@ const GalleryTrip = () => {
     [trip]
   );
 
+  // G5: ask the server whether I already have a request / membership. A failure
+  // here is non-fatal — the page still renders and the CTA simply shows the
+  // default "request to join" state.
+  const tripIdForJoin = trip?._id;
+  useEffect(() => {
+    if (!tripIdForJoin || !isAuthenticated) {
+      setJoinState(null);
+      return;
+    }
+
+    let cancelled = false;
+    api
+      .getJoinRequestState(tripIdForJoin)
+      .then((state) => {
+        if (!cancelled) setJoinState(state);
+      })
+      .catch(() => {
+        if (!cancelled) setJoinState(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [tripIdForJoin, isAuthenticated]);
+
   /**
    * G4: signed-in visitors get a private draft immediately; anonymous ones are
    * sent through sign-in with the clone intent attached, so they land back on
@@ -179,6 +218,107 @@ const GalleryTrip = () => {
     navigate(location.pathname, { replace: true, state: null });
     void handleClone();
   }, [location.state, location.pathname, trip, isAuthenticated, navigate, handleClone]);
+
+  /**
+   * G5: join needs a written note, so returning from sign-in opens the dialog
+   * instead of sending a request silently (the clone flow can act immediately).
+   */
+  useEffect(() => {
+    const wantsJoin = Boolean(
+      (location.state as { join?: boolean } | null)?.join
+    );
+    if (!wantsJoin || !trip || !isAuthenticated || autoJoinRef.current) return;
+
+    autoJoinRef.current = true;
+    navigate(location.pathname, { replace: true, state: null });
+    setJoinDialogOpen(true);
+  }, [location.state, location.pathname, trip, isAuthenticated, navigate]);
+
+  const handleJoinClick = useCallback(() => {
+    if (!trip) return;
+
+    if (!isAuthenticated) {
+      navigate("/auth", {
+        state: {
+          from: {
+            pathname: location.pathname,
+            state: { join: true },
+          },
+        },
+      });
+      return;
+    }
+
+    setJoinDialogOpen(true);
+  }, [trip, isAuthenticated, navigate, location.pathname]);
+
+  /**
+   * G6: reporting needs a signed-in personal account too. The post-sign-in
+   * resume reopens the composer instead of submitting anything silently.
+   */
+  const handleReportClick = useCallback(() => {
+    if (!trip) return;
+
+    if (!isAuthenticated) {
+      navigate("/auth", {
+        state: {
+          from: {
+            pathname: location.pathname,
+            state: { report: true },
+          },
+        },
+      });
+      return;
+    }
+
+    setReportOpen(true);
+  }, [trip, isAuthenticated, navigate, location.pathname]);
+
+  useEffect(() => {
+    const wantsReport = Boolean(
+      (location.state as { report?: boolean } | null)?.report
+    );
+    if (!wantsReport || !trip || !isAuthenticated || autoReportRef.current) return;
+
+    autoReportRef.current = true;
+    navigate(location.pathname, { replace: true, state: null });
+    setReportOpen(true);
+  }, [location.state, location.pathname, trip, isAuthenticated, navigate]);
+
+  const handleWithdraw = useCallback(async () => {
+    if (!trip) return;
+
+    setJoinBusy(true);
+    try {
+      const result = await api.withdrawJoinRequest(trip._id);
+      setJoinState((previous) =>
+        previous
+          ? { ...previous, request: result.request }
+          : { request: result.request, isMember: false, isOwner: false }
+      );
+      toast.success("Your request was withdrawn.");
+    } catch (err) {
+      console.error("Failed to withdraw the join request:", err);
+      toast.error(
+        err instanceof ApiError && err.message
+          ? err.message
+          : "That request could not be withdrawn right now."
+      );
+    } finally {
+      setJoinBusy(false);
+    }
+  }, [trip]);
+
+  const handleJoinSubmitted = useCallback(
+    (request: TripJoinRequest) => {
+      setJoinState((previous) =>
+        previous
+          ? { ...previous, request }
+          : { request, isMember: false, isOwner: false }
+      );
+    },
+    []
+  );
 
   if (loading) {
     return (
@@ -435,18 +575,58 @@ const GalleryTrip = () => {
                   )}
                   {cloning ? "Cloning this trip…" : "Clone & customize"}
                 </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled
-                  className="w-full rounded-2xl h-11 text-xs font-bold gap-2"
-                >
-                  <UserPlus className="w-4 h-4" />
-                  Request to join
-                </Button>
+                {joinState?.isOwner ? (
+                  <div className="rounded-2xl border border-border/70 bg-muted/40 px-3 py-2 text-center text-[11px] font-semibold text-muted-foreground">
+                    This is your trip — you already have full access.
+                  </div>
+                ) : joinState?.isMember ? (
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="w-full rounded-2xl h-11 text-xs font-bold gap-2"
+                  >
+                    <Link to="/dashboard" state={{ tripId: trip._id }}>
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      You’re a member — open trip
+                    </Link>
+                  </Button>
+                ) : joinState?.request?.status === "pending" ? (
+                  <div className="space-y-1.5">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled
+                      className="w-full rounded-2xl h-11 text-xs font-bold gap-2"
+                    >
+                      <Clock className="w-4 h-4" />
+                      Request pending
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={joinBusy}
+                      onClick={() => void handleWithdraw()}
+                      className="w-full rounded-xl h-8 text-[11px] font-semibold text-muted-foreground hover:text-destructive"
+                    >
+                      {joinBusy ? "Withdrawing…" : "Withdraw request"}
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleJoinClick}
+                    className="w-full rounded-2xl h-11 text-xs font-bold gap-2"
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    Request to join
+                  </Button>
+                )}
                 <p className="text-[10px] leading-relaxed text-muted-foreground text-center">
                   Cloning creates a private copy you own — the original stays
-                  untouched. Join requests arrive in an upcoming update.
+                  untouched. A join request goes to the owner and, if approved,
+                  gives you a commenter seat. It never grants edit access.
                 </p>
               </div>
             </section>
@@ -458,9 +638,22 @@ const GalleryTrip = () => {
               <p className="text-[11px] leading-relaxed text-muted-foreground">
                 Budgets, logged expenses and traveler lists are never part of a
                 published trip. Only the itinerary, the dates the owner chose to
-                show and their public profile are visible.
+                show and their public profile are visible. Read the{" "}
+                <Link to="/guidelines" className="font-bold text-primary hover:underline">
+                  community guidelines
+                </Link>
+                .
               </p>
             </section>
+
+            <button
+              type="button"
+              onClick={handleReportClick}
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl py-2 text-[11px] font-semibold text-muted-foreground transition-colors hover:text-destructive"
+            >
+              <Flag className="w-3.5 h-3.5" />
+              Report this trip
+            </button>
 
             <Button
               asChild
@@ -475,6 +668,22 @@ const GalleryTrip = () => {
           </aside>
         </div>
       </main>
+
+      {/* G5: join request composer (owner identity + short note + safety copy) */}
+      <JoinRequestDialog
+        open={joinDialogOpen}
+        onClose={() => setJoinDialogOpen(false)}
+        trip={trip}
+        onSubmitted={handleJoinSubmitted}
+      />
+
+      <ReportDialog
+        open={reportOpen}
+        onClose={() => setReportOpen(false)}
+        targetType="trip"
+        targetId={trip._id}
+        targetLabel={trip.title}
+      />
     </div>
   );
 };

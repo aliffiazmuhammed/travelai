@@ -1,4 +1,4 @@
-import type { TripGallery, TripVisibility } from './gallery';
+import type { TripGallery, TripModeration, TripVisibility } from './gallery';
 
 export interface ActivityItem {
   name?: string;
@@ -425,6 +425,8 @@ export interface Trip {
   gallery?: TripGallery;
   /** M8 G4: the public trip this draft was cloned from, if any. */
   clonedFrom?: TripClonedFrom;
+  /** M8 G6: set when reports or an admin removed this trip from the gallery. */
+  moderation?: TripModeration;
   /** Optimistic-concurrency counter (Milestone 6 §3.6) — moves on every write. */
   rev?: number;
   /** The caller's role on this trip (Milestone 6). Absent for legacy payloads. */

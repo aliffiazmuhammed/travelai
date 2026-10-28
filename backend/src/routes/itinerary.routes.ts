@@ -28,6 +28,15 @@ import {
   updateTripPublication,
 } from '../controllers/itinerary.controller.js';
 import {
+  deleteJoinRequest,
+  getJoinRequest,
+  getJoinRequests,
+  postApproveJoinRequest,
+  postBlockJoinRequester,
+  postDeclineJoinRequest,
+  postJoinRequest,
+} from '../controllers/joinRequests.controller.js';
+import {
   listTripMembers,
   leaveTrip,
   changeMemberRole,
@@ -101,6 +110,7 @@ import {
 import { createCommentSchema, updateCommentSchema } from '../schemas/comments.schema.js';
 import { tripPublishSchema } from '../schemas/gallery.schema.js';
 import { createPollSchema, votePollSchema } from '../schemas/polls.schema.js';
+import { joinRequestSchema } from '../schemas/gallery.schema.js';
 import {
   setTripChatKeysSchema,
   addChatEnvelopesSchema,
@@ -112,6 +122,7 @@ import {
   dayAlternativeLimiter,
   generateLimiter,
   inviteManageLimiter,
+  joinRequestLimiter,
   publicShareLimiter,
   tripCloneLimiter,
   typingPingLimiter,
@@ -213,6 +224,45 @@ router.post('/:id/duplicate', protectSession, requireTripRole('viewer'), duplica
 // Ownership is "whoever calls" — the service copies only the public projection
 // and the new draft is owned by the caller. 10 clones/day/account.
 router.post('/:id/clone', protectPersonal, tripCloneLimiter, cloneGalleryTrip);
+
+// Join requests (Milestone 8 G5) — requester side. The caller is a stranger
+// asking to join a *published* trip, so there is no trip role to check: the
+// public-trip filter in `services/gallery/joinRequests.ts` is the gate, plus
+// block/membership checks. Personal realm only (an agency session cannot ask to
+// join a personal gallery trip). 5 requests/day/account; one pending per trip
+// is enforced by a unique partial index.
+router.post(
+  '/:id/join-request',
+  protectPersonal,
+  joinRequestLimiter,
+  validate(joinRequestSchema),
+  postJoinRequest
+);
+router.get('/:id/join-request', protectPersonal, getJoinRequest);
+router.delete('/:id/join-request', protectPersonal, deleteJoinRequest);
+
+// Owner queue. Approval grants **commenter** only — the role is a literal in
+// the service, never a request parameter. Decline is silent to the requester;
+// block also clears that person's pending requests across the owner's trips.
+router.get('/:id/join-requests', protectSession, requireTripRole('owner'), getJoinRequests);
+router.post(
+  '/:id/join-requests/:requestId/approve',
+  protectSession,
+  requireTripRole('owner'),
+  postApproveJoinRequest
+);
+router.post(
+  '/:id/join-requests/:requestId/decline',
+  protectSession,
+  requireTripRole('owner'),
+  postDeclineJoinRequest
+);
+router.post(
+  '/:id/join-requests/:requestId/block',
+  protectSession,
+  requireTripRole('owner'),
+  postBlockJoinRequester
+);
 
 router.post('/:id/share', protectSession, requireTripRole('owner'), shareTrip);
 router.delete('/:id/share', protectSession, requireTripRole('owner'), revokeShareTrip);

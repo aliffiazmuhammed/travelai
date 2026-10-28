@@ -121,6 +121,19 @@ export interface ITripClonedFrom {
   clonedAt: Date;
 }
 
+/**
+ * Gallery moderation state (Milestone 8 G6). A trip keeps its normal
+ * `visibility: 'public'` while hidden: hidden content is removed from every
+ * public read (gallery, traveler page, clone and join) but the owner's data
+ * is untouched, so an admin dismissal can restore it without a re-publish.
+ */
+export interface ITripModeration {
+  hiddenAt: Date;
+  /** The platform operator for an admin de-list; absent for auto-hide. */
+  hiddenBy?: Types.ObjectId;
+  source: 'auto_report' | 'admin';
+}
+
 export interface ITrip extends Document {
   userId: Types.ObjectId;
   /**
@@ -154,6 +167,8 @@ export interface ITrip extends Document {
   gallery?: ITripGallery;
   /** Set when this draft was cloned from a published trip (M8 G4). */
   clonedFrom?: ITripClonedFrom;
+  /** Gallery moderation state (M8 G6); absent means the trip may be listed. */
+  moderation?: ITripModeration;
   tripDetails: Record<string, any>;
   version: number;
   hasEdited: boolean;
@@ -221,6 +236,19 @@ const tripClonedFromSchema = new Schema<ITripClonedFrom>(
     tripId: { type: Schema.Types.ObjectId, ref: 'Trip', required: true },
     ownerHandle: { type: String, required: true, trim: true, maxlength: 40 },
     clonedAt: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
+const tripModerationSchema = new Schema<ITripModeration>(
+  {
+    hiddenAt: { type: Date, required: true },
+    hiddenBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    source: {
+      type: String,
+      enum: ['auto_report', 'admin'],
+      required: true,
+    },
   },
   { _id: false }
 );
@@ -378,6 +406,10 @@ const tripSchema = new Schema<ITrip>(
       type: tripClonedFromSchema,
       default: undefined,
     },
+    moderation: {
+      type: tripModerationSchema,
+      default: undefined,
+    },
     tripDetails: {
       type: Object,
       required: true,
@@ -454,6 +486,9 @@ tripSchema.index({ visibility: 1, isDeleted: 1, startDate: 1 });
 // "newest published" reads.
 tripSchema.index({ visibility: 1, publishedAt: -1, _id: -1 });
 tripSchema.index({ 'gallery.tags': 1 });
+// Moderation lookups (G6): the admin console asks "which public trips are
+// hidden?" and the public clauses exclude the rest by this field.
+tripSchema.index({ 'moderation.hiddenAt': 1 }, { sparse: true });
 
 /** Agency trips must name their tenant; personal trips must not acquire one. */
 tripSchema.pre('validate', function () {

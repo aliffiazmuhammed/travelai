@@ -24,6 +24,11 @@ import {
   updateAgencyPlan,
   updateAgencyStatus,
 } from '../controllers/adminAgencies.controller.js';
+import {
+  dismissReportedContent,
+  hideReportedContent,
+  listReports,
+} from '../controllers/adminModeration.controller.js';
 import { protectPlatform } from '../middleware/auth.middleware.js';
 import { requirePlatformAdmin } from '../middleware/platformAdmin.middleware.js';
 import {
@@ -59,6 +64,20 @@ router.use(requirePlatformAdmin);
 router.use(protectPlatform);
 
 router.get('/overview', overview);
+
+// G6 moderation. Reported content only: these routes never list the personal
+// trip directory, and every decision is written to the platform audit trail.
+router.get('/reports', listReports);
+router.post(
+  '/reports/:targetType/:targetId/hide',
+  platformWriteLimiter,
+  hideReportedContent
+);
+router.post(
+  '/reports/:targetType/:targetId/dismiss',
+  platformWriteLimiter,
+  dismissReportedContent
+);
 
 // PA3 agency provisioning plus PA4 lifecycle/access operations. Static agency
 // paths are declared before `/:id` so they can never be read as a tenant id.

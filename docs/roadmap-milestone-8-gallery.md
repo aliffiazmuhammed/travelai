@@ -1,6 +1,6 @@
 # Milestone 8 — Public Gallery & Traveler Profiles
 
-**Status:** G1 and G2 shipped (2026-10-27); G3 and G4 implemented and awaiting review; G5–G6 approved and not started.
+**Status:** G1–G6 shipped and verified (2026-10-28).
 **Scope:** let a personal account publish a trip to a public, browsable gallery with a traveler profile; let visitors clone a published itinerary into their own draft or request to join it; keep everything monetary, membership- or identity-related off the public payload.
 
 **Locked decisions (2026-10-27):**
@@ -42,11 +42,11 @@ A trip can hold an unlisted link and a published listing at the same time, but t
 
 | Model | Change |
 |---|---|
-| `Trip` | `visibility: 'private' \| 'unlisted' \| 'public'` (default private; migration maps existing `isPublic` → `unlisted`), `publishedAt`, `gallery: { hideExactDates, summary?, tags? }`. Indexes for `visibility + start date`, `tags`, `publishedAt` |
+| `Trip` | `visibility: 'private' \| 'unlisted' \| 'public'` (default private; migration maps existing `isPublic` → `unlisted`), `publishedAt`, `gallery: { hideExactDates, summary?, tags? }`, `moderation: { hiddenAt?, hiddenBy?, source: 'auto_report' \| 'admin' }`. Indexes for `visibility + start date`, `tags`, `publishedAt`, and a sparse `moderation.hiddenAt` |
 | `User` | `profile: { handle (unique, sparse, lowercase), bio }`; avatar reuses `avatarUrl` |
-| `TripJoinRequest` (new) | tripId, requesterId, message (≤280), status `pending/approved/declined/withdrawn`, decidedBy, decidedAt; one pending per trip+user |
+| `TripJoinRequest` (new) | tripId, requesterId, message (≤280), status `pending/approved/declined/withdrawn`, decidedBy, decidedAt; one pending per trip+user (partial unique index) |
 | `UserBlock` (new) | blockerId, blockedId, createdAt; unique pair |
-| `TripReport` (new) | reporterId, targetType `trip/profile`, targetId, reason, note?, status `open/hidden/dismissed`; one per reporter+target |
+| `TripReport` (new) | reporterId, targetType `trip/profile`, targetId, reason (`spam/harassment/scam/privacy/other`), note (≤500), status `open/hidden/dismissed`, `resolvedBy/resolvedAt`; unique per reporter+target. Auto-hide threshold: 3 distinct open reporters |
 
 ## 4. API surface
 
@@ -64,15 +64,24 @@ all trip CRUD does):
 | Route | Purpose |
 |---|---|
 | `PATCH /api/itinerary/:id/publish` | publish / unpublish / update gallery metadata (owner only) — **G1 ✅** |
-| `POST /api/itinerary/:id/clone` | copy a published trip into a new draft |
-| `POST /api/itinerary/:id/join-requests` | request to join (auth, rate-limited, blocked users rejected) |
-| `GET /api/itinerary/:id/join-requests` | owner queue |
-| `PATCH /api/itinerary/:id/join-requests/:requestId` | approve / decline |
-| `DELETE /api/itinerary/:id/join-requests/:requestId` | requester withdraws |
+| `POST /api/itinerary/:id/clone` | copy a published trip into a new draft — **G4 ✅** |
+| `POST /api/itinerary/:id/join-request` | request to join (auth, 5/day, blocked refused) — **G5 ✅** |
+| `GET /api/itinerary/:id/join-request` | my latest request + membership state — **G5 ✅** |
+| `DELETE /api/itinerary/:id/join-request` | requester withdraws a pending request — **G5 ✅** |
+| `GET /api/itinerary/:id/join-requests` | owner queue (pending only) — **G5 ✅** |
+| `POST /api/itinerary/:id/join-requests/:requestId/{approve,decline,block}` | owner decision; approval grants commenter — **G5 ✅** |
 | `PATCH /api/auth/profile` | update name, handle + bio (`GET /api/auth/me` reads them) — **G1 ✅** |
 | `GET /api/auth/profile/handle-available` | availability check — **G1 ✅** |
-| `POST/DELETE /api/blocks/:userId`, `GET /api/blocks` | block list |
-| `POST /api/reports` | report a trip or profile |
+| `GET /api/blocks`, `POST/DELETE /api/blocks/:userId` | block list — **G5 ✅** |
+| `POST /api/reports` | report a trip (by id) or profile (by public handle) — **G6 ✅** |
+
+Platform admin (moderation only; `PLATFORM_ADMIN_ENABLED`):
+
+| Route | Purpose |
+|---|---|
+| `GET /api/admin/reports?status=open\|hidden\|dismissed&limit=` | grouped report queue with aggregate reasons — **G6 ✅** |
+| `POST /api/admin/reports/:targetType/:targetId/hide` | de-list a reported trip and close its reports — **G6 ✅** |
+| `POST /api/admin/reports/:targetType/:targetId/dismiss` | close reports and restore an auto-hidden listing — **G6 ✅** |
 
 ---
 
@@ -131,7 +140,7 @@ all trip CRUD does):
 
 **Acceptance:** anonymous browsing works; unpublished or expired trips vanish; the response payload contains no financial or member data (test-pinned); seeded gallery has at least 5 curated trips before the nav entry is enabled.
 
-**Implemented 2026-10-27 (awaiting review).** Artifacts:
+**Shipped 2026-10-27; verified 2026-10-28.** Artifacts:
 
 - `services/gallery/explore.ts`: eligibility filter (published, personal, not deleted, has `publishedAt`, start date today-or-later or date-less), search across title / `trip_title` / requested destination / summary (regex escaped), duration buckets via `$expr` over `duration_days` then the day list, tag `$all`, and a stable `(publishedAt, _id)` descending cursor encoded as base64url JSON. Publisher identity is resolved from `members[]` owner + an active personal account with a handle; a row without one is dropped rather than rendered ownerless.
 - `GET /api/explore` / `GET /api/explore/:tripId` (`controllers/explore.controller.ts`, `routes/explore.routes.ts`) behind a new `publicGalleryLimiter` (180 reads / 15 min / IP). `exploreQuerySchema` caps `q`, `groupType`, `cursor` and `limit` (1–24).
@@ -154,7 +163,7 @@ all trip CRUD does):
 
 **Acceptance:** a cloned trip is fully editable and shows attribution to the original owner; the original is untouched.
 
-**Implemented 2026-10-27 (awaiting review).** Artifacts:
+**Shipped 2026-10-27; verified 2026-10-28.** Artifacts:
 
 - `services/gallery/clone.ts`: the source is re-read through `loadGalleryTrip` (the same public projection as the anonymous page), then `buildClonedTripDraft` creates a fresh `workspace: 'personal'`, `status: 'draft'`, `visibility: 'private'` trip. Money, expenses, participants, finance, members, `shareId` and `generationMeta` are structurally absent from the source payload, so they cannot be copied. Exact dates are copied only when `dates.exact`; a hidden-date source becomes "dates flexible" instead of leaking the real window. Drawn routes carry over.
 - `Trip` gains `clonedFrom { tripId, ownerHandle, clonedAt }` (attribution only). The owner-facing trip payload includes it; the dashboard renders "Cloned from @handle" with a link to the traveller profile.
@@ -176,6 +185,19 @@ all trip CRUD does):
 
 **Acceptance:** approval never grants editor; duplicate pending requests are rejected; blocked users are refused server-side; only the owner can list or decide; requests on unpublished trips are rejected.
 
+**Shipped 2026-10-27; verified 2026-10-28.** Artifacts:
+
+- `models/TripJoinRequest.ts`: `tripId`, `requesterId`, optional 280-char `message`, `status` (`pending/approved/declined/withdrawn`), `decidedBy/decidedAt`, queue/history indexes, and a **partial unique index** on `{ tripId, requesterId }` where `status: 'pending'` — one open request per person per trip, with declined/withdrawn history allowed alongside.
+- `models/UserBlock.ts`: one-way `{ blockerId, blockedId }` with a unique pair index and a private optional reason. No email or identity fields.
+- `services/gallery/joinRequests.ts`: all requester and owner rules. Eligibility imports `publicTripClauses()` from `explore.ts`, so **joinable == visible in the gallery** (published, personal, not deleted, has `publishedAt`, upcoming). `requestToJoin` checks owner/member, block and duplicate-pending, then re-checks the block after insert to close the block-vs-request race. `approveJoinRequest` claims the pending row atomically, re-checks block/member/cap, then pushes a **literal `role: 'commenter'`** membership under `members.userId $ne` + a `$expr` cap guard; a lost race rolls the claim back to pending. There is no role parameter anywhere in the module (test-pinned). Owner decline is silent; blocking upserts the block and declines that person's pending requests across every trip the blocker owns.
+- Requester routes are `protectPersonal` + new `joinRequestLimiter` (5/day/account): `POST/GET/DELETE /api/itinerary/:id/join-request`. They intentionally skip `requireTripRole` (a stranger has no role yet); `routerCoverage.test.ts` records the exception and `realmCoverage.test.ts` classifies them personal. Owner routes (`GET /:id/join-requests`, `POST /:id/join-requests/:requestId/{approve,decline,block}`) are `protectSession` + `requireTripRole('owner')`.
+- `GET/POST/DELETE /api/blocks[/:userId]` behind `protectPersonal` (`routes/blocks.routes.ts`, mounted in `index.ts`), keyed only on the caller's account — no trip id, no agency/platform session.
+- `frontend/src/components/gallery/JoinRequestDialog.tsx`: owner name/photo, 280-char note with counter, and safety copy (what the owner sees, commenter-only, no payment details). `GalleryTrip` now has live join states — request, pending + withdraw, member, owner — with the same sign-in-resume pattern as clone (returning users get the dialog, never a silent request).
+- `TripMembers` gains an owner **Join requests** card with a pending badge, requester avatar/name/handle, the note, and Approve / Decline / Block (block has a confirmation). `Profile` gains a Blocked travellers list with unblock, so the block list is operable without the admin panel.
+- Tests: `services/gallery/joinRequests.test.ts` (22 pins: shared eligibility filter, pending/trimmed message, unpublished 404, owner/member refusal, duplicate 11000, blocked refusal, state, withdraw, commenter-only approval, cap, rollback, silent decline, block sweep, self-block/404, no-email block projection, route guards/limiter, model indexes, no-editor source pin). Full backend suite 683/683, typecheck clean; frontend typecheck and production build green.
+- **Sequencing note:** §6 says "do not start G5 before G6's report endpoint exists". G5 was implemented first at explicit request, behind the existing gallery gates; the report endpoint, auto-hide threshold, block enforcement and admin de-list now ship in G6, so the safety net exists before real traffic.
+- Not done here: email notifications (deferred by decision), a standalone moderation queue for blocks (list lives in Profile), and a browser smoke on a seeded database (the `test` DB still has zero public trips).
+
 ### G6 — Reporting, safety hardening, docs and verification
 
 **Goal:** the public surface is operable and defensible.
@@ -189,6 +211,24 @@ all trip CRUD does):
 - Verification: backend tests, typecheck, production build, browser smoke with synthetic accounts (Atlas test DB, cleaned up afterwards).
 
 **Acceptance:** reported content leaves the gallery at threshold; admin can de-list; smoke covers publish → browse → clone → request → approve on two accounts.
+
+**Shipped 2026-10-28.** Artifacts:
+
+- `models/TripReport.ts`: `reporterId`, `targetType` (`trip`/`profile`), `targetId`, `reason` (`spam/harassment/scam/privacy/other`), optional 500-char `note`, `status` (`open/hidden/dismissed`), `resolvedBy/resolvedAt`; unique `{reporterId,targetType,targetId}` so one account can report a target once, plus queue indexes. `AUTO_HIDE_REPORT_THRESHOLD = 3`.
+- `models/Trip.ts`: `moderation { hiddenAt, hiddenBy?, source: 'auto_report' | 'admin' }` and a sparse `moderation.hiddenAt` index. Hiding is deliberately **separate from `visibility`**: the owner keeps the trip, its data and its publication settings, while every public read drops it.
+- `services/gallery/reports.ts`: report creation, self-report guard, duplicate `11000` → friendly `409`, note trimming and the threshold flip. A profile is addressed by its **public handle** — the only identifier the public page receives — and the resolved user id is what the row and the admin queue store; an id is still accepted for internal callers. Profiles are queue-only: hiding one would take down every trip its owner published, so that remains an explicit account action. Auto-hide calls `emitTripUpdated` explicitly because `Trip.updateOne` skips the post hooks.
+- `services/gallery/explore.ts`: `publicTripClauses()` now also requires `{'moderation.hiddenAt': null}`, and `traveler.ts`, clone and join eligibility all reuse that one clause. A hidden trip therefore leaves the listing, the public page, the traveler page, cloning and join requests in the same query flip.
+- `POST /api/reports` (`controllers/reports.controller.ts`, `routes/reports.routes.ts`, mounted at `/api/reports`) behind `protectPersonal` + new `reportCreateLimiter` (10/day/account). `createReportSchema.targetId` is a trimmed 1–40 char string rather than a 24-hex pattern, because a profile target is a handle.
+- Admin moderation: `services/platform/moderation.ts` groups open/closed reports by target with aggregate reason counts and a minimal target summary (no itinerary body, budget or member list); `GET /api/admin/reports` plus `POST /api/admin/reports/:targetType/:targetId/{hide,dismiss}` (`controllers/adminModeration.controller.ts`, `routes/admin.routes.ts`) behind the existing `requirePlatformAdmin` + `protectPlatform`, CSRF and `platformWriteLimiter`. **De-list** hides the trip and closes reports as `hidden`; **dismiss** closes open *and* hidden reports as `dismissed` and clears the moderation marker, restoring an auto-hidden or de-listed listing. Both write `recordPlatformAudit` (`content.hidden` / `content.dismissed`). Hiding a profile is `400`.
+- `frontend/src/components/gallery/ReportDialog.tsx`: five reasons, optional 500-char note with counter, the three-report threshold copy and a guidelines link; sign-in resumes the trip page with the dialog open. `GalleryTrip` and `TravelerProfile` gain report buttons (the profile sends its handle).
+- `frontend/src/components/dashboard/ShareExportModal.tsx` + `Dashboard`: the owner sees "Hidden from the gallery since …", whether it was automatic or an admin de-list, and the review copy, without losing the trip.
+- `frontend/src/pages/Guidelines.tsx` at `/guidelines` (public): what belongs, what we remove, reporting/review and account action. Linked from the report dialog and the join-request safety note, which also warns against sharing payment details or a home address.
+- `frontend/src/pages/admin/AdminReports.tsx` at `/admin/reports` with Open / De-listed / Dismissed tabs, counts, public-page links, confirm dialogs and empty states; a de-listed trip carries a **Restore** action (the same dismiss decision), so de-listing is reversible without the API. "Reported content" in `AdminLayout`. Deviation from the spec's "Reported filter on the existing account list": grouping one card per target with reason counts and notes does not fit the account table, so the queue is its own minimal page; it still exposes only reported targets and reuses the platform shell, guards and audit.
+- Tests: `services/gallery/reports.test.ts` (9 pins: eligibility, self-report, duplicate, note/reason shape, threshold behaviour, handle resolution, route guard/limiter) and `services/platform/moderation.test.ts` (6 pins: grouping/projection, de-list, dismiss/restore, hidden-report reclassification, profile rules, audit/route wiring), plus updated pins in `explore.test.ts`, `traveler.test.ts`, `joinRequests.test.ts`, `clone.test.ts`, `routes/admin.routes.test.ts` and `routes/realmCoverage.test.ts`. Full backend suite **699/699**, typecheck clean; frontend typecheck and production build green.
+- `scripts/smoke-m8-g6.mts`: HTTP acceptance smoke over seeded synthetic accounts — publish → browse → traveler → clone → request → approve → three reports/auto-hide → hidden page/listing/traveler → owner banner payload → profile report by handle → admin queue/dismiss/restore/profile-hide-400/trip de-list → restore → public again — ending with `PASS` and `cleanup: users=0 trips=0 reports=0 audits=0`.
+- Browser smoke on the Vite dev server: signed-out report → sign-in resume with the dialog open; submit shows the thank-you toast; traveler profile reports by handle; `/guidelines` renders; the owner banner appears on the moderated trip; `/admin/reports` dismisses to the Dismissed tab and de-lists to the De-listed tab with the public page then `404`. Fixtures were removed afterwards (`cleanup: users=0 trips=0`).
+- Release gate and smoke instructions: `docs/milestone-8-test-plan.md`.
+- Not done here: a full moderation queue with appeals (out of scope by decision), reporter blocking from the admin queue, and email notifications.
 
 ---
 

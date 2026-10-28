@@ -15,6 +15,7 @@ import Trip from '../../models/Trip.js';
 import User from '../../models/User.js';
 import { AppError } from '../../utils/AppError.js';
 import { normalizeHandle } from '../user/profile.js';
+import { publicTripClauses } from './explore.js';
 import {
   projectTravelerProfile,
   type GalleryTravelerProfile,
@@ -22,12 +23,6 @@ import {
 
 /** Upper bound for one profile page; the gallery (G3) owns real pagination. */
 const PROFILE_TRIP_LIMIT = 30;
-
-function startOfTodayUtc(): Date {
-  const now = new Date();
-  now.setUTCHours(0, 0, 0, 0);
-  return now;
-}
 
 export async function loadTravelerProfile(
   rawHandle: unknown
@@ -46,16 +41,13 @@ export async function loadTravelerProfile(
   }
 
   const trips = await Trip.find({
-    visibility: 'public',
-    workspace: { $ne: 'agency' },
-    isDeleted: { $ne: true },
-    // Ownership comes from the members[] role, the same source the publish
-    // service trusts, so a transferred trip never lists under its creator.
-    members: { $elemMatch: { userId: user._id, role: 'owner' } },
-    $or: [
-      { startDate: { $gte: startOfTodayUtc() } },
-      { startDate: { $exists: false } },
-      { startDate: null },
+    // Reuse the gallery's eligibility rule (G6: this now also drops hidden
+    // trips). Ownership comes from the members[] role, the same source the
+    // publish service trusts, so a transferred trip never lists under its
+    // creator.
+    $and: [
+      ...publicTripClauses(),
+      { members: { $elemMatch: { userId: user._id, role: 'owner' } } },
     ],
   })
     .select('title tripDetails gallery startDate endDate publishedAt generationMeta')

@@ -45,7 +45,15 @@ function isTripScoped(path: string): boolean {
  * `protectPersonal` + `tripCloneLimiter`, and the service copies only the
  * public projection. `clone.test.ts` pins both of those facts.
  */
-const UNGUARDED_BY_DESIGN = new Set(['post /:id/clone']);
+const UNGUARDED_BY_DESIGN = new Set([
+  'post /:id/clone',
+  // G5 requester side: a stranger asking to join a published trip has no trip
+  // role yet, so the guard would be circular. The public-trip filter, block
+  // check and membership check in `joinRequests.ts` are the gate.
+  'post /:id/join-request',
+  'get /:id/join-request',
+  'delete /:id/join-request',
+]);
 
 test('every trip-scoped route carries a requireTripRole guard', () => {
   const layers = routeLayers();
@@ -224,6 +232,15 @@ test('guards declare the expected minimum roles (spot checks)', () => {
   assert.equal(minimumFor('POST', '/:id/polls/:pollId/votes'), 'commenter');
   assert.equal(minimumFor('POST', '/:id/polls/:pollId/close'), 'viewer');
   assert.equal(minimumFor('DELETE', '/:id/polls/:pollId'), 'viewer');
+  // Milestone 8 / G5 — the owner queue is owner-only; the requester side has no
+  // role guard by design (see UNGUARDED_BY_DESIGN).
+  assert.equal(minimumFor('GET', '/:id/join-requests'), 'owner');
+  assert.equal(minimumFor('POST', '/:id/join-requests/:requestId/approve'), 'owner');
+  assert.equal(minimumFor('POST', '/:id/join-requests/:requestId/decline'), 'owner');
+  assert.equal(minimumFor('POST', '/:id/join-requests/:requestId/block'), 'owner');
+  assert.equal(minimumFor('POST', '/:id/join-request'), undefined);
+  assert.equal(minimumFor('GET', '/:id/join-request'), undefined);
+  assert.equal(minimumFor('DELETE', '/:id/join-request'), undefined);
 });
 
 test('version-cap routes expose history only with the versions field loaded', () => {

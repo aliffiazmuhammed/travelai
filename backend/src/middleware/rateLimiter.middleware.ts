@@ -213,6 +213,51 @@ export const tripCloneLimiter = rateLimit({
 });
 
 /**
+ * Milestone 8 G5: join requests are stranger-to-stranger messages, so they are
+ * capped per account per day. Five is enough to ask about a handful of trips a
+ * person actually wants to join, and far too few for spraying requests across
+ * the gallery. The duplicate-pending rule is the unique index in the model, not
+ * this limiter — the two brakes cover different abuses.
+ */
+export const JOIN_REQUEST_DAILY_LIMIT = 5;
+
+export const joinRequestLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000,
+  max: JOIN_REQUEST_DAILY_LIMIT,
+  keyGenerator: userOrIpKey,
+  validate: false,
+  message: {
+    success: false,
+    error: 'You have sent the maximum number of join requests for today. Please try again tomorrow.',
+    message: 'You have sent the maximum number of join requests for today. Please try again tomorrow.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
+ * Milestone 8 G6: reports are a safety action, so the brake is generous enough
+ * for a person flagging several bad listings while still bounding scripted
+ * report brigading. A report is also unique per reporter+target, so this cap
+ * governs how many *different* pieces of content one account can flag a day.
+ */
+export const REPORT_DAILY_LIMIT = 10;
+
+export const reportCreateLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000,
+  max: REPORT_DAILY_LIMIT,
+  keyGenerator: userOrIpKey,
+  validate: false,
+  message: {
+    success: false,
+    error: 'You have sent the maximum number of reports for today. Please try again tomorrow.',
+    message: 'You have sent the maximum number of reports for today. Please try again tomorrow.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
  * F14 account security: a password change is a credential check, so it gets the
  * same brake shape as sign-in but keyed on the account (a shared NAT must not
  * lock everyone out). 10 tries / 15 min is generous for a human typing and

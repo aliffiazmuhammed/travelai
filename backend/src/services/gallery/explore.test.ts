@@ -389,11 +389,15 @@ test('the trip page queries only live public rows', async () => {
   await loadGalleryTrip(TRIP_1);
 
   assert.equal(tripQuery._id, TRIP_1);
-  assert.equal(tripQuery.visibility, 'public');
-  assert.deepEqual(tripQuery.isDeleted, { $ne: true });
-  assert.deepEqual(tripQuery.workspace, { $ne: 'agency' });
-  assert.deepEqual(tripQuery.publishedAt, { $ne: null });
-  assert.ok(Array.isArray(tripQuery.$or));
+  // G5: the page and the join-request path share `publicTripClauses()`, so the
+  // eligibility rule lives in exactly one place and arrives here as `$and`.
+  const clauses = tripQuery.$and as any[];
+  assert.ok(Array.isArray(clauses), 'the shared public clauses must be applied');
+  assert.ok(clauses.some((clause) => clause.visibility === 'public'));
+  assert.ok(clauses.some((clause) => clause.isDeleted?.$ne === true));
+  assert.ok(clauses.some((clause) => clause.workspace?.$ne === 'agency'));
+  assert.ok(clauses.some((clause) => clause.publishedAt?.$ne === null));
+  assert.ok(clauses.some((clause) => Array.isArray(clause.$or)));
 });
 
 test('an unpublished, expired or deleted trip is a 404', async () => {

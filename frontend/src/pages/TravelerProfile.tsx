@@ -1,15 +1,18 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { ReportDialog } from "@/components/gallery/ReportDialog";
 import { api } from "@/services/api";
+import { useAuth } from "@/context/UserContext";
 import { avatarSrc, initialsFor } from "@/lib/avatar";
 import {
   AlertCircle,
   ArrowRight,
   CalendarDays,
   Compass,
+  Flag,
   Globe,
   Loader2,
   Sparkles,
@@ -52,9 +55,39 @@ function dateLine(dates: GalleryDates): string {
 
 const TravelerProfile = () => {
   const { handle } = useParams<{ handle: string }>();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
   const [traveler, setTraveler] = useState<GalleryTravelerProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
+
+  useEffect(() => {
+    // G6: resume the report composer after a sign-in redirect, once.
+    const wantsReport = Boolean(
+      (location.state as { report?: boolean } | null)?.report
+    );
+    if (!wantsReport || !traveler || !isAuthenticated) return;
+    navigate(location.pathname, { replace: true, state: null });
+    setReportOpen(true);
+  }, [location.state, location.pathname, traveler, isAuthenticated, navigate]);
+
+  const handleReportClick = () => {
+    if (!traveler) return;
+    if (!isAuthenticated) {
+      navigate("/auth", {
+        state: {
+          from: {
+            pathname: location.pathname,
+            state: { report: true },
+          },
+        },
+      });
+      return;
+    }
+    setReportOpen(true);
+  };
 
   useEffect(() => {
     if (!handle) {
@@ -151,13 +184,23 @@ const TravelerProfile = () => {
                   )}
                 </div>
 
-                <div className="sm:ml-auto shrink-0 text-left sm:text-right">
-                  <p className="text-2xl font-black text-foreground">
-                    {traveler.trips.length}
-                  </p>
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    published {traveler.trips.length === 1 ? "trip" : "trips"}
-                  </p>
+                <div className="sm:ml-auto shrink-0 text-left sm:text-right space-y-2">
+                  <div>
+                    <p className="text-2xl font-black text-foreground">
+                      {traveler.trips.length}
+                    </p>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      published {traveler.trips.length === 1 ? "trip" : "trips"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleReportClick}
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:text-destructive"
+                  >
+                    <Flag className="w-3 h-3" />
+                    Report profile
+                  </button>
                 </div>
               </div>
             </section>
@@ -261,6 +304,16 @@ const TravelerProfile = () => {
           </div>
         )}
       </main>
+
+      {traveler && (
+        <ReportDialog
+          open={reportOpen}
+          onClose={() => setReportOpen(false)}
+          targetType="profile"
+          targetId={traveler.handle}
+          targetLabel={`@${traveler.handle}`}
+        />
+      )}
     </div>
   );
 };

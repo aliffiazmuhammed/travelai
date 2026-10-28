@@ -76,6 +76,29 @@ function upcomingClause(): FilterQuery<any> {
   };
 }
 
+/**
+ * The definition of "a trip the public gallery may show", exported so that the
+ * join-request path reuses exactly the same eligibility rule instead of
+ * inventing a second one. A trip that fails these clauses cannot be browsed,
+ * cloned or joined: unpublished, deleted, agency-owned, never published, or
+ * already in the past.
+ */
+export function publicTripClauses(): FilterQuery<any>[] {
+  return [
+    { visibility: 'public' },
+    { isDeleted: { $ne: true } },
+    { workspace: { $ne: 'agency' } },
+    // `publishedAt` is written by the publish endpoint; requiring it keeps the
+    // cursor maths well-defined and drops any hand-edited public row.
+    { publishedAt: { $ne: null } },
+    // G6: auto-hidden or admin-de-listed content leaves every public surface
+    // at once. `null` matches both an absent field and an explicit null, which
+    // is the two-state reality of `moderation.hiddenAt`.
+    { 'moderation.hiddenAt': null },
+    upcomingClause(),
+  ];
+}
+
 function normalizeTagsInput(input: ExploreListQuery['tags']): string[] {
   if (input === undefined) return [];
   const raw = Array.isArray(input) ? input : String(input).split(',');
@@ -127,15 +150,7 @@ function encodeCursor(trip: any): string {
  * without starting a database.
  */
 export function buildExploreFilter(query: ExploreListQuery): FilterQuery<any> {
-  const clauses: FilterQuery<any>[] = [
-    { visibility: 'public' },
-    { isDeleted: { $ne: true } },
-    { workspace: { $ne: 'agency' } },
-    // `publishedAt` is written by the publish endpoint; requiring it keeps the
-    // cursor maths well-defined and drops any hand-edited public row.
-    { publishedAt: { $ne: null } },
-    upcomingClause(),
-  ];
+  const clauses: FilterQuery<any>[] = publicTripClauses();
 
   const search = String(query.q ?? '').trim();
   if (search) {
@@ -267,11 +282,7 @@ export async function loadGalleryTrip(tripId: string): Promise<GalleryTrip> {
 
   const trip = (await Trip.findOne({
     _id: tripId,
-    visibility: 'public',
-    isDeleted: { $ne: true },
-    workspace: { $ne: 'agency' },
-    publishedAt: { $ne: null },
-    ...upcomingClause(),
+    $and: publicTripClauses(),
   })
     .select(
       'title tripDetails gallery startDate endDate publishedAt generationMeta members customRoutes'

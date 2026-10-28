@@ -8,6 +8,12 @@ import type {
   Trip,
   TripInput,
   TripPublicationState,
+  TripJoinRequest,
+  JoinRequestState,
+  BlockedAccount,
+  ReportReason,
+  ReportResult,
+  ReportTargetType,
   User,
   ItineraryData,
   TripVersionsResponse,
@@ -89,6 +95,9 @@ import type {
   PlatformAgencyStatus,
   PlatformAuditList,
   PlatformAuditQuery,
+  PlatformModerationAction,
+  PlatformModerationList,
+  PlatformModerationStatus,
   PlatformOwnerPreview,
   PlatformPlanTier,
   PlatformProvisionResult,
@@ -753,6 +762,35 @@ class ApiClient {
 
   async listAdminAudit(params: PlatformAuditQuery = {}): Promise<PlatformAuditList> {
     return this.request(`/api/admin/audit${auditQueryString(params)}`);
+  }
+
+  // G6 moderation console. Reported content only; every decision is audited.
+  async listModerationQueue(
+    status: PlatformModerationStatus = 'open',
+    limit = 50
+  ): Promise<PlatformModerationList> {
+    const query = new URLSearchParams({ status, limit: String(limit) });
+    return this.request(`/api/admin/reports?${query.toString()}`);
+  }
+
+  async hideReportedContent(
+    targetType: 'trip' | 'profile',
+    targetId: string
+  ): Promise<PlatformModerationAction> {
+    return this.request(
+      `/api/admin/reports/${encodeURIComponent(targetType)}/${encodeURIComponent(targetId)}/hide`,
+      { method: 'POST' }
+    );
+  }
+
+  async dismissReportedContent(
+    targetType: 'trip' | 'profile',
+    targetId: string
+  ): Promise<PlatformModerationAction> {
+    return this.request(
+      `/api/admin/reports/${encodeURIComponent(targetType)}/${encodeURIComponent(targetId)}/dismiss`,
+      { method: 'POST' }
+    );
   }
 
   async updateAgency(
@@ -1841,6 +1879,121 @@ class ApiClient {
   async cloneGalleryTrip(tripId: string): Promise<Trip> {
     return this.request(`/api/itinerary/${encodeURIComponent(tripId)}/clone`, {
       method: 'POST',
+    });
+  }
+
+  /**
+   * Milestone 8 G5 — ask the owner of a published trip to join. Approval grants
+   * **commenter** only; the server enforces one pending request per trip and
+   * 5 requests/day/account, and refuses blocked accounts.
+   */
+  async requestToJoinTrip(
+    tripId: string,
+    message?: string
+  ): Promise<{ success: boolean; request: TripJoinRequest }> {
+    return this.request(`/api/itinerary/${encodeURIComponent(tripId)}/join-request`, {
+      method: 'POST',
+      body: JSON.stringify({ message: message?.trim() || undefined }),
+    });
+  }
+
+  /** My latest request for this trip plus membership flags. */
+  async getJoinRequestState(
+    tripId: string
+  ): Promise<{ success: boolean } & JoinRequestState> {
+    return this.request(`/api/itinerary/${encodeURIComponent(tripId)}/join-request`);
+  }
+
+  /** Withdraw my pending request. */
+  async withdrawJoinRequest(
+    tripId: string
+  ): Promise<{ success: boolean; request: TripJoinRequest }> {
+    return this.request(`/api/itinerary/${encodeURIComponent(tripId)}/join-request`, {
+      method: 'DELETE',
+    });
+  }
+
+  /** Owner queue (owner-only server-side). */
+  async getJoinRequests(
+    tripId: string
+  ): Promise<{ success: boolean; requests: TripJoinRequest[] }> {
+    return this.request(`/api/itinerary/${encodeURIComponent(tripId)}/join-requests`);
+  }
+
+  /** Owner approval — the server always adds a commenter, never an editor. */
+  async approveJoinRequest(
+    tripId: string,
+    requestId: string
+  ): Promise<{ success: boolean; request: TripJoinRequest }> {
+    return this.request(
+      `/api/itinerary/${encodeURIComponent(tripId)}/join-requests/${encodeURIComponent(requestId)}/approve`,
+      { method: 'POST' }
+    );
+  }
+
+  async declineJoinRequest(
+    tripId: string,
+    requestId: string
+  ): Promise<{ success: boolean; request: TripJoinRequest }> {
+    return this.request(
+      `/api/itinerary/${encodeURIComponent(tripId)}/join-requests/${encodeURIComponent(requestId)}/decline`,
+      { method: 'POST' }
+    );
+  }
+
+  /** Block straight from the queue; the server also declines the request. */
+  async blockJoinRequester(
+    tripId: string,
+    requestId: string
+  ): Promise<{ success: boolean; block: BlockedAccount }> {
+    return this.request(
+      `/api/itinerary/${encodeURIComponent(tripId)}/join-requests/${encodeURIComponent(requestId)}/block`,
+      { method: 'POST' }
+    );
+  }
+
+  // Blocks (Milestone 8 G5) — personal account settings, not trip resources.
+  async getBlocks(): Promise<{ success: boolean; blocks: BlockedAccount[] }> {
+    return this.request('/api/blocks');
+  }
+
+  async blockUser(
+    userId: string,
+    reason?: string
+  ): Promise<{ success: boolean; block: BlockedAccount }> {
+    return this.request(`/api/blocks/${encodeURIComponent(userId)}`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: reason?.trim() || undefined }),
+    });
+  }
+
+  async unblockUser(
+    userId: string
+  ): Promise<{ success: boolean; removed: boolean }> {
+    return this.request(`/api/blocks/${encodeURIComponent(userId)}`, {
+      method: 'DELETE',
+    });
+  }
+
+  /**
+   * Milestone 8 G6 — report a published trip or traveler profile. Reporting is
+   * an accountable personal action: the server requires a session, caps reports
+   * at 10/day and stores one report per reporter+target.
+   */
+  async reportContent(input: {
+    targetType: ReportTargetType;
+    targetId: string;
+    reason: ReportReason;
+    note?: string;
+  }): Promise<ReportResult> {
+    return this.request('/api/reports', {
+      method: 'POST',
+      body: JSON.stringify({
+        targetType: input.targetType,
+        targetId: input.targetId,
+        reason: input.reason,
+        ...(input.note?.trim() ? { note: input.note.trim() } : {}),
+      }),
     });
   }
 
