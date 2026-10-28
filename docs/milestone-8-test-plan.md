@@ -1,6 +1,7 @@
 # Milestone 8 — public gallery acceptance and safety test plan
 
-**Status:** G1–G5 implemented; G6 implemented and awaiting review (2026-10-28).
+**Status:** G1–G6 shipped and verified (2026-10-28), including the launch
+seed (`npm run seed:gallery`).
 The automated suite and the HTTP smoke are green; the browser smoke for the
 happy path and moderation surfaces has been run on the Atlas `test` database and
 cleaned up.
@@ -98,9 +99,18 @@ Automated coverage: `services/gallery/publish.test.ts`,
       out of scope.
 - [ ] The Explore nav entry appears only at `total >= 5`; `/explore` still
       works by direct URL below the threshold.
+- [ ] `npm run seed:gallery -- --dry-run` reports 6 trips and 4 curator
+      accounts; running it for real lists 6 public trips and prints
+      `Explore nav gate: unlocked`, and a second run replaces exactly 6 trips
+      without creating duplicate accounts.
+- [ ] `npm run seed:gallery -- --cleanup` removes the seeded trips and curator
+      accounts, and refuses to delete a curator that owns non-seed trips.
+- [ ] Seeded trips keep their season copy (`Winter` in January, `Spring` in
+      April, `Autumn` in November, `Dry season` in June) and start at least 30
+      days out, so none drops out of the gallery right after a run.
 
 Automated coverage: `services/gallery/explore.test.ts`,
-`routes/realmCoverage.test.ts`.
+`services/gallery/seedContent.test.ts`, `routes/realmCoverage.test.ts`.
 
 ---
 
@@ -227,7 +237,7 @@ Automated coverage: `services/platform/moderation.test.ts`,
 ```bash
 # backend
 cd backend
-npm test            # full suite: 699 tests / 0 failures
+npm test            # full suite: 709 tests / 0 failures
 npx tsc --noEmit
 
 # frontend
@@ -236,7 +246,7 @@ npm run typecheck
 npm run build
 ```
 
-Latest local run (2026-10-28): backend **699/699**, backend typecheck clean,
+Latest local run (2026-10-28): backend **709/709**, backend typecheck clean,
 frontend typecheck and production build clean.
 
 ---
@@ -322,6 +332,7 @@ Ship only when:
 - the browser smoke covers publish → browse → clone → request → approve on two
   accounts, plus report → auto-hide → admin dismiss/de-list;
 - the gallery has at least five curated published trips before the nav entry is
-  enabled;
+  enabled — run `npm run seed:gallery` on the target database (use
+  `--dry-run` first and `--cleanup` to back it out);
 - an owner for report triage is named (who watches `/admin/reports`) and the
   response-time expectation is documented for support.

@@ -7,6 +7,7 @@ import { ReportDialog } from "@/components/gallery/ReportDialog";
 import { api } from "@/services/api";
 import { useAuth } from "@/context/UserContext";
 import { avatarSrc, initialsFor } from "@/lib/avatar";
+import { applyPageMeta } from "@/lib/meta";
 import {
   AlertCircle,
   ArrowRight,
@@ -116,6 +117,19 @@ const TravelerProfile = () => {
 
     load();
   }, [handle]);
+
+  // Public profile pages keep their tab title and share preview in step with
+  // the gallery pages (G3), which already apply page meta.
+  useEffect(() => {
+    if (!traveler) return;
+    return applyPageMeta({
+      title: `${traveler.name} (@${traveler.handle}) · TravelAI`,
+      description:
+        traveler.bio ||
+        `Trips published by @${traveler.handle} on TravelAI.`,
+      ogType: "profile",
+    });
+  }, [traveler]);
 
   return (
     <div className="min-h-screen bg-gradient-hero flex flex-col">

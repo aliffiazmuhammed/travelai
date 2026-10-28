@@ -150,7 +150,7 @@ Platform admin (moderation only; `PLATFORM_ADMIN_ENABLED`):
 - `hooks/useGalleryEnabled.ts` + `Navbar`: the Explore entry appears only when `total >= 5`; `/explore` itself is always reachable by URL.
 - `lib/meta.ts`: per-page `<title>`, description and OG tags on both pages (crawlability stays deferred).
 - Tests: `services/gallery/explore.test.ts` (20 pins: eligibility, expiry cutoff, search escaping, duration/tags, cursor round-trip and rejection, dropped publishers, leak sweeps for listing and trip page) plus gallery route classification in `routes/realmCoverage.test.ts`. Backend: 650 tests, typecheck green. Frontend: typecheck and production build green.
-- Local/dev caveat: `travelai` has no public trips yet (G1 migration mapped every existing row to `unlisted`/`private`), so the nav gate stays closed until at least 5 curated trips are published. Group type is accepted by the API (`?groupType=`) for curated links but has no free-text control yet, because the value is free-form in generated itineraries.
+- Local/dev caveat: `travelai` has no public trips yet (G1 migration mapped every existing row to `unlisted`/`private`), so the nav gate stays closed until at least 5 curated trips are published — `npm run seed:gallery` now supplies them (see "Launch seeding" below). Group type is accepted by the API (`?groupType=`) for curated links but has no free-text control yet, because the value is free-form in generated itineraries.
 - Not done here: clone (landed in G4) and reporting/moderation (G6), plus a browser smoke on a seeded database.
 
 ### G4 — Clone a published trip
@@ -230,6 +230,16 @@ Platform admin (moderation only; `PLATFORM_ADMIN_ENABLED`):
 - Release gate and smoke instructions: `docs/milestone-8-test-plan.md`.
 - Not done here: a full moderation queue with appeals (out of scope by decision), reporter blocking from the admin queue, and email notifications.
 
+### Launch seeding — the five-trip gate (2026-10-28)
+
+**Goal:** a fresh deployment reaches the G3 nav threshold (≥5 public trips) without hand-publishing through the UI.
+
+- `services/gallery/seedContent.ts`: the single source of truth — 4 curated publisher accounts (deterministic `.invalid` emails/handles, bios that say the trip was curated by the TravelAI team) and 6 complete trips with full itineraries, budgets, safety copy and valid summaries/tags. Dates are the *next occurrence* of a month/day anchor with a 30-day minimum horizon, so a spring trip stays in spring and nothing expires out of the gallery the week after a run; two trips are deliberately date-less ("Dates flexible").
+- `scripts/seed-gallery.ts` / `npm run seed:gallery`: `--dry-run`, `--cleanup`, `--base-date=YYYY-MM-DD`. Upserts curators by email (random, unrecorded bcrypt passwords — nobody can sign in), replaces only trips carrying `generationMeta.seedBatch`, and publishes through `setTripPublication` so the seeded rows obey every G1 rule. Cleanup removes the batch's trips, their join requests/reports and the curator accounts, refusing to delete a curator that owns non-seed trips.
+- `services/gallery/seedContent.test.ts`: 10 pins (≥5 trips, unique curator keys/handles/emails, handle rules, summary/tag limits, duration = itinerary length, day numbering, budget sums, exact/hidden/date-less mix, month-safe anchors, deterministic next-occurrence math).
+- Verified 2026-10-28 on the `test` database: seed prints `6 listed in the gallery` and `Explore nav gate: unlocked`; a re-run reuses the accounts and replaces exactly 6 trips; `/api/explore` returns 6 with no ISO dates on hidden-date rows; browser smoke of `/explore` (6 cards, correct date labels), a hidden-date trip page (no date strings, clone CTA) and `/travelers/maya_roams` (name, bio, one published trip).
+- Also fixed while seeding: the traveler profile page now applies page meta (`title`, description, `og:type: profile`) like the other public pages.
+
 ---
 
 ## 6. Sequencing
@@ -251,7 +261,7 @@ Platform admin (moderation only; `PLATFORM_ADMIN_ENABLED`):
 | Risk | Mitigation |
 |---|---|
 | Moderation gap (no full queue) | Report reporting exists from G6 with auto-hide at 3 reports + admin de-list + block list; content guidelines published |
-| Cold start | Curated seed trips; nav entry gated until ≥5 published |
+| Cold start | `npm run seed:gallery` ships 6 curated trips with full itineraries; nav entry gated until ≥5 published |
 | Physical safety (exact dates + strangers) | Hide-dates toggle; requester identity shown before approval; block list; safety copy; owner approval required |
 | SEO expectations | Deferred by design: gallery is SPA-rendered in M8; prerendering is a later milestone |
 | Privacy of co-travelers | Member identities and names never enter the projection |
