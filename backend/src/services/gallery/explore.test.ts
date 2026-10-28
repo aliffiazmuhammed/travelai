@@ -7,6 +7,7 @@ import {
   buildExploreFilter,
   listGalleryTrips,
   loadGalleryTrip,
+  publicTripClauses,
 } from './explore.js';
 
 /**
@@ -198,6 +199,18 @@ test('the expiry cutoff is midnight today, so a finished trip drops out', () => 
   );
 });
 
+test('includePast drops only the date window', () => {
+  const clauses = publicTripClauses({ includePast: true });
+
+  assert.equal(
+    clauses.some((clause: any) => Array.isArray(clause.$or)),
+    false,
+    'a past trip stays visible on profiles and direct links'
+  );
+  assert.ok(clauses.some((clause: any) => clause.visibility === 'public'));
+  assert.ok(clauses.some((clause: any) => clause['moderation.hiddenAt'] === null));
+});
+
 /* -------------------------------------------------------------------------- */
 /*  Filters                                                                    */
 /* -------------------------------------------------------------------------- */
@@ -384,7 +397,7 @@ test('an invalid id is a 404 without touching Mongo', async () => {
   assert.equal(tripQuery, null);
 });
 
-test('the trip page queries only live public rows', async () => {
+test('the trip page stays reachable after the trip ends', async () => {
   reset();
   await loadGalleryTrip(TRIP_1);
 
@@ -397,7 +410,8 @@ test('the trip page queries only live public rows', async () => {
   assert.ok(clauses.some((clause) => clause.isDeleted?.$ne === true));
   assert.ok(clauses.some((clause) => clause.workspace?.$ne === 'agency'));
   assert.ok(clauses.some((clause) => clause.publishedAt?.$ne === null));
-  assert.ok(clauses.some((clause) => Array.isArray(clause.$or)));
+  // A finished trip keeps its page: only the listing applies the date window.
+  assert.ok(!clauses.some((clause) => Array.isArray(clause.$or)));
 });
 
 test('an unpublished, expired or deleted trip is a 404', async () => {

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Menu, Plane, Sun, Moon, Sparkles, LogOut, UserCircle2 } from "lucide-react";
+import { Menu, Plane, Sun, Moon, Sparkles, LogOut, UserCircle2, Globe2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/context/UserContext";
@@ -146,6 +146,22 @@ const Navbar = () => {
                     </Avatar>
                     <span className="truncate">{displayName}</span>
                   </Link>
+                  {user?.handle && (
+                    <Button
+                      asChild
+                      variant="ghost"
+                      size="icon"
+                      className="rounded-xl h-10 w-10 text-muted-foreground hover:text-foreground"
+                      title="Your travel page"
+                    >
+                      <Link
+                        to={`/travelers/${encodeURIComponent(user.handle)}`}
+                        aria-label="Your travel page"
+                      >
+                        <Globe2 className="w-4 h-4" />
+                      </Link>
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"
@@ -255,6 +271,20 @@ const Navbar = () => {
                         </div>
                         <UserCircle2 className="h-4 w-4 text-muted-foreground ml-auto shrink-0" />
                       </Link>
+                      {user?.handle && (
+                        <Link
+                          to={`/travelers/${encodeURIComponent(user.handle)}`}
+                          onClick={() => setIsOpen(false)}
+                        >
+                          <Button
+                            variant="outline"
+                            className="w-full rounded-2xl h-11 text-xs font-bold gap-2"
+                          >
+                            <Globe2 className="h-4 w-4" />
+                            Your travel page
+                          </Button>
+                        </Link>
+                      )}
                       <Button
                         variant="outline"
                         onClick={() => {

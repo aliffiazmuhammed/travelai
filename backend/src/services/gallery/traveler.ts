@@ -3,9 +3,9 @@
  *
  * The handle is the only lookup key, and it only resolves for personal accounts
  * that hold one. The trip list is deliberately narrow: published, owned by this
- * account, not agency content, not deleted, and not already over. A trip with no
- * start date counts as upcoming ("Dates flexible"), so it is not silently
- * dropped from a profile.
+ * account, not agency content and not deleted. Unlike the gallery listing, it
+ * is not limited to upcoming trips — a traveler page is a portfolio, so a trip
+ * stays listed after it ends. A trip with no start date reads "Dates flexible".
  *
  * Everything the page renders comes back through `projectTravelerProfile`, so
  * the payload cannot grow an email, member list or price field by accident.
@@ -42,11 +42,11 @@ export async function loadTravelerProfile(
 
   const trips = await Trip.find({
     // Reuse the gallery's eligibility rule (G6: this now also drops hidden
-    // trips). Ownership comes from the members[] role, the same source the
-    // publish service trusts, so a transferred trip never lists under its
-    // creator.
+    // trips), minus the upcoming window — finished trips stay on the profile.
+    // Ownership comes from the members[] role, the same source the publish
+    // service trusts, so a transferred trip never lists under its creator.
     $and: [
-      ...publicTripClauses(),
+      ...publicTripClauses({ includePast: true }),
       { members: { $elemMatch: { userId: user._id, role: 'owner' } } },
     ],
   })

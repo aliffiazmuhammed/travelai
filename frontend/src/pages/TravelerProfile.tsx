@@ -58,24 +58,29 @@ const TravelerProfile = () => {
   const { handle } = useParams<{ handle: string }>();
   const location = useLocation();
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const [traveler, setTraveler] = useState<GalleryTravelerProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
+  const isOwnProfile = Boolean(
+    user?.handle &&
+      traveler &&
+      user.handle.toLowerCase() === traveler.handle.toLowerCase()
+  );
 
   useEffect(() => {
     // G6: resume the report composer after a sign-in redirect, once.
     const wantsReport = Boolean(
       (location.state as { report?: boolean } | null)?.report
     );
-    if (!wantsReport || !traveler || !isAuthenticated) return;
+    if (!wantsReport || !traveler || !isAuthenticated || isOwnProfile) return;
     navigate(location.pathname, { replace: true, state: null });
     setReportOpen(true);
-  }, [location.state, location.pathname, traveler, isAuthenticated, navigate]);
+  }, [location.state, location.pathname, traveler, isAuthenticated, isOwnProfile, navigate]);
 
   const handleReportClick = () => {
-    if (!traveler) return;
+    if (!traveler || isOwnProfile) return;
     if (!isAuthenticated) {
       navigate("/auth", {
         state: {
@@ -207,14 +212,16 @@ const TravelerProfile = () => {
                       shared {traveler.trips.length === 1 ? "trip" : "trips"}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleReportClick}
-                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:text-destructive"
-                  >
-                    <Flag className="w-3 h-3" />
-                    Report profile
-                  </button>
+                  {!isOwnProfile && (
+                    <button
+                      type="button"
+                      onClick={handleReportClick}
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:text-destructive"
+                    >
+                      <Flag className="w-3 h-3" />
+                      Report profile
+                    </button>
+                  )}
                 </div>
               </div>
             </section>
@@ -227,8 +234,7 @@ const TravelerProfile = () => {
                     Trips {traveler.name.split(" ")[0]} is sharing
                   </h2>
                   <p className="text-xs text-muted-foreground">
-                    Only the trips they've shared, and only while they're still
-                    ahead.
+                    Every trip they've chosen to share, past and upcoming.
                   </p>
                 </div>
               </div>

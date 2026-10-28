@@ -128,11 +128,11 @@ test('the trip query reuses the shared public clauses and scopes to owned rows',
   });
 
   const upcoming = scopes.find((clause) => Array.isArray(clause.$or));
-  assert.ok(upcoming, 'the upcoming window must be part of the shared clauses');
-  assert.equal(upcoming!.$or.length, 3);
-  assert.ok(upcoming!.$or[0].startDate.$gte instanceof Date);
-  assert.deepEqual(upcoming!.$or[1], { startDate: { $exists: false } });
-  assert.deepEqual(upcoming!.$or[2], { startDate: null });
+  assert.equal(
+    upcoming,
+    undefined,
+    'a profile keeps published trips after they end, so no date window applies'
+  );
 });
 
 test('the profile carries identity and card summaries only', async () => {

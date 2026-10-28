@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -35,6 +36,7 @@ import {
   ChevronDown,
   ChevronUp,
   Loader2,
+  Globe2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDate } from "@/lib/date";
@@ -83,6 +85,8 @@ interface MyTripsViewProps {
   onArchiveTrip?: (tripId: string) => Promise<void>;
   onUnarchiveTrip?: (tripId: string) => Promise<void>;
   canArchiveTrip?: (trip: Trip) => boolean;
+  /** Personal library: link to the owner's public travel page once they hold a handle. */
+  travelPageHandle?: string;
 }
 
 const DESTINATION_IMAGES: Record<string, string> = {
@@ -164,6 +168,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
   onArchiveTrip,
   onUnarchiveTrip,
   canArchiveTrip,
+  travelPageHandle,
 }) => {
   const isAgency = variant === "agency";
   const showingArchived = archivedValue === "archived";
@@ -327,15 +332,29 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
           </h2>
         </div>
 
-        <Button
-          type="button"
-          variant="hero"
-          onClick={onNewPlan}
-          className="rounded-2xl h-11 px-5 text-xs font-bold gap-2 shadow-sm self-start md:self-auto"
-        >
-          <PlusCircle className="w-4 h-4" />
-          <span>{planLabel}</span>
-        </Button>
+        <div className="flex items-center gap-2 self-start md:self-auto">
+          {travelPageHandle && (
+            <Button
+              asChild
+              variant="outline"
+              className="rounded-2xl h-11 px-4 text-xs font-bold gap-2"
+            >
+              <Link to={`/travelers/${encodeURIComponent(travelPageHandle)}`}>
+                <Globe2 className="h-4 w-4" />
+                Your travel page
+              </Link>
+            </Button>
+          )}
+          <Button
+            type="button"
+            variant="hero"
+            onClick={onNewPlan}
+            className="rounded-2xl h-11 px-5 text-xs font-bold gap-2 shadow-sm"
+          >
+            <PlusCircle className="w-4 h-4" />
+            <span>{planLabel}</span>
+          </Button>
+        </div>
       </div>
 
       {/* Filter & Search Bar */}

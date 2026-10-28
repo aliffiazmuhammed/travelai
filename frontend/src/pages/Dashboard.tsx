@@ -463,6 +463,7 @@ const Dashboard: React.FC = () => {
             onPurgeTrip={handlePurgeTrip}
             onNewPlan={() => navigate("/plan")}
             canDuplicateTrip={(trip) => trip.workspace !== "agency"}
+            travelPageHandle={user?.handle}
           />
         )}
       </main>

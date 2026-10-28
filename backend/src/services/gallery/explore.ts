@@ -82,9 +82,16 @@ function upcomingClause(): FilterQuery<any> {
  * inventing a second one. A trip that fails these clauses cannot be browsed,
  * cloned or joined: unpublished, deleted, agency-owned, never published, or
  * already in the past.
+ *
+ * `includePast` keeps everything except the date window. The gallery listing
+ * and join requests stay upcoming-only, while a traveler page and a direct trip
+ * link keep working after the trip ends — a published trip does not vanish from
+ * the person who shared it.
  */
-export function publicTripClauses(): FilterQuery<any>[] {
-  return [
+export function publicTripClauses(
+  options: { includePast?: boolean } = {}
+): FilterQuery<any>[] {
+  const clauses: FilterQuery<any>[] = [
     { visibility: 'public' },
     { isDeleted: { $ne: true } },
     { workspace: { $ne: 'agency' } },
@@ -95,8 +102,9 @@ export function publicTripClauses(): FilterQuery<any>[] {
     // at once. `null` matches both an absent field and an explicit null, which
     // is the two-state reality of `moderation.hiddenAt`.
     { 'moderation.hiddenAt': null },
-    upcomingClause(),
   ];
+  if (!options.includePast) clauses.push(upcomingClause());
+  return clauses;
 }
 
 function normalizeTagsInput(input: ExploreListQuery['tags']): string[] {
@@ -274,7 +282,7 @@ export async function listGalleryTrips(
   };
 }
 
-/** One public trip page. 404 for unpublished, expired, deleted or agency rows. */
+/** One public trip page. 404 for unpublished, deleted or agency rows. */
 export async function loadGalleryTrip(tripId: string): Promise<GalleryTrip> {
   if (!mongoose.isValidObjectId(tripId)) {
     throw new AppError('Trip not found.', 404);
@@ -282,7 +290,7 @@ export async function loadGalleryTrip(tripId: string): Promise<GalleryTrip> {
 
   const trip = (await Trip.findOne({
     _id: tripId,
-    $and: publicTripClauses(),
+    $and: publicTripClauses({ includePast: true }),
   })
     .select(
       'title tripDetails gallery startDate endDate publishedAt generationMeta members customRoutes'
