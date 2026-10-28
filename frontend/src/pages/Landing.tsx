@@ -15,10 +15,16 @@ import {
   Smartphone,
   ListChecks,
   Lock,
+  Compass,
+  ArrowRight,
+  UserPlus,
+  Copy,
+  ShieldCheck,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
+import { useGalleryEnabled } from "@/hooks/useGalleryEnabled";
 
 interface Feature {
   icon: LucideIcon;
@@ -114,7 +120,27 @@ const trustRows: { icon: LucideIcon; title: string; body: string }[] = [
   },
 ];
 
+const sharedTripPoints: { icon: LucideIcon; title: string; body: string }[] = [
+  {
+    icon: UserPlus,
+    title: "Ask to come along",
+    body: "Send the owner a note. They decide who joins — once they say yes, you can follow the trip and comment.",
+  },
+  {
+    icon: Copy,
+    title: "Make it yours",
+    body: "Take a copy of any shared trip and change whatever you like. The original stays exactly as it was.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Shared on purpose",
+    body: "Only what the owner chose to publish is visible. No budgets, no expenses, no private chat.",
+  },
+];
+
 const Landing = () => {
+  const galleryEnabled = useGalleryEnabled();
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
@@ -200,6 +226,58 @@ const Landing = () => {
           </div>
         </div>
       </section>
+
+      {/* Join a shared trip — the gallery story, shown only once the gallery
+          has enough trips to be a good first impression (same gate as the nav) */}
+      {galleryEnabled && (
+        <section
+          className="py-16 sm:py-24 px-4 bg-muted/30 border-y border-border/60"
+          aria-labelledby="join-a-trip"
+        >
+          <div className="container mx-auto">
+            <div className="text-center max-w-3xl mx-auto space-y-4">
+              <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3.5 py-1.5 text-xs font-bold text-primary">
+                <Compass className="h-3.5 w-3.5" />
+                Shared trips
+              </span>
+              <h2 id="join-a-trip" className="font-display text-2xl sm:text-4xl font-semibold tracking-tight">
+                Somebody already planned it
+                <span className="block text-primary">Join in, or take a copy</span>
+              </h2>
+              <p className="text-sm sm:text-lg text-muted-foreground px-2">
+                Browse the trips people chose to share. Ask the owner to come along, or make one your own and change it
+                however you like — the original stays as it was.
+              </p>
+              <div className="pt-2">
+                <Link to="/explore">
+                  <Button
+                    size="xl"
+                    className="rounded-2xl font-bold text-base gap-2 shadow-lg hover:scale-[1.02] transition-transform w-full sm:w-auto"
+                  >
+                    Browse shared trips
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </Link>
+              </div>
+            </div>
+
+            <ul className="mt-10 sm:mt-12 grid gap-4 sm:gap-6 sm:grid-cols-3 max-w-5xl mx-auto">
+              {sharedTripPoints.map(({ icon: Icon, title, body }) => (
+                <li
+                  key={title}
+                  className="rounded-3xl border border-border/70 bg-card p-6 shadow-xs space-y-2"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <h3 className="text-base font-bold text-foreground tracking-tight">{title}</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{body}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      )}
 
       {/* Plain-language trust band */}
       <section className="py-12 sm:py-16 px-4" aria-labelledby="privacy">
