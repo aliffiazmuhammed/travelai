@@ -854,7 +854,12 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
 
         {/* TAB 4: Stays & Culinary Hotspots View */}
         <TabsContent value="stays" className="outline-hidden animate-fade-in">
-          <StayAndCuisine itinerary={itinerary} destination={safeData.trip_title} />
+          <StayAndCuisine
+            itinerary={itinerary}
+            onUpdateItinerary={
+              isRealTrip && onSave ? handleUpdateItinerary : undefined
+            }
+          />
         </TabsContent>
 
         {/* TAB 5: Travel Guide & Safety View */}
