@@ -11,7 +11,6 @@ import {
   Camera,
   Receipt,
   Users,
-  MessageCircle,
   History,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -34,7 +33,6 @@ import { WeatherRoutingCard } from "./dashboard/WeatherRoutingCard";
 import { DayAlternativeDialog } from "./dashboard/DayAlternativeDialog";
 import { TripMembers } from "./dashboard/TripMembers";
 import { TripVersions } from "./dashboard/TripVersions";
-import { CommentsTab } from "./dashboard/CommentsTab";
 import { DiscussionDrawer } from "./dashboard/DiscussionDrawer";
 import { useTripComments } from "@/hooks/useTripComments";
 import { useTripChatCrypto } from "@/hooks/useTripChatCrypto";
@@ -265,8 +263,9 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
   const isOwner = role ? role === "owner" : Boolean(onSave);
   // The People tab appears only for real trips with a Milestone 6 payload.
   const showPeopleTab = Boolean(isRealTrip && role);
-  // Same gate for the discussion tab (F6b) — the server decides who may write.
-  const showCommentsTab = showPeopleTab;
+  // Discussion has one surface only: the floating chat drawer. Same gate as
+  // People — the server decides who may write.
+  const showDiscussion = showPeopleTab;
 
   /** E4b: `trip:updated` from another collaborator → silent refetch. Never
    * overwrites state while there are unsaved local edits (the conflict toast
@@ -286,23 +285,21 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
   // Live roster + remote-write notifications (no-op when the tier is off).
   //
   // F6b: the comment state is owned HERE (next to the single EventSource) and
-  // handed down to CommentsTab — frames land in it no matter which tab the
-  // user is on, and duplicates are impossible because dedupe happens by `_id`.
-  // The Discuss tab is reachable two ways since F8b: as a tab and as the
-  // floating drawer. `activeTab` is the single controlled source, so the FAB
-  // hides while the tab is open and the read marker flushes on either entry.
+  // handed down to the chat drawer — frames land in it while the drawer is
+  // closed, and duplicates are impossible because dedupe happens by `_id`.
+  // Opening and closing the drawer is what drives the read marker upstream.
   const [activeTab, setActiveTab] = useState<string>("timeline");
 
   const commentsController = useTripComments(
-    showCommentsTab ? tripId : undefined,
+    showDiscussion ? tripId : undefined,
     currentUserId
   );
-  // F10: the E2EE session lives next to the discussion hub so both surfaces
-  // (tab + drawer) share one key biography and one decrypt cache.
+  // F10: the E2EE session lives next to the discussion hub so every surface
+  // shares one key biography and one decrypt cache.
   const chatCrypto = useTripChatCrypto(
-    showCommentsTab ? tripId : undefined,
+    showDiscussion ? tripId : undefined,
     currentUserId,
-    showCommentsTab,
+    showDiscussion,
     chatRealm,
     chatIdentityScope
   );
@@ -324,12 +321,6 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
     onDecisionEvent: (frame) => commentsDecisionRef.current(frame),
     onPollEvent: (frame) => commentsPollRef.current(frame),
   });
-
-  /** Tab switch; a move INTO/OUT OF the Discuss tab is a surface open/close. */
-  const handleTabChange = (tab: string) => {
-    setActiveTab(tab);
-    if (showCommentsTab) commentsController.setOpen(tab === "comments");
-  };
 
   // --- Weather advisories (Milestone 4.4) ---
   const [weatherByDay, setWeatherByDay] = useState<Record<number, DailyWeather>>({});
@@ -713,7 +704,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
       {/* 2. Main Multi-View Tabs Navigation */}
       <Tabs
         value={activeTab}
-        onValueChange={handleTabChange}
+        onValueChange={setActiveTab}
         className="w-full space-y-6"
       >
         <div className="sticky top-16 z-30 bg-background/85 backdrop-blur-md py-2 -mx-2 px-2">
@@ -722,7 +713,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
               // Mobile/tablet: one horizontally-scrollable row of icon-only
               // pills (labels would wrap into two cramped rows of tiny cells).
               // From lg up: the familiar label grid.
-              "flex w-full max-w-full overflow-x-auto scrollbar-none h-auto p-1.5 bg-muted/60 border border-border/60 rounded-2xl shadow-xs gap-1 lg:grid lg:grid-cols-9",
+              "flex w-full max-w-full overflow-x-auto scrollbar-none h-auto p-1.5 bg-muted/60 border border-border/60 rounded-2xl shadow-xs gap-1 lg:grid lg:grid-cols-8",
               !showPeopleTab && "lg:grid-cols-7"
             )}
           >
@@ -801,25 +792,6 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
                 <span className="hidden lg:inline">People</span>
               </TabsTrigger>
             )}
-
-            {showCommentsTab && (
-              <TabsTrigger
-                value="comments"
-                title="Chat"
-                className="py-2.5 px-3 rounded-xl text-xs font-bold gap-2 shrink-0 data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
-              >
-                <MessageCircle className="w-3.5 h-3.5" />
-                <span className="hidden lg:inline">Chat</span>
-                {commentsController.state.unread > 0 && (
-                  <span
-                    className="min-w-4 h-4 px-1 rounded-full bg-destructive text-destructive-foreground text-[9px] font-black grid place-items-center"
-                    title={`${commentsController.state.unread} unread`}
-                  >
-                    {commentsController.state.unread > 9 ? "9+" : commentsController.state.unread}
-                  </span>
-                )}
-              </TabsTrigger>
-            )}
           </TabsList>
         </div>
 
@@ -835,7 +807,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
             weatherByDay={weatherByDay}
             onSuggestAlternative={isRealTrip && Boolean(onSave) ? openDayAlternative : undefined}
             alternativeLoadingDay={alternativeLoading ? alternativeDay : null}
-            commentCounts={showCommentsTab ? commentsController.state.dayCounts : undefined}
+            commentCounts={showDiscussion ? commentsController.state.dayCounts : undefined}
           />
         </TabsContent>
 
@@ -940,28 +912,11 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
             />
           </TabsContent>
         )}
-
-        {/* TAB 9: Trip discussion (Milestone 6 §19.7 / sprint F6b) */}
-        {showCommentsTab && (
-          <TabsContent value="comments" className="outline-hidden animate-fade-in">
-            <CommentsTab
-              tripId={tripId!}
-              myRole={role!}
-              days={safeData.duration_days}
-              controller={commentsController}
-              crypto={chatCrypto}
-              typingLabels={commentsController.typingLabels}
-              onTyping={commentsController.notifyTyping}
-              onApplyProposal={onSave ? applyAssistantProposal : undefined}
-              currentUserId={currentUserId}
-            />
-          </TabsContent>
-        )}
       </Tabs>
 
-      {/* Floating discussion drawer (Milestone 7, F8b) — reachable from every
-          tab; hidden while the Discuss tab itself is showing. */}
-      {showCommentsTab && tripId && role && (
+      {/* Floating trip chat (Milestone 7, F8b) — the only discussion surface;
+          the FAB carries the unread badge. */}
+      {showDiscussion && tripId && role && (
         <DiscussionDrawer
           tripId={tripId}
           myRole={role}
@@ -969,7 +924,6 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
           controller={commentsController}
           crypto={chatCrypto}
           presence={livePresence}
-          hidden={activeTab === "comments"}
           onApplyProposal={onSave ? applyAssistantProposal : undefined}
           currentUserId={currentUserId}
         />

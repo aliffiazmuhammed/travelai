@@ -295,8 +295,9 @@ export function useTripComments(
 
       if (commentsResult.status === 'fulfilled') {
         const result = commentsResult.value;
-        // A first poll can warm the cache before the Chat tab is opened; if it
-        // beats `ensureLoaded`, record the cursor so "Load earlier" still works.
+        // A first poll can warm the cache before the chat drawer is opened; if
+        // it beats `ensureLoaded`, record the cursor so "Load earlier" still
+        // works.
         if (!bootstrapped.current) {
           bootstrapped.current = true;
           cursorRef.current = result.nextCursor ?? null;

@@ -74,7 +74,7 @@ interface DayTimelineProps {
   /**
    * Live comment counts per day number (F6b2). Days carrying a discussion show
    * a small "how many comments" chip on their pill and header card; read-only
-   * — clicking is left to the Discuss tab.
+   * — clicking is left to the trip chat drawer.
    */
   commentCounts?: Record<string, number>;
 }

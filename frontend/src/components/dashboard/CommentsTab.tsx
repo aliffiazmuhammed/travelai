@@ -45,12 +45,12 @@ import { PollCard, PollComposer, PollsBand } from "@/components/dashboard/Polls"
 import { isRevConflict } from "@/lib/conflicts";
 
 /**
- * The 9th tab (Milestone 6 §19.7 / §20, sprint F6b) — day-anchored discussion
- * beside the itinerary.
+ * The trip discussion surface (Milestone 6 §19.7 / §20, sprint F6b) — day-
+ * anchored chat, rendered by the floating `DiscussionDrawer`.
  *
  * Rank-aware in three states (the server enforces the real rules — this is UX
  * honesty, not authorization): the composer is open for `commenter`+, shown
- * WITH a "watch-only" message for viewers, and this tab itself is only mounted
+ * WITH a "watch-only" message for viewers, and this surface is only mounted
  * for real trips with a role at all (anonymous share pages never see it).
  *
  * Rendering is deliberately dull: plain-text bodies as React text nodes, no
@@ -72,11 +72,10 @@ interface CommentsTabProps {
   /** Composer keystroke hook for the throttled "I'm composing" ping (F8b). */
   onTyping?: () => void;
   /**
-   * Surface shape (F8b §11): **'feed'** — the Discuss tab, newest-first with
-   * day filters; **'chat'** — the drawer, a real chat: chronological order
+   * Surface shape (F8b §11): **'feed'** — the retired in-page feed, kept for
+   * the logic core; **'chat'** — what the drawer renders: chronological order
    * with the newest message at the BOTTOM, composer pinned to the bottom
    * edge, auto-scroll, no inner card/header (the drawer owns the header).
-   * One logic core, two shapes — the same controller drives both.
    */
   variant?: "feed" | "chat";
   /**

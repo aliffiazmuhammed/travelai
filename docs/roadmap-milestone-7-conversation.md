@@ -36,6 +36,8 @@
 | Unread (client) | Seeded once per trip open from `GET read-state`; then only from **unknown** `comment:new` frames while the drawer is closed (own known rows never count — frames' `isYou` is untrusted, dedupe by `_id` handles it). Opening the drawer flushes `POST /comments/read` and zeroes the badge. Known limit: your own comment posted from another device can tick the badge on this one (server-truth re-syncs at next load). |
 | Typing (client) | Composer keystrokes → throttled ≤1 ping / 2.5s → `POST /events/typing` (decoration; errors swallowed). Incoming frames → "Kiran is typing…" line above the composer, auto-expires 5s after the last frame per author; own frames filtered by `currentUserId`. |
 
+> **Update 2026-10-28:** the Chat tab was retired — the floating drawer (with its unread FAB) is now the only discussion surface, so the itinerary tab row has 8 entries on a real trip with a role. The drawer no longer needs the "hide while the tab is open" prop.
+
 ## 3. Honest limits (F8)
 
 - Typing and read markers are single-instance-era: behind multiple instances typing degrades gracefully (it is decoration anyway), but unread counts stay CORRECT across instances because they are DB-derived, not in-memory.

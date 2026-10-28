@@ -19,20 +19,18 @@ import type { TripRole, AssistantProposal } from "@/types/trip";
 
 /**
  * The floating trip discussion (Milestone 7, sprint F8b; chat shape §11) —
- * chat v1's second surface. The 9th Discuss tab stays (deep-linkable,
- * filterable feed); this drawer is a REAL group chat: chronological messages
- * anchored to the bottom edge, auto-scroll holding the tail, the composer as
- * the floor, and the live roster in the slim header. Same `CommentsTab` logic
- * core, `variant="chat"` — one state, one EventSource, one read marker.
+ * the only discussion surface since the old Chat tab was retired: a REAL group
+ * chat with chronological messages anchored to the bottom edge, auto-scroll
+ * holding the tail, the composer as the floor, and the live roster in the slim
+ * header.
  *
  * - A fixed FAB bottom-right, offset above the mobile tab bar (`bottom-20`),
  *   with the unread badge (server-seeded, frame-bumped, flush-on-open
  *   upstream — the hook owns all three rules).
- * - The FAB hides when the Discuss tab itself is active (no duplicate
- *   surface) and on surfaces without a role at all (`hidden` covers both).
+ * - The Sheet unmounts on close, so each open starts scrolled to the newest
+ *   message.
  * - Opening the drawer calls `controller.setOpen(true)` → the read marker is
- *   flushed server-side; the Sheet unmounts on close, so each open starts
- *   scrolled to the newest message.
+ *   flushed server-side.
  */
 
 interface DiscussionDrawerProps {
@@ -47,8 +45,6 @@ interface DiscussionDrawerProps {
   crypto?: ChatCryptoApi;
   /** The live SSE roster — shown as a mini avatar stack in the header. */
   presence?: PresenceUser[];
-  /** Hide the FAB when the drawer is redundant (Discuss tab active, etc.). */
-  hidden?: boolean;
   /** F12b: proposal Apply composition — forwarded to the inner CommentsTab. */
   onApplyProposal?: (proposal: AssistantProposal) => Promise<void> | void;
   /** F13a: the caller's id, so poll votes can be recognised as "mine". */
@@ -62,7 +58,6 @@ export const DiscussionDrawer: React.FC<DiscussionDrawerProps> = ({
   controller,
   crypto,
   presence = [],
-  hidden = false,
   onApplyProposal,
   currentUserId,
 }) => {
@@ -80,31 +75,30 @@ export const DiscussionDrawer: React.FC<DiscussionDrawerProps> = ({
 
   return (
     <>
-      {!hidden &&
-        createPortal(
-          /* The FAB lives in a portal on <body>: any ancestor with a
-             transform/filter turns `position: fixed` into a viewport of that
-             ancestor, which pinned it to the document's bottom-right and let
-             it scroll away. Portaled + fixed, it stays on screen everywhere.
-             Keep z-40: below the Sheet's own z-50 overlay so the open drawer
-             covers it. */
-          <Button
-            type="button"
-            size="icon"
-            onClick={() => handleOpenChange(true)}
-            title="Trip chat"
-            aria-label={`Trip chat${unread > 0 ? `, ${unread} unread` : ""}`}
-            className="fixed z-40 bottom-20 right-4 sm:bottom-6 sm:right-6 w-12 h-12 rounded-full shadow-lg"
-          >
-            <MessageCircle className="w-5 h-5" />
-            {unread > 0 && (
-              <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-destructive text-destructive-foreground text-[10px] font-black grid place-items-center shadow">
-                {unread > 9 ? "9+" : unread}
-              </span>
-            )}
-          </Button>,
-          document.body
-        )}
+      {createPortal(
+        /* The FAB lives in a portal on <body>: any ancestor with a
+           transform/filter turns `position: fixed` into a viewport of that
+           ancestor, which pinned it to the document's bottom-right and let
+           it scroll away. Portaled + fixed, it stays on screen everywhere.
+           Keep z-40: below the Sheet's own z-50 overlay so the open drawer
+           covers it. */
+        <Button
+          type="button"
+          size="icon"
+          onClick={() => handleOpenChange(true)}
+          title="Trip chat"
+          aria-label={`Trip chat${unread > 0 ? `, ${unread} unread` : ""}`}
+          className="fixed z-40 bottom-20 right-4 sm:bottom-6 sm:right-6 w-12 h-12 rounded-full shadow-lg"
+        >
+          <MessageCircle className="w-5 h-5" />
+          {unread > 0 && (
+            <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-destructive text-destructive-foreground text-[10px] font-black grid place-items-center shadow">
+              {unread > 9 ? "9+" : unread}
+            </span>
+          )}
+        </Button>,
+        document.body
+      )}
 
       <Sheet open={open} onOpenChange={handleOpenChange}>
         <SheetContent
