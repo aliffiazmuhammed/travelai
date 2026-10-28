@@ -251,49 +251,59 @@ const TravelerProfile = () => {
                   {traveler.trips.map((trip) => (
                     <article
                       key={trip._id}
-                      className="rounded-3xl border border-border/70 bg-card p-5 space-y-3 shadow-xs"
+                      className="rounded-3xl border border-border/70 bg-card p-5 shadow-xs transition-shadow hover:shadow-md"
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 space-y-1">
-                          <p className="text-[11px] font-bold uppercase tracking-wider text-primary truncate">
-                            {trip.destination}
+                      <Link
+                        to={`/explore/${trip._id}`}
+                        className="block space-y-3 group"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 space-y-1">
+                            <p className="text-[11px] font-bold uppercase tracking-wider text-primary truncate">
+                              {trip.destination}
+                            </p>
+                            <h3 className="text-base font-black text-foreground leading-snug group-hover:text-primary transition-colors">
+                              {trip.title}
+                            </h3>
+                          </div>
+                          <span className="shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-bold text-primary">
+                            {trip.durationDays} {trip.durationDays === 1 ? "day" : "days"}
+                          </span>
+                        </div>
+
+                        {trip.summary && (
+                          <p className="text-xs text-foreground/80 leading-relaxed line-clamp-3">
+                            {trip.summary}
                           </p>
-                          <h3 className="text-base font-black text-foreground leading-snug">
-                            {trip.title}
-                          </h3>
+                        )}
+
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                          <span className="inline-flex items-center gap-1 font-semibold">
+                            <CalendarDays className="w-3.5 h-3.5" />
+                            {dateLine(trip.dates)}
+                          </span>
+                          {trip.season && <span>{trip.season}</span>}
+                          {trip.groupType && <span>{trip.groupType}</span>}
                         </div>
-                        <span className="shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-bold text-primary">
-                          {trip.durationDays} {trip.durationDays === 1 ? "day" : "days"}
+
+                        {trip.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {trip.tags.map((tag) => (
+                              <span
+                                key={tag}
+                                className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground"
+                              >
+                                #{tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-primary group-hover:gap-1.5 transition-all">
+                          See the trip
+                          <ArrowRight className="w-3.5 h-3.5" />
                         </span>
-                      </div>
-
-                      {trip.summary && (
-                        <p className="text-xs text-foreground/80 leading-relaxed line-clamp-3">
-                          {trip.summary}
-                        </p>
-                      )}
-
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-                        <span className="inline-flex items-center gap-1 font-semibold">
-                          <CalendarDays className="w-3.5 h-3.5" />
-                          {dateLine(trip.dates)}
-                        </span>
-                        {trip.season && <span>{trip.season}</span>}
-                        {trip.groupType && <span>{trip.groupType}</span>}
-                      </div>
-
-                      {trip.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {trip.tags.map((tag) => (
-                            <span
-                              key={tag}
-                              className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground"
-                            >
-                              #{tag}
-                            </span>
-                          ))}
-                        </div>
-                      )}
+                      </Link>
                     </article>
                   ))}
                 </div>
