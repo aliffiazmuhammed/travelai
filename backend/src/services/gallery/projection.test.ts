@@ -228,6 +228,26 @@ test('the itinerary allow-list drops every price-bearing field', () => {
   ]);
 });
 
+test('curated food spots publish as names and drop their prices', () => {
+  const trip = publishedTrip();
+  trip.tripDetails.day_by_day_itinerary[0].food_spots = [
+    'Local thali',
+    {
+      name: 'Cervejaria Ramiro',
+      cuisine: 'Garlic prawns',
+      price: '€30 for two',
+      note: 'Go before 7pm.',
+    },
+    { cuisine: 'no name, dropped' },
+  ];
+
+  const projected = projectGalleryTrip(trip, PUBLISHER);
+  const day = projected.itinerary.day_by_day_itinerary[0];
+
+  assert.deepEqual(day.food_spots, ['Local thali', 'Cervejaria Ramiro']);
+  assert.equal(JSON.stringify(projected).includes('€30'), false);
+});
+
 test('a maximal trip leaks no session, membership or money fields', () => {
   const maximal = publishedTrip({
     userId: 'owner1',

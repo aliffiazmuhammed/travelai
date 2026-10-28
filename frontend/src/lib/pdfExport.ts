@@ -340,7 +340,10 @@ function drawDay(ctx: Ctx, day: ItineraryData["day_by_day_itinerary"][number]) {
     .map((sv) => (typeof sv === "object" && sv !== null ? sv.name : String(sv)))
     .filter(Boolean)
     .join(", ");
-  const food = day.food_spots.filter(Boolean).join(", ");
+  const food = day.food_spots
+    .map((fv) => (typeof fv === "object" && fv !== null ? fv.name : String(fv)))
+    .filter(Boolean)
+    .join(", ");
   const transport = day.transport.filter(Boolean).join(" - ");
   const proTip = (day.pro_tip || []).filter(Boolean).join(" ");
 

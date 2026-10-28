@@ -34,7 +34,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import type { ItineraryData, StayItem } from "@/types/trip";
+import type { FoodItem, ItineraryData, StayItem } from "@/types/trip";
 
 interface StayAndCuisineProps {
   itinerary: ItineraryData["day_by_day_itinerary"];
@@ -61,6 +61,24 @@ interface StayDraft {
   location: string;
   price: string;
   vibe: string;
+  days: number[];
+}
+
+interface NormalizedFood {
+  id: string;
+  name: string;
+  cuisine?: string;
+  price?: string;
+  note?: string;
+  days: number[];
+  raw: string | FoodItem;
+}
+
+interface FoodDraft {
+  name: string;
+  cuisine: string;
+  price: string;
+  note: string;
   days: number[];
 }
 
@@ -111,6 +129,27 @@ function stayKey(item: string | StayItem): string {
   return normalizeStay(item).name.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+function normalizeFood(item: string | FoodItem): {
+  name: string;
+  cuisine?: string;
+  price?: string;
+  note?: string;
+} {
+  if (typeof item === "object" && item !== null) {
+    return {
+      name: item.name ? item.name.trim() : "Recommended Spot",
+      cuisine: item.cuisine?.trim() || undefined,
+      price: item.price ? String(item.price).trim() || undefined : undefined,
+      note: item.note?.trim() || undefined,
+    };
+  }
+  return { name: String(item || "").trim() };
+}
+
+function foodKey(item: string | FoodItem): string {
+  return normalizeFood(item).name.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
 function dayLabel(days: number[]): string {
   const sorted = [...days].sort((a, b) => a - b);
   if (sorted.length === 0) return "no nights";
@@ -142,6 +181,43 @@ const emptyDraft = (firstDay?: number): StayDraft => ({
   days: firstDay == null ? [] : [firstDay],
 });
 
+const emptyFoodDraft = (firstDay?: number): FoodDraft => ({
+  name: "",
+  cuisine: "",
+  price: "",
+  note: "",
+  days: firstDay == null ? [] : [firstDay],
+});
+
+const DayPicker: React.FC<{
+  days: number[];
+  selected: number[];
+  onToggle: (day: number) => void;
+}> = ({ days, selected, onToggle }) => (
+  <div className="flex flex-wrap gap-1.5">
+    {days.map((day) => {
+      const active = selected.includes(day);
+      return (
+        <button
+          key={day}
+          type="button"
+          aria-pressed={active}
+          aria-label={`Day ${day}`}
+          onClick={() => onToggle(day)}
+          className={cn(
+            "h-8 px-3 rounded-xl text-xs font-semibold border transition-colors",
+            active
+              ? "bg-primary text-primary-foreground border-primary"
+              : "bg-card text-muted-foreground border-border hover:border-primary/40"
+          )}
+        >
+          Day {day}
+        </button>
+      );
+    })}
+  </div>
+);
+
 export const StayAndCuisine: React.FC<StayAndCuisineProps> = ({
   itinerary,
   onUpdateItinerary,
@@ -151,6 +227,10 @@ export const StayAndCuisine: React.FC<StayAndCuisineProps> = ({
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [draftError, setDraftError] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<NormalizedStay | null>(null);
+  const [foodDraft, setFoodDraft] = useState<FoodDraft | null>(null);
+  const [editingFoodKey, setEditingFoodKey] = useState<string | null>(null);
+  const [foodError, setFoodError] = useState<string | null>(null);
+  const [removeFoodTarget, setRemoveFoodTarget] = useState<NormalizedFood | null>(null);
 
   // Aggregate and deduplicate stays across all days with smart multi-day grouping
   const groupedStays = useMemo<NormalizedStay[]>(() => {
@@ -195,19 +275,33 @@ export const StayAndCuisine: React.FC<StayAndCuisineProps> = ({
   }, [itinerary]);
 
   // Aggregate unique food spots across all days, keeping the days each one serves
-  const foodSpots = useMemo(() => {
-    const map = new Map<string, { name: string; days: number[] }>();
+  const foodSpots = useMemo<NormalizedFood[]>(() => {
+    const map = new Map<string, NormalizedFood>();
 
     itinerary.forEach((dayData) => {
       (dayData.food_spots || []).forEach((spot) => {
-        const name = String(spot || "").trim();
-        if (!name) return;
-        const key = name.toLowerCase();
+        if (!spot) return;
+        const norm = normalizeFood(spot);
+        if (!norm.name) return;
+        const key = norm.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+        if (!key) return;
+
         const existing = map.get(key);
         if (existing) {
           if (!existing.days.includes(dayData.day)) existing.days.push(dayData.day);
+          if (!existing.cuisine && norm.cuisine) existing.cuisine = norm.cuisine;
+          if (!existing.price && norm.price) existing.price = norm.price;
+          if (!existing.note && norm.note) existing.note = norm.note;
         } else {
-          map.set(key, { name, days: [dayData.day] });
+          map.set(key, {
+            id: key,
+            name: norm.name,
+            cuisine: norm.cuisine,
+            price: norm.price,
+            note: norm.note,
+            days: [dayData.day],
+            raw: spot,
+          });
         }
       });
     });
@@ -310,6 +404,109 @@ export const StayAndCuisine: React.FC<StayAndCuisineProps> = ({
     );
     setRemoveTarget(null);
     toast.success(`Removed ${stay.name}`);
+  };
+
+  const openAddFood = () => {
+    setEditingFoodKey(null);
+    setFoodError(null);
+    setFoodDraft(emptyFoodDraft(itinerary[0]?.day));
+  };
+
+  const openEditFood = (spot: NormalizedFood) => {
+    setEditingFoodKey(spot.id);
+    setFoodError(null);
+    setFoodDraft({
+      name: spot.name,
+      cuisine: spot.cuisine ?? "",
+      price: spot.price ?? "",
+      note: spot.note ?? "",
+      days: [...spot.days].sort((a, b) => a - b),
+    });
+  };
+
+  const closeFoodDraft = () => {
+    setFoodDraft(null);
+    setEditingFoodKey(null);
+    setFoodError(null);
+  };
+
+  const toggleFoodDay = (day: number) => {
+    if (!foodDraft) return;
+    setFoodDraft({
+      ...foodDraft,
+      days: foodDraft.days.includes(day)
+        ? foodDraft.days.filter((d) => d !== day)
+        : [...foodDraft.days, day].sort((a, b) => a - b),
+    });
+  };
+
+  const saveFoodDraft = () => {
+    if (!foodDraft || !onUpdateItinerary) return;
+    const name = foodDraft.name.trim();
+    if (!name) {
+      setFoodError("Give the spot a name so travellers can find it.");
+      return;
+    }
+    if (foodDraft.days.length === 0) {
+      setFoodError("Pick at least one day for this spot.");
+      return;
+    }
+    const nextKey = foodKey(name);
+    if (
+      editingFoodKey === null &&
+      foodSpots.some((spot) => spot.id === nextKey)
+    ) {
+      setFoodError("That spot is already on the trip — edit its card instead.");
+      return;
+    }
+
+    const source = foodSpots.find((spot) => spot.id === editingFoodKey);
+    const template =
+      source?.raw && typeof source.raw === "object" ? source.raw : undefined;
+
+    const next = itinerary.map((dayData) => {
+      const kept = (dayData.food_spots || []).filter((rec) => {
+        if (!rec) return false;
+        const key = foodKey(rec);
+        return key !== editingFoodKey && key !== nextKey;
+      });
+
+      if (!foodDraft.days.includes(dayData.day)) {
+        return { ...dayData, food_spots: kept };
+      }
+
+      const entry: FoodItem = { ...(template ?? { name }) };
+      entry.name = name;
+      const cuisine = foodDraft.cuisine.trim();
+      const price = foodDraft.price.trim();
+      const note = foodDraft.note.trim();
+      if (cuisine) entry.cuisine = cuisine;
+      else delete entry.cuisine;
+      if (price) entry.price = price;
+      else delete entry.price;
+      if (note) entry.note = note;
+      else delete entry.note;
+
+      return { ...dayData, food_spots: [...kept, entry] };
+    });
+
+    onUpdateItinerary(next);
+    toast.success(source ? `Updated ${name}` : `Added ${name}`);
+    closeFoodDraft();
+  };
+
+  const removeFoodSpot = (spot: NormalizedFood) => {
+    if (!onUpdateItinerary) return;
+    onUpdateItinerary(
+      itinerary.map((dayData) => ({
+        ...dayData,
+        food_spots: (dayData.food_spots || []).filter(
+          (rec) => rec && foodKey(rec) !== spot.id
+        ),
+      }))
+    );
+    setRemoveFoodTarget(null);
+    toast.success(`Removed ${spot.name}`);
   };
 
   return (
@@ -477,43 +674,125 @@ export const StayAndCuisine: React.FC<StayAndCuisineProps> = ({
               Food, Cafes & Regional Dining
             </h3>
           </div>
+          {canEdit && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="rounded-xl gap-1.5 h-9 text-xs font-semibold"
+              onClick={openAddFood}
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add a spot
+            </Button>
+          )}
         </div>
 
         {foodSpots.length === 0 ? (
           <Card className="rounded-3xl border border-dashed border-border bg-card/60">
-            <CardContent className="p-6 text-center text-xs text-muted-foreground">
-              No dining picks yet for this trip.
+            <CardContent className="p-8 text-center space-y-2">
+              <div className="w-11 h-11 rounded-2xl bg-orange-500/10 text-orange-600 dark:text-orange-400 flex items-center justify-center mx-auto">
+                <Utensils className="w-5 h-5" />
+              </div>
+              <p className="text-sm font-bold text-foreground">No dining picks yet</p>
+              <p className="text-xs text-muted-foreground max-w-sm mx-auto leading-relaxed">
+                {canEdit
+                  ? "Add the tables you'd actually send people to — the dish to order beats a star rating."
+                  : "The planner didn't suggest any food spots for this trip."}
+              </p>
+              {canEdit && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="hero"
+                  className="rounded-xl gap-1.5 h-9 text-xs font-semibold mt-2"
+                  onClick={openAddFood}
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Add the first spot
+                </Button>
+              )}
             </CardContent>
           </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {foodSpots.map((spot) => (
               <Card
-                key={spot.name}
+                key={spot.id}
                 className="rounded-3xl border border-border/70 hover:border-orange-500/30 bg-card/80 backdrop-blur-sm shadow-card transition-all"
               >
                 <CardContent className="p-5 space-y-3">
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-orange-500/10 text-orange-600 dark:text-orange-400 flex items-center justify-center shrink-0 shadow-2xs">
-                      <Utensils className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-foreground leading-snug">
-                        {spot.name}
-                      </h4>
-                      <div className="flex flex-wrap gap-1 pt-1">
-                        {[...spot.days]
-                          .sort((a, b) => a - b)
-                          .map((day) => (
-                            <span
-                              key={day}
-                              className="inline-flex items-center rounded-lg bg-muted/60 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground"
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-orange-500/10 text-orange-600 dark:text-orange-400 flex items-center justify-center shrink-0 shadow-2xs">
+                        <Utensils className="w-5 h-5" />
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {spot.cuisine && (
+                            <Badge className="bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20 text-[10px] font-bold">
+                              {spot.cuisine}
+                            </Badge>
+                          )}
+                          {spot.price && (
+                            <Badge
+                              variant="secondary"
+                              className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400"
                             >
-                              Day {day}
-                            </span>
-                          ))}
+                              {spot.price}
+                            </Badge>
+                          )}
+                        </div>
+                        <h4 className="text-sm font-bold text-foreground leading-snug">
+                          {spot.name}
+                        </h4>
                       </div>
                     </div>
+                    {canEdit && (
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          title={`Edit ${spot.name}`}
+                          aria-label={`Edit ${spot.name}`}
+                          className="h-8 w-8 text-muted-foreground hover:text-primary rounded-lg"
+                          onClick={() => openEditFood(spot)}
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          title={`Remove ${spot.name}`}
+                          aria-label={`Remove ${spot.name}`}
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive rounded-lg"
+                          onClick={() => setRemoveFoodTarget(spot)}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+
+                  {spot.note && (
+                    <p className="text-xs text-muted-foreground bg-muted/40 p-3 rounded-2xl border border-border/50 leading-relaxed">
+                      {spot.note}
+                    </p>
+                  )}
+
+                  <div className="flex flex-wrap gap-1">
+                    {[...spot.days]
+                      .sort((a, b) => a - b)
+                      .map((day) => (
+                        <span
+                          key={day}
+                          className="inline-flex items-center rounded-lg bg-muted/60 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground"
+                        >
+                          Day {day}
+                        </span>
+                      ))}
                   </div>
                 </CardContent>
               </Card>
@@ -621,28 +900,11 @@ export const StayAndCuisine: React.FC<StayAndCuisineProps> = ({
 
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold">Which nights?</Label>
-              <div className="flex flex-wrap gap-1.5">
-                {itinerary.map((dayData) => {
-                  const active = draft?.days.includes(dayData.day) ?? false;
-                  return (
-                    <button
-                      key={dayData.day}
-                      type="button"
-                      aria-pressed={active}
-                      aria-label={`Day ${dayData.day}`}
-                      onClick={() => toggleDraftDay(dayData.day)}
-                      className={cn(
-                        "h-8 px-3 rounded-xl text-xs font-semibold border transition-colors",
-                        active
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "bg-card text-muted-foreground border-border hover:border-primary/40"
-                      )}
-                    >
-                      Day {dayData.day}
-                    </button>
-                  );
-                })}
-              </div>
+              <DayPicker
+                days={itinerary.map((dayData) => dayData.day)}
+                selected={draft?.days ?? []}
+                onToggle={toggleDraftDay}
+              />
             </div>
 
             {draftError && (
@@ -695,6 +957,169 @@ export const StayAndCuisine: React.FC<StayAndCuisineProps> = ({
             <AlertDialogAction
               className="rounded-xl text-xs font-semibold h-10 bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => removeTarget && removeStay(removeTarget)}
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Food spot editor */}
+      <Dialog
+        open={foodDraft !== null}
+        onOpenChange={(open) => {
+          if (!open) closeFoodDraft();
+        }}
+      >
+        <DialogContent className="rounded-3xl max-w-md w-[92vw] sm:w-full p-5 sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold">
+              {editingFoodKey ? "Edit food spot" : "Add a food spot"}
+            </DialogTitle>
+            <DialogDescription className="text-xs leading-relaxed">
+              {editingFoodKey
+                ? "Update what travellers see — the place, what it serves, the price and your one-liner."
+                : "Pick the days it fits. Travellers see the name, what it serves, the price and your one-liner."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <form
+            className="space-y-3.5"
+            onSubmit={(event) => {
+              event.preventDefault();
+              saveFoodDraft();
+            }}
+          >
+            <div className="space-y-1.5">
+              <Label htmlFor="food-name" className="text-xs font-semibold">
+                Place name
+              </Label>
+              <Input
+                id="food-name"
+                value={foodDraft?.name ?? ""}
+                autoFocus
+                placeholder="e.g. Cervejaria Ramiro"
+                className="h-10 text-sm"
+                onChange={(event) =>
+                  setFoodDraft((current) =>
+                    current ? { ...current, name: event.target.value } : current
+                  )
+                }
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="food-cuisine" className="text-xs font-semibold">
+                  What it serves
+                </Label>
+                <Input
+                  id="food-cuisine"
+                  value={foodDraft?.cuisine ?? ""}
+                  placeholder="e.g. Garlic prawns, seafood rice"
+                  className="h-10 text-sm"
+                  onChange={(event) =>
+                    setFoodDraft((current) =>
+                      current ? { ...current, cuisine: event.target.value } : current
+                    )
+                  }
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="food-price" className="text-xs font-semibold">
+                  Price
+                </Label>
+                <Input
+                  id="food-price"
+                  value={foodDraft?.price ?? ""}
+                  placeholder="e.g. €30 for two"
+                  className="h-10 text-sm"
+                  onChange={(event) =>
+                    setFoodDraft((current) =>
+                      current ? { ...current, price: event.target.value } : current
+                    )
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="food-note" className="text-xs font-semibold">
+                Why it's worth a stop
+              </Label>
+              <Textarea
+                id="food-note"
+                value={foodDraft?.note ?? ""}
+                placeholder="e.g. Go before 7pm or queue outside with the locals."
+                className="min-h-[70px] text-sm rounded-xl"
+                maxLength={280}
+                onChange={(event) =>
+                  setFoodDraft((current) =>
+                    current ? { ...current, note: event.target.value } : current
+                  )
+                }
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Which days?</Label>
+              <DayPicker
+                days={itinerary.map((dayData) => dayData.day)}
+                selected={foodDraft?.days ?? []}
+                onToggle={toggleFoodDay}
+              />
+            </div>
+
+            {foodError && (
+              <p role="alert" className="text-xs font-medium text-destructive">
+                {foodError}
+              </p>
+            )}
+
+            <DialogFooter className="gap-2 sm:gap-0 pt-1">
+              <Button
+                type="button"
+                variant="ghost"
+                className="rounded-xl text-xs font-semibold h-10"
+                onClick={closeFoodDraft}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="hero"
+                className="rounded-xl text-xs font-semibold h-10"
+              >
+                {editingFoodKey ? "Save spot" : "Add spot"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={removeFoodTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setRemoveFoodTarget(null);
+        }}
+      >
+        <AlertDialogContent className="rounded-3xl max-w-md w-[92vw] sm:w-full p-5 sm:p-6">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-lg font-bold">
+              Remove {removeFoodTarget?.name}?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs leading-relaxed">
+              It comes off {removeFoodTarget ? dayLabel(removeFoodTarget.days) : "this trip"}{" "}
+              for this trip. You can add it back any time.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-0">
+            <AlertDialogCancel className="rounded-xl text-xs font-semibold h-10">
+              Keep it
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="rounded-xl text-xs font-semibold h-10 bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => removeFoodTarget && removeFoodSpot(removeFoodTarget)}
             >
               Remove
             </AlertDialogAction>

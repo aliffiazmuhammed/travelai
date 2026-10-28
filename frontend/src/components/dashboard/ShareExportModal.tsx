@@ -369,7 +369,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
           `Day ${day.day}: ${day.title}\n` +
           `  Activities: ${day.activities.map((a) => (typeof a === "object" && a !== null ? (a.title || a.name) : a)).join(" • ")}\n` +
           `  Stay: ${day.stay_recommendations.map((s) => (typeof s === "object" && s !== null ? s.name : s)).join(", ") || "Local stay"}\n` +
-          `  Food Spots: ${day.food_spots.join(", ") || "Regional dining"}`
+          `  Food Spots: ${day.food_spots.map((f) => (typeof f === "object" && f !== null ? f.name : f)).join(", ") || "Regional dining"}`
       ),
       "",
       `💸 Budget Allocation:`,

@@ -20,6 +20,13 @@ export interface StayItem {
   coordinates?: [number, number];
 }
 
+export interface FoodItem {
+  name: string;
+  cuisine?: string;
+  price?: string;
+  note?: string;
+}
+
 export interface ItineraryData {
   trip_title: string;
   duration_days: number;
@@ -39,7 +46,7 @@ export interface ItineraryData {
     activities: (string | ActivityItem)[];
     stay_recommendations: (string | StayItem)[];
     transport: string[];
-    food_spots: string[];
+    food_spots: (string | FoodItem)[];
     pro_tip: string[];
     permit_required: boolean;
   }[];

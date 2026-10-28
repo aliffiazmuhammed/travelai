@@ -759,7 +759,7 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
                   <ul className="text-xs text-muted-foreground space-y-1">
                     {dayData.food_spots.map((spot, idx) => (
                       <li key={idx} className="line-clamp-2 font-medium text-foreground/80">
-                        • {spot}
+                        • {typeof spot === "object" && spot !== null ? spot.name : String(spot)}
                       </li>
                     ))}
                   </ul>

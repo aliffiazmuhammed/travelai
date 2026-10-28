@@ -133,6 +133,18 @@ function asTextList(value: unknown): string[] {
     : [];
 }
 
+/** Curated food spots may be objects; the gallery publishes their names only. */
+function asFoodList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => {
+      if (typeof entry === 'string') return entry.trim();
+      if (entry && typeof entry === 'object') return asText((entry as Record<string, unknown>).name);
+      return '';
+    })
+    .filter((entry) => entry.length > 0);
+}
+
 function asPositiveInt(value: unknown): number | undefined {
   const n = Number(value);
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : undefined;
@@ -280,7 +292,7 @@ function projectDay(raw: any): GalleryDay | null {
     activities,
     stay_recommendations: stays,
     transport: asTextList(raw.transport),
-    food_spots: asTextList(raw.food_spots),
+    food_spots: asFoodList(raw.food_spots),
     pro_tip: asTextList(raw.pro_tip),
     permit_required: raw.permit_required === true,
   };
