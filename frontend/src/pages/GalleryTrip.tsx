@@ -124,7 +124,7 @@ const GalleryTrip = () => {
         title: `${trip.title} · ${trip.destination || "TravelAI"}`,
         description:
           trip.summary ||
-          `A ${trip.durationDays}-day itinerary in ${trip.destination || "the gallery"}, published by ${trip.publisher.name}.`,
+          `A ${trip.durationDays}-day itinerary in ${trip.destination || "the gallery"}, shared by ${trip.publisher.name}.`,
         ogType: "article",
       });
     }
@@ -133,7 +133,7 @@ const GalleryTrip = () => {
       return applyPageMeta({
         title: "Trip not found · TravelAI",
         description:
-          "This published trip is no longer public. It may have been unpublished, or its travel dates have passed.",
+          "This shared trip is no longer public. It may have been unshared, or its travel dates have passed.",
         ogType: "website",
       });
     }
@@ -328,7 +328,7 @@ const GalleryTrip = () => {
           <Loader2 className="w-10 h-10 text-primary animate-spin" />
           <div className="text-center space-y-1">
             <h3 className="text-base font-bold text-foreground">
-              Opening this published trip…
+              Opening this trip…
             </h3>
             <p className="text-xs text-muted-foreground">
               Loading the itinerary its owner shared
@@ -350,11 +350,11 @@ const GalleryTrip = () => {
             </div>
             <div className="space-y-2">
               <h1 className="text-xl font-black text-foreground">
-                {notFound ? "This trip is not public" : "Something went wrong"}
+                {notFound ? "This trip isn't here anymore" : "Something went wrong"}
               </h1>
               <p className="text-xs text-muted-foreground leading-relaxed">
                 {notFound
-                  ? "The owner may have unpublished it, or its travel dates have passed. Published trips leave the gallery once they are over."
+                  ? "The owner may have unshared it, or the trip has already happened. Shared trips leave the gallery once they're over."
                   : error || "This trip could not be loaded right now."}
               </p>
             </div>
@@ -362,7 +362,7 @@ const GalleryTrip = () => {
               <Button asChild variant="hero" className="rounded-2xl h-11 px-6 text-xs font-bold gap-2">
                 <Link to="/explore">
                   <Compass className="w-4 h-4" />
-                  Browse the gallery
+                  See other shared trips
                 </Link>
               </Button>
               <Button asChild variant="outline" className="rounded-2xl h-11 px-6 text-xs font-bold">
@@ -387,7 +387,7 @@ const GalleryTrip = () => {
           className="inline-flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
-          Back to the gallery
+          Back to shared trips
         </Link>
 
         {/* Trip header */}
@@ -399,7 +399,7 @@ const GalleryTrip = () => {
             </span>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-[11px] font-semibold text-muted-foreground">
               <Globe className="w-3 h-3" />
-              Public trip
+              Shared trip
             </span>
           </div>
 
@@ -468,8 +468,8 @@ const GalleryTrip = () => {
               <div className="space-y-0.5">
                 <h2 className="text-lg font-black text-foreground">Day by day</h2>
                 <p className="text-xs text-muted-foreground">
-                  {days} {days === 1 ? "day" : "days"} as published by the owner.
-                  This preview is read-only.
+                  {days} {days === 1 ? "day" : "days"}, exactly as{" "}
+                  {trip.publisher.name} planned {days === 1 ? "it" : "them"}.
                 </p>
               </div>
               {days > 0 ? (
@@ -477,10 +477,10 @@ const GalleryTrip = () => {
               ) : (
                 <div className="rounded-3xl border border-dashed border-border/80 bg-card/60 p-8 text-center">
                   <p className="text-sm font-bold text-foreground">
-                    No day-by-day plan was published
+                    No day-by-day plan was shared
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    The owner shared the trip without day details.
+                    The owner shared the trip without the day-by-day details.
                   </p>
                 </div>
               )}
@@ -532,7 +532,7 @@ const GalleryTrip = () => {
           <aside className="space-y-4 lg:sticky lg:top-24">
             <section className="rounded-3xl border border-border/70 bg-card p-5 space-y-4">
               <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                Published by
+                Shared by
               </p>
               <Link
                 to={`/travelers/${encodeURIComponent(trip.publisher.handle)}`}
@@ -573,7 +573,7 @@ const GalleryTrip = () => {
                   ) : (
                     <Copy className="w-4 h-4" />
                   )}
-                  {cloning ? "Cloning this trip…" : "Clone & customize"}
+                  {cloning ? "Making your copy…" : "Make it mine"}
                 </Button>
                 {joinState?.isOwner ? (
                   <div className="rounded-2xl border border-border/70 bg-muted/40 px-3 py-2 text-center text-[11px] font-semibold text-muted-foreground">
@@ -587,7 +587,7 @@ const GalleryTrip = () => {
                   >
                     <Link to="/dashboard" state={{ tripId: trip._id }}>
                       <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                      You’re a member — open trip
+                      You're in — open the trip
                     </Link>
                   </Button>
                 ) : joinState?.request?.status === "pending" ? (
@@ -599,7 +599,7 @@ const GalleryTrip = () => {
                       className="w-full rounded-2xl h-11 text-xs font-bold gap-2"
                     >
                       <Clock className="w-4 h-4" />
-                      Request pending
+                      Waiting to hear back
                     </Button>
                     <Button
                       type="button"
@@ -620,29 +620,29 @@ const GalleryTrip = () => {
                     className="w-full rounded-2xl h-11 text-xs font-bold gap-2"
                   >
                     <UserPlus className="w-4 h-4" />
-                    Request to join
+                    Ask to join
                   </Button>
                 )}
                 <p className="text-[10px] leading-relaxed text-muted-foreground text-center">
-                  Cloning creates a private copy you own — the original stays
-                  untouched. A join request goes to the owner and, if approved,
-                  gives you a commenter seat. It never grants edit access.
+                  Your copy is private and yours to change however you like — the
+                  original stays as it is. Asking to join sends a note to the
+                  owner; if they say yes, you can follow the trip and comment.
                 </p>
               </div>
             </section>
 
             <section className="rounded-3xl bg-primary/5 border border-primary/15 p-5 space-y-2">
               <p className="text-xs font-bold text-foreground">
-                A public preview, nothing more
+                What's shared — and what isn't
               </p>
               <p className="text-[11px] leading-relaxed text-muted-foreground">
-                Budgets, logged expenses and traveler lists are never part of a
-                published trip. Only the itinerary, the dates the owner chose to
-                show and their public profile are visible. Read the{" "}
+                You're seeing the itinerary, the dates the owner chose to share
+                and their public profile. Budgets, expenses and travel companions
+                stay private. The{" "}
                 <Link to="/guidelines" className="font-bold text-primary hover:underline">
                   community guidelines
-                </Link>
-                .
+                </Link>{" "}
+                cover the rest.
               </p>
             </section>
 

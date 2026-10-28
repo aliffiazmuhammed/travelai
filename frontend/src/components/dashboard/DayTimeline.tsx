@@ -291,7 +291,7 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
       </div>
 
       {/* Vertical Timeline Feed */}
-      <div className="relative pl-12 sm:pl-16 space-y-12 before:absolute before:left-4 sm:before:left-5 before:top-4 before:bottom-4 before:w-0.5 before:bg-gradient-to-b before:from-primary before:via-accent before:to-muted">
+      <div className="relative pl-12 sm:pl-16 space-y-12 before:absolute before:left-4 sm:before:left-5 before:top-8 sm:before:top-10 before:bottom-4 before:w-0.5 before:bg-gradient-to-b before:from-primary before:via-accent before:to-muted">
         {daysToShow.map((dayData) => {
           const actualDayIndex = itinerary.findIndex((d) => d.day === dayData.day);
           const cleanTitle = dayData.title.replace(/^day\s*\d+\s*[:\-–]\s*/i, "");
@@ -315,9 +315,13 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
           return (
             <div key={dayData.day} className="relative space-y-6">
               {/* Day Milestone Marker */}
+              {/* Two layers so the badge stays opaque: the rail behind it is
+                  continuous, and a translucent fill alone let it show through. */}
               <div className="absolute -left-12 sm:-left-16 top-0 w-8 sm:w-10 flex items-center justify-center">
-                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs sm:text-sm ring-4 ring-background">
-                  {dayData.day}
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-background flex items-center justify-center">
+                  <div className="w-full h-full rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs sm:text-sm">
+                    {dayData.day}
+                  </div>
                 </div>
               </div>
 

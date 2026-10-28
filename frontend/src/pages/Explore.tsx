@@ -128,7 +128,7 @@ const ExploreCard = ({ trip, onTagClick }: ExploreCardProps) => (
         to={`/explore/${trip._id}`}
         className="inline-flex shrink-0 items-center gap-1 text-[11px] font-bold text-primary hover:gap-1.5 transition-all"
       >
-        View trip
+        See the trip
         <ArrowRight className="w-3.5 h-3.5" />
       </Link>
     </div>
@@ -158,9 +158,9 @@ const Explore = () => {
 
   useEffect(() => {
     return applyPageMeta({
-      title: "Explore published trips · TravelAI",
+      title: "Explore trips to join · TravelAI",
       description:
-        "Browse real day-by-day itineraries published by TravelAI travelers, then start your own plan from one you like.",
+        "Real trips people have planned and shared on TravelAI. Find one you fancy, ask the owner to join, or take a copy and make it your own.",
       ogType: "website",
     });
   }, []);
@@ -220,7 +220,7 @@ const Explore = () => {
         setError(
           err instanceof ApiError && err.message
             ? err.message
-            : "The gallery could not be loaded right now."
+            : "We couldn't load the gallery right now."
         );
       } finally {
         if (!cancelled) setLoading(false);
@@ -293,16 +293,16 @@ const Explore = () => {
         <header className="rounded-3xl bg-card/80 backdrop-blur-md border border-border/80 shadow-card p-6 sm:p-8 space-y-4">
           <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 border border-primary/20 px-3 py-1 text-[11px] font-bold text-primary">
             <Globe className="w-3 h-3" />
-            Public gallery
+            Trips people shared
           </div>
           <div className="space-y-2 max-w-2xl">
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
-              Trips travelers chose to share
+              Find a trip you'd like to join
             </h1>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Real day-by-day itineraries, published by their owners. Read one
-              start to finish, then use it as the starting point for your own
-              plan.
+              Real trips, shared by the people who planned them. Scroll until
+              one catches your eye — then ask the owner to come along, or take
+              a copy that's yours to change.
             </p>
           </div>
 
@@ -312,8 +312,8 @@ const Explore = () => {
               <Input
                 value={searchInput}
                 onChange={(event) => setSearchInput(event.target.value)}
-                placeholder="Search destinations, titles or summaries…"
-                aria-label="Search published trips"
+                placeholder="Where are you headed?"
+                aria-label="Search shared trips"
                 className="h-11 rounded-2xl pl-9 pr-10 bg-background/80"
               />
               {searchInput && (
@@ -395,10 +395,10 @@ const Explore = () => {
             <Loader2 className="w-9 h-9 text-primary animate-spin" />
             <div className="text-center space-y-1">
               <h3 className="text-base font-bold text-foreground">
-                Finding published trips…
+                Gathering trips people shared…
               </h3>
               <p className="text-xs text-muted-foreground">
-                Only what each traveler chose to make public
+                Only the ones their owners were happy to share
               </p>
             </div>
           </div>
@@ -409,7 +409,7 @@ const Explore = () => {
             </div>
             <div className="space-y-1">
               <p className="text-sm font-bold text-foreground">
-                The gallery did not load
+                We couldn't load the gallery
               </p>
               <p className="text-xs text-muted-foreground">{error}</p>
             </div>
@@ -430,13 +430,13 @@ const Explore = () => {
             </div>
             <p className="text-sm font-bold text-foreground">
               {hasFilters
-                ? "No published trips match those filters"
-                : "The gallery is just getting started"}
+                ? "Nothing matches those filters yet"
+                : "No trips have been shared yet"}
             </p>
             <p className="text-xs text-muted-foreground max-w-md mx-auto">
               {hasFilters
-                ? "Try a broader search, a different trip length, or clear the filters."
-                : "Travelers publish trips from their dashboard. Check back soon, or plan the first one."}
+                ? "Maybe try a wider search, a different trip length, or clear them?"
+                : "Be the first — plan a trip, then share it once you're happy with it."}
             </p>
             {hasFilters ? (
               <Button
@@ -461,7 +461,7 @@ const Explore = () => {
           <section className="space-y-5">
             <div className="flex items-center justify-between gap-3">
               <p className="text-xs font-semibold text-muted-foreground">
-                Showing {trips.length} of {total} published{" "}
+                Showing {trips.length} of {total} shared{" "}
                 {total === 1 ? "trip" : "trips"}
               </p>
             </div>
@@ -496,7 +496,7 @@ const Explore = () => {
                 </Button>
               ) : (
                 <p className="text-[11px] font-semibold text-muted-foreground">
-                  You have reached the end of the gallery.
+                  That's every shared trip for now.
                 </p>
               )}
             </div>

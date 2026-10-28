@@ -158,7 +158,7 @@ Platform admin (moderation only; `PLATFORM_ADMIN_ENABLED`):
 **Goal:** browsing converts into a draft.
 
 - `POST /api/trips/:id/clone`: builds a fresh private draft owned by the cloner from the projection, records `clonedFrom { tripId, ownerHandle }`, rate-limited (10/day/user).
-- Public page CTA "Clone & customize" → creates the draft → lands in the planner.
+- Public page CTA "Make it mine" (the clone action) → creates the draft → lands in the planner.
 - Tests: ownership, no money/members copied, rate limit, unpublished target rejected.
 
 **Acceptance:** a cloned trip is fully editable and shows attribution to the original owner; the original is untouched.
@@ -168,7 +168,7 @@ Platform admin (moderation only; `PLATFORM_ADMIN_ENABLED`):
 - `services/gallery/clone.ts`: the source is re-read through `loadGalleryTrip` (the same public projection as the anonymous page), then `buildClonedTripDraft` creates a fresh `workspace: 'personal'`, `status: 'draft'`, `visibility: 'private'` trip. Money, expenses, participants, finance, members, `shareId` and `generationMeta` are structurally absent from the source payload, so they cannot be copied. Exact dates are copied only when `dates.exact`; a hidden-date source becomes "dates flexible" instead of leaking the real window. Drawn routes carry over.
 - `Trip` gains `clonedFrom { tripId, ownerHandle, clonedAt }` (attribution only). The owner-facing trip payload includes it; the dashboard renders "Cloned from @handle" with a link to the traveller profile.
 - `POST /api/itinerary/:id/clone` (`controllers/itinerary.controller.ts`, `routes/itinerary.routes.ts`) — codebase convention for the spec's `/api/trips/:id/clone`. It runs `protectPersonal` + new `tripCloneLimiter` (10/day/account, user-keyed) and intentionally skips `requireTripRole`: the source is a public trip the caller need not belong to. `routerCoverage.test.ts` documents that one exception; `realmCoverage.test.ts` classifies it as personal.
-- `frontend/src/pages/GalleryTrip.tsx`: "Clone & customize" is live. Signed-in visitors get the draft and land in the dashboard with it opened; anonymous visitors are sent through sign-in with the clone intent and the copy is created on return. The join button stays a G5 placeholder.
+- `frontend/src/pages/GalleryTrip.tsx`: the clone CTA ("Make it mine") is live. Signed-in visitors get the draft and land in the dashboard with it opened; anonymous visitors are sent through sign-in with the clone intent and the copy is created on return. The join button stays a G5 placeholder.
 - `api.cloneGalleryTrip` + `Trip.clonedFrom` type.
 - Tests: `services/gallery/clone.test.ts` (9 pins: cloner ownership, attribution, no money/members/private metadata, exact dates, hidden dates, routes, original untouched, unpublished/expired/agency 404, rate-limit/guard wiring). Backend: 659 tests, typecheck green. Frontend: typecheck and production build green.
 - Not done here: an in-product browser smoke on a seeded public trip (the `test` database still has zero public trips) and a bulk-copy reporting surface (G6).

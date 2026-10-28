@@ -125,8 +125,7 @@ const TravelerProfile = () => {
     return applyPageMeta({
       title: `${traveler.name} (@${traveler.handle}) · TravelAI`,
       description:
-        traveler.bio ||
-        `Trips published by @${traveler.handle} on TravelAI.`,
+        traveler.bio || `Trips shared by @${traveler.handle} on TravelAI.`,
       ogType: "profile",
     });
   }, [traveler]);
@@ -144,7 +143,7 @@ const TravelerProfile = () => {
                 Opening this traveler's page…
               </h3>
               <p className="text-xs text-muted-foreground">
-                Fetching their published trips
+                Gathering their shared trips
               </p>
             </div>
           </div>
@@ -156,7 +155,8 @@ const TravelerProfile = () => {
             <div className="space-y-2">
               <h2 className="text-xl font-black text-foreground">Traveler not found</h2>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                {error || "The handle you followed may be wrong or no longer public."}
+                {error ||
+                  "That handle doesn't seem to belong to anyone — it may be mistyped, or no longer public."}
               </p>
             </div>
             <Button asChild variant="hero" className="rounded-2xl h-11 px-6 text-xs font-bold gap-2">
@@ -204,7 +204,7 @@ const TravelerProfile = () => {
                       {traveler.trips.length}
                     </p>
                     <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                      published {traveler.trips.length === 1 ? "trip" : "trips"}
+                      shared {traveler.trips.length === 1 ? "trip" : "trips"}
                     </p>
                   </div>
                   <button
@@ -224,11 +224,11 @@ const TravelerProfile = () => {
               <div className="flex items-center justify-between gap-3">
                 <div className="space-y-0.5">
                   <h2 className="text-lg sm:text-xl font-black text-foreground">
-                    Upcoming published trips
+                    Trips {traveler.name.split(" ")[0]} is sharing
                   </h2>
                   <p className="text-xs text-muted-foreground">
-                    Only trips this traveler chose to publish, and only while they
-                    are still ahead.
+                    Only the trips they've shared, and only while they're still
+                    ahead.
                   </p>
                 </div>
               </div>
@@ -239,10 +239,11 @@ const TravelerProfile = () => {
                     <Compass className="w-6 h-6" />
                   </div>
                   <p className="text-sm font-bold text-foreground">
-                    No upcoming published trips yet
+                    Nothing shared yet
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    When {traveler.name.split(" ")[0]} publishes a trip, it appears here.
+                    When {traveler.name.split(" ")[0]} shares a trip, it'll show
+                    up here.
                   </p>
                 </div>
               ) : (
