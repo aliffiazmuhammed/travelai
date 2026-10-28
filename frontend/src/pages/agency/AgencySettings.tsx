@@ -31,6 +31,7 @@ import type { AgencyAsset, AgencyAssetKind, AgencyBranding } from '@/types';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import AgencyPasswordChange from './AgencyPasswordChange';
+import DirectoryProfileEditor from '@/components/agency/DirectoryProfileEditor';
 
 const HEX_COLOUR = /^#[0-9a-fA-F]{6}$/;
 const IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp';
@@ -448,8 +449,9 @@ const AgencySettings: React.FC = () => {
           </div>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             Your brand identity for client pages, quotes and exports, plus your
-            personal agency account. Uploaded files are private to this agency
-            and never listed publicly.
+            personal agency account. Files stay private to this agency; only
+            the logo and details you choose in the public profile reach
+            travellers.
           </p>
         </div>
         {canManage ? (
@@ -474,6 +476,8 @@ const AgencySettings: React.FC = () => {
           assets. You can still view the brand preview and asset library.
         </div>
       ) : null}
+
+      <DirectoryProfileEditor />
 
       <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
         <div className="space-y-5">

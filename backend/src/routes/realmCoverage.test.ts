@@ -8,6 +8,8 @@ import travelersRouter from './travelers.routes.js';
 import exploreRouter from './explore.routes.js';
 import blocksRouter from './blocks.routes.js';
 import reportsRouter from './reports.routes.js';
+import enquiriesRouter from './enquiries.routes.js';
+import agenciesRouter from './agencies.routes.js';
 import { AUTH_GUARD_TAG } from '../middleware/auth.middleware.js';
 
 /**
@@ -136,6 +138,41 @@ test('gallery explore routes are anonymous and classified', () => {
     layers.filter((layer) => guardKind(layer) !== undefined).map(pathOf),
     [],
     'Gallery browse must never inherit a session or platform guard'
+  );
+});
+
+test('public agency directory routes are anonymous and classified', () => {
+  const layers = routeLayers(agenciesRouter);
+  assert.deepEqual(
+    layers.map(pathOf),
+    [
+      '/',
+      '/facets',
+      '/:slug/logo',
+      '/:slug/packages/:packageId/cover',
+      '/:slug/enquiries',
+      '/:slug',
+    ],
+    'D3 adds the listing, facets and public logo; D4 package covers; D5 the one anonymous write'
+  );
+  assert.deepEqual(
+    layers.filter((layer) => guardKind(layer) !== undefined).map(pathOf),
+    [],
+    'A public directory page must never require a session or tenant role'
+  );
+});
+
+test('a traveller’s own enquiry history is personal-realm only', () => {
+  const layers = routeLayers(enquiriesRouter);
+  assert.deepEqual(
+    layers.map((layer) => `${pathOf(layer)} ${Object.keys(layer.route?.methods ?? {})}`),
+    ['/ get'],
+    'The consumer side of enquiries is one read; the write is public and lives on the directory router'
+  );
+  assert.deepEqual(
+    layers.filter((layer) => guardKind(layer) !== 'personal').map(pathOf),
+    [],
+    'An enquiry history carries contact details, so agency and platform sessions must be refused'
   );
 });
 

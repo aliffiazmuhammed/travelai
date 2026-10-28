@@ -14,8 +14,10 @@ import invitesRoutes from './routes/invites.routes.js';
 import geoRoutes from './routes/geo.routes.js';
 import travelersRoutes from './routes/travelers.routes.js';
 import exploreRoutes from './routes/explore.routes.js';
+import agenciesRoutes from './routes/agencies.routes.js';
 import blocksRoutes from './routes/blocks.routes.js';
 import reportsRoutes from './routes/reports.routes.js';
+import enquiriesRoutes from './routes/enquiries.routes.js';
 import agencyRoutes from './routes/agency.routes.js';
 import agencyAuthRoutes from './routes/agencyAuth.routes.js';
 import adminAuthRoutes from './routes/adminAuth.routes.js';
@@ -225,12 +227,18 @@ app.use('/api/travelers', travelersRoutes);
 // Public gallery listing and trip pages (G3): same rule — anonymous, and every
 // row leaves through the gallery projection rather than a raw trip document.
 app.use('/api/explore', exploreRoutes);
+// Public agency directory profiles (M9 D1): anonymous, projection-only, and
+// 404 for drafts, suspended agencies and ops-hidden profiles.
+app.use('/api/agencies', agenciesRoutes);
 // Personal block list (G5): account-scoped, one-way, never carries a trip id.
 // Agency and platform sessions are refused by `protectPersonal`.
 app.use('/api/blocks', blocksRoutes);
 // Safety reports (G6): personal-realm, accountable, daily-limited. Reporting a
 // trip or profile never exposes the reporter on any public payload.
 app.use('/api/reports', reportsRoutes);
+// A traveller's own enquiries (M9 D5): personal realm only, read-only. The
+// public enquiry *write* lives on `/api/agencies/:slug/enquiries`.
+app.use('/api/enquiries', enquiriesRoutes);
 // Agency Workspace (A0): read-only placeholder namespace, gated per request.
 // PA0 auth lives under the same gate, before the tenant routes — it is public
 // bootstrap (`/context`, `/csrf`, `/signin`, `/logout`) plus agency-session

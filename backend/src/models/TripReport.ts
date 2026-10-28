@@ -14,7 +14,12 @@ import mongoose, { Document, Schema, Types } from 'mongoose';
  * The trip's own `moderation` field is the fast query key; this collection is
  * the audit trail and the admin queue.
  */
-export const REPORT_TARGET_TYPES = ['trip', 'profile'] as const;
+/**
+ * `trip` and `profile` are Milestone 8 targets. `agency_profile` (M9 D5) stores
+ * the owning **Agency** id: the public page is slug-addressed, but ops hide and
+ * restore must act on the tenant record, so the slug is resolved at report time.
+ */
+export const REPORT_TARGET_TYPES = ['trip', 'profile', 'agency_profile'] as const;
 export type ReportTargetType = (typeof REPORT_TARGET_TYPES)[number];
 
 export const REPORT_REASONS = [
@@ -35,7 +40,7 @@ export const AUTO_HIDE_REPORT_THRESHOLD = 3;
 export interface ITripReport extends Document {
   reporterId: Types.ObjectId;
   targetType: ReportTargetType;
-  /** A Trip or User id, depending on `targetType`. */
+  /** A Trip, User or Agency id, depending on `targetType`. */
   targetId: Types.ObjectId;
   reason: ReportReason;
   note?: string;

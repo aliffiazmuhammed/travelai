@@ -6,6 +6,7 @@ import {
   Camera,
   ExternalLink,
   Globe,
+  Inbox,
   Loader2,
   Mail,
   ShieldCheck,
@@ -23,6 +24,13 @@ import Navbar from "@/components/Navbar";
 import { useAuth } from "@/context/UserContext";
 import { api } from "@/services/api";
 import { avatarSrc, initialsFor } from "@/lib/avatar";
+import {
+  AGENCY_ENQUIRY_STATUS_LABELS,
+  agencyEnquiryStatusBadgeClass,
+  formatAgencyDate,
+} from "@/lib/agency";
+import { cn } from "@/lib/utils";
+import type { AgencyEnquiry } from "@/types/agency";
 import type { BlockedAccount } from "@/types/gallery";
 
 /**
@@ -91,6 +99,11 @@ const Profile = () => {
   const [blocks, setBlocks] = useState<BlockedAccount[]>([]);
   const [blocksBusy, setBlocksBusy] = useState<string | null>(null);
 
+  // Sent enquiries (Milestone 9 D5). Anonymous submissions cannot be listed, so
+  // this card only ever shows rows the signed-in session was attributed to.
+  const [myEnquiries, setMyEnquiries] = useState<AgencyEnquiry[]>([]);
+  const [showAllEnquiries, setShowAllEnquiries] = useState(false);
+
   // Keep the field in sync with the session (including after a save).
   useEffect(() => {
     setName(user?.name ?? "");
@@ -121,8 +134,27 @@ const Profile = () => {
     };
   }, [user?._id]);
 
-  const handleUnblock = async (block: BlockedAccount) => {
-    setBlocksBusy(block.userId);
+  // M9 D5: sent enquiries. Non-fatal on failure — the card stays hidden rather
+  // than turning the profile page into an error.
+  useEffect(() => {
+    if (!user?._id) return;
+
+    let cancelled = false;
+    api
+      .getMyEnquiries({ limit: 20 })
+      .then((page) => {
+        if (!cancelled) setMyEnquiries(page.enquiries || []);
+      })
+      .catch(() => {
+        if (!cancelled) setMyEnquiries([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?._id]);
+
+  const handleUnblock = async (block: BlockedAccount) => {    setBlocksBusy(block.userId);
     try {
       await api.unblockUser(block.userId);
       setBlocks((previous) =>
@@ -622,6 +654,89 @@ const Profile = () => {
                   </div>
                 ))}
               </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Sent enquiries (Milestone 9 D5) ---------------------------------- */}
+        {myEnquiries.length > 0 && (
+          <Card className="rounded-3xl border-border/70">
+            <CardHeader className="pb-4">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Inbox className="h-4 w-4 text-primary" />
+                Enquiries you've sent
+              </CardTitle>
+              <CardDescription>
+                Each enquiry went only to the agency you chose. They reply in
+                their workspace, so you may not get an email copy.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {(showAllEnquiries ? myEnquiries : myEnquiries.slice(0, 3)).map(
+                (enquiry) => (
+                  <div
+                    key={enquiry.id}
+                    className="space-y-1.5 rounded-2xl border border-border/60 bg-background/60 p-3"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        {enquiry.agency ? (
+                          <Link
+                            to={`/agencies/${encodeURIComponent(enquiry.agency.slug)}`}
+                            className="truncate text-sm font-bold text-foreground hover:text-primary hover:underline"
+                          >
+                            {enquiry.agency.name}
+                          </Link>
+                        ) : (
+                          <span className="text-sm font-bold text-foreground">
+                            An agency
+                          </span>
+                        )}
+                        <span
+                          className={cn(
+                            "rounded-full border px-2 py-0.5 text-[10px] font-bold",
+                            agencyEnquiryStatusBadgeClass(enquiry.status)
+                          )}
+                        >
+                          {AGENCY_ENQUIRY_STATUS_LABELS[enquiry.status]}
+                        </span>
+                      </div>
+                      {enquiry.createdAt && (
+                        <span className="text-[10px] text-muted-foreground">
+                          {formatAgencyDate(enquiry.createdAt)}
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="text-[11px] text-muted-foreground">
+                      {enquiry.package ? `${enquiry.package.title} · ` : ""}
+                      {enquiry.dates.flexible && !enquiry.dates.start
+                        ? "Flexible dates"
+                        : enquiry.dates.start
+                          ? `From ${formatAgencyDate(enquiry.dates.start)}`
+                          : "No dates given"}
+                    </p>
+
+                    <p className="line-clamp-2 text-xs leading-relaxed text-foreground/80">
+                      {enquiry.message}
+                    </p>
+                  </div>
+                )
+              )}
+
+              {myEnquiries.length > 3 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="rounded-xl text-[11px] font-bold"
+                  onClick={() => setShowAllEnquiries((value) => !value)}
+                >
+                  {showAllEnquiries
+                    ? "Show fewer"
+                    : `Show all ${myEnquiries.length}`}
+                </Button>
+              )}
             </CardContent>
           </Card>
         )}

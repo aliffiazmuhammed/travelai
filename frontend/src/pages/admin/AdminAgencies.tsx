@@ -38,6 +38,7 @@ import { api } from '@/services/api';
 import type {
   PlatformAgencyInput,
   PlatformAgencyList,
+  PlatformAgencyProfileFilter,
   PlatformAgencyStatusFilter,
   PlatformOwnerPreview,
   PlatformPlanTier,
@@ -115,6 +116,8 @@ const AdminAgencies: React.FC = () => {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] =
     useState<PlatformAgencyStatusFilter>('all');
+  const [profileFilter, setProfileFilter] =
+    useState<PlatformAgencyProfileFilter>('all');
   const [planFilter, setPlanFilter] = useState('all');
   const [page, setPage] = useState(1);
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -186,6 +189,7 @@ const AdminAgencies: React.FC = () => {
       .listAdminAgencies({
         q: debouncedSearch,
         status: statusFilter,
+        profile: profileFilter,
         planTierId: planFilter,
         page,
         limit: 25,
@@ -207,7 +211,7 @@ const AdminAgencies: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [debouncedSearch, statusFilter, planFilter, page, listReloadKey]);
+  }, [debouncedSearch, statusFilter, profileFilter, planFilter, page, listReloadKey]);
 
   // Owner-realm preview while the operator types. Debounced, cancelled on blur
   // of the dialog so a stale response cannot overwrite a reopened wizard.
@@ -521,6 +525,25 @@ const AdminAgencies: React.FC = () => {
                 <SelectItem value="all">All statuses</SelectItem>
                 <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="suspended">Suspended</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
+              value={profileFilter}
+              onValueChange={(value) => {
+                setProfileFilter(value as PlatformAgencyProfileFilter);
+                setPage(1);
+              }}
+            >
+              <SelectTrigger
+                aria-label="Filter by directory state"
+                className="h-9 w-36 border-slate-700 bg-slate-950 text-slate-200"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All directory</SelectItem>
+                <SelectItem value="published">Listed</SelectItem>
+                <SelectItem value="hidden">Hidden by ops</SelectItem>
               </SelectContent>
             </Select>
             <Select

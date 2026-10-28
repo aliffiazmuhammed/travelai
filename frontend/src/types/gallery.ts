@@ -159,7 +159,8 @@ export interface ExplorePage {
 /*  Moderation (Milestone 8 G6)                                                */
 /* -------------------------------------------------------------------------- */
 
-export type ReportTargetType = 'trip' | 'profile';
+/** `agency_profile` (M9 D5) is addressed by the directory slug. */
+export type ReportTargetType = 'trip' | 'profile' | 'agency_profile';
 export type ReportReason =
   | 'spam'
   | 'harassment'

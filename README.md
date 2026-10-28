@@ -106,6 +106,14 @@ Traditional trip planning involves juggling dozen of browser tabs: reading confl
 - **JSON Data Backup**: Full raw data export.
 - **Dedicated Print Stylesheet**: Browser print-to-PDF styles that hide navigation bars and reformat cards for clean physical paper printing.
 
+### 🏢 Agency Workspace, Public Directory & Enquiries
+- **Agency Workspace**: A separate agency realm for travel businesses — team members and roles, branding and assets, trip planning, clients, quotes, PDF exports and plan limits. It never mixes with personal trips or accounts.
+- **Public Directory**: Agencies publish a profile (about, base city, destinations, specialties, services, languages, optional phone/GSTIN, logo) and appear on `/agencies` with cursor pagination, search and facet filters for city, destination, specialty and language. Publishing is a readiness check, not a toggle: no description, city, destination, service or logo, no listing.
+- **Package Cards**: A trip can be published as a snapshot package — title, nights, highlights, inclusions, a cover image and an optional per-person price. The card never reads the source trip again, so editing or deleting the trip cannot break a public listing. Unpriced packages show "on request", and "from ₹…" on the listing is always the cheapest live package.
+- **Guest Enquiries**: Travellers can send an enquiry from a profile or package with consent, dates, party size, budget band and a message. The agency gets it in an in-app inbox (no email dependency) with claim/assign, status transitions (`new → replied → quoted → won/lost`), and one-click conversion into a client with a prefilled quote.
+- **Trust Signals**: A human-reviewed verification badge, and "Usually replies in ~X h" computed from the median of recent replies — hidden until the agency has answered at least five enquiries, so a new listing never over-promises.
+- **Ops Moderation**: Platform admins can verify/unverify and hide/restore profiles or individual packages from the admin console. A takedown is effective on the listing, facets, direct URLs, logos, covers and enquiry forms, keeps the agency's own draft/published choice, and is audited on both the platform and tenant trails. A read-only launch gate (`scripts/launch-gate-m9.mts`) checks the announcement bar: ≥5 verified live profiles, a priced package on each, and at least one answered test enquiry.
+
 ### 📱 Mobile-First Responsive Design
 - Optimized for all screen sizes from ultra-compact smartphones (320px iPhone SE) and tablets to 4K desktop displays.
 - Touch-friendly 44px min-height targets, scrollable pill selectors, and mobile drawer navigation.

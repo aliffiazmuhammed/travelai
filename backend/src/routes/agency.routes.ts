@@ -62,6 +62,25 @@ import {
   unarchiveAgencyTripHandler,
   uploadAgencyAssetHandler,
 } from '../controllers/agency.controller.js';
+import {
+  createAgencyPackageHandler,
+  deleteAgencyPackageHandler,
+  getAgencyDirectoryProfile,
+  listAgencyPackagesHandler,
+  publishAgencyDirectoryProfile,
+  publishAgencyPackageHandler,
+  saveAgencyDirectoryProfile,
+  unpublishAgencyDirectoryProfile,
+  unpublishAgencyPackageHandler,
+  updateAgencyPackageHandler,
+} from '../controllers/directory.controller.js';
+import {
+  convertAgencyEnquiryHandler,
+  getAgencyEnquiryHandler,
+  getAgencyEnquirySummaryHandler,
+  listAgencyEnquiriesHandler,
+  updateAgencyEnquiryHandler,
+} from '../controllers/enquiries.controller.js';
 import { protectAgency } from '../middleware/auth.middleware.js';
 import { deleteTrip, purgeTrip, restoreTrip } from '../controllers/itinerary.controller.js';
 import { requireAgencyWorkspace } from '../middleware/agencyWorkspace.middleware.js';
@@ -76,6 +95,12 @@ import {
   handleAgencyTemplateUpload,
 } from '../middleware/upload.middleware.js';
 import { validate } from '../middleware/validate.middleware.js';
+import { updateAgencyEnquirySchema } from '../schemas/agencyEnquiry.schema.js';
+import {
+  createAgencyPackageSchema,
+  saveAgencyDirectoryProfileSchema,
+  updateAgencyPackageSchema,
+} from '../schemas/directory.schema.js';
 import {
   addAgencyTemplateVersionSchema,
   activateAgencyInviteSchema,
@@ -168,6 +193,44 @@ router.get(
   downloadAgencyProposalHandler
 );
 
+// Enquiry inbox (M9 D5/D6). Workspace-addressed (no `:agencyId`), because the
+// signed-in agency session already names the tenant; the membership guard falls
+// back to that session tenant. Registered before `/:agencyId` so "enquiries" is
+// never read as a tenant id. Viewers can read the inbox; claiming, moving status
+// and converting are planner work.
+router.get(
+  '/enquiries',
+  protectAgency,
+  requireAgencyMember(),
+  listAgencyEnquiriesHandler
+);
+// Must precede `/:enquiryId`, or "summary" would be read as an id.
+router.get(
+  '/enquiries/summary',
+  protectAgency,
+  requireAgencyMember(),
+  getAgencyEnquirySummaryHandler
+);
+router.get(
+  '/enquiries/:enquiryId',
+  protectAgency,
+  requireAgencyMember(),
+  getAgencyEnquiryHandler
+);
+router.patch(
+  '/enquiries/:enquiryId',
+  protectAgency,
+  requireAgencyRole('planner'),
+  validate(updateAgencyEnquirySchema),
+  updateAgencyEnquiryHandler
+);
+router.post(
+  '/enquiries/:enquiryId/convert',
+  protectAgency,
+  requireAgencyRole('planner'),
+  convertAgencyEnquiryHandler
+);
+
 // PA0: self-service agency creation is gone. Tenants are provisioned by the
 // platform admin (PA3); until then `GET /` and `POST /` stay removed.
 
@@ -179,6 +242,76 @@ router.patch(
   requireAgencyRole('admin'),
   validate(updateAgencySchema),
   updateAgency
+);
+
+// Public directory profile (M9 D1). Every member can read the draft and the
+// publish readiness list; only owner/admin can edit or publish, because this
+// text and the logo appear on a public page under the agency's name.
+router.get(
+  '/:agencyId/profile',
+  protectAgency,
+  requireAgencyMember(),
+  getAgencyDirectoryProfile
+);
+router.put(
+  '/:agencyId/profile',
+  protectAgency,
+  requireAgencyRole('admin'),
+  validate(saveAgencyDirectoryProfileSchema),
+  saveAgencyDirectoryProfile
+);
+router.post(
+  '/:agencyId/profile/publish',
+  protectAgency,
+  requireAgencyRole('admin'),
+  publishAgencyDirectoryProfile
+);
+router.post(
+  '/:agencyId/profile/unpublish',
+  protectAgency,
+  requireAgencyRole('admin'),
+  unpublishAgencyDirectoryProfile
+);
+
+// Trip packages (M9 D4). Planners draft from a trip; publishing and deleting
+// touch the public directory under the agency's name, so they stay admin-only.
+router.get(
+  '/:agencyId/packages',
+  protectAgency,
+  requireAgencyMember(),
+  listAgencyPackagesHandler
+);
+router.post(
+  '/:agencyId/packages',
+  protectAgency,
+  requireAgencyRole('planner'),
+  validate(createAgencyPackageSchema),
+  createAgencyPackageHandler
+);
+router.patch(
+  '/:agencyId/packages/:packageId',
+  protectAgency,
+  requireAgencyRole('planner'),
+  validate(updateAgencyPackageSchema),
+  updateAgencyPackageHandler
+);
+router.post(
+  '/:agencyId/packages/:packageId/publish',
+  protectAgency,
+  requireAgencyRole('admin'),
+  publishAgencyPackageHandler
+);
+router.post(
+  '/:agencyId/packages/:packageId/unpublish',
+  protectAgency,
+  requireAgencyRole('admin'),
+  unpublishAgencyPackageHandler
+);
+router.delete(
+  '/:agencyId/packages/:packageId',
+  protectAgency,
+  requireAgencyRole('admin'),
+  deleteAgencyPackageHandler
 );
 
 // Brand assets (A3). Members can view the library; only admins can add or

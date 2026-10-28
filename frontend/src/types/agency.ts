@@ -91,6 +91,357 @@ export interface AgencyAuthSession {
 }
 
 /* -------------------------------------------------------------------------- */
+/*  Public directory profile (M9 D1/D2)                                       */
+/* -------------------------------------------------------------------------- */
+
+export type DirectoryProfileState = 'draft' | 'published' | 'hidden';
+
+export interface DirectoryServiceOption {
+  id: string;
+  label: string;
+}
+
+export interface DirectoryLanguageOption {
+  code: string;
+  label: string;
+}
+
+/** The tenant's own view of its directory row, in any state. */
+export interface AgencyDirectoryProfile {
+  state: DirectoryProfileState;
+  about: string;
+  baseCity: string;
+  destinations: string[];
+  specialties: string[];
+  /** Service ids from the server catalog. */
+  services: string[];
+  /** Language codes from the server catalog. */
+  languages: string[];
+  showPhone: boolean;
+  showGstin: boolean;
+  publishedAt: string | null;
+  verified: boolean;
+  /** Ops hid the profile; only support can clear it. */
+  underReview: boolean;
+}
+
+export interface AgencyDirectoryReadiness {
+  ready: boolean;
+  missing: string[];
+}
+
+export interface AgencyDirectoryCatalog {
+  services: DirectoryServiceOption[];
+  languages: DirectoryLanguageOption[];
+}
+
+/** GET adds the chooser catalog; every mutation returns profile + readiness. */
+export interface AgencyDirectoryProfileResponse {
+  success: boolean;
+  profile: AgencyDirectoryProfile;
+  readiness: AgencyDirectoryReadiness;
+  catalog: AgencyDirectoryCatalog;
+}
+
+export interface AgencyDirectoryProfilePayload {
+  success: boolean;
+  profile: AgencyDirectoryProfile;
+  readiness: AgencyDirectoryReadiness;
+}
+
+export interface AgencyDirectoryProfileInput {
+  about?: string;
+  baseCity?: string;
+  destinations?: string[];
+  specialties?: string[];
+  services?: string[];
+  languages?: string[];
+  showPhone?: boolean;
+  showGstin?: boolean;
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Public directory (M9 D3)                                                  */
+/* -------------------------------------------------------------------------- */
+
+/** One listing card — smaller than the profile by design. */
+export interface AgencyDirectoryCard {
+  slug: string;
+  name: string;
+  baseCity: string;
+  specialties: string[];
+  services: DirectoryServiceOption[];
+  logoUrl: string | null;
+  verified: boolean;
+  /** Lowest published package price; null means "price on request". */
+  fromPricePerPerson: number | null;
+  currency: string;
+}
+
+export interface AgencyDirectoryPage {
+  success: boolean;
+  agencies: AgencyDirectoryCard[];
+  nextCursor: string | null;
+  hasMore: boolean;
+  total: number;
+}
+
+export interface AgencyDirectoryFilters {
+  q?: string;
+  city?: string;
+  destination?: string;
+  specialty?: string;
+  language?: string;
+  cursor?: string;
+  limit?: number;
+}
+
+export interface AgencyDirectoryFacet {
+  value: string;
+  label: string;
+  count: number;
+}
+
+export interface AgencyDirectoryFacets {
+  destinations: AgencyDirectoryFacet[];
+  specialties: AgencyDirectoryFacet[];
+  cities: AgencyDirectoryFacet[];
+  languages: AgencyDirectoryFacet[];
+}
+
+export interface AgencyDirectoryFacetsResponse {
+  success: boolean;
+  facets: AgencyDirectoryFacets;
+}
+
+/** One published package on the public profile (M9 D4). Snapshot fields only. */
+export interface AgencyDirectoryPackage {
+  id: string;
+  title: string;
+  summary: string;
+  nights: number;
+  pricePerPerson: number | null;
+  currency: string;
+  coverUrl: string | null;
+  highlights: string[];
+  inclusions: string[];
+}
+
+/** The public profile payload (`GET /api/agencies/:slug`). */
+export interface AgencyDirectoryPublicProfile {
+  slug: string;
+  name: string;
+  about: string;
+  baseCity: string;
+  destinations: string[];
+  specialties: string[];
+  services: DirectoryServiceOption[];
+  languages: DirectoryLanguageOption[];
+  logoUrl: string | null;
+  website: string | null;
+  contactPhone: string | null;
+  gstin: string | null;
+  verified: boolean;
+  publishedAt: string | null;
+  /** Median first-response hours; null while the sample is too small (M9 D7). */
+  replyTimeHours: number | null;
+  packages: AgencyDirectoryPackage[];
+}
+
+export interface AgencyDirectoryPublicProfileResponse {
+  success: boolean;
+  profile: AgencyDirectoryPublicProfile;
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Public enquiries (M9 D5)                                                  */
+/* -------------------------------------------------------------------------- */
+
+export type AgencyEnquiryStatus = 'new' | 'replied' | 'quoted' | 'won' | 'lost';
+export type AgencyEnquirySource = 'profile' | 'package';
+export type AgencyEnquiryBudgetBand =
+  | 'under_25k'
+  | '25k_50k'
+  | '50k_1l'
+  | 'above_1l'
+  | 'not_sure';
+
+export type AgencyEnquiryDateView = {
+  start: string | null;
+  end: string | null;
+  flexible: boolean;
+};
+
+/**
+ * One enquiry as both sides read it. The inbox never includes `agency`; the
+ * traveller's own history does, so a row is identifiable without the slug.
+ * Internal bookkeeping (`client`, `assignee`, `assignedTo`, `lostReason`) is
+ * always blank on the consumer projection.
+ */
+export interface AgencyEnquiry {
+  id: string;
+  status: AgencyEnquiryStatus;
+  source: AgencyEnquirySource;
+  contact: { name: string; email: string; phone: string | null };
+  party: { adults: number; children: number };
+  dates: AgencyEnquiryDateView;
+  budgetBand: AgencyEnquiryBudgetBand | null;
+  message: string;
+  /** `tripId` is tenant-only: it powers the quote hand-off. */
+  package: { id: string; title: string; tripId?: string | null } | null;
+  agency?: { name: string; slug: string } | null;
+  client: { id: string; name: string } | null;
+  assignedTo: string | null;
+  assignee: { id: string; name: string } | null;
+  consentAt: string | null;
+  repliedAt: string | null;
+  convertedAt: string | null;
+  lostReason: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface AgencyEnquiryPage {
+  success: boolean;
+  enquiries: AgencyEnquiry[];
+  nextCursor: string | null;
+  hasMore: boolean;
+  total: number;
+}
+
+/** What the public form posts; the server re-validates every field. */
+export interface AgencyEnquiryInput {
+  name: string;
+  email: string;
+  phone?: string;
+  adults: number;
+  children?: number;
+  startDate?: string;
+  endDate?: string;
+  flexible?: boolean;
+  budgetBand?: AgencyEnquiryBudgetBand;
+  message: string;
+  packageId?: string;
+  consent: boolean;
+}
+
+export interface AgencyEnquiryAcknowledgement {
+  id: string;
+  status: AgencyEnquiryStatus;
+  createdAt: string | null;
+}
+
+export interface AgencyEnquiryFilters {
+  status?: AgencyEnquiryStatus;
+  cursor?: string;
+  limit?: number;
+}
+
+/** D6 inbox actions. `assigneeId: null` releases the lead. */
+export interface AgencyEnquiryUpdateInput {
+  status?: AgencyEnquiryStatus;
+  lostReason?: string;
+  assigneeId?: string | null;
+}
+
+export interface AgencyEnquiryUpdateResult {
+  success: boolean;
+  enquiry: AgencyEnquiry;
+  /** True only when this call won the claim on an unassigned lead. */
+  claimed: boolean;
+}
+
+export interface AgencyEnquiryConversion {
+  success: boolean;
+  enquiry: AgencyEnquiry;
+  client: AgencyClient;
+  /** True when an existing directory record was reused. */
+  reused: boolean;
+  /** True when this call created the directory record. */
+  created: boolean;
+}
+
+export interface AgencyEnquirySummaryView {
+  total: number;
+  byStatus: Record<AgencyEnquiryStatus, number>;
+  /** New + replied + quoted: the leads still needing work. */
+  open: number;
+  receivedThisWeek: number;
+  repliedThisWeek: number;
+  convertedThisWeek: number;
+  /** Won ÷ total, rounded to three decimals. */
+  conversionRate: number;
+  weekStart: string;
+}
+
+export interface AgencyEnquirySummary {
+  success: boolean;
+  summary: AgencyEnquirySummaryView;
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Package snapshots (M9 D4)                                                 */
+/* -------------------------------------------------------------------------- */
+
+export type AgencyPackageState = 'draft' | 'published';
+
+export interface AgencyPackageReadiness {
+  ready: boolean;
+  missing: string[];
+}
+
+/**
+ * The agency's own package row. `tripId` is provenance only — the package is a
+ * copy of the trip at creation time and never reads it again.
+ */
+export interface AgencyPackage {
+  id: string;
+  tripId: string | null;
+  title: string;
+  summary: string;
+  nights: number;
+  pricePerPerson: number | null;
+  currency: string;
+  /** Authenticated asset URL for the tenant's own previews. */
+  coverUrl: string | null;
+  highlights: string[];
+  inclusions: string[];
+  state: AgencyPackageState;
+  publishedAt: string | null;
+  /** Ops takedown; only support can clear it. */
+  hidden: boolean;
+  hiddenAt: string | null;
+  hiddenReason: string | null;
+  readiness: AgencyPackageReadiness;
+}
+
+/** Editable package fields; any subset is a valid PATCH. */
+export interface AgencyPackageInput {
+  title?: string;
+  summary?: string;
+  nights?: number;
+  fromPricePerPerson?: number | null;
+  highlights?: string[];
+  inclusions?: string[];
+  coverAssetId?: string | null;
+}
+
+/** Creation needs either a source trip (snapshot) or an explicit title. */
+export interface AgencyPackageCreateInput extends AgencyPackageInput {
+  tripId?: string;
+}
+
+export interface AgencyPackageResponse {
+  success: boolean;
+  package: AgencyPackage;
+}
+
+export interface AgencyPackageListResponse {
+  success: boolean;
+  packages: AgencyPackage[];
+}
+
+/* -------------------------------------------------------------------------- */
 /*  Client directory and quotes (A4)                                          */
 /* -------------------------------------------------------------------------- */
 

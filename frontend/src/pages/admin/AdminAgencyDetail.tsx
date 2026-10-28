@@ -8,10 +8,14 @@ import {
   Copy,
   CreditCard,
   Crown,
+  ExternalLink,
+  EyeOff,
   Gauge,
+  Globe2,
   KeyRound,
   Loader2,
   RefreshCw,
+  RotateCcw,
   ShieldCheck,
   ShieldOff,
   Trash2,
@@ -49,6 +53,7 @@ import {
 import { api } from '@/services/api';
 import type {
   PlatformAgencyDetail,
+  PlatformAgencyDirectoryPackage,
   PlatformAgencyMember,
   PlatformAgencyRole,
   PlatformAgencyStatus,
@@ -68,6 +73,10 @@ interface AdminAgencyDetailProps {
 }
 
 const roleOptions: PlatformAgencyRole[] = ['owner', 'admin', 'planner', 'viewer'];
+
+type DirectoryHideTarget =
+  | { kind: 'profile' }
+  | { kind: 'package'; id: string; title: string };
 
 /**
  * `/admin/agencies` detail drawer (PA4).
@@ -109,6 +118,9 @@ const AdminAgencyDetail: React.FC<AdminAgencyDetailProps> = ({
   const [removeTarget, setRemoveTarget] = useState<PlatformAgencyMember | null>(null);
   const [transferOpen, setTransferOpen] = useState(false);
   const [resetTarget, setResetTarget] = useState<PlatformAgencyMember | null>(null);
+  const [directoryHideTarget, setDirectoryHideTarget] =
+    useState<DirectoryHideTarget | null>(null);
+  const [directoryHideReason, setDirectoryHideReason] = useState('');
   const [credential, setCredential] = useState<{
     email: string;
     password: string;
@@ -293,6 +305,63 @@ const AdminAgencyDetail: React.FC<AdminAgencyDetailProps> = ({
         workspace: result.workspace,
       });
       setResetTarget(null);
+    });
+
+  const applyDirectory = (directory: PlatformAgencyDetail['directory']) => {
+    setAgency((current) => (current ? { ...current, directory } : current));
+    onChanged?.();
+  };
+
+  const changeVerification = (verified: boolean) =>
+    run(verified ? 'directory-verify' : 'directory-unverify', async () => {
+      if (!agency) return;
+      const result = verified
+        ? await api.verifyAdminAgencyProfile(agency._id)
+        : await api.unverifyAdminAgencyProfile(agency._id);
+      applyDirectory(result.directory);
+      toast.success(
+        verified
+          ? 'Verified badge granted. The public profile updates immediately.'
+          : 'Verified badge removed. The profile stays listed.'
+      );
+    });
+
+  const restoreProfile = () =>
+    run('directory-restore', async () => {
+      if (!agency) return;
+      const result = await api.restoreAdminAgencyProfile(agency._id);
+      applyDirectory(result.directory);
+      toast.success('Profile restored to the public directory.');
+    });
+
+  const confirmDirectoryHide = () =>
+    run('directory-hide', async () => {
+      if (!agency || !directoryHideTarget) return;
+      const reason = directoryHideReason.trim();
+      const result =
+        directoryHideTarget.kind === 'profile'
+          ? await api.hideAdminAgencyProfile(agency._id, reason)
+          : await api.hideAdminAgencyPackage(
+              agency._id,
+              directoryHideTarget.id,
+              reason
+            );
+      applyDirectory(result.directory);
+      setDirectoryHideTarget(null);
+      setDirectoryHideReason('');
+      toast.success(
+        directoryHideTarget.kind === 'profile'
+          ? 'Profile hidden from every public surface.'
+          : 'Package hidden from the public profile.'
+      );
+    });
+
+  const restorePackage = (pkg: PlatformAgencyDirectoryPackage) =>
+    run(`directory-package-${pkg.id}`, async () => {
+      if (!agency) return;
+      const result = await api.restoreAdminAgencyPackage(agency._id, pkg.id);
+      applyDirectory(result.directory);
+      toast.success('Package restored to the public profile.');
     });
 
   const copyInvite = async () => {
@@ -533,6 +602,216 @@ const AdminAgencyDetail: React.FC<AdminAgencyDetailProps> = ({
                     {agency.billing.notes}
                   </p>
                 ) : null}
+              </div>
+            </section>
+
+            <section className="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <SectionTitle icon={<Globe2 className="h-4 w-4 text-teal-400" />}>
+                  Public directory
+                </SectionTitle>
+                {agency.directory.slug ? (
+                  <a
+                    href={`/agencies/${agency.directory.slug}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-300 hover:text-teal-200"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    Open public page
+                  </a>
+                ) : null}
+              </div>
+
+              {agency.directory.profile ? (
+                <>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                    <MiniStat label="State" value={agency.directory.profile.state} />
+                    <MiniStat
+                      label="Verified"
+                      value={agency.directory.profile.verifiedAt ? 'Verified' : 'Not verified'}
+                    />
+                    <MiniStat
+                      label="Reply time"
+                      value={
+                        agency.directory.profile.replyTimeHours
+                          ? `~${agency.directory.profile.replyTimeHours} h`
+                          : 'Hidden (<5 replies)'
+                      }
+                    />
+                    <MiniStat
+                      label="Published"
+                      value={formatAdminDate(
+                        agency.directory.profile.publishedAt ?? undefined
+                      )}
+                    />
+                  </div>
+
+                  {agency.directory.profile.hiddenAt ? (
+                    <p className="mt-2 rounded-lg border border-rose-900/70 bg-rose-950/30 px-2.5 py-2 text-xs text-rose-200">
+                      <EyeOff className="mr-1 inline h-3.5 w-3.5" />
+                      Hidden {formatAdminDate(agency.directory.profile.hiddenAt ?? undefined)}
+                      {agency.directory.profile.hiddenReason
+                        ? ` — ${agency.directory.profile.hiddenReason}`
+                        : ''}
+                    </p>
+                  ) : null}
+
+                  {!agency.directory.profile.ready ? (
+                    <p className="mt-2 rounded-lg border border-amber-900/70 bg-amber-950/20 px-2.5 py-2 text-xs text-amber-200">
+                      <AlertTriangle className="mr-1 inline h-3.5 w-3.5" />
+                      Not publishable yet: {agency.directory.profile.missing.join(' ')}
+                    </p>
+                  ) : null}
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="border-slate-700 bg-slate-900 text-slate-300 hover:text-white"
+                      onClick={() =>
+                        void changeVerification(!agency.directory.profile?.verifiedAt)
+                      }
+                      disabled={busy !== null}
+                    >
+                      {agency.directory.profile.verifiedAt ? (
+                        <ShieldOff className="mr-2 h-3.5 w-3.5" />
+                      ) : (
+                        <ShieldCheck className="mr-2 h-3.5 w-3.5" />
+                      )}
+                      {agency.directory.profile.verifiedAt ? 'Remove badge' : 'Verify badge'}
+                    </Button>
+                    {agency.directory.profile.hiddenAt ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="bg-emerald-600 text-white hover:bg-emerald-500"
+                        onClick={() => void restoreProfile()}
+                        disabled={busy !== null}
+                      >
+                        <RotateCcw className="mr-2 h-3.5 w-3.5" />
+                        Restore profile
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="border-rose-900 bg-slate-900 text-rose-300 hover:bg-rose-950/40"
+                        onClick={() => {
+                          setDirectoryHideReason('');
+                          setDirectoryHideTarget({ kind: 'profile' });
+                        }}
+                        disabled={busy !== null}
+                      >
+                        <EyeOff className="mr-2 h-3.5 w-3.5" />
+                        Hide profile
+                      </Button>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <p className="mt-3 text-xs text-slate-500">
+                  This agency has not saved a public profile yet. Nothing is listed.
+                </p>
+              )}
+
+              <div className="mt-4 border-t border-slate-800 pt-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Packages
+                </p>
+                {agency.directory.packages.length === 0 ? (
+                  <p className="mt-1 text-xs text-slate-500">No packages created yet.</p>
+                ) : (
+                  <div className="mt-2 overflow-x-auto">
+                    <table className="w-full min-w-[560px] text-left text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-800 text-[10px] uppercase tracking-wider text-slate-500">
+                          <th className="px-2 py-2 font-semibold">Package</th>
+                          <th className="px-2 py-2 font-semibold">State</th>
+                          <th className="px-2 py-2 font-semibold">Price</th>
+                          <th className="px-2 py-2 text-right font-semibold">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {agency.directory.packages.map((pkg) => (
+                          <tr
+                            key={pkg.id}
+                            className="border-b border-slate-800/70 last:border-0"
+                          >
+                            <td className="px-2 py-2">
+                              <p className="font-medium text-slate-200">
+                                {pkg.title || 'Untitled package'}
+                              </p>
+                              {pkg.hiddenAt ? (
+                                <p className="text-[11px] text-rose-300">
+                                  Hidden {formatAdminDate(pkg.hiddenAt)}
+                                  {pkg.hiddenReason ? ` — ${pkg.hiddenReason}` : ''}
+                                </p>
+                              ) : null}
+                            </td>
+                            <td className="px-2 py-2">
+                              <Badge
+                                variant="outline"
+                                className={
+                                  pkg.hiddenAt
+                                    ? 'border-rose-900 bg-rose-950/40 text-[10px] text-rose-300'
+                                    : pkg.state === 'published'
+                                      ? 'border-emerald-800 bg-emerald-950/40 text-[10px] text-emerald-300'
+                                      : 'border-slate-700 text-[10px] text-slate-400'
+                                }
+                              >
+                                {pkg.hiddenAt ? 'hidden' : pkg.state}
+                              </Badge>
+                            </td>
+                            <td className="whitespace-nowrap px-2 py-2 text-xs text-slate-400">
+                              {pkg.pricePerPerson === null
+                                ? 'On request'
+                                : `${pkg.currency} ${pkg.pricePerPerson.toLocaleString('en-IN')}`}
+                            </td>
+                            <td className="px-2 py-2">
+                              <div className="flex items-center justify-end">
+                                {pkg.hiddenAt ? (
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-8 text-xs text-emerald-300 hover:bg-slate-800"
+                                    onClick={() => void restorePackage(pkg)}
+                                    disabled={busy !== null}
+                                  >
+                                    <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                                    Restore
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-8 text-xs text-rose-300 hover:bg-rose-950/40"
+                                    onClick={() => {
+                                      setDirectoryHideReason('');
+                                      setDirectoryHideTarget({
+                                        kind: 'package',
+                                        id: pkg.id,
+                                        title: pkg.title,
+                                      });
+                                    }}
+                                    disabled={busy !== null}
+                                  >
+                                    <EyeOff className="mr-1.5 h-3.5 w-3.5" />
+                                    Hide
+                                  </Button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             </section>
 
@@ -943,6 +1222,61 @@ const AdminAgencyDetail: React.FC<AdminAgencyDetailProps> = ({
                 <ArrowRightLeft className="mr-2 h-4 w-4" />
               )}
               Transfer owner
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={directoryHideTarget !== null}
+        onOpenChange={(next) => {
+          if (!next && busy !== 'directory-hide') {
+            setDirectoryHideTarget(null);
+            setDirectoryHideReason('');
+          }
+        }}
+      >
+        <DialogContent className="border-slate-800 bg-slate-900 text-slate-100 sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <EyeOff className="h-4 w-4 text-rose-400" />
+              {directoryHideTarget?.kind === 'package'
+                ? 'Hide this package?'
+                : 'Hide this profile?'}
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">
+              {directoryHideTarget?.kind === 'package'
+                ? `"${
+                    directoryHideTarget.title || 'Untitled package'
+                  }" disappears from the public profile and its cover route. The agency keeps its draft/published choice and you can restore it here.`
+                : 'The profile disappears from the listing, facets, its direct URL, package covers and every enquiry entry point. The publish date is kept, so a restore returns it to the directory.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-slate-300">
+                Reason (audited and shown to the agency)
+              </Label>
+              <Input
+                value={directoryHideReason}
+                onChange={(event) => setDirectoryHideReason(event.target.value)}
+                maxLength={500}
+                placeholder="Why is it coming down?"
+                className="border-slate-700 bg-slate-950 text-slate-100 placeholder:text-slate-500"
+              />
+            </div>
+            <Button
+              type="button"
+              className="w-full bg-rose-600 text-white hover:bg-rose-500"
+              onClick={() => void confirmDirectoryHide()}
+              disabled={busy === 'directory-hide' || !directoryHideReason.trim()}
+            >
+              {busy === 'directory-hide' ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <EyeOff className="mr-2 h-4 w-4" />
+              )}
+              Hide from directory
             </Button>
           </div>
         </DialogContent>

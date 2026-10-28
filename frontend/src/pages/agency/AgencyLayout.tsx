@@ -1,11 +1,12 @@
-import React from 'react';
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   BriefcaseBusiness,
   Building2,
   FileText,
   Gauge,
   Home,
+  Inbox,
   LayoutDashboard,
   LogOut,
   Map,
@@ -29,9 +30,12 @@ import { useAgency } from '@/context/AgencyContext';
 import { avatarSrc, initialsFor } from '@/lib/avatar';
 import { agencyRoleBadgeClass, agencyRoleLabel } from '@/lib/agency';
 import { cn } from '@/lib/utils';
+import { api } from '@/services/api';
 
 const navItems = [
   { to: '/agency', label: 'Overview', icon: LayoutDashboard, end: true },
+  // M9 D5: leads from the public directory. Every member may read the inbox.
+  { to: '/agency/enquiries', label: 'Enquiries', icon: Inbox, end: false },
   { to: '/agency/trips', label: 'Trips', icon: Map, end: false },
   {
     to: '/agency/clients',
@@ -54,8 +58,31 @@ const navItems = [
  */
 const AgencyLayout: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, agency: sessionAgency, logout } = useAgencyAuth();
-  const { activeAgency, loading, error, canManage } = useAgency();
+  const { activeAgency, activeAgencyId, loading, error, canManage } = useAgency();
+  const [newLeads, setNewLeads] = useState(0);
+
+  // D6: the nav badge is the cheapest possible nudge — it refetches on route
+  // changes and stays silent when the summary fails (the inbox still works).
+  useEffect(() => {
+    if (!activeAgencyId) {
+      setNewLeads(0);
+      return;
+    }
+    let cancelled = false;
+    void api
+      .getAgencyEnquirySummary()
+      .then((result) => {
+        if (!cancelled) setNewLeads(result.summary.byStatus.new);
+      })
+      .catch(() => {
+        /* badge only */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeAgencyId, location.pathname]);
 
   const visibleNavItems = navItems.filter(
     (item) => !('adminOnly' in item && item.adminOnly) || canManage
@@ -192,6 +219,11 @@ const AgencyLayout: React.FC = () => {
             >
               <item.icon className="h-4 w-4" />
               {item.label}
+              {item.to === '/agency/enquiries' && newLeads > 0 ? (
+                <span className="ml-0.5 rounded-full bg-teal-600 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                  {newLeads > 99 ? '99+' : newLeads}
+                </span>
+              ) : null}
             </NavLink>
           ))}
         </div>

@@ -276,3 +276,37 @@ export const protectSession = async (
 };
 
 (protectSession as any)[AUTH_GUARD_TAG] = { realm: 'session' };
+
+/**
+ * Optional personal identity (M9 D5).
+ *
+ * The public enquiry form is an anonymous write: a submission must work with no
+ * session at all. When the visitor happens to be signed in, though, the same
+ * write is attributed to their verified account so the confirmation can appear
+ * in "Enquiries you've sent" and the per-email rate limit can key on a person.
+ *
+ * Any missing, stale or non-personal credential is ignored rather than rejected,
+ * because a broken agency cookie must never block a stranger from contacting an
+ * agency. Nothing is attached unless the full realm check passes.
+ */
+export const attachPersonalIfPresent = async (
+  req: AuthenticatedRequest,
+  _res: Response,
+  next: NextFunction
+) => {
+  try {
+    const token = bearerToken(req) ?? cookieToken(req, 'personal');
+    if (token) {
+      const claims = verifyRealmToken(token);
+      if (claims.realm === 'personal') {
+        const identity = await loadIdentity(claims, ['personal']);
+        if (identity && !identity.mustChangePassword) {
+          attachIdentity(req, identity);
+        }
+      }
+    }
+  } catch {
+    // Deliberately silent: an optional identity is never a failure.
+  }
+  return next();
+};

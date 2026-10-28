@@ -16,6 +16,7 @@ import {
   Link2,
   Loader2,
   Map as MapIcon,
+  Package as PackageIcon,
   PlusCircle,
   Receipt,
   Sparkles,
@@ -43,6 +44,7 @@ import {
 } from '@/components/ui/select';
 import ItineraryDisplay from '@/components/ItineraryDisplay';
 import AgencyExportPanel from '@/components/agency/AgencyExportPanel';
+import AgencyPackagePanel from '@/components/agency/AgencyPackagePanel';
 import AgencyQuotePanel from '@/components/agency/AgencyQuotePanel';
 import { MyTripsView } from '@/components/dashboard/MyTripsView';
 import { useAgency } from '@/context/AgencyContext';
@@ -79,21 +81,45 @@ const AgencyTrips: React.FC = () => {
   const { activeAgency, activeAgencyId, canManage } = useAgency();
 
   const tabParam = searchParams.get('tab');
-  const activeTab: 'itinerary' | 'quote' | 'export' =
-    tabParam === 'quote' ? 'quote' : tabParam === 'export' ? 'export' : 'itinerary';
+  const activeTab: 'itinerary' | 'quote' | 'export' | 'package' =
+    tabParam === 'quote'
+      ? 'quote'
+      : tabParam === 'export'
+        ? 'export'
+        : tabParam === 'package'
+          ? 'package'
+          : 'itinerary';
+
+  // D6 quote hand-off: the enquiry drawer links here with the converted client
+  // and the party size. Dates have no quote field, so they stay on the lead.
+  const prefillClientId = searchParams.get('client') || undefined;
+  const prefillParty = useMemo(() => {
+    if (!prefillClientId) return undefined;
+    const adults = Number(searchParams.get('adults'));
+    const children = Number(searchParams.get('children'));
+    return {
+      adults: Number.isFinite(adults) && adults > 0 ? Math.round(adults) : 2,
+      children: Number.isFinite(children) && children >= 0 ? Math.round(children) : 0,
+    };
+  }, [prefillClientId, searchParams]);
   const [quoteTabOpened, setQuoteTabOpened] = useState(activeTab === 'quote');
   const [exportTabOpened, setExportTabOpened] = useState(
     activeTab === 'export'
+  );
+  const [packageTabOpened, setPackageTabOpened] = useState(
+    activeTab === 'package'
   );
 
   useEffect(() => {
     if (activeTab === 'quote') setQuoteTabOpened(true);
     if (activeTab === 'export') setExportTabOpened(true);
+    if (activeTab === 'package') setPackageTabOpened(true);
   }, [activeTab]);
 
-  const switchTab = (next: 'itinerary' | 'quote' | 'export') => {
+  const switchTab = (next: 'itinerary' | 'quote' | 'export' | 'package') => {
     if (next === 'quote') setQuoteTabOpened(true);
     if (next === 'export') setExportTabOpened(true);
+    if (next === 'package') setPackageTabOpened(true);
     const params = new URLSearchParams(searchParams);
     if (next === 'itinerary') params.delete('tab');
     else params.set('tab', next);
@@ -513,6 +539,19 @@ const AgencyTrips: React.FC = () => {
               <FileText className="h-3.5 w-3.5" />
               Export
             </button>
+            <button
+              type="button"
+              onClick={() => switchTab('package')}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition',
+                activeTab === 'package'
+                  ? 'bg-teal-600 text-white'
+                  : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
+              )}
+            >
+              <PackageIcon className="h-3.5 w-3.5" />
+              Package
+            </button>
           </div>
 
           {/* Both panels stay mounted so switching tabs never loses edits. */}
@@ -567,6 +606,8 @@ const AgencyTrips: React.FC = () => {
                 tripTitle={selectedTrip.title}
                 tripStartDate={selectedTrip.startDate}
                 tripEndDate={selectedTrip.endDate}
+                prefillClientId={prefillClientId}
+                prefillParty={prefillParty}
               />
             </div>
           ) : null}
@@ -579,6 +620,19 @@ const AgencyTrips: React.FC = () => {
                 tripTitle={selectedTrip.title}
                 archived={Boolean(selectedTrip.archivedAt)}
                 onOpenQuoteTab={() => switchTab('quote')}
+              />
+            </div>
+          ) : null}
+
+          {packageTabOpened ? (
+            <div className={activeTab === 'package' ? undefined : 'hidden'}>
+              <AgencyPackagePanel
+                agencyId={activeAgencyId}
+                tripId={selectedTrip._id}
+                tripTitle={selectedTrip.title}
+                archived={Boolean(selectedTrip.archivedAt)}
+                canEdit={canPlan}
+                canManage={canManage}
               />
             </div>
           ) : null}

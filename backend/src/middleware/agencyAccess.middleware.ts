@@ -45,7 +45,13 @@ async function loadAgencyAccess(req: AgencyAccessRequest) {
     throw new AppError('Please sign in to access this feature.', 401);
   }
 
-  const agencyId = String(req.params.agencyId || '');
+  // Tenant-scoped routes name the tenant in `:agencyId`. Workspace routes that
+  // act on "my agency" (M9 D5 inbox) have no path param, so the guard falls
+  // back to the tenant bound to the verified agency session. A personal session
+  // never carries `agencyId`, so this cannot widen access across realms.
+  const requested = String(req.params.agencyId || '');
+  const agencyId =
+    requested || (req.realm === 'agency' ? String(req.agencyId || '') : '');
   if (!mongoose.isValidObjectId(agencyId)) {
     return { agency: null, member: null };
   }

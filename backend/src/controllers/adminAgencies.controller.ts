@@ -11,10 +11,12 @@ import {
   agencyPlanChangeSchema,
   agencyStatusSchema,
   createAgencyTenantSchema,
+  directoryHideSchema,
   platformAuditQuerySchema,
 } from '../schemas/platformAgencies.schema.js';
 import { linkOriginHints } from '../services/collab/invites.js';
 import * as agencies from '../services/platform/agencies.js';
+import * as directoryAdmin from '../services/platform/directoryAdmin.js';
 import * as provisioning from '../services/platform/provisioning.js';
 
 /**
@@ -221,9 +223,96 @@ export const resetAgencyMemberPassword = catchAsync(
   }
 );
 
-/** GET /api/admin/audit?q=&action=&targetType=&from=&to=&page=&limit= */
-export const platformAudit = catchAsync(
+/* -------------------------------------------------------------------------- */
+/*  M9 D7 directory verification and delisting                                 */
+/* -------------------------------------------------------------------------- */
+
+/** POST /api/admin/agencies/:id/directory/verify — grant the public badge. */
+export const verifyAgencyProfile = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
+    const result = await directoryAdmin.setProfileVerification({
+      actorId: String(req.userId),
+      agencyId: String(req.params.id),
+      verified: true,
+      client: clientContext(req),
+    });
+    res.status(200).json({ success: true, ...result });
+  }
+);
+
+/** POST /api/admin/agencies/:id/directory/unverify — revoke the badge only. */
+export const unverifyAgencyProfile = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const result = await directoryAdmin.setProfileVerification({
+      actorId: String(req.userId),
+      agencyId: String(req.params.id),
+      verified: false,
+      client: clientContext(req),
+    });
+    res.status(200).json({ success: true, ...result });
+  }
+);
+
+/** POST /api/admin/agencies/:id/directory/hide — delist the public profile. */
+export const hideAgencyProfile = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const body = directoryHideSchema.parse(req.body ?? {});
+    const result = await directoryAdmin.setProfileHidden({
+      actorId: String(req.userId),
+      agencyId: String(req.params.id),
+      hidden: true,
+      reason: body.reason,
+      client: clientContext(req),
+    });
+    res.status(200).json({ success: true, ...result });
+  }
+);
+
+/** POST /api/admin/agencies/:id/directory/restore — return it to the listing. */
+export const restoreAgencyProfile = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const result = await directoryAdmin.setProfileHidden({
+      actorId: String(req.userId),
+      agencyId: String(req.params.id),
+      hidden: false,
+      client: clientContext(req),
+    });
+    res.status(200).json({ success: true, ...result });
+  }
+);
+
+/** POST /api/admin/agencies/:id/directory/packages/:packageId/hide */
+export const hideAgencyPackage = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const body = directoryHideSchema.parse(req.body ?? {});
+    const result = await directoryAdmin.setPackageHidden({
+      actorId: String(req.userId),
+      agencyId: String(req.params.id),
+      packageId: String(req.params.packageId),
+      hidden: true,
+      reason: body.reason,
+      client: clientContext(req),
+    });
+    res.status(200).json({ success: true, ...result });
+  }
+);
+
+/** POST /api/admin/agencies/:id/directory/packages/:packageId/restore */
+export const restoreAgencyPackage = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const result = await directoryAdmin.setPackageHidden({
+      actorId: String(req.userId),
+      agencyId: String(req.params.id),
+      packageId: String(req.params.packageId),
+      hidden: false,
+      client: clientContext(req),
+    });
+    res.status(200).json({ success: true, ...result });
+  }
+);
+
+/** GET /api/admin/audit?q=&action=&targetType=&from=&to=&page=&limit= */
+export const platformAudit = catchAsync(  async (req: AuthenticatedRequest, res: Response) => {
     const query = parseQuery(platformAuditQuerySchema, req.query);
     const result = await agencies.listPlatformAudit(query);
     res.status(200).json({ success: true, ...result });

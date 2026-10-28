@@ -391,6 +391,9 @@ interface AgencyQuotePanelProps {
   tripTitle: string;
   tripStartDate?: string;
   tripEndDate?: string;
+  /** D6: a lead's converted client, prefilled when the quote is still blank. */
+  prefillClientId?: string;
+  prefillParty?: { adults: number; children: number };
 }
 
 /**
@@ -406,6 +409,8 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
   tripTitle,
   tripStartDate,
   tripEndDate,
+  prefillClientId,
+  prefillParty,
 }) => {
   const { activeAgency, canManage } = useAgency();
   const { user } = useAgencyAuth();
@@ -431,6 +436,7 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
     canPlan ? 'internal' : 'client'
   );
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
+  const [prefillApplied, setPrefillApplied] = useState(false);
   const requestRef = useRef(0);
 
   const loadQuote = useCallback(async () => {
@@ -482,6 +488,26 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
       cancelled = true;
     };
   }, [agencyId]);
+
+  // D6: an enquiry's converted client arrives through the URL. Wait for both the
+  // quote and the client directory, apply once, and never touch an existing
+  // quote — its saved client snapshot is authoritative.
+  useEffect(() => {
+    if (prefillApplied || !prefillClientId || loading) return;
+    const client = clients.find((entry) => entry._id === prefillClientId);
+    if (!client) return;
+    setPrefillApplied(true);
+    if (quote) return;
+    setEditor((prev) => ({
+      ...prev,
+      clientId: client._id,
+      clientName: client.name,
+      clientEmail: client.email ?? '',
+      clientPhone: client.phone ?? '',
+      adults: String(prefillParty?.adults ?? prev.adults),
+      children: String(prefillParty?.children ?? prev.children),
+    }));
+  }, [clients, loading, prefillApplied, prefillClientId, prefillParty, quote]);
 
   const applySavedQuote = (saved: AgencyQuote) => {
     setQuote(saved);

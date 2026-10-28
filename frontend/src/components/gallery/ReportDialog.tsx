@@ -118,7 +118,12 @@ export const ReportDialog: React.FC<ReportDialogProps> = ({
         <DialogHeader className="space-y-1.5">
           <DialogTitle className="text-lg font-black flex items-center gap-2">
             <Flag className="w-4 h-4 text-destructive" />
-            Report this {targetType === "trip" ? "trip" : "profile"}
+            Report this{" "}
+            {targetType === "trip"
+              ? "trip"
+              : targetType === "agency_profile"
+                ? "agency profile"
+                : "profile"}
           </DialogTitle>
           <DialogDescription className="text-xs leading-relaxed">
             Reporting <strong className="text-foreground">{targetLabel}</strong>.
@@ -183,8 +188,13 @@ export const ReportDialog: React.FC<ReportDialogProps> = ({
         <div className="flex items-start gap-2 rounded-2xl border border-amber-500/25 bg-amber-500/5 p-3">
           <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
           <p className="text-[11px] leading-relaxed text-muted-foreground">
-            Reports are for genuine safety and quality problems. Three distinct
-            reports hide a trip from the gallery pending review. Read the{" "}
+            Reports are for genuine safety and quality problems.{" "}
+            {targetType === "trip"
+              ? "Three distinct reports hide a trip from the gallery pending review."
+              : targetType === "agency_profile"
+                ? "Agency pages are reviewed manually and are never hidden automatically."
+                : "Profile reports go to the moderation queue; a profile is never hidden automatically."}{" "}
+            Read the{" "}
             <Link to="/guidelines" className="font-bold text-primary hover:underline">
               community guidelines
             </Link>

@@ -1,9 +1,10 @@
 # Agency Workspace and Platform Admin — Operations runbook and launch policies
 
-Companion to `agency-a9-test-plan.md`. This is the operating manual for the
+Companion to `agency-a9-test-plan.md`; the public directory and enquiry flow are
+covered by `docs/milestone-9-test-plan.md`. This is the operating manual for the
 Agency Workspace (A1-A9) plus the platform admin console (PA0-PA5): onboarding,
-support, backups/retention/deletion, rollback and the feature-flag kill
-switches. Realm and migration details live in
+support, backups/retention/deletion, rollback, directory moderation and the
+feature-flag kill switches. Realm and migration details live in
 `docs/roadmap-platform-admin.md`, `docs/agency-identity-migration.md` and
 `docs/platform-admin-test-plan.md`.
 
@@ -248,6 +249,72 @@ Use `docs/agency-identity-migration.md` for the full checklist. In short:
 4. Provision the pilot tenant; enable `AGENCY_WORKSPACE_ENABLED`.
 5. Roll back by disabling both flags, redeploying the previous build and
    restoring the pre-migration backup. Do not attempt an in-place down-migration.
+
+### 3A.6 Directory verification, delisting and the launch gate
+
+These operations live in **Agencies → tenant → Public directory**. They act on
+the public listing only; they never read or change trips, quotes or clients, and
+`PLATFORM_ADMIN_ENABLED` must be on (otherwise every path under `/api/admin` is
+`404`).
+
+**Verification (badge only).**
+
+- **Verify badge** stamps `verifiedAt` and shows the trust badge on the listing
+  card and profile. **Remove badge** clears it.
+- Verification never publishes and unverification never unpublishes. A verified
+  agency can unpublish itself the same minute; the badge is not a substitute for
+  the readiness checks.
+- Only verify after a human has checked the identity, the about text and at
+  least one package. The badge is a promise to travellers.
+
+**Delisting a profile.**
+
+- **Hide profile** requires a short reason. It disappears immediately from
+  `/agencies`, every facet count, `/agencies/:slug`, the logo and cover routes
+  and the enquiry form. The publish date is kept.
+- **Restore profile** clears the moderation marker and returns the row to
+  `published` when it had been published before, or to `draft` when it had not.
+  The agency's own intent is never overwritten.
+- Tell the agency what happened. The reason appears in their audit log
+  (`profile.hidden` / `profile.restored`) and the platform trail
+  (`directory.profile.hidden` / `.restored`).
+
+**Delisting a package.**
+
+- Use the package row in the same section. A hidden package leaves the public
+  profile and the listing "from" price without changing its `draft`/`published`
+  state, so **Restore** puts it back exactly where it was.
+- A hidden package cannot be republished by the agency (`409`); support must
+  restore it first. This is deliberate: an agency must not undo an ops decision
+  by toggling publish.
+
+**Reply time.** The "Usually replies in ~X h" line is computed automatically
+from the median of the last 20 replies and stays hidden below 5 replied
+enquiries. Nothing in the console sets it by hand; if it looks wrong, check the
+inbox for very old unanswered-then-answered leads.
+
+**Audit and rate limits.** Every verify/unverify/hide/restore writes one
+platform audit row and one tenant audit row, and is behind
+`platformWriteLimiter`. A repeated action is idempotent (`changed: false`) and
+does not write a second row.
+
+**Launch gate.** Read-only; run against the target database before announcing
+the directory:
+
+```bash
+cd backend
+npx tsx scripts/launch-gate-m9.mts
+```
+
+It checks three things and exits `1` while any fails:
+
+1. at least five published, verified profiles on active agencies;
+2. every one of those profiles has at least one published, non-hidden package
+   with a price (so "from ₹…" is never a bluff);
+3. at least one lead has been replied/quoted/won — the end-to-end test enquiry.
+
+Re-run it after the last delisting or verification change. It writes nothing, so
+it is safe against production.
 
 ---
 

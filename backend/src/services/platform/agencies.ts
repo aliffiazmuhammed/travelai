@@ -4,6 +4,7 @@ import Agency, {
   type IAgency,
   type IAgencyBilling,
 } from '../../models/Agency.js';
+import AgencyProfile from '../../models/AgencyProfile.js';
 import AgencyInvite from '../../models/AgencyInvite.js';
 import AgencyMember from '../../models/AgencyMember.js';
 import PlatformAudit, { type IPlatformAudit } from '../../models/PlatformAudit.js';
@@ -21,6 +22,7 @@ import type {
 import type { LinkOriginHints } from '../collab/invites.js';
 import { AGENCY_ROLE_RANK, type AgencyRole } from '../agency/access.js';
 import { recordAgencyAudit } from '../agency/audit.js';
+import { publicProfileFilter } from '../directory/profile.js';
 import {
   changeAgencyMemberRole as changeMemberRoleService,
   removeAgencyMember as removeMemberService,
@@ -39,6 +41,10 @@ import {
 } from '../agency/plan.js';
 import { resetAgencyPassword, type ClientContext } from './accounts.js';
 import { recordPlatformAudit } from './audit.js';
+import {
+  loadDirectoryAdminView,
+  type DirectoryAdminView,
+} from './directoryAdmin.js';
 
 /**
  * Platform agency lifecycle and access operations (PA4).
@@ -107,6 +113,8 @@ export interface PlatformAgencyDetail extends PlatformAgencyRow {
   members: PlatformAgencyMemberRow[];
   pendingInvites: number;
   recentAudit: PlatformAuditEntry[];
+  /** Public directory state, packages and readiness (M9 D7). */
+  directory: DirectoryAdminView;
 }
 
 export interface PlatformAgencyListResult {
@@ -405,17 +413,51 @@ function buildAgencyFilter(query: AgencyListQuery): FilterQuery<IAgency> {
   return clauses.length === 0 ? {} : { $and: clauses };
 }
 
+/**
+ * Directory-state filter. Profile rows own publication, so the console resolves
+ * the requested state to agency ids once and then reuses the existing filters.
+ * An empty id set is kept as `$in: []` so "no matches" is explicit.
+ */
+async function profileFilterClause(
+  profile: AgencyListQuery['profile']
+): Promise<FilterQuery<IAgency> | null> {
+  if (profile === 'all') return null;
+  const rows = (await AgencyProfile.find(
+    profile === 'published'
+      ? publicProfileFilter()
+      : { 'moderation.hiddenAt': { $ne: null } }
+  )
+    .select('agencyId')
+    .lean()) as Array<{ agencyId: mongoose.Types.ObjectId }>;
+  return { _id: { $in: rows.map((row) => row.agencyId) } };
+}
+
+function appendClause(
+  filter: FilterQuery<IAgency>,
+  clause: FilterQuery<IAgency>
+): FilterQuery<IAgency> {
+  const existing = filter.$and as FilterQuery<IAgency>[] | undefined;
+  if (existing) return { $and: [...existing, clause] };
+  if (Object.keys(filter).length === 0) return clause;
+  return { $and: [filter, clause] };
+}
+
 /** Directory list. Usage totals are computed on the detail view. */
 export async function listAgencies(
   query: AgencyListQuery
 ): Promise<PlatformAgencyListResult> {
-  const filter = buildAgencyFilter(query);
+  const profileClause = await profileFilterClause(query.profile);
+  const baseQuery = buildAgencyFilter(query);
+  const filter = profileClause
+    ? appendClause(baseQuery, profileClause)
+    : baseQuery;
 
-  const baseClauses = (filter.$and as FilterQuery<IAgency>[] | undefined)?.filter(
-    (clause) => !('status' in clause)
-  );
+  const allClauses =
+    (filter.$and as FilterQuery<IAgency>[] | undefined) ??
+    (Object.keys(filter).length > 0 ? [filter] : []);
+  const baseClauses = allClauses.filter((clause) => !('status' in clause));
   const baseFilter: FilterQuery<IAgency> =
-    baseClauses && baseClauses.length > 0 ? { $and: baseClauses } : {};
+    baseClauses.length > 0 ? { $and: baseClauses } : {};
 
   const [agencies, total, statusRows] = await Promise.all([
     Agency.find(filter)
@@ -484,7 +526,7 @@ export async function getAgencyDetail(id: string): Promise<PlatformAgencyDetail>
   const { memberships, users } = await loadMemberRows(id);
 
   const now = new Date();
-  const [usage, pendingInvites, auditRows] = await Promise.all([
+  const [usage, pendingInvites, auditRows, directory] = await Promise.all([
     agencyUsage(id),
     AgencyInvite.countDocuments({
       agencyId: id,
@@ -502,6 +544,7 @@ export async function getAgencyDetail(id: string): Promise<PlatformAgencyDetail>
       .limit(12)
       .select('actorId action targetType targetId metadata ip createdAt')
       .lean() as unknown as Promise<AuditLean[]>,
+    loadDirectoryAdminView(id),
   ]);
 
   const ordered = sortMembers(memberships);
@@ -530,6 +573,7 @@ export async function getAgencyDetail(id: string): Promise<PlatformAgencyDetail>
     members,
     pendingInvites,
     recentAudit: await projectAuditRows(auditRows),
+    directory,
   };
 }
 

@@ -118,11 +118,13 @@ test('the agency list schema defaults to the full directory', () => {
   assert.deepEqual(parsed, {
     q: '',
     status: 'all',
+    profile: 'all',
     planTierId: 'all',
     page: 1,
     limit: 25,
   });
   assert.throws(() => agencyListQuerySchema.parse({ status: 'deleted' }));
+  assert.throws(() => agencyListQuerySchema.parse({ profile: 'draft' }));
   assert.throws(() => agencyListQuerySchema.parse({ unknown: true }));
 });
 

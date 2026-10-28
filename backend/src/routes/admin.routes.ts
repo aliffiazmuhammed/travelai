@@ -14,15 +14,21 @@ import {
   agencyOwnerPreview,
   agencyPlans,
   createAgencyTenant,
+  hideAgencyPackage,
+  hideAgencyProfile,
   inviteAgencyMember,
   listAgencies,
   platformAudit,
   removeAgencyMember,
   resetAgencyMemberPassword,
+  restoreAgencyPackage,
+  restoreAgencyProfile,
   transferAgencyOwner,
+  unverifyAgencyProfile,
   updateAgencyMemberRole,
   updateAgencyPlan,
   updateAgencyStatus,
+  verifyAgencyProfile,
 } from '../controllers/adminAgencies.controller.js';
 import {
   dismissReportedContent,
@@ -133,6 +139,40 @@ router.post(
   '/agencies/:id/members/:userId/reset-password',
   platformWriteLimiter,
   resetAgencyMemberPassword
+);
+
+// M9 D7 directory operations. Verification is a badge only; a hide takes the
+// profile or one package off every public surface (listing, facets, direct URL,
+// cover bytes) until ops restores it. Every action is audited.
+router.post(
+  '/agencies/:id/directory/verify',
+  platformWriteLimiter,
+  verifyAgencyProfile
+);
+router.post(
+  '/agencies/:id/directory/unverify',
+  platformWriteLimiter,
+  unverifyAgencyProfile
+);
+router.post(
+  '/agencies/:id/directory/hide',
+  platformWriteLimiter,
+  hideAgencyProfile
+);
+router.post(
+  '/agencies/:id/directory/restore',
+  platformWriteLimiter,
+  restoreAgencyProfile
+);
+router.post(
+  '/agencies/:id/directory/packages/:packageId/hide',
+  platformWriteLimiter,
+  hideAgencyPackage
+);
+router.post(
+  '/agencies/:id/directory/packages/:packageId/restore',
+  platformWriteLimiter,
+  restoreAgencyPackage
 );
 
 // PA4 audit viewer. Platform action history only; tenant audit rows stay in the

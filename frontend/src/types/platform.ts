@@ -211,6 +211,7 @@ export interface PlatformAgencyInput {
 
 export type PlatformAgencyStatus = 'active' | 'suspended';
 export type PlatformAgencyStatusFilter = 'all' | PlatformAgencyStatus;
+export type PlatformAgencyProfileFilter = 'all' | 'published' | 'hidden';
 export type PlatformAgencyRole = 'owner' | 'admin' | 'planner' | 'viewer';
 
 export interface PlatformAgencyPlanLimits {
@@ -282,6 +283,43 @@ export interface PlatformAgencyDetail extends PlatformAgencyRow {
   members: PlatformAgencyMember[];
   pendingInvites: number;
   recentAudit: PlatformAuditRow[];
+  /** Public directory state and packages (M9 D7). */
+  directory: PlatformAgencyDirectory;
+}
+
+/** Ops view of one public profile row (M9 D7). */
+export interface PlatformAgencyDirectoryProfile {
+  state: 'draft' | 'published' | 'hidden';
+  publishedAt: string | null;
+  verifiedAt: string | null;
+  hiddenAt: string | null;
+  hiddenReason: string | null;
+  ready: boolean;
+  missing: string[];
+  replyTimeHours: number | null;
+}
+
+export interface PlatformAgencyDirectoryPackage {
+  id: string;
+  title: string;
+  state: 'draft' | 'published';
+  pricePerPerson: number | null;
+  currency: string;
+  publishedAt: string | null;
+  hiddenAt: string | null;
+  hiddenReason: string | null;
+}
+
+export interface PlatformAgencyDirectory {
+  slug: string;
+  profile: PlatformAgencyDirectoryProfile | null;
+  packages: PlatformAgencyDirectoryPackage[];
+}
+
+export interface PlatformAgencyDirectoryMutation {
+  success: boolean;
+  changed: boolean;
+  directory: PlatformAgencyDirectory;
 }
 
 export interface PlatformAgencyList {
@@ -297,6 +335,7 @@ export interface PlatformAgencyList {
 export interface PlatformAgencyQuery {
   q?: string;
   status?: PlatformAgencyStatusFilter;
+  profile?: PlatformAgencyProfileFilter;
   planTierId?: string;
   page?: number;
   limit?: number;
@@ -392,8 +431,19 @@ export interface PlatformModerationProfile {
   status: string;
 }
 
+/** An agency directory profile (M9 D5); `slug` opens the public page. */
+export interface PlatformModerationAgency {
+  _id: string;
+  name: string;
+  slug: string;
+  status: string;
+  profileState: string;
+  city?: string;
+  hidden: boolean;
+}
+
 export interface PlatformModerationGroup {
-  targetType: 'trip' | 'profile';
+  targetType: 'trip' | 'profile' | 'agency_profile';
   targetId: string;
   reportCount: number;
   lastReportedAt: string;
@@ -402,6 +452,7 @@ export interface PlatformModerationGroup {
   hidden: boolean;
   trip?: PlatformModerationTrip;
   profile?: PlatformModerationProfile;
+  agency?: PlatformModerationAgency;
 }
 
 export interface PlatformModerationList {

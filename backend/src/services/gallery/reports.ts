@@ -10,19 +10,25 @@ import User from '../../models/User.js';
 import { AppError } from '../../utils/AppError.js';
 import { emitTripUpdated } from '../collab/presence.js';
 import { normalizeHandle } from '../user/profile.js';
+import { loadPublicAgencyRecord } from '../directory/profile.js';
 
 /**
- * Reporting and automatic gallery hiding (Milestone 8 G6).
+ * Reporting and automatic gallery hiding (Milestone 8 G6, extended in M9 D5).
  *
- * Two decisions define this module:
+ * Three decisions define this module:
  *
- * 1. **Only public, personal content is reportable.** A private draft is not
- *    in front of strangers, and agency content never enters the gallery.
+ * 1. **Only public content is reportable.** A private draft is not in front of
+ *    strangers, and agency content never enters the gallery — but a published
+ *    agency directory profile is public, so it is reportable in its own right.
  * 2. **Auto-hide is a query flip, not a delete.** At three distinct open
  *    reports the trip gains `moderation.hiddenAt`; every public read already
  *    intersects `publicTripClauses()`, so the listing, traveler page, clone
  *    and join all drop it together. The owner's document is untouched, which
  *    is what lets an admin dismissal restore it.
+ * 3. **Businesses are never auto-hidden.** A personal profile and an agency
+ *    profile only enter the ops queue; taking a company page down is a manual
+ *    decision (M9 defaults), because one coordinated report burst must not
+ *    erase a legitimate listing.
  *
  * A report row is one per reporter per target (unique index). Reporting your
  * own trip or profile is refused — self-reports are not a moderation signal.
@@ -82,10 +88,11 @@ function normalizeNote(note: unknown): string | undefined {
 /**
  * Checks that the target exists and is publicly visible.
  *
- * A trip is addressed by id. A profile is addressed by its **public handle**
- * — that is the only identifier the public page ever receives, and it keeps
- * internal user ids out of the visitor's browser. The resolved user id is what
- * gets stored on the report row, so the admin queue can join on it later.
+ * A trip is addressed by id. A personal profile is addressed by its **public
+ * handle** — that is the only identifier the public page ever receives, and it
+ * keeps internal user ids out of the visitor's browser. An agency profile
+ * (M9 D5) is addressed by its directory slug for the same reason; the report
+ * row stores the owning Agency id so ops can hide/restore by tenant.
  *
  * The owner id is returned for trips so the caller can refuse a self-report. A
  * target that is already hidden is still reportable: a visitor may have loaded
@@ -97,6 +104,12 @@ async function loadReportableTarget(
   reporterId: string
 ): Promise<{ ownerId?: string; targetId: string }> {
   const ref = String(targetRef ?? '').trim();
+
+  if (targetType === 'agency_profile') {
+    const record = await loadPublicAgencyRecord(ref);
+    if (!record) throw new AppError('That content could not be found.', 404);
+    return { targetId: String(record.agency._id) };
+  }
 
   if (targetType === 'trip') {
     if (!isObjectId(ref)) {
@@ -231,8 +244,9 @@ export async function createReport(input: {
     throw error;
   }
 
-  // Profiles are queue-only: hiding a profile would remove every trip they
-  // own, which is an explicit admin decision rather than an automated flip.
+  // Personal and agency profiles are queue-only: hiding a personal profile
+  // would remove every trip they own, and hiding an agency page is a manual
+  // business decision. Both are explicit admin actions, never an auto flip.
   if (input.targetType !== 'trip' || !ownerId) {
     return { report: projectReport(report), hidden: false };
   }

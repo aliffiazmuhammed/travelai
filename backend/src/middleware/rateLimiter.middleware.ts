@@ -441,6 +441,24 @@ export const publicGalleryLimiter = rateLimit({
 });
 
 /**
+ * Public agency directory (M9 D3). Listing, facets, profile and logo share one
+ * IP bucket: a single directory page fires the listing, the facets and up to a
+ * page of logos, so splitting them would only multiply the allowance. 180
+ * reads / 15 min matches the gallery brake.
+ */
+export const publicDirectoryLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 180,
+  message: {
+    success: false,
+    error: 'Too many directory requests. Please slow down and try again shortly.',
+    message: 'Too many directory requests. Please slow down and try again shortly.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
  * Public proposal accept (A7) — the only public write. The 256-bit token is
  * the capability, but acceptance changes commercial state, so the brake is
  * tighter than the read limiter: 20 accepts / 15 min / IP.
@@ -505,6 +523,83 @@ export const agencyAssetUploadAgencyLimiter = rateLimit({
     success: false,
     error: 'This agency has reached its hourly asset upload limit. Please try again in an hour.',
     message: 'This agency has reached its hourly asset upload limit. Please try again in an hour.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/* -------------------------------------------------------------------------- */
+/*  Public agency enquiries (M9 D5)                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The enquiry form is the directory's only anonymous **write**, so it carries
+ * three stacked daily buckets. Each covers a different abuse:
+ *
+ * - **IP** — one household or office cannot flood an agency from one address.
+ * - **Email** — a single traveller cannot spray every agency from changing IPs
+ *   (and a typo'd retry does not eat the whole IP budget).
+ * - **Agency** — no single listing can be buried in a lead flood meant to make
+ *   the inbox useless.
+ *
+ * The email key is the submitted address, lowercased and trimmed. A missing or
+ * malformed address falls back to the IP key rather than a shared `unknown`
+ * bucket, so bad input cannot lock every visitor out at once.
+ */
+export const ENQUIRY_IP_DAILY_LIMIT = 5;
+export const ENQUIRY_EMAIL_DAILY_LIMIT = 3;
+export const ENQUIRY_AGENCY_DAILY_LIMIT = 50;
+
+const enquiryEmailKey = (req: any): string => {
+  const raw = req?.body?.email;
+  const email = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+  return email ? `email:${email}` : `ip:${req?.ip ?? 'anonymous'}`;
+};
+
+const enquiryAgencyKey = (req: any): string => {
+  const slug = typeof req?.params?.slug === 'string' ? req.params.slug.trim() : '';
+  return slug ? `agency:${slug}` : `ip:${req?.ip ?? 'anonymous'}`;
+};
+
+const ENQUIRY_LIMIT_COPY = 'You have sent the maximum number of enquiries for today. Please try again tomorrow.';
+
+export const enquiryIpLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000,
+  max: ENQUIRY_IP_DAILY_LIMIT,
+  message: {
+    success: false,
+    error: ENQUIRY_LIMIT_COPY,
+    message: ENQUIRY_LIMIT_COPY,
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+export const enquiryEmailLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000,
+  max: ENQUIRY_EMAIL_DAILY_LIMIT,
+  keyGenerator: enquiryEmailKey,
+  validate: false,
+  message: {
+    success: false,
+    error: ENQUIRY_LIMIT_COPY,
+    message: ENQUIRY_LIMIT_COPY,
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+export const enquiryAgencyLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000,
+  max: ENQUIRY_AGENCY_DAILY_LIMIT,
+  keyGenerator: enquiryAgencyKey,
+  validate: false,
+  message: {
+    success: false,
+    error:
+      'This agency has received the maximum number of enquiries for today. Please try again tomorrow.',
+    message:
+      'This agency has received the maximum number of enquiries for today. Please try again tomorrow.',
   },
   standardHeaders: true,
   legacyHeaders: false,

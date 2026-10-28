@@ -15,6 +15,12 @@ export interface IAgencyClient extends Document {
   phone?: string;
   company?: string;
   notes?: string;
+  /**
+   * The directory enquiry that first brought this person in (M9 D6). Optional:
+   * clients added by hand have no source. A unique partial index makes
+   * "convert this enquiry" idempotent even under two simultaneous clicks.
+   */
+  sourceEnquiryId?: Types.ObjectId | null;
   createdBy: Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
@@ -55,6 +61,11 @@ const agencyClientSchema = new Schema<IAgencyClient>(
       trim: true,
       maxlength: 1000,
     },
+    sourceEnquiryId: {
+      type: Schema.Types.ObjectId,
+      ref: 'AgencyEnquiry',
+      default: null,
+    },
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',
@@ -67,5 +78,15 @@ const agencyClientSchema = new Schema<IAgencyClient>(
 // The directory lists one tenant's clients alphabetically.
 agencyClientSchema.index({ agencyId: 1, name: 1 });
 agencyClientSchema.index({ agencyId: 1, createdAt: -1 });
+// One converted client per enquiry. Partial so hand-added clients (null) are
+// unaffected; a concurrent double-convert loses the race instead of duplicating.
+agencyClientSchema.index(
+  { agencyId: 1, sourceEnquiryId: 1 },
+  {
+    name: 'agencyId_1_sourceEnquiryId_1',
+    unique: true,
+    partialFilterExpression: { sourceEnquiryId: { $type: 'objectId' } },
+  }
+);
 
 export default mongoose.model<IAgencyClient>('AgencyClient', agencyClientSchema);

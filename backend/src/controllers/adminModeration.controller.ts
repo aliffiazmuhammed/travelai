@@ -26,7 +26,9 @@ function clientContext(req: AuthenticatedRequest) {
 }
 
 function targetTypeOf(value: unknown): ReportTargetType {
-  if (value === 'trip' || value === 'profile') return value;
+  if (value === 'trip' || value === 'profile' || value === 'agency_profile') {
+    return value;
+  }
   throw new AppError('Unknown moderation target.', 400);
 }
 

@@ -78,8 +78,23 @@ test('A1-A8 agency API exposes the expected route table', () => {
     '/proposals/:token GET',
     '/proposals/:token/accept POST',
     '/proposals/:token/pdf GET',
+    '/enquiries GET',
+    '/enquiries/summary GET',
+    '/enquiries/:enquiryId GET',
+    '/enquiries/:enquiryId PATCH',
+    '/enquiries/:enquiryId/convert POST',
     '/:agencyId GET',
     '/:agencyId PATCH',
+    '/:agencyId/profile GET',
+    '/:agencyId/profile PUT',
+    '/:agencyId/profile/publish POST',
+    '/:agencyId/profile/unpublish POST',
+    '/:agencyId/packages GET',
+    '/:agencyId/packages POST',
+    '/:agencyId/packages/:packageId PATCH',
+    '/:agencyId/packages/:packageId/publish POST',
+    '/:agencyId/packages/:packageId/unpublish POST',
+    '/:agencyId/packages/:packageId DELETE',
     '/:agencyId/assets GET',
     '/:agencyId/assets POST',
     '/:agencyId/assets/:assetId DELETE',
@@ -220,6 +235,12 @@ test('every tenant-scoped route carries a tenant guard', () => {
 test('team, settings, trash, assets and invite management require admin rank', () => {
   const adminRoutes = new Set([
     '/:agencyId PATCH',
+    '/:agencyId/profile PUT',
+    '/:agencyId/profile/publish POST',
+    '/:agencyId/profile/unpublish POST',
+    '/:agencyId/packages/:packageId/publish POST',
+    '/:agencyId/packages/:packageId/unpublish POST',
+    '/:agencyId/packages/:packageId DELETE',
     '/:agencyId/assets POST',
     '/:agencyId/assets/:assetId DELETE',
     '/:agencyId/trash GET',
@@ -262,6 +283,8 @@ test('team, settings, trash, assets and invite management require admin rank', (
 test('read-only tenant routes require membership, not admin', () => {
   const readRoutes = new Set([
     '/:agencyId GET',
+    '/:agencyId/profile GET',
+    '/:agencyId/packages GET',
     '/:agencyId/assets GET',
     '/:agencyId/assets/:assetId/content GET',
     '/:agencyId/clients GET',
@@ -287,6 +310,8 @@ test('trip writes, directory writes, quote actions and exports require planner r
     '/:agencyId/clients POST',
     '/:agencyId/clients/:clientId PATCH',
     '/:agencyId/clients/:clientId DELETE',
+    '/:agencyId/packages POST',
+    '/:agencyId/packages/:packageId PATCH',
     '/:agencyId/trips POST',
     '/:agencyId/trips/:tripId PATCH',
     '/:agencyId/trips/:tripId/exports/preview POST',
@@ -298,6 +323,8 @@ test('trip writes, directory writes, quote actions and exports require planner r
     '/:agencyId/trips/:tripId/quote/send POST',
     '/:agencyId/trips/:tripId/quote/accept POST',
     '/:agencyId/trips/:tripId/quote/cancel POST',
+    '/enquiries/:enquiryId PATCH',
+    '/enquiries/:enquiryId/convert POST',
   ]);
   for (const layer of routeLayers()) {
     const key = `${pathOf(layer)} ${methodsOf(layer).join(',')}`;

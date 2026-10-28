@@ -67,6 +67,9 @@ function targetHeading(group: PlatformModerationGroup): string {
   if (group.targetType === 'trip') {
     return group.trip?.title ?? 'Deleted trip';
   }
+  if (group.targetType === 'agency_profile') {
+    return group.agency?.name ?? 'Deleted agency';
+  }
   return group.profile?.handle ? `@${group.profile.handle}` : group.profile?.name ?? 'Deleted profile';
 }
 
@@ -76,6 +79,13 @@ function targetSubheading(group: PlatformModerationGroup): string {
     if (!trip) return 'The trip no longer exists. Reports are kept for the audit trail.';
     const publisher = trip.publisherHandle ? `@${trip.publisherHandle}` : trip.publisherName;
     return [trip.destination, publisher, trip.visibility].filter(Boolean).join(' · ');
+  }
+  if (group.targetType === 'agency_profile') {
+    const agency = group.agency;
+    if (!agency) return 'The agency no longer exists.';
+    return [agency.slug, agency.city, agency.status, `profile ${agency.profileState}`]
+      .filter(Boolean)
+      .join(' · ');
   }
   const profile = group.profile;
   if (!profile) return 'The profile no longer exists.';
@@ -168,7 +178,8 @@ const AdminReports: React.FC = () => {
           </h1>
           <p className="mt-1 text-sm text-slate-400">
             Only content a traveller has reported appears here. Three distinct open
-            reports hide a trip automatically while it waits for review.
+            reports hide a trip automatically while it waits for review; profiles and
+            agency pages are always reviewed manually.
           </p>
         </div>
         <Button
@@ -234,7 +245,8 @@ const AdminReports: React.FC = () => {
               {status === 'open' ? 'Nothing is waiting for review.' : 'Nothing in this tab.'}
             </p>
             <p className="text-xs text-slate-500">
-              Reported trips and profiles appear here as soon as a traveller flags them.
+              Reported trips, profiles and agency pages appear here as soon as a
+              traveller flags them.
             </p>
           </CardContent>
         </Card>
@@ -243,7 +255,8 @@ const AdminReports: React.FC = () => {
           {groups.map((group) => {
             const key = `${group.targetType}:${group.targetId}`;
             const isProfile = group.targetType === 'profile';
-            const canHide = !isProfile && !group.hidden;
+            const isAgency = group.targetType === 'agency_profile';
+            const canHide = group.targetType === 'trip' && !group.hidden;
 
             return (
               <Card key={key} className="border-slate-800 bg-slate-900/60">
@@ -255,12 +268,14 @@ const AdminReports: React.FC = () => {
                           variant="outline"
                           className={cn(
                             'px-1.5 py-0 text-[10px] font-semibold uppercase tracking-wide',
-                            isProfile
-                              ? 'border-sky-800 bg-sky-950/40 text-sky-300'
-                              : 'border-indigo-800 bg-indigo-950/40 text-indigo-300'
+                            isAgency
+                              ? 'border-amber-800 bg-amber-950/40 text-amber-300'
+                              : isProfile
+                                ? 'border-sky-800 bg-sky-950/40 text-sky-300'
+                                : 'border-indigo-800 bg-indigo-950/40 text-indigo-300'
                           )}
                         >
-                          {isProfile ? 'Profile' : 'Trip'}
+                          {isAgency ? 'Agency' : isProfile ? 'Profile' : 'Trip'}
                         </Badge>
                         <span className="text-sm font-semibold text-slate-100">
                           {targetHeading(group)}
@@ -271,7 +286,11 @@ const AdminReports: React.FC = () => {
                             className="border-rose-900 bg-rose-950/40 px-1.5 py-0 text-[10px] font-semibold uppercase tracking-wide text-rose-300"
                           >
                             <ShieldOff className="mr-1 h-3 w-3" />
-                            {group.trip?.hiddenSource === 'admin' ? 'De-listed' : 'Auto-hidden'}
+                            {isAgency
+                              ? 'Hidden'
+                              : group.trip?.hiddenSource === 'admin'
+                                ? 'De-listed'
+                                : 'Auto-hidden'}
                           </Badge>
                         ) : null}
                       </div>
@@ -316,6 +335,24 @@ const AdminReports: React.FC = () => {
                           </a>
                         </Button>
                       ) : null}
+                      {isAgency && group.agency?.slug ? (
+                        <Button
+                          asChild
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="border-slate-700 bg-slate-900 text-slate-300 hover:text-white"
+                        >
+                          <a
+                            href={`/agencies/${encodeURIComponent(group.agency.slug)}`}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                            Public page
+                          </a>
+                        </Button>
+                      ) : null}
 
                       {status === 'open' && canHide ? (
                         <Button
@@ -342,7 +379,7 @@ const AdminReports: React.FC = () => {
                         </Button>
                       ) : null}
 
-                      {status === 'hidden' && !isProfile && group.hidden ? (
+                      {status === 'hidden' && group.targetType === 'trip' && group.hidden ? (
                         <Button
                           type="button"
                           size="sm"
@@ -454,6 +491,13 @@ const AdminReports: React.FC = () => {
                 <>
                   The reports are closed as dismissed. The profile stays public —
                   disable the account from Accounts if the content itself breaks the
+                  guidelines.
+                </>
+              ) : actionTarget?.group.targetType === 'agency_profile' ? (
+                <>
+                  The reports are closed as dismissed. The agency page stays public;
+                  agency profiles are never hidden automatically. Hide the
+                  directory profile from the agency record if it breaks the
                   guidelines.
                 </>
               ) : (

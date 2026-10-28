@@ -1,4 +1,6 @@
 import mongoose from 'mongoose';
+import Agency from '../../models/Agency.js';
+import AgencyProfile from '../../models/AgencyProfile.js';
 import Trip from '../../models/Trip.js';
 import TripReport, {
   type ReportReason,
@@ -30,7 +32,9 @@ import {
  *
  * Profiles are queue-only: hiding a profile would silently take down every trip
  * its owner has published, so that stays a deliberate account action rather than
- * a one-click moderation side effect.
+ * a one-click moderation side effect. Milestone 9 D5 adds agency directory
+ * profiles on the same rule — reported, summarised here, dismissed here, but
+ * never auto-hidden by a report burst.
  */
 
 export interface ModerationReporter {
@@ -72,6 +76,23 @@ export interface ModerationProfileSummary {
   status: string;
 }
 
+/**
+ * An agency directory profile (M9 D5). Addressed in the queue by the Agency id
+ * stored on the report row; the public page's slug is shown so an operator can
+ * open it in one click.
+ */
+export interface ModerationAgencySummary {
+  _id: string;
+  name: string;
+  slug: string;
+  /** Tenant lifecycle (`active`, `suspended`, …). */
+  status: string;
+  /** Directory profile state (`draft`, `published`, `hidden`). */
+  profileState: string;
+  city?: string;
+  hidden: boolean;
+}
+
 export interface ModerationGroup {
   targetType: ReportTargetType;
   targetId: string;
@@ -82,6 +103,7 @@ export interface ModerationGroup {
   hidden: boolean;
   trip?: ModerationTripSummary;
   profile?: ModerationProfileSummary;
+  agency?: ModerationAgencySummary;
 }
 
 export interface ModerationList {
@@ -198,11 +220,14 @@ export async function listReportedContent(
   const profileIds = groups
     .filter((group) => group._id.targetType === 'profile')
     .map((group) => group._id.targetId);
+  const agencyIds = groups
+    .filter((group) => group._id.targetType === 'agency_profile')
+    .map((group) => group._id.targetId);
   const reporterIds = [
     ...new Set(groups.flatMap((group) => group.reports.map((r) => String(r.reporterId)))),
   ];
 
-  const [trips, profiles, reporters] = await Promise.all([
+  const [trips, profiles, agencies, agencyProfiles, reporters] = await Promise.all([
     tripIds.length
       ? ((await Trip.find({ _id: { $in: tripIds } })
           .select(
@@ -213,6 +238,16 @@ export async function listReportedContent(
     profileIds.length
       ? ((await User.find({ _id: { $in: profileIds } })
           .select('name email profile status')
+          .lean()) as any[])
+      : Promise.resolve([]),
+    agencyIds.length
+      ? ((await Agency.find({ _id: { $in: agencyIds } })
+          .select('name slug status')
+          .lean()) as any[])
+      : Promise.resolve([]),
+    agencyIds.length
+      ? ((await AgencyProfile.find({ agencyId: { $in: agencyIds } })
+          .select('agencyId state baseCity moderation')
           .lean()) as any[])
       : Promise.resolve([]),
     reporterIds.length
@@ -233,6 +268,10 @@ export async function listReportedContent(
 
   const tripMap = new Map(trips.map((trip) => [String(trip._id), trip]));
   const profileMap = new Map(profiles.map((profile) => [String(profile._id), profile]));
+  const agencyMap = new Map(agencies.map((agency) => [String(agency._id), agency]));
+  const agencyProfileMap = new Map(
+    agencyProfiles.map((profile) => [String(profile.agencyId), profile])
+  );
   const reporterMap = new Map(reporters.map((reporter) => [String(reporter._id), reporter]));
   const publisherMap = new Map(publishers.map((user) => [String(user._id), user]));
 
@@ -244,7 +283,18 @@ export async function listReportedContent(
       const id = String(targetId);
       const trip = targetType === 'trip' ? tripMap.get(id) : undefined;
       const profile = targetType === 'profile' ? profileMap.get(id) : undefined;
-      const hidden = Boolean(trip?.moderation?.hiddenAt);
+      const agency =
+        targetType === 'agency_profile' ? agencyMap.get(id) : undefined;
+      const agencyProfile =
+        targetType === 'agency_profile' ? agencyProfileMap.get(id) : undefined;
+      const agencyHidden = Boolean(
+        agencyProfile?.state === 'hidden' ||
+          agencyProfile?.moderation?.hiddenAt
+      );
+      const hidden =
+        targetType === 'agency_profile'
+          ? agencyHidden
+          : Boolean(trip?.moderation?.hiddenAt);
 
       const reports: ModerationReportRow[] = [...group.reports]
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -324,6 +374,20 @@ export async function listReportedContent(
         };
       }
 
+      if (agency) {
+        out.agency = {
+          _id: String(agency._id),
+          name: text(agency.name) || 'An agency',
+          slug: text(agency.slug),
+          status: String(agency.status ?? 'active'),
+          profileState: String(agencyProfile?.state ?? 'missing'),
+          hidden: agencyHidden,
+          ...(text(agencyProfile?.baseCity)
+            ? { city: text(agencyProfile?.baseCity) }
+            : {}),
+        };
+      }
+
       return out;
     }),
   };
@@ -350,20 +414,24 @@ export interface ModerationActionResult {
  * Applies one moderation decision to one target and closes every open report
  * for it. `hide` also de-lists a trip; `dismiss` restores a hidden trip. Both
  * are audited with the number of reports resolved.
+ *
+ * M9 D5 adds agency profiles as a **dismiss-only** target: the manual-moderation
+ * default means a report never takes a business page down automatically, and
+ * this console refuses `hide` (ops hides through the profile itself, so the
+ * agency keeps its own draft intact). Personal profiles behave the same way.
  */
 export async function resolveReportedContent(
   input: ModerationActionInput
 ): Promise<ModerationActionResult> {
-  if (input.targetType === 'trip' && !isObjectId(input.targetId)) {
-    throw new AppError('Reported content not found.', 404);
-  }
-  if (input.targetType === 'profile' && !isObjectId(input.targetId)) {
+  if (!isObjectId(input.targetId)) {
     throw new AppError('Reported content not found.', 404);
   }
 
-  if (input.targetType === 'profile' && input.action === 'hide') {
+  if (input.action === 'hide' && input.targetType !== 'trip') {
     throw new AppError(
-      'Profiles cannot be de-listed from this console. Dismiss the report or disable the account.',
+      input.targetType === 'agency_profile'
+        ? 'Agency profiles cannot be de-listed from this console. Dismiss the report or hide the directory profile itself.'
+        : 'Profiles cannot be de-listed from this console. Dismiss the report or disable the account.',
       400
     );
   }
@@ -371,8 +439,11 @@ export async function resolveReportedContent(
   if (input.targetType === 'trip') {
     const exists = await Trip.exists({ _id: input.targetId });
     if (!exists) throw new AppError('Reported content not found.', 404);
-  } else {
+  } else if (input.targetType === 'profile') {
     const exists = await User.exists({ _id: input.targetId });
+    if (!exists) throw new AppError('Reported content not found.', 404);
+  } else {
+    const exists = await Agency.exists({ _id: input.targetId });
     if (!exists) throw new AppError('Reported content not found.', 404);
   }
 
@@ -404,10 +475,13 @@ export async function resolveReportedContent(
     }
   );
 
-  const target = await Trip.findOne({ _id: input.targetId })
-    .select('moderation')
-    .lean()
-    .catch(() => null);
+  const target =
+    input.targetType === 'trip'
+      ? await Trip.findOne({ _id: input.targetId })
+          .select('moderation')
+          .lean()
+          .catch(() => null)
+      : null;
   const hidden =
     input.targetType === 'trip' ? Boolean((target as any)?.moderation?.hiddenAt) : false;
 

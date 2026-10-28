@@ -1,15 +1,18 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowRight,
   BadgeCheck,
   BriefcaseBusiness,
+  CheckCircle2,
   FileText,
+  Inbox,
   LayoutTemplate,
   Loader2,
   Map,
   Settings,
   Sparkles,
+  Trophy,
   Users,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -18,6 +21,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useAgency } from '@/context/AgencyContext';
 import { agencyRoleBadgeClass, agencyRoleLabel } from '@/lib/agency';
 import { cn } from '@/lib/utils';
+import { api } from '@/services/api';
+import type { AgencyEnquirySummaryView } from '@/types/agency';
 
 const toolCards = [
   {
@@ -48,6 +53,30 @@ const toolCards = [
 
 const AgencyOverview: React.FC = () => {
   const { loading, agencies, activeAgency, canManage } = useAgency();
+  const [enquirySummary, setEnquirySummary] =
+    useState<AgencyEnquirySummaryView | null>(null);
+
+  // D6: a small live funnel on the dashboard. The inbox remains the full view;
+  // this is only a nudge, so a failed fetch leaves the cards empty rather than
+  // blocking the workspace.
+  useEffect(() => {
+    if (!activeAgency?._id) {
+      setEnquirySummary(null);
+      return;
+    }
+    let cancelled = false;
+    void api
+      .getAgencyEnquirySummary()
+      .then((result) => {
+        if (!cancelled) setEnquirySummary(result.summary);
+      })
+      .catch(() => {
+        /* counters only */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeAgency?._id]);
 
   if (loading && agencies.length === 0) {
     return (
@@ -95,7 +124,7 @@ const AgencyOverview: React.FC = () => {
                 variant="outline"
                 className="border-teal-200 bg-teal-50 text-[11px] text-teal-700 dark:border-teal-900 dark:bg-teal-950/40 dark:text-teal-300"
               >
-                Agency workspace A6
+                Agency workspace A9
               </Badge>
             </div>
             <div className="space-y-2">
@@ -167,13 +196,84 @@ const AgencyOverview: React.FC = () => {
         </div>
       </section>
 
+      <section className="grid gap-4 sm:grid-cols-3">
+        <Card className="border-slate-200 dark:border-slate-800">
+          <CardContent className="space-y-2 p-5">
+            <div className="flex items-center justify-between">
+              <span className="grid h-9 w-9 place-items-center rounded-lg bg-teal-50 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300">
+                <Inbox className="h-4 w-4" />
+              </span>
+              <Badge variant="outline" className="text-[10px] text-slate-500">
+                D6 live
+              </Badge>
+            </div>
+            <div>
+              <div className="text-2xl font-semibold">
+                {enquirySummary ? enquirySummary.byStatus.new : '—'}
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                New leads waiting for a first reply
+                {enquirySummary
+                  ? ` · ${enquirySummary.open} open in total`
+                  : ''}
+              </p>
+            </div>
+            <Button asChild size="sm" variant="outline">
+              <Link to="/agency/enquiries">
+                Open inbox <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200 dark:border-slate-800">
+          <CardContent className="space-y-2 p-5">
+            <span className="grid h-9 w-9 place-items-center rounded-lg bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300">
+              <CheckCircle2 className="h-4 w-4" />
+            </span>
+            <div>
+              <div className="text-2xl font-semibold">
+                {enquirySummary ? enquirySummary.repliedThisWeek : '—'}
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Replied in the last 7 days
+                {enquirySummary
+                  ? ` · ${enquirySummary.receivedThisWeek} received`
+                  : ''}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200 dark:border-slate-800">
+          <CardContent className="space-y-2 p-5">
+            <span className="grid h-9 w-9 place-items-center rounded-lg bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300">
+              <Trophy className="h-4 w-4" />
+            </span>
+            <div>
+              <div className="text-2xl font-semibold">
+                {enquirySummary
+                  ? `${Math.round(enquirySummary.conversionRate * 1000) / 10}%`
+                  : '—'}
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Won ÷ all leads
+                {enquirySummary
+                  ? ` · ${enquirySummary.byStatus.won} won`
+                  : ''}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </section>
+
       <section className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-base">Set up checklist</CardTitle>
             <CardDescription>
-              A6 adds custom proposal templates: upload once, preview against a
-              real trip, then activate a version for new exports.
+              Milestone 9 adds your public directory profile, package cards and the
+              lead inbox: publish once, then answer and convert enquiries here.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -252,6 +352,8 @@ const AgencyOverview: React.FC = () => {
             <p>Custom templates need a real-trip preview before activation.</p>
             <p>Planners edit; owners and admins manage sharing and the trash.</p>
             <p>Clients stay trip-scoped and never become agency members.</p>
+            <p>A public directory page turns profile and package views into consented leads.</p>
+            <p>The lead inbox is in-app: claim, reply, quote, then convert to a client.</p>
           </CardContent>
         </Card>
       </section>

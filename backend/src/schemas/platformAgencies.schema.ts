@@ -68,11 +68,14 @@ export type CreateAgencyTenantInput = z.infer<typeof createAgencyTenantSchema>;
 /* -------------------------------------------------------------------------- */
 
 export const AGENCY_STATUS_FILTERS = ['all', 'active', 'suspended'] as const;
+/** Directory-state filter for the ops console (M9 D7). */
+export const AGENCY_PROFILE_FILTERS = ['all', 'published', 'hidden'] as const;
 
 export const agencyListQuerySchema = z
   .object({
     q: z.string().trim().max(120, 'Search is limited to 120 characters.').optional().default(''),
     status: z.enum(AGENCY_STATUS_FILTERS).optional().default('all'),
+    profile: z.enum(AGENCY_PROFILE_FILTERS).optional().default('all'),
     planTierId: z.string().trim().max(40).optional().default('all'),
     page: z.coerce.number().int().min(1).max(10000).optional().default(1),
     limit: z.coerce.number().int().min(1).max(100).optional().default(25),
@@ -82,6 +85,16 @@ export const agencyListQuerySchema = z
 export const agencyStatusSchema = z
   .object({
     status: z.enum(['active', 'suspended']),
+  })
+  .strict();
+
+/**
+ * Ops takedown note (M9 D7). Optional but bounded: the platform audit row and
+ * the tenant log both carry it, so it must never become free storage.
+ */
+export const directoryHideSchema = z
+  .object({
+    reason: z.string().trim().max(500, 'Keep the note under 500 characters.').optional().default(''),
   })
   .strict();
 
@@ -152,3 +165,4 @@ export type AgencyListQuery = z.infer<typeof agencyListQuerySchema>;
 export type AgencyPlanChangeInput = z.infer<typeof agencyPlanChangeSchema>;
 export type AgencyMemberInviteInput = z.infer<typeof agencyMemberInviteSchema>;
 export type PlatformAuditQuery = z.infer<typeof platformAuditQuerySchema>;
+export type DirectoryHideInput = z.infer<typeof directoryHideSchema>;

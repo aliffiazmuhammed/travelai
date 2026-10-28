@@ -1,5 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import Agency from '../../models/Agency.js';
+import AgencyProfile from '../../models/AgencyProfile.js';
 import PlatformAudit from '../../models/PlatformAudit.js';
 import Trip from '../../models/Trip.js';
 import TripReport from '../../models/TripReport.js';
@@ -19,6 +21,7 @@ import {
 
 const TRIP_ID = '64b000000000000000000501';
 const PROFILE_ID = '64b0000000000000000005a1';
+const AGENCY_ID = '64b0000000000000000005b2';
 const REPORTER_ID = '64b0000000000000000005c3';
 const OWNER_ID = '64b0000000000000000005d5';
 const REPORT_ID = '64b0000000000000000005e7';
@@ -26,6 +29,7 @@ const ADMIN_ID = '64b0000000000000000005f9';
 
 let tripExists = true;
 let profileExists = true;
+let agencyExists = true;
 let tripUpdates: Array<{ filter: any; update: any }> = [];
 let reportUpdates: Array<{ filter: any; update: any }> = [];
 let currentTrip: any = { moderation: { hiddenAt: new Date(), source: 'admin' } };
@@ -33,6 +37,8 @@ let listGroups: any[] = [];
 let listTotals: any[] = [];
 let auditWrites: any[] = [];
 let userResults: any[][] = [];
+let agencyResults: any[][] = [];
+let agencyProfileResults: any[][] = [];
 
 const original = {
   tripExists: Trip.exists,
@@ -41,6 +47,9 @@ const original = {
   tripFind: Trip.find,
   userExists: User.exists,
   userFind: User.find,
+  agencyExists: Agency.exists,
+  agencyFind: Agency.find,
+  agencyProfileFind: AgencyProfile.find,
   reportAggregate: TripReport.aggregate,
   reportUpdateMany: TripReport.updateMany,
   auditCreate: PlatformAudit.create,
@@ -58,6 +67,7 @@ function thenable(value: any): any {
 
 (Trip as any).exists = async () => (tripExists ? { _id: TRIP_ID } : null);
 (User as any).exists = async () => (profileExists ? { _id: PROFILE_ID } : null);
+(Agency as any).exists = async () => (agencyExists ? { _id: AGENCY_ID } : null);
 (Trip as any).updateOne = async (filter: any, update: any) => {
   tripUpdates.push({ filter, update });
   // Mirror the write so the post-decision read sees the new marker state.
@@ -71,6 +81,8 @@ function thenable(value: any): any {
 (Trip as any).findOne = () => thenable(currentTrip);
 (Trip as any).find = () => thenable([]);
 (User as any).find = () => thenable(userResults.shift() ?? []);
+(Agency as any).find = () => thenable(agencyResults.shift() ?? []);
+(AgencyProfile as any).find = () => thenable(agencyProfileResults.shift() ?? []);
 (TripReport as any).updateMany = async (filter: any, update: any) => {
   reportUpdates.push({ filter, update });
   return { modifiedCount: 2 };
@@ -89,6 +101,7 @@ function thenable(value: any): any {
 function reset() {
   tripExists = true;
   profileExists = true;
+  agencyExists = true;
   tripUpdates = [];
   reportUpdates = [];
   currentTrip = { moderation: { hiddenAt: new Date(), source: 'admin' } };
@@ -96,6 +109,8 @@ function reset() {
   listTotals = [];
   auditWrites = [];
   userResults = [];
+  agencyResults = [];
+  agencyProfileResults = [];
 }
 
 test('de-list hides the trip, closes reports and writes an audit row', async () => {
@@ -200,6 +215,85 @@ test('profiles are queued but cannot be de-listed from this console', async () =
   assert.equal(reportUpdates[0].update.$set.status, 'dismissed');
 });
 
+test('agency profiles are queued, dismissable, and never de-listed here', async () => {
+  reset();
+
+  await assert.rejects(
+    () =>
+      resolveReportedContent({
+        actorId: ADMIN_ID,
+        targetType: 'agency_profile',
+        targetId: AGENCY_ID,
+        action: 'hide',
+      }),
+    /cannot be de-listed/
+  );
+
+  const dismissed = await resolveReportedContent({
+    actorId: ADMIN_ID,
+    targetType: 'agency_profile',
+    targetId: AGENCY_ID,
+    action: 'dismiss',
+  });
+
+  assert.equal(dismissed.hidden, false);
+  assert.equal(dismissed.changed, false, 'only trips change visibility');
+  assert.equal(tripUpdates.length, 0, 'an agency report must never touch a trip');
+  assert.equal(reportUpdates[0].update.$set.status, 'dismissed');
+  assert.equal(auditWrites[0].targetType, 'agency_profile');
+  assert.equal(auditWrites[0].targetId, AGENCY_ID);
+
+  agencyExists = false;
+  await assert.rejects(
+    () =>
+      resolveReportedContent({
+        actorId: ADMIN_ID,
+        targetType: 'agency_profile',
+        targetId: AGENCY_ID,
+        action: 'dismiss',
+      }),
+    /not found/
+  );
+});
+
+test('an agency profile group carries the tenant and directory summary', async () => {
+  reset();
+  listGroups = [
+    {
+      _id: { targetType: 'agency_profile', targetId: AGENCY_ID },
+      reportCount: 1,
+      lastReportedAt: new Date('2026-10-27T11:00:00.000Z'),
+      reports: [
+        {
+          _id: REPORT_ID,
+          reporterId: REPORTER_ID,
+          reason: 'scam',
+          status: 'open',
+          createdAt: new Date('2026-10-27T11:00:00.000Z'),
+        },
+      ],
+    },
+  ];
+  agencyResults = [
+    [{ _id: AGENCY_ID, name: 'Himalaya Trails', slug: 'himalaya-trails', status: 'active' }],
+  ];
+  agencyProfileResults = [
+    [{ agencyId: AGENCY_ID, state: 'published', baseCity: 'Manali', moderation: {} }],
+  ];
+  userResults = [[{ _id: REPORTER_ID, name: 'Sam', profile: { handle: 'sam' } }]];
+
+  const result = await listReportedContent({ status: 'open', limit: 50 });
+
+  assert.equal(result.groups.length, 1);
+  const group = result.groups[0];
+  assert.equal(group.targetType, 'agency_profile');
+  assert.equal(group.agency?.slug, 'himalaya-trails');
+  assert.equal(group.agency?.city, 'Manali');
+  assert.equal(group.agency?.profileState, 'published');
+  assert.equal(group.hidden, false);
+  assert.equal(group.reports[0].reporter?.handle, 'sam');
+});
+
 test('the reported-content listing groups by target and carries triage context', async () => {
   reset();
   listGroups = [
@@ -265,6 +359,9 @@ test.after(() => {
   (Trip as any).find = original.tripFind;
   (User as any).exists = original.userExists;
   (User as any).find = original.userFind;
+  (Agency as any).exists = original.agencyExists;
+  (Agency as any).find = original.agencyFind;
+  (AgencyProfile as any).find = original.agencyProfileFind;
   (TripReport as any).aggregate = original.reportAggregate;
   (TripReport as any).updateMany = original.reportUpdateMany;
   (PlatformAudit as any).create = original.auditCreate;

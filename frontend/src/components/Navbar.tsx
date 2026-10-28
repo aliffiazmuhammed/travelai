@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/context/UserContext";
 import { useGalleryEnabled } from "@/hooks/useGalleryEnabled";
+import { useAgencyDirectoryEnabled } from "@/hooks/useAgencyDirectoryEnabled";
 import { avatarSrc, initialsFor } from "@/lib/avatar";
 import { cn } from "@/lib/utils";
 
@@ -54,9 +55,13 @@ const Navbar = () => {
   // only once the gallery holds at least 5 published trips, so the link is never
   // offered to an empty room. Direct `/explore` links keep working regardless.
   const galleryEnabled = useGalleryEnabled();
+  // Milestone 9 D3: the same content gate for agencies — five published
+  // profiles before the link is offered, while `/agencies` stays reachable.
+  const directoryEnabled = useAgencyDirectoryEnabled();
   const navItems = [
     { label: "Home", path: "/" },
     ...(galleryEnabled === true ? [{ label: "Explore", path: "/explore" }] : []),
+    ...(directoryEnabled === true ? [{ label: "Agencies", path: "/agencies" }] : []),
     { label: "Plan Trip", path: "/plan" },
     { label: "My Trips", path: "/dashboard" },
   ];

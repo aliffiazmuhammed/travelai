@@ -49,6 +49,27 @@ import type {
   AgencyBranding,
   AgencyClient,
   AgencyHealth,
+  AgencyDirectoryProfileInput,
+  AgencyDirectoryProfilePayload,
+  AgencyDirectoryProfileResponse,
+  AgencyDirectoryFacetsResponse,
+  AgencyDirectoryFilters,
+  AgencyDirectoryPage,
+  AgencyDirectoryPublicProfileResponse,
+  AgencyEnquiry,
+  AgencyEnquiryAcknowledgement,
+  AgencyEnquiryConversion,
+  AgencyEnquiryFilters,
+  AgencyEnquiryInput,
+  AgencyEnquiryPage,
+  AgencyEnquirySummary,
+  AgencyEnquiryUpdateInput,
+  AgencyEnquiryUpdateResult,
+  AgencyPackage,
+  AgencyPackageCreateInput,
+  AgencyPackageInput,
+  AgencyPackageListResponse,
+  AgencyPackageResponse,
   AgencyInvite,
   AgencyInvitePreview,
   AgencyInvitableRole,
@@ -86,6 +107,7 @@ import type {
   PlatformAdminList,
   PlatformOverview,
   PlatformAgencyDetail,
+  PlatformAgencyDirectoryMutation,
   PlatformAgencyInput,
   PlatformAgencyInviteResult,
   PlatformAgencyList,
@@ -126,6 +148,9 @@ function agencyQueryString(params: PlatformAgencyQuery): string {
   const search = new URLSearchParams();
   if (params.q) search.set('q', params.q);
   if (params.status && params.status !== 'all') search.set('status', params.status);
+  if (params.profile && params.profile !== 'all') {
+    search.set('profile', params.profile);
+  }
   if (params.planTierId && params.planTierId !== 'all') {
     search.set('planTierId', params.planTierId);
   }
@@ -760,6 +785,66 @@ class ApiClient {
     );
   }
 
+  // M9 D7 directory operations. Verification changes the public badge only;
+  // hide/restore removes or returns a profile/package on every public surface.
+  async verifyAdminAgencyProfile(
+    id: string
+  ): Promise<PlatformAgencyDirectoryMutation> {
+    return this.request(
+      `/api/admin/agencies/${encodeURIComponent(id)}/directory/verify`,
+      { method: 'POST' }
+    );
+  }
+
+  async unverifyAdminAgencyProfile(
+    id: string
+  ): Promise<PlatformAgencyDirectoryMutation> {
+    return this.request(
+      `/api/admin/agencies/${encodeURIComponent(id)}/directory/unverify`,
+      { method: 'POST' }
+    );
+  }
+
+  async hideAdminAgencyProfile(
+    id: string,
+    reason: string
+  ): Promise<PlatformAgencyDirectoryMutation> {
+    return this.request(
+      `/api/admin/agencies/${encodeURIComponent(id)}/directory/hide`,
+      { method: 'POST', body: JSON.stringify({ reason }) }
+    );
+  }
+
+  async restoreAdminAgencyProfile(
+    id: string
+  ): Promise<PlatformAgencyDirectoryMutation> {
+    return this.request(
+      `/api/admin/agencies/${encodeURIComponent(id)}/directory/restore`,
+      { method: 'POST' }
+    );
+  }
+
+  async hideAdminAgencyPackage(
+    id: string,
+    packageId: string,
+    reason: string
+  ): Promise<PlatformAgencyDirectoryMutation> {
+    return this.request(
+      `/api/admin/agencies/${encodeURIComponent(id)}/directory/packages/${encodeURIComponent(packageId)}/hide`,
+      { method: 'POST', body: JSON.stringify({ reason }) }
+    );
+  }
+
+  async restoreAdminAgencyPackage(
+    id: string,
+    packageId: string
+  ): Promise<PlatformAgencyDirectoryMutation> {
+    return this.request(
+      `/api/admin/agencies/${encodeURIComponent(id)}/directory/packages/${encodeURIComponent(packageId)}/restore`,
+      { method: 'POST' }
+    );
+  }
+
   async listAdminAudit(params: PlatformAuditQuery = {}): Promise<PlatformAuditList> {
     return this.request(`/api/admin/audit${auditQueryString(params)}`);
   }
@@ -774,7 +859,7 @@ class ApiClient {
   }
 
   async hideReportedContent(
-    targetType: 'trip' | 'profile',
+    targetType: 'trip' | 'profile' | 'agency_profile',
     targetId: string
   ): Promise<PlatformModerationAction> {
     return this.request(
@@ -784,7 +869,7 @@ class ApiClient {
   }
 
   async dismissReportedContent(
-    targetType: 'trip' | 'profile',
+    targetType: 'trip' | 'profile' | 'agency_profile',
     targetId: string
   ): Promise<PlatformModerationAction> {
     return this.request(
@@ -838,6 +923,146 @@ class ApiClient {
     return this.request(
       `/api/agency/${encodeURIComponent(id)}/assets/${encodeURIComponent(assetId)}`,
       { method: 'DELETE' }
+    );
+  }
+
+  /** M9 D2: the tenant's own public-directory profile + publish readiness. */
+  async getAgencyDirectoryProfile(
+    id: string
+  ): Promise<AgencyDirectoryProfileResponse> {
+    return this.request(`/api/agency/${encodeURIComponent(id)}/profile`);
+  }
+
+  async saveAgencyDirectoryProfile(
+    id: string,
+    payload: AgencyDirectoryProfileInput
+  ): Promise<AgencyDirectoryProfilePayload> {
+    return this.request(`/api/agency/${encodeURIComponent(id)}/profile`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async publishAgencyDirectoryProfile(
+    id: string
+  ): Promise<AgencyDirectoryProfilePayload> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(id)}/profile/publish`,
+      { method: 'POST' }
+    );
+  }
+
+  async unpublishAgencyDirectoryProfile(
+    id: string
+  ): Promise<AgencyDirectoryProfilePayload> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(id)}/profile/unpublish`,
+      { method: 'POST' }
+    );
+  }
+
+  /** M9 D4: the tenant's package snapshots (planners edit, admins publish). */
+  async listAgencyPackages(id: string): Promise<AgencyPackageListResponse> {
+    return this.request(`/api/agency/${encodeURIComponent(id)}/packages`);
+  }
+
+  async createAgencyPackage(
+    id: string,
+    payload: AgencyPackageCreateInput
+  ): Promise<AgencyPackageResponse> {
+    return this.request(`/api/agency/${encodeURIComponent(id)}/packages`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async updateAgencyPackage(
+    id: string,
+    packageId: string,
+    payload: AgencyPackageInput
+  ): Promise<AgencyPackageResponse> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(id)}/packages/${encodeURIComponent(packageId)}`,
+      { method: 'PATCH', body: JSON.stringify(payload) }
+    );
+  }
+
+  async publishAgencyPackage(
+    id: string,
+    packageId: string
+  ): Promise<AgencyPackageResponse> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(id)}/packages/${encodeURIComponent(packageId)}/publish`,
+      { method: 'POST' }
+    );
+  }
+
+  async unpublishAgencyPackage(
+    id: string,
+    packageId: string
+  ): Promise<AgencyPackageResponse> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(id)}/packages/${encodeURIComponent(packageId)}/unpublish`,
+      { method: 'POST' }
+    );
+  }
+
+  async deleteAgencyPackage(
+    id: string,
+    packageId: string
+  ): Promise<{ success: boolean; id: string }> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(id)}/packages/${encodeURIComponent(packageId)}`,
+      { method: 'DELETE' }
+    );
+  }
+
+  /**
+   * M9 D5: the tenant enquiry inbox. Workspace-addressed (no tenant id in the
+   * path) because the signed-in agency session already names the tenant.
+   */
+  async getAgencyEnquiries(
+    filters: AgencyEnquiryFilters = {}
+  ): Promise<AgencyEnquiryPage> {
+    const query = new URLSearchParams();
+    if (filters.status) query.append('status', filters.status);
+    if (filters.cursor) query.append('cursor', filters.cursor);
+    if (filters.limit) query.append('limit', String(filters.limit));
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    return this.request(`/api/agency/enquiries${suffix}`);
+  }
+
+  async getAgencyEnquiry(
+    enquiryId: string
+  ): Promise<{ success: boolean; enquiry: AgencyEnquiry }> {
+    return this.request(
+      `/api/agency/enquiries/${encodeURIComponent(enquiryId)}`
+    );
+  }
+
+  /** D6: dashboard counters for the inbox (rolling seven-day window). */
+  async getAgencyEnquirySummary(): Promise<AgencyEnquirySummary> {
+    return this.request('/api/agency/enquiries/summary');
+  }
+
+  /** D6: move status, claim or release a lead. */
+  async updateAgencyEnquiry(
+    enquiryId: string,
+    payload: AgencyEnquiryUpdateInput
+  ): Promise<AgencyEnquiryUpdateResult> {
+    return this.request(
+      `/api/agency/enquiries/${encodeURIComponent(enquiryId)}`,
+      { method: 'PATCH', body: JSON.stringify(payload) }
+    );
+  }
+
+  /** D6: idempotent convert to a directory client, marked won. */
+  async convertAgencyEnquiry(
+    enquiryId: string
+  ): Promise<AgencyEnquiryConversion> {
+    return this.request(
+      `/api/agency/enquiries/${encodeURIComponent(enquiryId)}/convert`,
+      { method: 'POST' }
     );
   }
 
@@ -1869,6 +2094,73 @@ class ApiClient {
     tripId: string
   ): Promise<{ success: boolean; trip: GalleryTrip }> {
     return this.request(`/api/explore/${encodeURIComponent(tripId)}`);
+  }
+
+  /** M9 D3: anonymous agency directory listing. */
+  async getAgencies(
+    filters: AgencyDirectoryFilters = {}
+  ): Promise<AgencyDirectoryPage> {
+    const query = new URLSearchParams();
+    if (filters.q?.trim()) query.append('q', filters.q.trim());
+    if (filters.city?.trim()) query.append('city', filters.city.trim());
+    if (filters.destination?.trim()) {
+      query.append('destination', filters.destination.trim());
+    }
+    if (filters.specialty?.trim()) query.append('specialty', filters.specialty.trim());
+    if (filters.language?.trim()) query.append('language', filters.language.trim());
+    if (filters.cursor) query.append('cursor', filters.cursor);
+    if (filters.limit) query.append('limit', String(filters.limit));
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    return this.request(`/api/agencies${suffix}`);
+  }
+
+  /** M9 D3: filter chips with counts for the directory page. */
+  async getAgencyFacets(): Promise<AgencyDirectoryFacetsResponse> {
+    return this.request('/api/agencies/facets');
+  }
+
+  /** M9 D3: one published agency profile. 404 once unpublished or suspended. */
+  async getPublicAgencyProfile(
+    slug: string
+  ): Promise<AgencyDirectoryPublicProfileResponse> {
+    return this.request(`/api/agencies/${encodeURIComponent(slug)}`);
+  }
+
+  /**
+   * M9 D5: send an enquiry to a published agency. Anonymous by design — when the
+   * visitor happens to be signed in the server also attributes the row to their
+   * account, so it appears in `getMyEnquiries`. The response carries an id and
+   * status only, never the contact details.
+   */
+  async submitAgencyEnquiry(
+    slug: string,
+    payload: AgencyEnquiryInput
+  ): Promise<{ success: boolean; enquiry: AgencyEnquiryAcknowledgement }> {
+    return this.request(
+      `/api/agencies/${encodeURIComponent(slug)}/enquiries`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          ...payload,
+          phone: payload.phone?.trim() || undefined,
+          startDate: payload.startDate || undefined,
+          endDate: payload.endDate || undefined,
+          flexible: payload.flexible === true,
+          packageId: payload.packageId || undefined,
+        }),
+      }
+    );
+  }
+
+  /** M9 D5: the signed-in traveller's own enquiry history. */
+  async getMyEnquiries(
+    filters: { cursor?: string; limit?: number } = {}
+  ): Promise<AgencyEnquiryPage> {
+    const query = new URLSearchParams();
+    if (filters.cursor) query.append('cursor', filters.cursor);
+    if (filters.limit) query.append('limit', String(filters.limit));
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    return this.request(`/api/enquiries${suffix}`);
   }
 
   /**

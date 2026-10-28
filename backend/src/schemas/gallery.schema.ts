@@ -60,20 +60,21 @@ export const blockUserSchema = z.object({
 });
 
 /**
- * Report walls (Milestone 8 G6). Shape only: whether the target exists and is
- * reportable, self-reports, duplicate reports and the auto-hide threshold live
- * in `services/gallery/reports.ts`.
+ * Report walls (Milestone 8 G6, extended in M9 D5). Shape only: whether the
+ * target exists and is reportable, self-reports, duplicate reports and the
+ * auto-hide threshold live in `services/gallery/reports.ts`.
  *
  * `targetId` is intentionally not an ObjectId pattern: a trip is addressed by
- * id, but a profile is addressed by its public handle (the only identifier the
- * public page receives). The service resolves either form.
+ * id, a profile by its public handle and an agency profile by its directory
+ * slug (the only identifiers the public pages receive). The service resolves
+ * every form.
  */
 export const REPORT_NOTE_MAX = 500;
 export const REPORT_TARGET_REF_MAX = 40;
 
 export const createReportSchema = z
   .object({
-    targetType: z.enum(['trip', 'profile']),
+    targetType: z.enum(['trip', 'profile', 'agency_profile']),
     targetId: z
       .string()
       .trim()

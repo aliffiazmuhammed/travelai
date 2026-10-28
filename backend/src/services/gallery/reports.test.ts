@@ -1,5 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import Agency from '../../models/Agency.js';
+import AgencyProfile from '../../models/AgencyProfile.js';
 import Trip from '../../models/Trip.js';
 import User from '../../models/User.js';
 import TripReport, {
@@ -27,11 +29,15 @@ const TRIP_ID = '64b000000000000000000401';
 const PROFILE_ID = '64b0000000000000000004a1';
 const REPORTER_ID = '64b0000000000000000004c3';
 const OWNER_ID = '64b0000000000000000004d5';
+const AGENCY_ID = '64b0000000000000000004b7';
 
 let tripRow: any = null;
 let profileRow: any = null;
+let agencyRow: any = null;
+let agencyProfileRow: any = null;
 let lastTripFilter: any = null;
 let lastProfileFilter: any = null;
+let lastAgencyFilter: any = null;
 let distinctCount = 0;
 let createError: any = null;
 let created: any[] = [];
@@ -41,6 +47,8 @@ const original = {
   tripFindOne: Trip.findOne,
   tripUpdateOne: Trip.updateOne,
   userFindOne: User.findOne,
+  agencyFindOne: Agency.findOne,
+  agencyProfileFindOne: AgencyProfile.findOne,
   reportCreate: TripReport.create,
   reportDistinct: TripReport.distinct,
 };
@@ -66,6 +74,11 @@ function thenable(value: any): any {
   lastProfileFilter = filter;
   return thenable(profileRow);
 };
+(Agency as any).findOne = (filter: any) => {
+  lastAgencyFilter = filter;
+  return thenable(agencyRow);
+};
+(AgencyProfile as any).findOne = () => thenable(agencyProfileRow);
 (TripReport as any).create = async (doc: any) => {
   if (createError) throw createError;
   const row = {
@@ -85,8 +98,11 @@ function reset() {
     members: [{ userId: OWNER_ID, role: 'owner' }],
   };
   profileRow = { _id: PROFILE_ID };
+  agencyRow = { _id: AGENCY_ID };
+  agencyProfileRow = { state: 'published', publishedAt: new Date() };
   lastTripFilter = null;
   lastProfileFilter = null;
+  lastAgencyFilter = null;
   distinctCount = 0;
   createError = null;
   created = [];
@@ -198,6 +214,56 @@ test('a profile report by handle resolves to the user id and never auto-hides', 
   assert.equal(result.report.targetId, PROFILE_ID);
 });
 
+test('an agency profile report resolves the slug to the agency id and never auto-hides', async () => {
+  reset();
+  distinctCount = 99;
+
+  const result = await createReport({
+    reporterId: REPORTER_ID,
+    targetType: 'agency_profile',
+    targetId: 'Himalaya-Trails',
+    reason: 'scam',
+  });
+
+  assert.equal(result.hidden, false);
+  assert.equal(tripUpdates.length, 0);
+  // The public page knows only the slug; the queue needs the tenant id so an
+  // operator can hide or restore the agency itself.
+  assert.equal(lastAgencyFilter.slug, 'himalaya-trails');
+  assert.equal(lastAgencyFilter.status, 'active');
+  assert.equal(String(created[0].targetId), AGENCY_ID);
+  assert.equal(result.report.targetId, AGENCY_ID);
+  assert.equal(result.report.targetType, 'agency_profile');
+});
+
+test('an agency profile that is not public cannot be reported', async () => {
+  reset();
+  agencyRow = null;
+  await assert.rejects(
+    () =>
+      createReport({
+        reporterId: REPORTER_ID,
+        targetType: 'agency_profile',
+        targetId: 'himalaya-trails',
+        reason: 'spam',
+      }),
+    /could not be found/
+  );
+
+  reset();
+  agencyProfileRow = null;
+  await assert.rejects(
+    () =>
+      createReport({
+        reporterId: REPORTER_ID,
+        targetType: 'agency_profile',
+        targetId: 'himalaya-trails',
+        reason: 'spam',
+      }),
+    /could not be found/
+  );
+});
+
 test('the report model pins one row per reporter+target and the 3-report threshold', () => {
   assert.equal(AUTO_HIDE_REPORT_THRESHOLD, 3);
 
@@ -227,6 +293,8 @@ test.after(() => {
   (Trip as any).findOne = original.tripFindOne;
   (Trip as any).updateOne = original.tripUpdateOne;
   (User as any).findOne = original.userFindOne;
+  (Agency as any).findOne = original.agencyFindOne;
+  (AgencyProfile as any).findOne = original.agencyProfileFindOne;
   (TripReport as any).create = original.reportCreate;
   (TripReport as any).distinct = original.reportDistinct;
 });
