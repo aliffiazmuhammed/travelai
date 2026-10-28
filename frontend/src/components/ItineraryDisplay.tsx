@@ -3,7 +3,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Calendar,
   MapPin,
-  Wallet,
   Compass,
   Bed,
   ShieldCheck,
@@ -23,7 +22,6 @@ import { cn } from "@/lib/utils";
 import { TripHeader } from "./dashboard/TripHeader";
 import { DayTimeline } from "./dashboard/DayTimeline";
 import { TripMap } from "./dashboard/TripMap";
-import { BudgetVisualizer } from "./dashboard/BudgetVisualizer";
 import { StayAndCuisine } from "./dashboard/StayAndCuisine";
 import { TravelGuideSafety } from "./dashboard/TravelGuideSafety";
 import { TripFeedback } from "./dashboard/TripFeedback";
@@ -713,8 +711,8 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
               // Mobile/tablet: one horizontally-scrollable row of icon-only
               // pills (labels would wrap into two cramped rows of tiny cells).
               // From lg up: the familiar label grid.
-              "flex w-full max-w-full overflow-x-auto scrollbar-none h-auto p-1.5 bg-muted/60 border border-border/60 rounded-2xl shadow-xs gap-1 lg:grid lg:grid-cols-8",
-              !showPeopleTab && "lg:grid-cols-7"
+              "flex w-full max-w-full overflow-x-auto scrollbar-none h-auto p-1.5 bg-muted/60 border border-border/60 rounded-2xl shadow-xs gap-1 lg:grid lg:grid-cols-7",
+              !showPeopleTab && "lg:grid-cols-6"
             )}
           >
             <TabsTrigger
@@ -733,15 +731,6 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
             >
               <MapPin className="w-3.5 h-3.5" />
               <span className="hidden lg:inline">Interactive Map</span>
-            </TabsTrigger>
-
-            <TabsTrigger
-              value="budget"
-              title="Budget Analytics"
-              className="py-2.5 px-3 rounded-xl text-xs font-bold gap-2 shrink-0 data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
-            >
-              <Wallet className="w-3.5 h-3.5" />
-              <span className="hidden lg:inline">Budget Analytics</span>
             </TabsTrigger>
 
             <TabsTrigger
@@ -843,16 +832,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
           />
         </TabsContent>
 
-        {/* TAB 3: Budget Analytics View */}
-        <TabsContent value="budget" className="outline-hidden animate-fade-in">
-          <BudgetVisualizer
-            budget={safeData.budget_breakdown}
-            paymentTips={safeData.footnotes_safety_tips.payment}
-            perPersonBudget={safeData.budget_per_person}
-          />
-        </TabsContent>
-
-        {/* TAB 4: Stays & Culinary Hotspots View */}
+        {/* TAB 3: Stays & Culinary Hotspots View */}
         <TabsContent value="stays" className="outline-hidden animate-fade-in">
           <StayAndCuisine
             itinerary={itinerary}
@@ -862,7 +842,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
           />
         </TabsContent>
 
-        {/* TAB 5: Travel Guide & Safety View */}
+        {/* TAB 4: Travel Guide & Safety View */}
         <TabsContent value="guide" className="outline-hidden animate-fade-in">
           <TravelGuideSafety
             guide={safeData.local_transport}
@@ -871,7 +851,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
           />
         </TabsContent>
 
-        {/* TAB 6: Expense Tracker View */}
+        {/* TAB 5: Expense Tracker View */}
         <TabsContent value="expenses" className="outline-hidden animate-fade-in">
           <ExpenseTracker
             tripId={tripId}

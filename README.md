@@ -92,16 +92,13 @@ Traditional trip planning involves juggling dozen of browser tabs: reading confl
 - **Thumbs Up/Down Rating**: Rate any generated itinerary; ratings feed straight back into future personalization.
 - **Analytics Endpoint**: Aggregated quality scores, feedback counts, variant performance and top destinations are exposed via `/api/itinerary/insights`.
 
-### 📊 Financial & Budget Analytics (Recharts)
-- **Interactive Donut Breakdown**: Visualizes planned expenses across Accommodation, Food & Drinks, Activities, Local Transit, and Buffer.
-- **Daily Spending Rhythm**: Projected daily cashflow bar charts.
+### 📊 Expense Tracking & Settlement
 - **Real Expense Tracking**: Log actual spend during the trip (description, category, amount, date, day) into a per-trip ledger.
 - **Planned vs Actual**: A grouped bar chart plus planned / spent / remaining / variance cards compare your logged expenses against the AI's planned budget per category.
 - **Group Travellers**: Add companions so each expense can record who paid and be split equally (foundation for settlement).
 - **Multi-Currency Logging & Conversion**: Log expenses in any of 30 ECB-quoted currencies; rates come from Frankfurter (12-hour cache), are snapshotted onto the trip, and every amount is stored converted into the trip's base currency. Switch the base currency at any time and the whole ledger re-converts.
 - **Bill Splitting & Settle Up**: Choose not-split, equal, or custom per-person shares, then see each traveller's paid/share/net balance plus the fewest transfers needed to settle up.
 - **Receipt Attachments**: Attach a photo or PDF receipt to any expense (JPEG/PNG/WebP/PDF, ≤ `MAX_UPLOAD_MB`, default 5 MB), preview it before saving, open it from the ledger, and remove it again. Nothing is stored unless the file's actual bytes match its declared type.
-- **Emergency Reserve & Payment Guide**: Dedicated ~10% contingency calculation with regional UPI vs Cash acceptance guidance.
 
 ### 📤 Seamless Sharing, Export & Print
 - **Public Read-Only Web Links**: Unique share tokens allowing friends or family to explore the itinerary without needing an account.
@@ -274,7 +271,6 @@ travelai/
         │   │   ├── RouteEditor.tsx      # Modal to name / colour / tag a drawn route
         │   │   ├── TripMap.tsx          # Leaflet map with 80+ destinations, drawn routes & distances
         │   │   ├── StayAndCuisine.tsx   # Consolidated stay cards & dining hotspots
-        │   │   ├── BudgetVisualizer.tsx # Donut and bar charts + UPI advice
         │   │   ├── TravelGuideSafety.tsx# Climate, packing checklist & etiquette
         │   │   ├── ShareExportModal.tsx # Public link, WhatsApp text & PDF print
         │   │   └── MyTripsView.tsx      # Library view with search, filter & duplicates
