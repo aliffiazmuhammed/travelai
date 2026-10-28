@@ -129,6 +129,21 @@ function stayKey(item: string | StayItem): string {
   return normalizeStay(item).name.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+/**
+ * Trips generated before structured food spots stored each recommendation as
+ * one sentence: "Dinner at X (why it is worth it)". Split the trailing
+ * parenthetical into the note so the card heading stays a venue, not a
+ * paragraph. Strings without a long trailing detail are left whole.
+ */
+function splitLegacyFood(text: string): { name: string; note?: string } {
+  const trimmed = text.trim();
+  const match = trimmed.match(/^(.*?)\s*\(([^()]{16,})\)\.?$/);
+  if (!match) return { name: trimmed };
+  const name = match[1].trim();
+  const note = match[2].trim();
+  return name ? { name, note } : { name: trimmed };
+}
+
 function normalizeFood(item: string | FoodItem): {
   name: string;
   cuisine?: string;
@@ -143,7 +158,7 @@ function normalizeFood(item: string | FoodItem): {
       note: item.note?.trim() || undefined,
     };
   }
-  return { name: String(item || "").trim() };
+  return splitLegacyFood(String(item || ""));
 }
 
 function foodKey(item: string | FoodItem): string {

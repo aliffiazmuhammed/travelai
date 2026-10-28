@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import crypto from 'crypto';
 import { generateWithFallback, generateStreamWithFallback } from '../services/ai/index.js';
+import { normalizeGeneratedItinerary } from '../services/ai/normalize.js';
 import {
   PROMPT_VERSION,
   buildPromptText,
@@ -241,7 +242,7 @@ export const generateItinerary = catchAsync(
     });
 
     const result = await generateWithFallback(promptText);
-    const parsedItinerary = parseItineraryJson(result.text);
+    const parsedItinerary = normalizeGeneratedItinerary(parseItineraryJson(result.text));
 
     const generationMeta = buildGenerationMeta({
       body,
@@ -351,7 +352,7 @@ export const generateItineraryStream = async (req: AuthenticatedRequest, res: Re
       message: 'Validating itinerary structure and formatting...',
     });
 
-    const parsedItinerary = parseItineraryJson(result.text);
+    const parsedItinerary = normalizeGeneratedItinerary(parseItineraryJson(result.text));
 
     const generationMeta = buildGenerationMeta({
       body,

@@ -400,6 +400,8 @@ Do not include links or markdown links in the response.
 
 Ensure this is written in a natural, local-friendly tone that feels authentic and is easy to follow. Make sure to **fill all details and avoid vague instructions like “explore nearby” or “eat somewhere”** — be specific.
 
+For every "food_spots" entry, keep the meal, venue and area in "name" only (e.g. "Dinner at Artjuna Cafe, Anjuna"). Put the cuisine style in "cuisine" as a short label, and any practical reasoning, dietary notes or ordering tips in "note" as one sentence. Never paste the whole recommendation into "name", and never mention prices.
+
 give the output in this json schema:
 {
   "trip_title": "string",
@@ -440,7 +442,13 @@ give the output in this json schema:
         }
       ],
       "transport": ["string"],
-      "food_spots": ["string"],
+      "food_spots": [
+        {
+          "name": "string",
+          "cuisine": "string",
+          "note": "string"
+        }
+      ],
       "pro_tip": ["string"],
       "permit_required": "boolean"
     }

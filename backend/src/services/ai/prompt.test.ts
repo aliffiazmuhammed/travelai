@@ -171,3 +171,21 @@ test('buildDayAlternativePrompt relaxes guidance when weather is fine', () => {
   assert.ok(!/INDOOR/.test(prompt));
   assert.ok(prompt.includes('(no activities recorded)'));
 });
+
+test('the itinerary contract asks for structured food spots', () => {
+  const prompt = buildPromptText({
+    destination: 'Goa',
+    days: 3,
+    budget: 25000,
+    startdate: '2026-11-10',
+    enddate: '2026-11-13',
+    interests: ['Food'],
+    groupType: 'Couple',
+  });
+
+  assert.ok(prompt.includes('"food_spots": ['));
+  assert.ok(prompt.includes('"cuisine": "string"'));
+  assert.ok(prompt.includes('"note": "string"'));
+  assert.ok(!prompt.includes('"food_spots": ["string"]'));
+  assert.ok(prompt.includes('Never paste the whole recommendation into "name"'));
+});
