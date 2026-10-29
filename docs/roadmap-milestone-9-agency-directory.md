@@ -372,6 +372,20 @@ Admin routes deliberately do **not** expose enquiry contents; that is client PII
 
 **Verified 2026-10-29:** backend suite **909/909** with `src/services/agency/proposalSummary.test.ts` (registered in the explicit test list) pinning the sibling/own/open projection and the exact key sets; backend `tsc --noEmit`, frontend typecheck, production build and lint clean. The test stub mimics Mongoose field selection, and that caught a real defect in this pass: the summary's quote query did not `select('tripId')`, so the settled rule would have been silently dead in production while the permissive stub passed. The projection is fixed and the test now fails if `tripId` drops out of the select again. The browser pass was not repeated for this refinement: the card logic is the one already smoked in R7, with `settled` fed by the new field.
 
+### R8 — The sent quote becomes a guided hand-off
+
+**Status:** implemented and verified 2026-10-29, after a real report ("in my enquiry tab enquiries are listed but i cannot see the proposal or itinerary sent by the agency").
+
+**Goal:** sending a quote and delivering a proposal are two different actions, so the UI must connect them instead of letting the traveller wait on a promise nobody kept.
+
+- **The report was accurate, not a display bug.** A read-only pass over the reported enquiry found a `sent` quote on the lead's trip but **zero client exports and zero proposal links**. "Send quote" only locks the quote version; the traveller sees a proposal only when a share link (pinned to a ready client export) exists, which is created in the trip's Export tab. The thread's "No proposal has been sent for this enquiry yet" was the truth.
+- **Sending writes the funnel back.** `sendQuote` now stamps `quoted` on the lead behind the quote's client (`AgencyClient.sourceEnquiryId` → `markEnquiryQuotedByProposal`), the same transition the share path already performs. A `won`/`lost` lead keeps its status, a client without an enquiry is a no-op, and re-sending is idempotent.
+- **"Proposal ready" is gated on an actual proposal.** `travellerEnquiryStatusLabel(status, hasLiveProposal)` reads `In progress` when a `quoted` lead has no live link and keeps `Proposal ready` only when one exists; the badge class matches (`travellerEnquiryStatusBadgeClass(status, hasLiveProposal)`). Wired into `/enquiries`, the signed-in thread and the profile preview, all of which already know the live proposal count.
+- **The agency gets the hand-off.** The sent quote panel shows "Send proposal to traveller", which opens the existing Export tab through the page's own `switchTab` (URL keeps `?tab=export`, so a reload lands in the right place). The send toast now says the quote is locked and that sharing delivers it, instead of implying delivery.
+- **Still deferred:** automatically minting an export and share link from send. Template choice and PDF generation stay an explicit agency step; R8 only removes the dead end between the two.
+
+**Verified 2026-10-29:** backend suite **914/914**, with `src/services/agency/sendQuote.test.ts` (registered in the explicit test list) pinning the fresh-lead transition, the untouched `won` lead, the client-without-enquiry no-op, idempotent re-send and the viewer role refusal; backend `tsc --noEmit`, frontend typecheck, production build and lint clean (only the repo's pre-existing `no-explicit-any` hits). Browser smoke on synthetic fixtures in the test database: a `quoted` lead with no proposal read `In progress` on `/enquiries`; after a live proposal link was attached it read `Proposal ready` with `1 proposal`; the agency trip's quote tab rendered `Q-2026-9001 v2 Sent` with "Send proposal to traveller", and clicking it moved to `?tab=export` with the Proposal exports panel. All synthetic users, membership, enquiry, quote and link were deleted and the temporary script removed.
+
 ## 6. Build order and dependencies
 
 | Order | Milestone | Depends on |
@@ -390,6 +404,7 @@ Admin routes deliberately do **not** expose enquiry contents; that is client PII
 | 12 | R6 polish batch (in-app answers, traveller vocabulary, nav badges) | D8, R5 |
 | 13 | R7 audit fixes (badge truth, one-acceptance rule, live comparison, decline frame) | R6 |
 | 14 | R7 follow-up (settled-trip projection, price line only on open quotes) | R7 |
+| 15 | R8 guided hand-off (send writes `quoted`, label gated on a live proposal, Export CTA) | R5, R7 follow-up, A7 |
 
 D4 can run in parallel with D5 if split across sessions; nothing else parallelises cleanly because the projection contract is shared.
 

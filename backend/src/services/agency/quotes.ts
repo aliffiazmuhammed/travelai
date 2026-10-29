@@ -5,7 +5,10 @@ import Trip from '../../models/Trip.js';
 import { AppError } from '../../utils/AppError.js';
 import { agencyCan, type AgencyRole } from './access.js';
 import { assertAgencyClient } from './clients.js';
-import { markEnquiryWonByAcceptance } from '../directory/enquiries.js';
+import {
+  markEnquiryQuotedByProposal,
+  markEnquiryWonByAcceptance,
+} from '../directory/enquiries.js';
 import {
   AGENCY_TERMS_MAX_ITEMS,
   AGENCY_TERMS_MAX_LENGTH,
@@ -776,6 +779,22 @@ export async function sendQuote(input: {
   if (!sent) {
     throw new AppError('This quote changed before it could be sent. Reload it.', 409);
   }
+
+  // Sending is the funnel's quote step, not a private status flip: a directory
+  // lead moves to `quoted` here exactly as it does when the proposal document
+  // is shared. A won or lost lead keeps the status its agency chose.
+  if (sent.clientId) {
+    const client = (await AgencyClient.findOne({
+      _id: sent.clientId,
+      agencyId: input.agencyId,
+    })
+      .select('sourceEnquiryId')
+      .lean()) as any;
+    if (client?.sourceEnquiryId) {
+      await markEnquiryQuotedByProposal(String(client.sourceEnquiryId));
+    }
+  }
+
   return sent;
 }
 

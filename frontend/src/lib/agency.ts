@@ -100,9 +100,26 @@ export const TRAVELLER_ENQUIRY_STATUS_LABELS: Record<AgencyEnquiryStatus, string
   lost: 'Closed',
 };
 
-export function travellerEnquiryStatusBadgeClass(
-  status: AgencyEnquiryStatus
+/**
+ * "Proposal ready" is a promise about the thread, not about the funnel: the
+ * agency can send a quote before sharing the proposal document, and the
+ * traveller must not go looking for something that is not there yet.
+ */
+export function travellerEnquiryStatusLabel(
+  status: AgencyEnquiryStatus,
+  hasLiveProposal: boolean
 ): string {
+  if (status === 'quoted' && !hasLiveProposal) return 'In progress';
+  return TRAVELLER_ENQUIRY_STATUS_LABELS[status];
+}
+
+export function travellerEnquiryStatusBadgeClass(
+  status: AgencyEnquiryStatus,
+  hasLiveProposal = true
+): string {
+  if (status === 'quoted' && !hasLiveProposal) {
+    return 'border-border bg-muted text-foreground/75';
+  }
   switch (status) {
     case 'replied':
       return 'border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-700 dark:bg-sky-950/40 dark:text-sky-300';

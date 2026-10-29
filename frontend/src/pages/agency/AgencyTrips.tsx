@@ -608,6 +608,7 @@ const AgencyTrips: React.FC = () => {
                 tripEndDate={selectedTrip.endDate}
                 prefillClientId={prefillClientId}
                 prefillParty={prefillParty}
+                onOpenExportTab={() => switchTab('export')}
               />
             </div>
           ) : null}

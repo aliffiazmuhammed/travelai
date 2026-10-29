@@ -11,6 +11,7 @@ import {
   Receipt,
   RefreshCw,
   Send,
+  Share2,
   Trash2,
   Users,
   XCircle,
@@ -394,6 +395,8 @@ interface AgencyQuotePanelProps {
   /** D6: a lead's converted client, prefilled when the quote is still blank. */
   prefillClientId?: string;
   prefillParty?: { adults: number; children: number };
+  /** Sending a quote does not deliver a document; the Export tab does. */
+  onOpenExportTab?: () => void;
 }
 
 /**
@@ -411,6 +414,7 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
   tripEndDate,
   prefillClientId,
   prefillParty,
+  onOpenExportTab,
 }) => {
   const { activeAgency, canManage } = useAgency();
   const { user } = useAgencyAuth();
@@ -623,7 +627,9 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
       }
       const result = await api.sendAgencyQuote(agencyId, tripId);
       applySavedQuote(result.quote);
-      toast.success('Quote marked as sent. It is now locked as a version.');
+      toast.success(
+        'Quote sent and locked as a version. Share the proposal to send it to the traveller.'
+      );
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : 'Could not send this quote.'
@@ -910,6 +916,17 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
               </>
             ) : quote ? (
               <>
+                {quote.status === 'sent' && !viewingOldVersion && onOpenExportTab ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={onOpenExportTab}
+                    disabled={busy}
+                  >
+                    <Share2 className="mr-1.5 h-3.5 w-3.5" />
+                    Send proposal to traveller
+                  </Button>
+                ) : null}
                 {quote.status === 'sent' && !viewingOldVersion ? (
                   <Button
                     size="sm"

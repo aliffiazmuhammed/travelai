@@ -27,7 +27,7 @@ import { useAuth } from "@/context/UserContext";
 import { api } from "@/services/api";
 import { avatarSrc, initialsFor } from "@/lib/avatar";
 import {
-  TRAVELLER_ENQUIRY_STATUS_LABELS,
+  travellerEnquiryStatusLabel,
   travellerEnquiryStatusBadgeClass,
   formatAgencyDate,
 } from "@/lib/agency";
@@ -713,10 +713,16 @@ const Profile = () => {
                         <span
                           className={cn(
                             "rounded-full border px-2 py-0.5 text-[10px] font-bold",
-                            travellerEnquiryStatusBadgeClass(enquiry.status)
+                            travellerEnquiryStatusBadgeClass(
+                              enquiry.status,
+                              (enquiry.proposals?.count ?? 0) > 0
+                            )
                           )}
                         >
-                          {TRAVELLER_ENQUIRY_STATUS_LABELS[enquiry.status]}
+                          {travellerEnquiryStatusLabel(
+                            enquiry.status,
+                            (enquiry.proposals?.count ?? 0) > 0
+                          )}
                         </span>
                         {enquiry.unread.traveller > 0 && (
                           <span className="inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground">

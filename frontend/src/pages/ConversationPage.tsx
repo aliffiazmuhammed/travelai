@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   AGENCY_ENQUIRY_BUDGET_LABELS,
-  TRAVELLER_ENQUIRY_STATUS_LABELS,
+  travellerEnquiryStatusLabel,
   travellerEnquiryStatusBadgeClass,
   formatAgencyDate,
 } from '@/lib/agency';
@@ -224,10 +224,16 @@ const ConversationPage: React.FC = () => {
                     variant="outline"
                     className={cn(
                       'text-[10px]',
-                      travellerEnquiryStatusBadgeClass(conversation.status)
+                      travellerEnquiryStatusBadgeClass(
+                        conversation.status,
+                        proposals.length > 0
+                      )
                     )}
                   >
-                    {TRAVELLER_ENQUIRY_STATUS_LABELS[conversation.status]}
+                    {travellerEnquiryStatusLabel(
+                      conversation.status,
+                      proposals.length > 0
+                    )}
                   </Badge>
                   {liveMode === 'live' ? (
                     <span
