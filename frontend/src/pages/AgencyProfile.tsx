@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import AgencyEnquiryDialog from "@/components/directory/AgencyEnquiryDialog";
 import AgencyPackageCard from "@/components/directory/AgencyPackageCard";
@@ -33,6 +33,8 @@ import type { AgencyDirectoryPackage, AgencyDirectoryPublicProfile } from "@/typ
  */
 const AgencyProfile = () => {
   const { slug } = useParams<{ slug: string }>();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [profile, setProfile] = useState<AgencyDirectoryPublicProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -80,6 +82,24 @@ const AgencyProfile = () => {
       cancelled = true;
     };
   }, [slug, reloadKey]);
+
+  // Coming back from `/auth` after "Sign in to enquire": reopen the form, and
+  // keep the package when the traveller started from a package card.
+  useEffect(() => {
+    if (!profile) return;
+    const pending = (
+      location.state as {
+        openEnquiry?: { packageId?: string | null };
+      } | null
+    )?.openEnquiry;
+    if (!pending) return;
+    const pkg = pending.packageId
+      ? profile.packages.find((entry) => entry.id === pending.packageId) ?? null
+      : null;
+    setEnquiryPackage(pkg);
+    setEnquiryOpen(true);
+    navigate(location.pathname, { replace: true });
+  }, [location.state, location.pathname, navigate, profile]);
 
   // Meta tags wait for the real name, so a share preview never says "Loading".
   useEffect(() => {

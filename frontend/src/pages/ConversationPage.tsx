@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { AlertCircle, ArrowUpRight, CalendarDays, Loader2, MessageSquare, ShieldCheck, Users, Wallet } from 'lucide-react';
+import { AlertCircle, ArrowLeft, ArrowUpRight, CalendarDays, Loader2, MessageSquare, ShieldCheck, Users, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
 import Navbar from '@/components/Navbar';
 import ConversationThread from '@/components/directory/ConversationThread';
@@ -27,7 +27,7 @@ import type {
  * - `/conversation/:token` — the guest's private link. No account, the token is
  *   the capability, and the page shows the same thread the agency sees.
  * - `/enquiry/:enquiryId` — a signed-in traveller's own thread, linked from the
- *   profile card and the proposal comparison.
+ *   enquiries list and the proposal comparison.
  *
  * Both modes share the comparison surface: proposals tied to this enquiry sit
  * beside the thread, and a question about one is sent into the same thread.
@@ -127,15 +127,24 @@ const ConversationPage: React.FC = () => {
               </p>
             </div>
             <Link
-              to="/profile"
+              to={guest ? '/agencies' : '/enquiries'}
               className="inline-flex items-center gap-1.5 text-xs font-bold text-primary hover:underline"
             >
-              Go to your profile
+              {guest ? 'Browse agencies' : 'Back to your enquiries'}
               <ArrowUpRight className="h-3.5 w-3.5" />
             </Link>
           </div>
         ) : (
           <div className="space-y-5">
+            {!guest ? (
+              <Link
+                to="/enquiries"
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-muted-foreground transition-colors hover:text-primary"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                All enquiries
+              </Link>
+            ) : null}
             <div className="flex flex-col gap-3 rounded-3xl border border-border/80 bg-card/80 p-5 shadow-card sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0 space-y-1">
                 <p className="text-[11px] font-bold uppercase tracking-wider text-primary">

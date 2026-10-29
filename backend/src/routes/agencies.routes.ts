@@ -7,7 +7,7 @@ import {
   listPublicAgencies,
 } from '../controllers/directory.controller.js';
 import { createAgencyEnquiryHandler } from '../controllers/enquiries.controller.js';
-import { attachPersonalIfPresent } from '../middleware/auth.middleware.js';
+import { protectPersonal } from '../middleware/auth.middleware.js';
 import {
   enquiryAgencyLimiter,
   enquiryEmailLimiter,
@@ -26,8 +26,10 @@ import { createAgencyEnquirySchema } from '../schemas/agencyEnquiry.schema.js';
  * into. `/facets` is registered before `/:slug` so it is never read as a page
  * slug, and package covers sit beside the logo as slug-addressed bytes.
  *
- * D5 adds the one anonymous write. It is guarded by three daily buckets (IP,
- * email, agency) and an *optional* personal identity — never a required one.
+ * D5 adds the one write. Browsing stays anonymous, but sending an enquiry is a
+ * personal-realm action: the traveller must be signed in so the thread, every
+ * reply and any proposal land in an account they can return to. The write keeps
+ * its three daily buckets (IP, email, agency) in front of the guard's session.
  */
 const router = Router();
 
@@ -44,8 +46,8 @@ router.post(
   enquiryIpLimiter,
   enquiryEmailLimiter,
   enquiryAgencyLimiter,
+  protectPersonal,
   validate(createAgencyEnquirySchema),
-  attachPersonalIfPresent,
   createAgencyEnquiryHandler
 );
 router.get('/:slug', publicDirectoryLimiter, getPublicAgencyProfile);

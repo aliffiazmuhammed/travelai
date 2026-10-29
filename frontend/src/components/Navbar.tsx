@@ -64,6 +64,10 @@ const Navbar = () => {
     ...(directoryEnabled === true ? [{ label: "Agencies", path: "/agencies" }] : []),
     { label: "Plan Trip", path: "/plan" },
     { label: "My Trips", path: "/dashboard" },
+    // M9: replies live in conversations, so the list of sent enquiries needs a
+    // door of its own — signed-in only, because anonymous enquiries are never
+    // attributed to an account.
+    ...(isAuthenticated ? [{ label: "Enquiries", path: "/enquiries" }] : []),
   ];
 
   return (

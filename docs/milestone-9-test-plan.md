@@ -134,15 +134,17 @@ Automated coverage: `services/directory/packages.test.ts`,
 
 ## 7. D5 — enquiry intake
 
-- [ ] Guest submission requires consent, a 20–1500 character message, 1–20
-      adults, at most 30 people and valid calendar dates.
+- [ ] Submission requires a personal session: a guest request gets `401`
+      before any validation, and the dialog shows a sign-in prompt, not the form.
+- [ ] A signed-in submission requires consent, a 20–1500 character message,
+      1–20 adults, at most 30 people and valid calendar dates.
 - [ ] Unknown fields are rejected; a missing or foreign package is `404`.
 - [ ] A suspended, unpublished or ops-hidden agency answers the same `404` as
       its page.
 - [ ] The acknowledgement contains no contact echo and no agency internals.
 - [ ] Limits: IP 5/day, email 3/day, agency 50/day.
-- [ ] A signed-in visitor's `userId` is attached only from the verified session;
-      a guest row has `userId: null`.
+- [ ] The enquiry is attributed to the caller's personal session `userId`; an
+      agency or platform session cannot submit one and no guest token is minted.
 - [ ] The tenant inbox is scoped by `agencyId` and shows the lead immediately;
       a personal history read returns only the caller's rows.
 
@@ -222,11 +224,14 @@ Automated coverage: `services/directory/insights.test.ts`,
 
 ## 9A. D8 — conversations and proposal comparison
 
-### Guest link
+### Evidence link and the sign-in gate (D9)
 
-- [ ] Submitting an enquiry shows the private conversation URL once, with a
-      copy action; a signed-out traveller is warned that it is the only way back.
-- [ ] The link opens `/conversation/:token` with the opening enquiry, the agency
+- [ ] A signed-out traveller sees "Sign in to send this enquiry" instead of the
+      form; the link goes to `/auth` and returns to `/agencies/:slug`, reopening
+      the dialog with the package preselected.
+- [ ] A successful submission shows "Open conversation" (`/enquiry/:id`) and
+      "All enquiries" (`/enquiries`) and no URL to copy.
+- [ ] A legacy guest link minted before D9 still opens `/conversation/:token` with the opening enquiry, the agency
       name and every reply; opening it marks the agency's replies read.
 - [ ] A guest reply appears in the agency inbox with an unread badge.
 - [ ] The link stops working after `conversationTokenExpiresAt`; an unknown,
@@ -235,8 +240,16 @@ Automated coverage: `services/directory/insights.test.ts`,
 
 ### Signed-in traveller
 
-- [ ] `/profile` lists each enquiry with its status, unread replies and an
-      "Open conversation" link to `/enquiry/:id`.
+- [ ] `/enquiries` (and the signed-in-only "Enquiries" nav item) lists every
+      enquiry sent while signed in: agency, package, dates and party, status,
+      unread replies, last message, live-proposal count, "Open conversation" and
+      a link to `/proposals`.
+- [ ] The list counts a proposal only while its link is live: a revoked or
+      expired link drops the count, and the number agrees with `/proposals`.
+- [ ] `/profile` shows the three newest enquiries with "View all N enquiries"
+      into `/enquiries`; `/enquiry/:id` carries an "All enquiries" back link.
+- [ ] Legacy guest rows never appear in the list; a signed-out visit to
+      `/enquiries` redirects to `/auth`, and the nav item is absent.
 - [ ] Another account, an agency session and a platform session all get 404/403
       for that thread.
 - [ ] Sending a reply marks the agency's earlier messages read and shows the
@@ -302,8 +315,9 @@ npm run typecheck
 npm run build
 ```
 
-Latest local run (2026-10-29): backend **849/849**, backend typecheck clean,
-frontend typecheck and production build clean; targeted D8 suites 16/16.
+Latest local run (2026-10-29): backend **851/851**, backend typecheck clean,
+frontend typecheck and production build clean; targeted D8 suites 16/16 and
+the D9 enquiry + realm suites 36/36.
 
 Browser pass (synthetic agency, all rows deleted afterwards):
 
@@ -316,8 +330,14 @@ Browser pass (synthetic agency, all rows deleted afterwards):
    restore returns it in the same state.
 5. Run the launch gate against the seeded staging database and confirm PASS on
    all three checks.
-6. Submit a guest enquiry, copy the private link, open it in a clean profile,
-   reply, then sign in as the agency and confirm the unread badge and the thread.
+6. Signed out, open the profile and package cards: the dialog shows the sign-in
+   prompt, and a direct guest `POST` returns `401`. Sign in from the prompt,
+   land back on the profile with the dialog reopened (package preselected), send
+   the enquiry, and confirm "Open conversation" reaches the thread; then sign in
+   as the agency and confirm the unread badge and thread.
 7. Send a proposal from the agency, open `/proposals` as the traveller, compare
    two proposals and ask a question from a card; confirm it lands on the right
    thread.
+8. Open `/enquiries` as that traveller: the enquiry, unread badge and proposal
+   count match the inbox and `/proposals`; "Open conversation" lands on the
+   thread and "View all" from the profile preview reaches the same list.

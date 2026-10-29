@@ -24,6 +24,7 @@ const Agencies = lazy(() => import("./pages/Agencies"));
 const AgencyProfile = lazy(() => import("./pages/AgencyProfile"));
 const ProposalShare = lazy(() => import("./pages/ProposalShare"));
 const ConversationPage = lazy(() => import("./pages/ConversationPage"));
+const Enquiries = lazy(() => import("./pages/Enquiries"));
 const MyProposals = lazy(() => import("./pages/MyProposals"));
 const InviteAccept = lazy(() => import("./pages/InviteAccept"));
 const Profile = lazy(() => import("./pages/Profile"));
@@ -114,6 +115,14 @@ const App = () => (
                   }
                 />
                 {/* M9 D8: a signed-in traveller's thread and comparison. */}
+                <Route
+                  path="/enquiries"
+                  element={
+                    <ProtectedRoute>
+                      <Enquiries />
+                    </ProtectedRoute>
+                  }
+                />
                 <Route
                   path="/enquiry/:enquiryId"
                   element={

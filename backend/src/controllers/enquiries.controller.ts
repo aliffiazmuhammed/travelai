@@ -3,7 +3,6 @@ import {
   agencyContext,
   type AgencyAccessRequest,
 } from '../middleware/agencyAccess.middleware.js';
-import { linkOriginHints } from '../services/collab/invites.js';
 import type { AuthenticatedRequest } from '../types/index.js';
 import { AppError } from '../utils/AppError.js';
 import { catchAsync } from '../utils/catchAsync.js';
@@ -27,17 +26,17 @@ import {
  * Agency enquiries (Milestone 9 D5), mounted at `/api/agencies` (public write)
  * and `/api/agency` (tenant inbox) / `/api/enquiries` (own history).
  *
- * The write is anonymous but never trusts the body: the service re-normalises
- * every field, re-checks consent and re-verifies that the agency and package are
- * still public. The acknowledgement deliberately carries no contact detail.
+ * The write never trusts the body: the service re-normalises every field,
+ * re-checks consent and re-verifies that the agency and package are still
+ * public. The acknowledgement deliberately carries no contact detail.
  */
 
 /**
  * `POST /api/agencies/:slug/enquiries`.
  *
- * `req.userId` is only present when `attachPersonalIfPresent` verified a
- * personal session; an agency or platform cookie is ignored, so an agent using
- * the workspace cannot accidentally file a lead as their own tenant account.
+ * `protectPersonal` on the route guarantees the session, so the enquiry is
+ * always attributed to the traveller's own account — an agency or platform
+ * cookie never reaches this handler.
  */
 export const createAgencyEnquiryHandler = catchAsync(
   async (req: Request, res: Response) => {
@@ -45,8 +44,7 @@ export const createAgencyEnquiryHandler = catchAsync(
     const acknowledgement = await submitAgencyEnquiry({
       slug: String(req.params.slug || ''),
       body: req.body ?? {},
-      userId: auth.realm === 'personal' ? auth.userId : undefined,
-      linkOrigins: linkOriginHints(req),
+      userId: String(auth.userId),
     });
     res.status(201).json({ success: true, enquiry: acknowledgement });
   }

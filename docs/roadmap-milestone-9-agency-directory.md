@@ -1,6 +1,6 @@
 # Milestone 9 — Agency Directory & Enquiries
 
-**Status:** D1–D8 implemented (2026-10-29) — profile contract, agency-side editor, the public listing + profile pages with the public logo route, packages as snapshot cards with a builder and from-price, the public enquiry form with a tenant inbox, the D6 inbox actions + idempotent conversion into a directory client with a quote hand-off, D7 verification, reply time, ops delisting and the launch gate, and D8 two-way enquiry conversations with the traveller's private guest link and proposal comparison. The defaults below stand as shipped unless a later decision says otherwise.
+**Status:** D1–D9 implemented (2026-10-29) — profile contract, agency-side editor, the public listing + profile pages with the public logo route, packages as snapshot cards with a builder and from-price, the public enquiry form with a tenant inbox, the D6 inbox actions + idempotent conversion into a directory client with a quote hand-off, D7 verification, reply time, ops delisting and the launch gate, D8 two-way enquiry conversations and proposal comparison, and D9 requiring a personal account to send an enquiry. The defaults below stand as shipped unless a later decision says otherwise.
 **Scope:** give onboarded agencies a public, searchable profile with services and package cards, and give travellers a single enquiry form that lands in the agency's workspace as a lead that can become a client and a quote.
 
 **Basis:** planning read the existing agency domain (`backend/src/models/Agency.ts`, `AgencyQuote.ts`, `AgencyClient`, `services/agency/access.ts`, `plan.ts`, `routes/agency.routes.ts`), the gallery's public-surface patterns (`services/gallery/explore.ts`, `projection.ts`, `traveler.ts`) and the shared gating hook (`frontend/src/hooks/useGalleryEnabled.ts`). No market research is implied.
@@ -10,20 +10,20 @@
 | Decision | Default assumed here | Why |
 |---|---|---|
 | Entry point | New navbar item "Agencies", content-gated at ≥5 published profiles | Mirrors the gallery gate; a two-agency directory should never be linked |
-| Who can enquire | Guests allowed with a verified email + consent checkbox; signed-in users get prefilled contact and see their own enquiry history | Account-only kills conversion on a lead-gen page; no verification invites spam |
+| Who can enquire | Signed-in travellers only (D9). Browsing stays anonymous; the form prompts for sign-in and returns to the dialog | An enquiry is a conversation the traveller must be able to find again, and a free account costs less than a guest link that can be lost |
 | Package depth | Title, nights, cover, optional "from" price per person, 4–6 highlights, inclusions summary. No day-by-day itinerary | Cards are marketing; the paid proposal product stays the detailed artefact |
 | Price visibility | Optional per package. When absent the card says "price on request" | Many agencies will not publish a number on a first pass |
 | Listing entitlement | Every `active` agency may publish a profile; no plan gate yet | Pricing is still a proposal in `docs/market-go-and-pricing.md`; gating now would block supply |
 | Verification | Manual ops approval, optional GSTIN badge | Cheap, and the main trust lever |
 | Moderation | Manual ops delist only — no auto-hide threshold | Three reports is cheap for a competitor to manufacture on a public business page |
 
-**Deliberate non-goals:** no bookings, deposits or payments on behalf of agencies; no reviews or ratings; no full itinerary publication; no paid placement or featured slots; no email/WhatsApp notification of enquiries in this milestone (in-app only, consistent with A7); no merging of proposals into a trip in the traveller's comparison view; no consumer login requirement for the enquiry form.
+**Deliberate non-goals:** no bookings, deposits or payments on behalf of agencies; no reviews or ratings; no full itinerary publication; no paid placement or featured slots; no email/WhatsApp notification of enquiries in this milestone (in-app only, consistent with A7); no merging of proposals into a trip in the traveller's comparison view; no anonymous enquiry submission (D9 requires a personal account).
 
 ---
 
 ## 1. Where this sits
 
-The product already has two public surfaces (published itinerary gallery, traveler profiles) and one B2B tenant surface (the agency workspace). This milestone introduces the first surface where **an agency is the content** rather than the author, and the first **anonymous write** outside auth and reports.
+The product already has two public surfaces (published itinerary gallery, traveler profiles) and one B2B tenant surface (the agency workspace). This milestone introduces the first surface where **an agency is the content** rather than the author. Reading it is anonymous; sending an enquiry is the one consumer write, and since D9 it belongs to a personal account.
 
 | Surface | Audience | Exists today |
 |---|---|---|
@@ -43,7 +43,7 @@ The directory is intentionally separate from the proposal pipeline: a directory 
 4. **A package is a snapshot.** Title, cover, nights, price and highlights are copied onto the package at save time; editing, deleting or re-pricing the underlying trip cannot change or leak a public package payload.
 5. **Enquiries are inert.** Submitting one creates exactly one enquiry row — no client, no quote, no membership, no notification of anyone outside the owning tenant. Conversion is an explicit agency action.
 6. **Tenant isolation on every agency-realm route**: an enquiry, package or profile is reachable only through `protectAgency` + the owning `agencyId`; a member of agency A gets 404 for agency B's rows.
-7. **The enquiry form is the only anonymous write.** It is rate-limited per IP and per email, CSRF-protected, consent-stamped, and never echoes submitted PII back in URLs or logs.
+7. **The enquiry write requires a personal session (D9).** It sits behind `protectPersonal`, is rate-limited per IP, per email and per agency, CSRF-protected, consent-stamped, attributed to the signed-in account, and never echoes submitted PII back in URLs or logs. Directory reads stay anonymous.
 
 ## 3. Data model
 
@@ -60,7 +60,7 @@ Indexes: `AgencyProfile { state: 1, publishedAt: -1, _id: -1 }`; `AgencyPackage 
 
 ## 4. API surface
 
-Public (anonymous, rate-limited, projection only) — new `routes/agencies.routes.ts`, mounted at `/api/agencies`:
+Public reads (anonymous, rate-limited, projection only) — new `routes/agencies.routes.ts`, mounted at `/api/agencies`. The enquiry write lives in the same router but is personal-realm (D9):
 
 | Route | Purpose |
 |---|---|
@@ -69,9 +69,9 @@ Public (anonymous, rate-limited, projection only) — new `routes/agencies.route
 | `GET /api/agencies/:slug/logo` | published logo bytes; 404 unless profile and agency are public |
 | `GET /api/agencies/:slug/packages/:packageId/cover` | published package cover bytes (D4) |
 | `GET /api/agencies/facets` | distinct destinations / specialties / languages with counts, for filter chips |
-| `POST /api/agencies/:slug/enquiries` | submit an enquiry (guest or signed-in); consent required; 5/day/IP and 3/day/email |
+| `POST /api/agencies/:slug/enquiries` | submit an enquiry (personal session required since D9); consent required; 5/day/IP, 3/day/email, 50/day/agency |
 
-Guest conversation (D8) — `routes/conversations.routes.ts`, mounted at `/api/conversations`. No session: the private 256-bit token is the only capability, and every route resolves exactly one enquiry from its sha256 hash:
+Legacy guest conversation (D8) — `routes/conversations.routes.ts`, mounted at `/api/conversations`. No session: the private 256-bit token is the only capability, and every route resolves exactly one enquiry from its sha256 hash. Since D9 no new token is minted; links already sent keep working until they expire:
 
 | Route | Purpose |
 |---|---|
@@ -88,6 +88,10 @@ Personal realm (D8) — `routes/enquiries.routes.ts` and `routes/proposals.route
 | `POST /api/enquiries/:id/messages` | signed-in reply |
 | `GET /api/proposals` | every live proposal answering this account's own enquiries |
 | `GET /api/proposals/:linkId` / `/pdf` | the full pinned document / PDF, owner-only (resolved by id; the proposal token never leaves the agency's link) |
+
+`GET /api/enquiries` (the traveller's own list) also carries `proposals: { count, lastAt }`
+per row — live links only, resolved by the stamped `enquiryId` or, for older
+links, through the quote's client.
 
 Agency realm (`protectAgency`, mounted under `/api/agency`; D1 ships the four profile routes):
 
@@ -194,7 +198,7 @@ Admin routes deliberately do **not** expose enquiry contents; that is client PII
 
 ### D5 — Enquiry submission
 
-**Status:** implemented 2026-10-28 (intake, tenant inbox reads, personal history and the manual `agency_profile` report target; inbox actions and conversion stay in D6).
+**Status:** implemented 2026-10-28 (intake, tenant inbox reads, personal history and the manual `agency_profile` report target; inbox actions and conversion stay in D6). **Superseded by D9:** the guest-token and `attachPersonalIfPresent` details below describe the original intake; the write now requires a personal session.
 
 - `AgencyEnquiry` model, validation (email format, party size caps, message limits, future-or-flexible dates), consent timestamp, and rate limiters (per IP + per email, plus a per-agency daily cap).
 - Enquiry form on the profile and on each package card (package preselected), with success copy that states what happens next and when to expect a reply.
@@ -207,7 +211,7 @@ Admin routes deliberately do **not** expose enquiry contents; that is client PII
 
 **Deferred:** inbox actions — claim/assign, status transitions, lost reason, reply and conversion (D6); notification badge/unread count (D6); browser smoke of the two-sided flow (D6/D7).
 
-**Acceptance:** guest submission succeeds with consent and fails without it; the sixth submission from one IP in a day is refused with a friendly message; a suspended agency's form returns 404; the agency sees the enquiry in its inbox immediately; no email is sent.
+**Acceptance (D5 as shipped; D9 later added the session requirement):** guest submission succeeds with consent and fails without it; the sixth submission from one IP in a day is refused with a friendly message; a suspended agency's form returns 404; the agency sees the enquiry in its inbox immediately; no email is sent.
 
 ### D6 — Agency enquiry inbox and conversion
 
@@ -245,27 +249,47 @@ Admin routes deliberately do **not** expose enquiry contents; that is client PII
 
 ### D8 — Two-way enquiry conversations and proposal comparison
 
-**Status:** implemented 2026-10-29 (backend thread service + routes, traveller `/proposals` page, guest `/conversation/:token` page, agency inbox thread and the profile history links).
+**Status:** implemented 2026-10-29 (backend thread service + routes, traveller `/proposals` page, guest `/conversation/:token` page, agency inbox thread and the profile history links). Since D9 the guest link is legacy-only: new enquiries are signed-in and open at `/enquiry/:id`.
 
-**Goal:** the agency's reply reaches the traveller in-app, a guest can come back through a private link, and a traveller with proposals from several agencies can compare them without the product merging anything behind their back.
+**Goal:** the agency's reply reaches the traveller in-app, a traveller can come back to the thread (through their account, or a legacy guest link), and a traveller with proposals from several agencies can compare them without the product merging anything behind their back.
 
 - **One thread, one enquiry.** Messages are subdocuments on `AgencyEnquiry`, so a read is always tenant-scoped by `agencyId` and a reply can never attach to a lead the caller cannot see. The thread is returned with its enquiry and never queried across tenants.
-- **Two capabilities.** A signed-in traveller replies through their own account (`userId` on the row). A guest replies through the private link minted at submit; the raw token exists only in that URL, while the row stores a sha256 hash, a six-character hint and `conversationTokenExpiresAt` (default 90 days, capped at 365). Expired links, unknown tokens and a suspended agency all answer the same generic 404.
+- **Two capabilities.** A signed-in traveller replies through their own account (`userId` on the row). Legacy guest rows keep the private link that was minted at submit before D9; the raw token exists only in that URL, while the row stores a sha256 hash, a six-character hint and `conversationTokenExpiresAt` (default 90 days, capped at 365). New enquiries mint no token. Expired links, unknown tokens and a suspended agency all answer the same generic 404.
 - **Reads are receipts.** The side that did not write a message fills in its read timestamp; unread counts for the inbox, the profile history and the thread are derived from the same array, never a second counter. Opening the agency detail or the traveller page marks the other side's messages read, and replying is an acknowledgement.
 - **Replying is answering.** The first agency message stamps `repliedAt` and moves a `new` lead to `replied`, so the public reply-time badge measures a reply that actually reached the traveller. Every agency reply is audited (`enquiry.replied`).
 - **Proposals answer a conversation.** `AgencyProposalLink.enquiryId` is stamped from the quote's client when a share is minted; older links resolve through the quote client ids. A guest sees only the live links belonging to their own enquiry; a signed-in traveller sees every live link answering one of their own enquiries and can open the exact pinned document or PDF by id.
 - **Comparison is read-only.** `/proposals` shows cards side by side (agency, trip, total, per-person, inclusions, exclusions, validity) with two actions: open the pinned document, or message the agency on the thread that proposal answers. There is no merge and no trip creation.
-- **Guest success screen.** Submitting an enquiry returns the private conversation URL once; the dialog shows it with a copy button and a clearer warning for signed-out travellers, and signed-in travellers also get a link to `/enquiry/:id`.
+- **Success screen.** Submitting an enquiry confirms where the reply will arrive and links "Open conversation" (`/enquiry/:id`) and "All enquiries" (`/enquiries`). Since D9 there is no URL to copy; the D8 copy button survives only in the legacy guest page.
+- **The list has a door.** Replies and proposals only reached the traveller through buried links (a profile card and `/proposals`). `/enquiries` is now the signed-in traveller's own list — agency, package, dates and party, status, unread replies, last message, a live-proposal badge, "Open conversation" and a header link to `/proposals` — with a "Enquiries" nav item (desktop and mobile sheet, signed-in only) and the profile card reduced to a three-row preview with "View all". Since D9 every new enquiry belongs to a personal account, so this list is the traveller's complete history; only legacy guest rows stay reachable through their link alone.
 
-**Shipped:** `models/AgencyEnquiry.ts` (thread limits, message schema, token hash/hint/expiry, partial unique index), `services/directory/conversations.ts` (token mint/validate/url, message projection/meta/unread, guest + personal + agency append, receipts, conversation views), `services/directory/enquiries.ts` (submit mints the token and returns the conversation link; views carry `messages`, `unread`, reply meta; agency detail marks the thread read), `services/agency/proposals.ts` (`enquiryId` stamping, consumer ownership/list summaries, guest/personal document + PDF), `controllers/conversations.controller.ts`, `routes/conversations.routes.ts`, `routes/proposals.routes.ts`, extended enquiries/agency routes and realm coverage, `AgencyEnquiryDialog` success screen, `ConversationThread`, `ProposalPreviewDialog`, `ProposalComparison`, `pages/ConversationPage`, `pages/MyProposals`, agency inbox thread, profile enquiry links and the `/proposals` entry. Tests: `services/directory/conversations.test.ts` (16) plus the extended enquiry, proposal, route and realm suites.
+**Shipped:** `models/AgencyEnquiry.ts` (thread limits, message schema, token hash/hint/expiry, partial unique index), `services/directory/conversations.ts` (token mint/validate/url, message projection/meta/unread, guest + personal + agency append, receipts, conversation views), `services/directory/enquiries.ts` (views carry `messages`, `unread`, reply meta; agency detail marks the thread read; D9 removed the token mint from submit), `services/agency/proposals.ts` (`enquiryId` stamping, consumer ownership/list summaries, guest/personal document + PDF), `controllers/conversations.controller.ts`, `routes/conversations.routes.ts`, `routes/proposals.routes.ts`, extended enquiries/agency routes and realm coverage, `AgencyEnquiryDialog` success screen, `ConversationThread`, `ProposalPreviewDialog`, `ProposalComparison`, `pages/ConversationPage`, `pages/MyProposals`, `pages/Enquiries`, `Navbar` (signed-in "Enquiries" entry), agency inbox thread, profile enquiry preview and the `/proposals` entry. Tests: `services/directory/conversations.test.ts` (16) plus the extended enquiry, proposal, route and realm suites.
 
-**Verified 2026-10-29:** backend `tsc --noEmit` clean; full backend suite **849/849**; frontend typecheck (`tsconfig.app.json`) and production build clean. Acceptance is pinned by tests: an unknown, expired or suspended-agency token all 404; the raw token is never stored; a guest read stamps the traveller receipt and a reply stamps the agency receipt; an empty or oversized body writes nothing; another account gets 404 for someone else's thread; the first agency reply sets `repliedAt` once and a viewer role is refused; opening a lead stamps only unread traveller messages; a package enquiry still resolves a same-tenant title.
+**Verified 2026-10-29:** backend `tsc --noEmit` clean; full backend suite **851/851**; frontend typecheck (`tsconfig.app.json`) and production build clean. Acceptance is pinned by tests: an unknown, expired or suspended-agency token all 404; the raw token is never stored; a guest read stamps the traveller receipt and a reply stamps the agency receipt; an empty or oversized body writes nothing; another account gets 404 for someone else's thread; the first agency reply sets `repliedAt` once and a viewer role is refused; opening a lead stamps only unread traveller messages; a package enquiry still resolves a same-tenant title.
 
-**Browser smoke 2026-10-29 (guest → agency → traveller):** submitted a guest enquiry from the Hills & Horizons profile, opened the private link in a clean tab and replied; the agency inbox showed `1 new`, opening the lead cleared it, and the reply moved `new → replied`; the guest reload showed the reply and "Read" on the guest's own message. Then a signed-in account (`d8.traveller@example.com`) submitted an enquiry with the form prefilled, opened `/enquiry/:id`, and replied from `/proposals` via "Ask about this"; the agency inbox showed the unread message, replied, and the profile card showed `1 new reply` while the thread showed `Read` on the traveller message. `/proposals` rendered a pinned proposal document (11-page brochure with the PDF action) in the comparison card, and "Ask about this" posted to the right thread; the smoke link was removed afterwards. A foreign link id returned 404 for both the guest token and the signed-in account, and the guest's proposal list stayed scoped to its own agency. No merge or trip action exists on any of these surfaces.
+**Browser smoke 2026-10-29 (legacy guest link, before D9; links already sent still work this way):** submitted a guest enquiry from the Hills & Horizons profile, opened the private link in a clean tab and replied; the agency inbox showed `1 new`, opening the lead cleared it, and the reply moved `new → replied`; the guest reload showed the reply and "Read" on the guest's own message. Then a signed-in account (`d8.traveller@example.com`) submitted an enquiry with the form prefilled, opened `/enquiry/:id`, and replied from `/proposals` via "Ask about this"; the agency inbox showed the unread message, replied, and the profile card showed `1 new reply` while the thread showed `Read` on the traveller message. `/proposals` rendered a pinned proposal document (11-page brochure with the PDF action) in the comparison card, and "Ask about this" posted to the right thread; the smoke link was removed afterwards. A foreign link id returned 404 for both the guest token and the signed-in account, and the guest's proposal list stayed scoped to its own agency. No merge or trip action exists on any of these surfaces.
+
+**Browser smoke 2026-10-29 (traveller's `/enquiries`):** as a synthetic account, `/enquiries` listed the one enquiry with the agency, "Flexible dates", "2 adults · 1 child", one live proposal badge, "View proposals" and "Open conversation" → `/enquiry/:id` (thread rendered with an "All enquiries" back link); `/profile` showed the three-row preview with "View all 1 enquiry" and the proposal chip; `/proposals` kept its `/enquiries` back link; the navbar carried "Enquiries" while signed in and dropped it after logout, where `/enquiries` redirected to `/auth`. The API returned `proposals: { count: 0, lastAt: null }` before the fixture link and `{ count: 1 }` after it, with a revoked link excluded; every fixture row and the temp script were removed afterwards.
 
 **Deferred:** email/WhatsApp notifications (in-app only by M9 default); merging a chosen proposal into a trip (explicit non-goal); a multi-epoch thread archive (messages are capped at 500 per enquiry).
 
-**Acceptance:** a guest can read and reply through the private link until expiry; a signed-in traveller's thread is invisible to other accounts and to agency/platform sessions; the agency inbox shows unread counts and marks them read on open; a first reply moves `new → replied`; `/proposals` compares live proposals and every message action lands on the correct enquiry.
+**Acceptance:** a legacy guest link can be read and replied through until expiry; a signed-in traveller's thread is invisible to other accounts and to agency/platform sessions; the agency inbox shows unread counts and marks them read on open; a first reply moves `new → replied`; `/proposals` compares live proposals and every message action lands on the correct enquiry.
+
+### D9 — Enquiries require a personal account
+
+**Status:** implemented 2026-10-29 (product decision: features belong to signed-in users; directory browsing stays anonymous).
+
+**Goal:** an enquiry is a conversation the traveller must be able to find again, so the write belongs to a personal account rather than a guest token.
+
+- `POST /api/agencies/:slug/enquiries` sits behind `protectPersonal`; the rate limiters still run in front of the guard so a scripted attacker burns its own buckets. Directory reads, the profile and package cards stay anonymous.
+- `submitAgencyEnquiry` requires a `userId`, stamps it on the row and mints no conversation token. Legacy rows keep their hashed token, so links already sent keep working until expiry; the acknowledgement shrinks to `{ id, status, createdAt }`.
+- The dialog shows "Sign in to send this enquiry" instead of the form for guests, with a link to `/auth` that carries the profile as the return path and the pending package; the profile reopens the dialog with that package selected on return.
+- The success panel offers "Open conversation" (`/enquiry/:id`) and "All enquiries" (`/enquiries`) and shows no URL to copy. Every new enquiry lands in the traveller's list.
+
+**Shipped:** `protectPersonal` on the enquiry write, required `userId` and removed token minting in `services/directory/enquiries.ts`, simplified `AgencyEnquiryAcknowledgement`, `realmCoverage.test.ts` expectation (only `/:slug/enquiries personal` is guarded inside the public directory router), updated enquiry service tests, `AgencyEnquiryDialog` sign-in branch and success actions, `AgencyProfile` return-path effect.
+
+**Verified 2026-10-29:** backend `tsc --noEmit` clean; full backend suite **851/851**; targeted `enquiries` + realm coverage **36/36**; frontend typecheck (`tsconfig.app.json`) and production build clean. Browser smoke with a synthetic personal account: signed out, the profile dialog showed the prompt with no form; a cookie-less `POST` was refused by CSRF (`403`) and the same POST with a CSRF token reached the guard (`401`, "Your session has expired or is invalid"); "Sign in or create an account" returned to `/agencies/m9-hills-horizons` after login with the dialog reopened and "Package: dgdg" preselected; submitting showed "Open conversation" and "All enquiries", no link to copy; `/enquiries` listed the enquiry and the thread rendered it; the stored row had `conversationTokenHash: null`. The synthetic user and enquiry were deleted afterwards.
+
+**Acceptance:** a guest sees the sign-in prompt and no form, and a guest `POST` is refused; a signed-in submission lands in the agency inbox and in `/enquiries`; the `/auth` round-trip reopens the dialog with the package preselected; a new enquiry never stores a conversation token.
 
 ## 6. Build order and dependencies
 
@@ -279,6 +303,7 @@ Admin routes deliberately do **not** expose enquiry contents; that is client PII
 | 6 | D6 inbox + conversion | D5 |
 | 7 | D7 verification, ops, launch | D3–D6 |
 | 8 | D8 conversations + proposal comparison | D5, D6, A7 |
+| 9 | D9 sign-in gate on the enquiry write | D5, D8 |
 
 D4 can run in parallel with D5 if split across sessions; nothing else parallelises cleanly because the projection contract is shared.
 
@@ -305,7 +330,7 @@ D4 can run in parallel with D5 if split across sessions; nothing else parallelis
 ## 9. Open decisions
 
 1. Entry point label and placement — "Agencies" beside "Explore" (default) vs a section inside Explore.
-2. Guest enquiries vs signed-in only (default: guest allowed with consent).
+2. Guest enquiries vs signed-in only — **resolved in D9: signed-in only**; browsing stays anonymous and legacy guest links keep working until expiry.
 3. Whether the "from" price is mandatory on a published package (default: optional).
 4. Whether listing is bundled into every active agency (default) or becomes a paid entitlement once pricing is approved.
-5. Whether consumers get an in-app enquiry thread in this milestone — **resolved in D8: yes**, with a private guest link and a read-only proposal comparison.
+5. Whether consumers get an in-app enquiry thread in this milestone — **resolved in D8: yes**, with a read-only proposal comparison; D9 replaced the private guest link for new enquiries with the signed-in thread.

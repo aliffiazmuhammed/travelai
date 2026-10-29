@@ -2,9 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   CalendarDays,
-  Check,
   CheckCircle2,
-  Copy,
   Loader2,
   Mail,
   MessageSquare,
@@ -43,6 +41,10 @@ import type {
  *
  * A signed-in visitor is prefilled from their account but may edit every field:
  * the enquiry is a message to the agency, not an account action.
+ *
+ * Sending requires an account: the thread, every reply and any proposal live in
+ * `/enquiries`, so a guest is asked to sign in (and returned to this page) before
+ * the form is offered. There is no guest link for new enquiries.
  */
 
 interface AgencyEnquiryDialogProps {
@@ -83,7 +85,7 @@ const AgencyEnquiryDialog: React.FC<AgencyEnquiryDialogProps> = ({
   packageTitle,
   onSubmitted,
 }) => {
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -100,7 +102,6 @@ const AgencyEnquiryDialog: React.FC<AgencyEnquiryDialogProps> = ({
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [ack, setAck] = useState<AgencyEnquiryAcknowledgement | null>(null);
-  const [copied, setCopied] = useState(false);
 
   const minDate = useMemo(todayIso, []);
 
@@ -123,7 +124,6 @@ const AgencyEnquiryDialog: React.FC<AgencyEnquiryDialogProps> = ({
     setSending(false);
     setSent(false);
     setAck(null);
-    setCopied(false);
   }, [open, user?.name, user?.email]);
 
   // A flexible enquiry has no dates at all: clear them so a stale value cannot
@@ -244,50 +244,15 @@ const AgencyEnquiryDialog: React.FC<AgencyEnquiryDialogProps> = ({
             </div>
 
             {ack ? (
-              <div className="space-y-2 rounded-2xl border border-primary/20 bg-primary/5 p-3">
-                <p className="flex items-center gap-1.5 text-[11px] font-bold text-primary">
-                  <ShieldCheck className="h-3.5 w-3.5" />
-                  Keep this private conversation link
+              <div className="space-y-3 rounded-2xl border border-primary/20 bg-primary/5 p-3">
+                <p className="text-[11px] leading-relaxed text-muted-foreground">
+                  The thread with {agencyName} is in your enquiries, together with
+                  every reply and any proposal they send.
                 </p>
-                <div className="flex items-center gap-1.5">
-                  <code className="min-w-0 flex-1 truncate rounded-lg border border-border/60 bg-background/80 px-2 py-1.5 text-[10px] text-muted-foreground">
-                    {ack.conversation.url}
-                  </code>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="rounded-xl text-xs font-bold gap-1.5 shrink-0"
-                    onClick={() => {
-                      void navigator.clipboard
-                        .writeText(ack.conversation.url)
-                        .then(() => setCopied(true))
-                        .catch(() => setCopied(false));
-                    }}
-                  >
-                    {copied ? (
-                      <Check className="h-3.5 w-3.5 text-emerald-600" />
-                    ) : (
-                      <Copy className="h-3.5 w-3.5" />
-                    )}
-                    {copied ? "Copied" : "Copy"}
-                  </Button>
-                </div>
-                <p className="text-[10px] text-muted-foreground">
-                  Anyone with this link can read the thread
-                  {ack.conversation.expiresAt
-                    ? ` until ${new Date(ack.conversation.expiresAt).toLocaleDateString()}`
-                    : ""}
-                  .{" "}
-                  {user
-                    ? "You can also open it from your profile."
-                    : "Keep it if you did not sign in — it is your only way back to the reply."}
-                </p>
-                {user ? (
+                <div className="flex flex-wrap gap-2">
                   <Button
                     asChild
                     size="sm"
-                    variant="outline"
                     className="rounded-xl text-xs font-bold gap-1.5"
                   >
                     <Link to={`/enquiry/${ack.id}`} onClick={onClose}>
@@ -295,13 +260,67 @@ const AgencyEnquiryDialog: React.FC<AgencyEnquiryDialogProps> = ({
                       Open conversation
                     </Link>
                   </Button>
-                ) : null}
+                  <Button
+                    asChild
+                    size="sm"
+                    variant="outline"
+                    className="rounded-xl text-xs font-bold gap-1.5"
+                  >
+                    <Link to="/enquiries" onClick={onClose}>
+                      All enquiries
+                    </Link>
+                  </Button>
+                </div>
               </div>
             ) : null}
 
             <DialogFooter>
               <Button type="button" className="rounded-xl text-xs font-bold" onClick={onClose}>
                 Done
+              </Button>
+            </DialogFooter>
+          </div>
+        ) : !isAuthenticated ? (
+          <div className="space-y-4 py-2">
+            <div className="flex items-start gap-3 rounded-2xl border border-primary/20 bg-primary/5 p-4">
+              <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+              <div className="space-y-1 text-xs text-foreground">
+                <p className="font-bold">Sign in to send this enquiry</p>
+                <p className="text-muted-foreground">
+                  Replies and proposals arrive in your enquiries, so the
+                  conversation needs an account. Sign in or create one — you
+                  come straight back here, and {agencyName} only sees what you
+                  send.
+                </p>
+              </div>
+            </div>
+            <DialogFooter className="gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                className="rounded-xl text-xs font-bold"
+                onClick={onClose}
+              >
+                Not now
+              </Button>
+              <Button asChild className="rounded-xl text-xs font-bold gap-1.5">
+                <Link
+                  to="/auth"
+                  state={{
+                    from: {
+                      pathname: `/agencies/${encodeURIComponent(slug)}`,
+                      state: {
+                        openEnquiry: {
+                          packageId: packageId ?? null,
+                          packageTitle: packageTitle ?? null,
+                        },
+                      },
+                    },
+                  }}
+                  onClick={onClose}
+                >
+                  Sign in or create an account
+                </Link>
               </Button>
             </DialogFooter>
           </div>

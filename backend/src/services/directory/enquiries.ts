@@ -9,6 +9,8 @@ import AgencyEnquiry, {
 } from '../../models/AgencyEnquiry.js';
 import AgencyMember from '../../models/AgencyMember.js';
 import AgencyPackage from '../../models/AgencyPackage.js';
+import AgencyProposalLink from '../../models/AgencyProposalLink.js';
+import AgencyQuote from '../../models/AgencyQuote.js';
 import User from '../../models/User.js';
 import { AppError } from '../../utils/AppError.js';
 import { agencyCan, type AgencyRole } from '../agency/access.js';
@@ -18,14 +20,11 @@ import {
   type AgencyClientSummary,
 } from '../agency/clients.js';
 import { userLabel } from '../collab/comments.js';
-import type { LinkOriginHints } from '../collab/invites.js';
 import {
   applyConversationRead,
   conversationMessages,
   conversationMeta,
-  conversationUrl,
   markAgencyConversationRead,
-  mintConversationToken,
   type ConversationMessageView,
   type ConversationUnreadView,
 } from './conversations.js';
@@ -81,6 +80,11 @@ export interface AgencyEnquiryAssigneeView {
   name: string;
 }
 
+export interface AgencyEnquiryProposalsView {
+  count: number;
+  lastAt: string | null;
+}
+
 export interface AgencyEnquiryView {
   id: string;
   status: AgencyEnquiryStatus;
@@ -111,6 +115,11 @@ export interface AgencyEnquiryView {
   messages?: ConversationMessageView[];
   /** When the guest link stops working (agency view only). */
   conversationExpiresAt: string | null;
+  /**
+   * Live proposals answering this enquiry (consumer history only). Lets the
+   * traveller see that a plan was sent without opening every thread.
+   */
+  proposals?: AgencyEnquiryProposalsView;
   createdAt: string | null;
   updatedAt: string | null;
 }
@@ -345,15 +354,14 @@ export interface EnquiryAcknowledgement {
   id: string;
   status: AgencyEnquiryStatus;
   createdAt: string | null;
-  /**
-   * The private guest thread (D8). The raw token exists only in this URL; the
-   * success screen shows it once and the traveller keeps it like a proposal link.
-   */
-  conversation: { url: string; expiresAt: string | null };
 }
 
 /**
  * Writes one enquiry for a published agency profile.
+ *
+ * The traveller is always a signed-in account, so the row is attributed and the
+ * thread, every reply and any proposal are reachable from `/enquiries`. Guest
+ * links are no longer minted; existing rows keep their token until it expires.
  *
  * The package check is deliberately scoped to the same agency **and** to a
  * published state: an unpublished or foreign package id is a 404, not a silent
@@ -362,9 +370,7 @@ export interface EnquiryAcknowledgement {
 export async function submitAgencyEnquiry(input: {
   slug: string;
   body: EnquirySubmissionInput;
-  userId?: string;
-  /** Where the guest conversation link should point (see `pickLinkOrigin`). */
-  linkOrigins?: LinkOriginHints;
+  userId: string;
 }): Promise<EnquiryAcknowledgement> {
   const record = await loadPublicAgencyRecord(input.slug);
   if (!record) {
@@ -393,32 +399,19 @@ export async function submitAgencyEnquiry(input: {
     packageId = new Types.ObjectId(String((pkg as any)._id));
   }
 
-  const userId =
-    input.userId && mongoose.isValidObjectId(input.userId)
-      ? new Types.ObjectId(input.userId)
-      : null;
-
-  const token = mintConversationToken();
   const enquiry = await AgencyEnquiry.create({
     agencyId: record.agency._id,
     packageId,
-    userId,
+    userId: new Types.ObjectId(input.userId),
     ...fields,
     source: packageId ? 'package' : 'profile',
     status: 'new',
-    conversationTokenHash: token.hash,
-    conversationTokenHint: token.hint,
-    conversationTokenExpiresAt: token.expiresAt,
   });
 
   return {
     id: String(enquiry._id),
     status: enquiry.status,
     createdAt: iso(enquiry.createdAt),
-    conversation: {
-      url: conversationUrl(token.raw, input.linkOrigins),
-      expiresAt: iso(token.expiresAt),
-    },
   };
 }
 
@@ -560,7 +553,11 @@ export function viewAgencyEnquiry(
   packages: Map<string, AgencyEnquiryPackageView> = new Map(),
   agency?: { name: string; slug: string } | null,
   relations?: EnquiryRelations,
-  options: { consumer?: boolean; includeMessages?: boolean } = {}
+  options: {
+    consumer?: boolean;
+    includeMessages?: boolean;
+    proposals?: AgencyEnquiryProposalsView;
+  } = {}
 ): AgencyEnquiryView {
   const consumer = options.consumer === true;
   const packageId = row?.packageId ? String(row.packageId) : '';
@@ -616,6 +613,7 @@ export function viewAgencyEnquiry(
     conversationExpiresAt: consumer
       ? null
       : iso(row?.conversationTokenExpiresAt),
+    ...(options.proposals ? { proposals: options.proposals } : {}),
     createdAt: iso(row?.createdAt),
     updatedAt: iso(row?.updatedAt),
   };
@@ -695,6 +693,66 @@ export async function getAgencyEnquiry(
   });
 }
 
+/**
+ * Live proposals per enquiry for the traveller's list. A proposal answers an
+ * enquiry by its stamped `enquiryId` or, for links minted before that field
+ * existed, through the quote's directory client. Only live links count, so the
+ * badge agrees with what the conversation will actually show.
+ */
+async function liveProposalsByEnquiry(
+  rows: any[]
+): Promise<Map<string, AgencyEnquiryProposalsView>> {
+  const counts = new Map<string, AgencyEnquiryProposalsView>();
+  if (rows.length === 0) return counts;
+
+  const enquiryIds = rows.map((row) => row._id);
+  const clientToEnquiry = new Map(
+    rows
+      .filter((row) => row?.clientId)
+      .map((row) => [String(row.clientId), String(row._id)])
+  );
+  const quotes = clientToEnquiry.size
+    ? ((await AgencyQuote.find({
+        clientId: { $in: [...clientToEnquiry.keys()] },
+      })
+        .select('_id clientId')
+        .lean()) as any[])
+    : [];
+  const quoteToEnquiry = new Map(
+    quotes.map((quote) => [
+      String(quote._id),
+      clientToEnquiry.get(String(quote.clientId)) ?? null,
+    ])
+  );
+
+  const links = (await AgencyProposalLink.find({
+    revokedAt: null,
+    expiresAt: { $gt: new Date() },
+    $or: [
+      { enquiryId: { $in: enquiryIds } },
+      ...(quotes.length ? [{ quoteId: { $in: quotes.map((quote) => quote._id) } }] : []),
+    ],
+  })
+    .select('enquiryId quoteId createdAt')
+    .lean()) as any[];
+
+  const known = new Set(enquiryIds.map(String));
+  for (const link of links) {
+    const enquiryId =
+      link.enquiryId && known.has(String(link.enquiryId))
+        ? String(link.enquiryId)
+        : quoteToEnquiry.get(String(link.quoteId));
+    if (!enquiryId) continue;
+
+    const entry = counts.get(enquiryId) ?? { count: 0, lastAt: null };
+    entry.count += 1;
+    const at = iso(link.createdAt);
+    if (at && (!entry.lastAt || at > entry.lastAt)) entry.lastAt = at;
+    counts.set(enquiryId, entry);
+  }
+  return counts;
+}
+
 /** A consumer's own history: only rows attributed to their verified session. */
 export async function listOwnEnquiries(input: {
   userId: string;
@@ -765,6 +823,7 @@ export async function listOwnEnquiries(input: {
     ])
   );
 
+  const proposals = await liveProposalsByEnquiry(pageRows);
   const last = pageRows[pageRows.length - 1];
   return {
     enquiries: pageRows.map((row) =>
@@ -773,7 +832,10 @@ export async function listOwnEnquiries(input: {
         packageTitles,
         agencyMap.get(String(row.agencyId)) ?? null,
         undefined,
-        { consumer: true }
+        {
+          consumer: true,
+          proposals: proposals.get(String(row._id)) ?? { count: 0, lastAt: null },
+        }
       )
     ),
     nextCursor: rows.length > limit && last ? encodeEnquiryCursor(last) : null,

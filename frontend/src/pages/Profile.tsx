@@ -3,6 +3,7 @@ import { Link, Navigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Ban,
+  ArrowUpRight,
   Camera,
   ExternalLink,
   Globe,
@@ -100,10 +101,11 @@ const Profile = () => {
   const [blocks, setBlocks] = useState<BlockedAccount[]>([]);
   const [blocksBusy, setBlocksBusy] = useState<string | null>(null);
 
-  // Sent enquiries (Milestone 9 D5). Anonymous submissions cannot be listed, so
-  // this card only ever shows rows the signed-in session was attributed to.
+  // Sent enquiries (Milestone 9). Anonymous submissions cannot be listed, so
+  // this card only ever shows rows the signed-in session was attributed to. It
+  // is a preview; the full list lives at `/enquiries`.
   const [myEnquiries, setMyEnquiries] = useState<AgencyEnquiry[]>([]);
-  const [showAllEnquiries, setShowAllEnquiries] = useState(false);
+  const [myEnquiriesTotal, setMyEnquiriesTotal] = useState(0);
 
   // Keep the field in sync with the session (including after a save).
   useEffect(() => {
@@ -135,19 +137,23 @@ const Profile = () => {
     };
   }, [user?._id]);
 
-  // M9 D5: sent enquiries. Non-fatal on failure — the card stays hidden rather
-  // than turning the profile page into an error.
+  // M9: sent enquiries, three most recent. Non-fatal on failure — the card stays
+  // hidden rather than turning the profile page into an error.
   useEffect(() => {
     if (!user?._id) return;
 
     let cancelled = false;
     api
-      .getMyEnquiries({ limit: 20 })
+      .getMyEnquiries({ limit: 3 })
       .then((page) => {
-        if (!cancelled) setMyEnquiries(page.enquiries || []);
+        if (cancelled) return;
+        setMyEnquiries(page.enquiries || []);
+        setMyEnquiriesTotal(page.total ?? 0);
       })
       .catch(() => {
-        if (!cancelled) setMyEnquiries([]);
+        if (cancelled) return;
+        setMyEnquiries([]);
+        setMyEnquiriesTotal(0);
       });
 
     return () => {
@@ -668,9 +674,9 @@ const Profile = () => {
                 Enquiries you've sent
               </CardTitle>
               <CardDescription>
-                Each enquiry went only to the agency you chose. Replies arrive in
-                your conversation here, so no email copy is needed — open a
-                thread to read it and answer back.
+                Each enquiry went only to the agency you chose. Replies and
+                proposals arrive in the conversation, so open a thread to read
+                them and answer back.
               </CardDescription>
               <Button
                 asChild
@@ -685,8 +691,7 @@ const Profile = () => {
               </Button>
             </CardHeader>
             <CardContent className="space-y-2">
-              {(showAllEnquiries ? myEnquiries : myEnquiries.slice(0, 3)).map(
-                (enquiry) => (
+              {myEnquiries.slice(0, 3).map((enquiry) => (
                   <div
                     key={enquiry.id}
                     className="space-y-1.5 rounded-2xl border border-border/60 bg-background/60 p-3"
@@ -744,12 +749,20 @@ const Profile = () => {
                     </p>
 
                     <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
                         {enquiry.replyCount > 0
                           ? `${enquiry.replyCount} ${
                               enquiry.replyCount === 1 ? "reply" : "replies"
                             } in this thread`
                           : "No reply yet"}
+                        {(enquiry.proposals?.count ?? 0) > 0 && (
+                          <span className="rounded-full border border-indigo-300 bg-indigo-50 px-1.5 py-0.5 font-bold text-indigo-800 dark:border-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
+                            {enquiry.proposals?.count}{" "}
+                            {enquiry.proposals?.count === 1
+                              ? "proposal"
+                              : "proposals"}
+                          </span>
+                        )}
                       </span>
                       <Button
                         asChild
@@ -764,22 +777,20 @@ const Profile = () => {
                       </Button>
                     </div>
                   </div>
-                )
-              )}
+                ))}
 
-              {myEnquiries.length > 3 && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="rounded-xl text-[11px] font-bold"
-                  onClick={() => setShowAllEnquiries((value) => !value)}
-                >
-                  {showAllEnquiries
-                    ? "Show fewer"
-                    : `Show all ${myEnquiries.length}`}
-                </Button>
-              )}
+              <Button
+                asChild
+                variant="ghost"
+                size="sm"
+                className="rounded-xl text-[11px] font-bold gap-1"
+              >
+                <Link to="/enquiries">
+                  View all {myEnquiriesTotal}{" "}
+                  {myEnquiriesTotal === 1 ? "enquiry" : "enquiries"}
+                  <ArrowUpRight className="h-3 w-3" />
+                </Link>
+              </Button>
             </CardContent>
           </Card>
         )}

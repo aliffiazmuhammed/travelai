@@ -83,7 +83,7 @@ const MyProposals: React.FC = () => {
           </div>
           <div className="flex items-center gap-2">
             <Button asChild variant="outline" size="sm" className="rounded-xl text-xs font-bold gap-1.5">
-              <Link to="/profile">
+              <Link to="/enquiries">
                 <Inbox className="h-3.5 w-3.5" />
                 Your enquiries
               </Link>

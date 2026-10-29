@@ -7,6 +7,8 @@ import AgencyEnquiry, { AGENCY_ENQUIRY_LIMITS } from '../../models/AgencyEnquiry
 import AgencyMember from '../../models/AgencyMember.js';
 import AgencyPackage from '../../models/AgencyPackage.js';
 import AgencyProfile from '../../models/AgencyProfile.js';
+import AgencyProposalLink from '../../models/AgencyProposalLink.js';
+import AgencyQuote from '../../models/AgencyQuote.js';
 import User from '../../models/User.js';
 import {
   createAgencyEnquirySchema,
@@ -50,6 +52,7 @@ const ADMIN_ID = '64c00000000000000000060a';
 const OTHER_MEMBER_ID = '64c00000000000000000060b';
 const CLIENT_ID = '64c00000000000000000060c';
 const TRIP_ID = '64c00000000000000000060d';
+const QUOTE_ID = '64c00000000000000000060e';
 
 let agencyRow: any = null;
 let agencyProfileRow: any = null;
@@ -57,6 +60,8 @@ let packageRows: any[] = [];
 let enquiryRows: any[] = [];
 let createdEnquiries: any[] = [];
 let clientRows: any[] = [];
+let quoteRows: any[] = [];
+let proposalLinkRows: any[] = [];
 let userRows: any[] = [];
 let memberIds: string[] = [];
 let auditRows: any[] = [];
@@ -83,6 +88,8 @@ const original = {
   memberExists: AgencyMember.exists,
   userFind: User.find,
   auditCreate: AgencyAudit.create,
+  quoteFind: AgencyQuote.find,
+  proposalLinkFind: AgencyProposalLink.find,
 };
 
 function thenable(value: any): any {
@@ -134,6 +141,13 @@ function matchesFilter(row: any, filter: any): boolean {
       }
       if ('$lt' in cond && !(value && new Date(value) < new Date(cond.$lt))) {
         return false;
+      }
+      if ('$gt' in cond && !(value && new Date(value) > new Date(cond.$gt))) {
+        return false;
+      }
+      if ('$in' in cond) {
+        const allowed = (cond.$in ?? []).map((entry: any) => String(entry));
+        if (!allowed.includes(String(value ?? ''))) return false;
       }
       if ('$exists' in cond) {
         const exists = value !== undefined && value !== null;
@@ -244,6 +258,11 @@ function matchesFilter(row: any, filter: any): boolean {
   return doc;
 };
 
+(AgencyQuote as any).find = (filter: any) =>
+  queryChain(quoteRows.filter((row) => matchesFilter(row, filter)));
+(AgencyProposalLink as any).find = (filter: any) =>
+  queryChain(proposalLinkRows.filter((row) => matchesFilter(row, filter)));
+
 function reset() {
   agencyRow = { _id: AGENCY_ID, name: 'Himalaya Trails', slug: 'himalaya-trails', status: 'active' };
   agencyProfileRow = { _id: PROFILE_ID, agencyId: AGENCY_ID, state: 'published' };
@@ -254,6 +273,8 @@ function reset() {
   enquiryRows = [];
   createdEnquiries = [];
   clientRows = [];
+  quoteRows = [];
+  proposalLinkRows = [];
   userRows = [
     { _id: ACTOR_ID, name: 'Asha Planner', email: 'asha@agency.test' },
     { _id: ADMIN_ID, name: 'Owner One', email: 'owner@agency.test' },
@@ -411,12 +432,13 @@ test('the request schema rejects unknown keys and a missing consent', () => {
 /*  Submission                                                                */
 /* -------------------------------------------------------------------------- */
 
-test('a guest enquiry writes one row against the resolved agency', async () => {
+test('an enquiry writes one row attributed to the signed-in traveller', async () => {
   reset();
 
   const ack = await submitAgencyEnquiry({
     slug: 'Himalaya-Trails',
     body: validBody(),
+    userId: USER_ID,
   });
 
   assert.equal(ack.id, ENQUIRY_ID);
@@ -425,12 +447,15 @@ test('a guest enquiry writes one row against the resolved agency', async () => {
 
   const row = createdEnquiries[0];
   assert.equal(String(row.agencyId), AGENCY_ID);
-  assert.equal(row.userId, null);
+  assert.equal(String(row.userId), USER_ID);
   assert.equal(row.packageId, null);
   assert.equal(row.source, 'profile');
   assert.equal(row.status, 'new');
   assert.equal(row.contact.email, 'asha@example.com');
   assert.ok(row.consentAt instanceof Date);
+  // Only a signed-in traveller can enquire, so no guest capability is minted.
+  assert.equal(row.conversationTokenHash, undefined);
+  assert.equal(row.conversationTokenExpiresAt, undefined);
 });
 
 test('a signed-in visitor is attributed, and a package enquiry keeps the card', async () => {
@@ -454,14 +479,24 @@ test('an unpublished agency, draft profile or foreign package is a 404', async (
   reset();
   agencyRow = null;
   await assert.rejects(
-    () => submitAgencyEnquiry({ slug: 'himalaya-trails', body: validBody() }),
+    () =>
+      submitAgencyEnquiry({
+        slug: 'himalaya-trails',
+        body: validBody(),
+        userId: USER_ID,
+      }),
     /not accepting enquiries/
   );
 
   reset();
   agencyProfileRow = null;
   await assert.rejects(
-    () => submitAgencyEnquiry({ slug: 'himalaya-trails', body: validBody() }),
+    () =>
+      submitAgencyEnquiry({
+        slug: 'himalaya-trails',
+        body: validBody(),
+        userId: USER_ID,
+      }),
     /not accepting enquiries/
   );
 
@@ -471,6 +506,7 @@ test('an unpublished agency, draft profile or foreign package is a 404', async (
       submitAgencyEnquiry({
         slug: 'himalaya-trails',
         body: validBody({ packageId: FOREIGN_PACKAGE_ID }),
+        userId: USER_ID,
       }),
     /no longer available/
   );
@@ -533,6 +569,53 @@ test('own history filters by the verified user and names each agency', async () 
     $and: [{ userId: USER_ID }],
   });
   assert.deepEqual(lastEnquiryCount, { userId: USER_ID });
+});
+
+test('own history counts only the live proposals answering each enquiry', async () => {
+  reset();
+  enquiryRows = [
+    enquiryRow({ userId: USER_ID, status: 'replied' }),
+    enquiryRow({ _id: OTHER_ENQUIRY_ID, userId: USER_ID, agencyId: OTHER_AGENCY_ID, clientId: CLIENT_ID }),
+  ];
+  agencyFindResults = [
+    [
+      { _id: AGENCY_ID, name: 'Himalaya Trails', slug: 'himalaya-trails' },
+      { _id: OTHER_AGENCY_ID, name: 'Coast & Co', slug: 'coast-and-co' },
+    ],
+  ];
+  quoteRows = [{ _id: QUOTE_ID, clientId: CLIENT_ID }];
+  const expiresAt = new Date('2027-01-01T00:00:00.000Z');
+  proposalLinkRows = [
+    { _id: 'link-1', enquiryId: ENQUIRY_ID, quoteId: null, expiresAt, createdAt: new Date('2026-10-28T10:00:00.000Z') },
+    { _id: 'link-2', enquiryId: ENQUIRY_ID, quoteId: null, expiresAt, createdAt: new Date('2026-10-28T12:00:00.000Z') },
+    // Minted before the enquiry id was stamped: reachable through the quote's client.
+    { _id: 'link-3', enquiryId: null, quoteId: QUOTE_ID, expiresAt, createdAt: new Date('2026-10-27T08:00:00.000Z') },
+    { _id: 'revoked', enquiryId: ENQUIRY_ID, quoteId: null, expiresAt, revokedAt: new Date('2026-10-28T13:00:00.000Z'), createdAt: new Date('2026-10-28T13:00:00.000Z') },
+    { _id: 'expired', enquiryId: ENQUIRY_ID, quoteId: null, expiresAt: new Date('2026-10-01T00:00:00.000Z'), createdAt: new Date('2026-09-01T00:00:00.000Z') },
+  ];
+
+  const page = await listOwnEnquiries({ userId: USER_ID });
+
+  assert.deepEqual(page.enquiries[0].proposals, {
+    count: 2,
+    lastAt: '2026-10-28T12:00:00.000Z',
+  });
+  assert.deepEqual(page.enquiries[1].proposals, {
+    count: 1,
+    lastAt: '2026-10-27T08:00:00.000Z',
+  });
+});
+
+test('own history reports no proposals when none answer an enquiry', async () => {
+  reset();
+  enquiryRows = [enquiryRow({ userId: USER_ID })];
+  agencyFindResults = [
+    [{ _id: AGENCY_ID, name: 'Himalaya Trails', slug: 'himalaya-trails' }],
+  ];
+
+  const page = await listOwnEnquiries({ userId: USER_ID });
+
+  assert.deepEqual(page.enquiries[0].proposals, { count: 0, lastAt: null });
 });
 
 test('cursors round-trip and garbage is a friendly 400', () => {
@@ -915,4 +998,6 @@ test.after(() => {
   (AgencyMember as any).exists = original.memberExists;
   (User as any).find = original.userFind;
   (AgencyAudit as any).create = original.auditCreate;
+  (AgencyQuote as any).find = original.quoteFind;
+  (AgencyProposalLink as any).find = original.proposalLinkFind;
 });

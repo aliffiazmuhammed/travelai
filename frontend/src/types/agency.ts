@@ -304,6 +304,11 @@ export interface AgencyEnquiry {
   lastMessageBy: AgencyConversationAuthor | null;
   /** Full thread on the detail read; omitted from list projections. */
   messages?: AgencyConversationMessage[];
+  /**
+   * Live proposals answering this enquiry — consumer history only. Absent on
+   * the agency inbox, which has its own quote surfaces.
+   */
+  proposals?: { count: number; lastAt: string | null };
   /** When the guest link stops working (agency view only). */
   conversationExpiresAt: string | null;
   createdAt: string | null;
@@ -338,8 +343,6 @@ export interface AgencyEnquiryAcknowledgement {
   id: string;
   status: AgencyEnquiryStatus;
   createdAt: string | null;
-  /** D8: the private guest thread link, shown once on the success screen. */
-  conversation: { url: string; expiresAt: string | null };
 }
 
 export interface AgencyEnquiryFilters {

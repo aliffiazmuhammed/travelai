@@ -143,7 +143,7 @@ test('gallery explore routes are anonymous and classified', () => {
   );
 });
 
-test('public agency directory routes are anonymous and classified', () => {
+test('public agency directory pages are anonymous; the enquiry write is personal-realm', () => {
   const layers = routeLayers(agenciesRouter);
   assert.deepEqual(
     layers.map(pathOf),
@@ -155,12 +155,12 @@ test('public agency directory routes are anonymous and classified', () => {
       '/:slug/enquiries',
       '/:slug',
     ],
-    'D3 adds the listing, facets and public logo; D4 package covers; D5 the one anonymous write'
+    'D3 adds the listing, facets and public logo; D4 package covers; D5 the one write'
   );
   assert.deepEqual(
-    layers.filter((layer) => guardKind(layer) !== undefined).map(pathOf),
-    [],
-    'A public directory page must never require a session or tenant role'
+    layers.filter((layer) => guarded(layer)).map((layer) => `${pathOf(layer)} ${guardKind(layer)}`),
+    ['/:slug/enquiries personal'],
+    'Browsing stays anonymous, but an enquiry must belong to a personal account so the thread and its replies have somewhere to live'
   );
 });
 
