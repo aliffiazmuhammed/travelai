@@ -15,6 +15,7 @@ import {
   formatAgencyDate,
 } from '@/lib/agency';
 import { cn } from '@/lib/utils';
+import { notifyEnquiryBadgeChanged } from '@/lib/enquiryBadge';
 import { useEnquiryLiveRefresh } from '@/hooks/useEnquiryEvents';
 import { api } from '@/services/api';
 import type {
@@ -46,6 +47,9 @@ const ConversationPage: React.FC = () => {
   // A quiet live refresh may overlap the first load; an older read must not
   // overwrite a newer thread.
   const requestSeq = useRef(0);
+  // Opening this thread clears its unread count server-side; the navbar badge
+  // is told once per transition instead of on every quiet poll.
+  const unreadRef = useRef<number | null>(null);
 
   const load = useCallback(async (quiet = false) => {
     const seq = ++requestSeq.current;
@@ -85,6 +89,13 @@ const ConversationPage: React.FC = () => {
       setConversation(next.conversation);
       setProposals(next.proposals);
       if (quiet) setError(null);
+      if (!guest) {
+        const unread = next.conversation.unread?.traveller ?? 0;
+        // `null` on the first read: the navbar may have counted before this
+        // request's receipt landed, so its pill needs one catch-up read.
+        if (unreadRef.current !== 0) notifyEnquiryBadgeChanged();
+        unreadRef.current = unread;
+      }
     } catch (err) {
       if (seq !== requestSeq.current || quiet) return;
       setError(
@@ -125,6 +136,7 @@ const ConversationPage: React.FC = () => {
     async (proposal: AgencyProposalSummary) => {
       await api.acceptMyProposal(proposal.id);
       await load(true);
+      notifyEnquiryBadgeChanged();
       toast.success(`${proposal.agency.name} has your acceptance.`);
     },
     [load]
@@ -134,6 +146,7 @@ const ConversationPage: React.FC = () => {
     async (proposal: AgencyProposalSummary) => {
       await api.declineMyProposal(proposal.id);
       await load(true);
+      notifyEnquiryBadgeChanged();
       toast.success('Proposal declined. The conversation stays open.');
     },
     [load]

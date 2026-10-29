@@ -203,8 +203,7 @@ const ProposalCard: React.FC<{
             </p>
           </div>
           <div className="col-span-2 text-[10px] text-muted-foreground">
-            {quote.validUntil ? `Valid until ${formatDate(quote.validUntil)}` : 'No expiry given'}
-            {proposal.expiresAt ? ` · link until ${formatDate(proposal.expiresAt)}` : ''}
+            {quote.validUntil ? `Price held until ${formatDate(quote.validUntil)}` : 'No expiry given'}
           </div>
         </div>
       ) : null}

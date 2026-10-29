@@ -13,6 +13,13 @@ import {
   acceptAgencyProposalForUser,
   declineAgencyProposalForUser,
 } from './proposals.js';
+import {
+  agencyChannel,
+  openStream,
+  resetForTests as resetBus,
+  userChannel,
+  type EnquiryEvent,
+} from '../realtime/enquiryEvents.js';
 
 /**
  * R6: the traveller's two in-app answers.
@@ -31,10 +38,14 @@ const ENQUIRY_ID = '64d000000000000000000b05';
 const USER_ID = '64d000000000000000000b06';
 const LINK_ID = '64d000000000000000000b07';
 const OTHER_USER_ID = '64d000000000000000000b08';
+const OTHER_TRIP_ID = '64d000000000000000000b09';
+const OTHER_QUOTE_ID = '64d000000000000000000b0a';
 
 let linkRow: any = null;
 let quoteRow: any = null;
 let enquiryRow: any = null;
+/** Accepted quotes elsewhere, for the duplicate-trip guard (R7). */
+let siblingQuotes: any[] = [];
 let audits: any[] = [];
 let linkUpdates: any[] = [];
 
@@ -85,6 +96,20 @@ const original = {
 });
 
 (AgencyQuote as any).findOne = (filter: any) => {
+  // R7's duplicate-trip guard excludes the link's own quote and matches on
+  // agency, trip and the accepted status.
+  if (filter?._id?.$ne !== undefined) {
+    const match = siblingQuotes.find(
+      (row) =>
+        (filter.agencyId === undefined ||
+          String(row.agencyId) === String(filter.agencyId)) &&
+        (filter.tripId === undefined ||
+          String(row.tripId) === String(filter.tripId)) &&
+        (filter.status === undefined || row.status === filter.status) &&
+        String(row._id) !== String(filter._id.$ne)
+    );
+    return chain(match ?? null);
+  }
   if (!quoteRow) return chain(null);
   if (String(filter?._id) !== String(QUOTE_ID)) return chain(null);
   // The ownership read selects only clientId; loadPinnedRows takes the row.
@@ -168,8 +193,10 @@ process.on('exit', () => {
 });
 
 function reset() {
+  resetBus();
   audits = [];
   linkUpdates = [];
+  siblingQuotes = [];
   linkRow = {
     _id: LINK_ID,
     agencyId: AGENCY_ID,
@@ -250,6 +277,73 @@ test('a second acceptance is idempotent, not a second quote write', async () => 
 
   assert.equal(again.status, 'accepted');
   assert.deepEqual(audits, [], 'no duplicate audit rows');
+});
+
+test('a second version of the same trip cannot be accepted', async () => {
+  reset();
+  siblingQuotes = [
+    {
+      _id: OTHER_QUOTE_ID,
+      agencyId: AGENCY_ID,
+      tripId: TRIP_ID,
+      status: 'accepted',
+      acceptedAt: new Date('2026-10-22T00:00:00.000Z'),
+    },
+  ];
+
+  await assert.rejects(
+    () => acceptAgencyProposalForUser(LINK_ID, USER_ID),
+    (error: any) =>
+      error instanceof AppError &&
+      error.statusCode === 409 &&
+      /already accepted another version/i.test(error.message)
+  );
+
+  assert.equal(quoteRow.status, 'sent', 'the open version stays open');
+  assert.equal(enquiryRow.status, 'quoted');
+  assert.deepEqual(audits, [], 'a refused answer writes nothing');
+});
+
+test('an accepted quote on another trip does not block this one', async () => {
+  reset();
+  siblingQuotes = [
+    {
+      _id: OTHER_QUOTE_ID,
+      agencyId: AGENCY_ID,
+      tripId: OTHER_TRIP_ID,
+      status: 'accepted',
+    },
+  ];
+
+  const result = await acceptAgencyProposalForUser(LINK_ID, USER_ID);
+
+  assert.equal(result.status, 'accepted');
+  assert.equal(quoteRow.status, 'accepted');
+});
+
+test('declining tells the agency once, and the traveller not at all', async () => {
+  reset();
+  const tenant: EnquiryEvent[] = [];
+  const traveller: EnquiryEvent[] = [];
+  openStream(agencyChannel(AGENCY_ID), {
+    deliver: (event) => tenant.push(event),
+    close: () => {},
+  });
+  openStream(userChannel(USER_ID), {
+    deliver: (event) => traveller.push(event),
+    close: () => {},
+  });
+
+  await declineAgencyProposalForUser(LINK_ID, USER_ID);
+  await declineAgencyProposalForUser(LINK_ID, USER_ID);
+
+  assert.equal(tenant.length, 1, 'the retry is not new information');
+  assert.equal(traveller.length, 0, 'the traveller just answered');
+  const frame = tenant[0] as any;
+  assert.equal(frame.type, 'proposal:declined');
+  assert.equal(frame.linkId, LINK_ID);
+  assert.equal(frame.enquiryId, ENQUIRY_ID);
+  assert.equal(frame.declinedAt, linkRow.declinedAt.toISOString());
 });
 
 test('a foreign account cannot accept or decline someone else’s proposal', async () => {

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowUpRight, Inbox, Loader2, RefreshCw, Sparkles } from 'lucide-react';
 import Navbar from '@/components/Navbar';
@@ -6,6 +6,8 @@ import ProposalComparison from '@/components/directory/ProposalComparison';
 import ProposalPreviewDialog from '@/components/directory/ProposalPreviewDialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { useEnquiryLiveRefresh } from '@/hooks/useEnquiryEvents';
+import { notifyEnquiryBadgeChanged } from '@/lib/enquiryBadge';
 import { api } from '@/services/api';
 import type { AgencyProposalSummary } from '@/types/agency';
 import { toast } from 'sonner';
@@ -25,32 +27,45 @@ const MyProposals: React.FC = () => {
   const [reloadKey, setReloadKey] = useState(0);
   const [preview, setPreview] = useState<AgencyProposalSummary | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+  // Newer reads win: a live refresh can start while the first load is in
+  // flight, and an older response must never overwrite a fresher list.
+  const requestSeq = useRef(0);
 
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
+  /**
+   * `quiet` is the live/poll path: it refreshes in place without the spinner
+   * and, on failure, leaves the cards already on screen alone.
+   */
+  const load = useCallback(async (quiet: boolean) => {
+    const seq = ++requestSeq.current;
+    if (!quiet) {
       setLoading(true);
       setError(null);
-      try {
-        const result = await api.getMyProposals();
-        if (!cancelled) setProposals(result.proposals ?? []);
-      } catch (err) {
-        if (!cancelled) {
-          setError(
-            err instanceof Error && err.message
-              ? err.message
-              : 'Your proposals could not be loaded right now.'
-          );
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [reloadKey]);
+    }
+    try {
+      const result = await api.getMyProposals();
+      if (seq !== requestSeq.current) return;
+      setProposals(result.proposals ?? []);
+      setError(null);
+    } catch (err) {
+      if (seq !== requestSeq.current || quiet) return;
+      setError(
+        err instanceof Error && err.message
+          ? err.message
+          : 'Your proposals could not be loaded right now.'
+      );
+    } finally {
+      if (!quiet) setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load(false);
+  }, [load, reloadKey]);
+
+  // A new proposal or a revised quote reaches this page as it happens (R7).
+  const liveMode = useEnquiryLiveRefresh(
+    useCallback(() => load(true), [load])
+  );
 
   const send = useCallback(async (proposal: AgencyProposalSummary, body: string) => {
     if (!proposal.enquiryId) {
@@ -73,6 +88,7 @@ const MyProposals: React.FC = () => {
           : row
       )
     );
+    notifyEnquiryBadgeChanged();
     toast.success(`${proposal.agency.name} has your acceptance.`);
   }, []);
 
@@ -85,6 +101,7 @@ const MyProposals: React.FC = () => {
           : row
       )
     );
+    notifyEnquiryBadgeChanged();
     toast.success('Proposal declined. The conversation stays open.');
   }, []);
 
@@ -111,6 +128,15 @@ const MyProposals: React.FC = () => {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {liveMode === 'live' ? (
+              <span
+                className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-2.5 py-1 text-[10px] font-bold text-primary"
+                title="New proposals appear here as they arrive"
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+                Live
+              </span>
+            ) : null}
             <Button asChild variant="outline" size="sm" className="rounded-xl text-xs font-bold gap-1.5">
               <Link to="/enquiries">
                 <Inbox className="h-3.5 w-3.5" />

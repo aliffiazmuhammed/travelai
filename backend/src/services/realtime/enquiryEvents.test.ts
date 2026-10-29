@@ -7,6 +7,7 @@ import {
   emitEnquiryRead,
   emitEnquiryUpdated,
   emitProposalCreated,
+  emitProposalDeclined,
   emitTo,
   isEnquirySseEnabled,
   openStream,
@@ -304,11 +305,35 @@ test('a new proposal notifies only the traveller who sent the enquiry', () => {
   ]);
 });
 
+test('a declined proposal reaches the tenant only, naming the link', () => {
+  const tenant = collect(agencyChannel(AGENCY_ID));
+  const traveller = collect(userChannel(USER_ID));
+
+  emitProposalDeclined({
+    agencyId: AGENCY_ID,
+    enquiryId: ENQUIRY_ID,
+    linkId: '64c000000000000000000807',
+    declinedAt: new Date('2026-10-29T10:00:00.000Z'),
+  });
+
+  assert.equal(traveller.events.length, 0, 'the traveller already answered');
+  assert.equal(tenant.events.length, 1);
+  assert.deepEqual(Object.keys(tenant.events[0]).sort(), [
+    'at',
+    'declinedAt',
+    'enquiryId',
+    'linkId',
+    'type',
+  ]);
+  assert.equal((tenant.events[0] as any).declinedAt, '2026-10-29T10:00:00.000Z');
+});
+
 test('an emitter with no row id is silent instead of addressing a shared channel', () => {
   const tenant = collect(agencyChannel(AGENCY_ID));
   emitEnquiryCreated({ agencyId: AGENCY_ID });
   emitEnquiryUpdated({ userId: USER_ID });
   emitEnquiryRead({}, 'agency');
   emitProposalCreated({ enquiryId: '', userId: USER_ID, linkId: 'l1' });
+  emitProposalDeclined({ agencyId: AGENCY_ID, linkId: '' });
   assert.equal(tenant.events.length, 0);
 });

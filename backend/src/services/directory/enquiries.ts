@@ -20,6 +20,7 @@ import {
   projectAgencyClient,
   type AgencyClientSummary,
 } from '../agency/clients.js';
+import { effectiveQuoteStatus } from '../agency/quotes.js';
 import { createAgencyTrip } from '../agency/trips.js';
 import { userLabel } from '../collab/comments.js';
 import {
@@ -718,7 +719,9 @@ export async function getAgencyEnquiry(
  *
  * `unansweredOnly` is what the nav badge wants: an accepted or declined link is
  * still a live proposal in the thread, but it is no longer work waiting for the
- * traveller.
+ * traveller. The pinned quote decides the rest: an agency-side acceptance never
+ * stamps the link, and a cancelled or lapsed quote keeps its share link
+ * looking live, so a link only counts when its quote is still `sent`.
  */
 async function liveProposalsByEnquiry(
   rows: any[],
@@ -759,8 +762,43 @@ async function liveProposalsByEnquiry(
     .select('enquiryId quoteId createdAt')
     .lean()) as any[];
 
+  let answerable: Set<string> | null = null;
+  if (options.unansweredOnly) {
+    const pinnedIds = [
+      ...new Set(links.map((link) => String(link.quoteId ?? '')).filter(Boolean)),
+    ];
+    const pinned = pinnedIds.length
+      ? ((await AgencyQuote.find({ _id: { $in: pinnedIds } })
+          .select('_id tripId status validUntil')
+          .lean()) as any[])
+      : [];
+    // Accepting one version settles the trip: its other open versions are no
+    // longer work waiting for the traveller, even though their quotes are still
+    // `sent` (a second acceptance is refused).
+    const tripIds = [...new Set(pinned.map((quote) => String(quote.tripId ?? '')).filter(Boolean))];
+    const acceptedTrips = new Set(
+      (
+        (tripIds.length
+          ? await AgencyQuote.find({ tripId: { $in: tripIds }, status: 'accepted' })
+              .select('tripId')
+              .lean()
+          : []) as any[]
+      ).map((quote) => String(quote.tripId))
+    );
+    answerable = new Set(
+      pinned
+        .filter(
+          (quote) =>
+            effectiveQuoteStatus(quote) === 'sent' &&
+            !acceptedTrips.has(String(quote.tripId))
+        )
+        .map((quote) => String(quote._id))
+    );
+  }
+
   const known = new Set(enquiryIds.map(String));
   for (const link of links) {
+    if (answerable && !answerable.has(String(link.quoteId))) continue;
     const enquiryId =
       link.enquiryId && known.has(String(link.enquiryId))
         ? String(link.enquiryId)
@@ -870,7 +908,7 @@ export async function listOwnEnquiries(input: {
 export interface OwnEnquirySummaryView {
   /** Agency messages this account has not opened, across every enquiry. */
   unread: number;
-  /** Live proposals this account has not answered (accept or decline). */
+  /** Live proposals this account can still answer (accept or decline). */
   liveProposals: number;
   lastMessageAt: string | null;
 }

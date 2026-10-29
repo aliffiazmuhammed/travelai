@@ -63,7 +63,14 @@ export type EnquiryEvent =
       at: string;
     }
   | { type: 'enquiry:read'; enquiryId: string; side: EnquiryReadSide; at: string }
-  | { type: 'proposal:new'; enquiryId: string; linkId: string; at: string };
+  | { type: 'proposal:new'; enquiryId: string; linkId: string; at: string }
+  | {
+      type: 'proposal:declined';
+      enquiryId: string;
+      linkId: string;
+      declinedAt: string | null;
+      at: string;
+    };
 
 export interface StreamSink {
   deliver: (event: EnquiryEvent) => void;
@@ -263,6 +270,30 @@ export function emitProposalCreated(input: {
     type: 'proposal:new',
     enquiryId,
     linkId,
+    at: new Date().toISOString(),
+  });
+}
+
+/**
+ * The traveller turned this version down (R7). Only the tenant hears about it:
+ * the traveller just answered their own screen, and the agency is the side that
+ * needs to react. An ad-hoc client link carries no `enquiryId`; the frame names
+ * the link instead.
+ */
+export function emitProposalDeclined(input: {
+  agencyId: unknown;
+  enquiryId?: unknown;
+  linkId: unknown;
+  declinedAt?: unknown;
+}): void {
+  const linkId = String(input.linkId ?? '');
+  const channel = agencyChannel(input.agencyId);
+  if (!linkId || !channel) return;
+  emitTo(channel, {
+    type: 'proposal:declined',
+    enquiryId: String(input.enquiryId ?? ''),
+    linkId,
+    declinedAt: iso(input.declinedAt),
     at: new Date().toISOString(),
   });
 }

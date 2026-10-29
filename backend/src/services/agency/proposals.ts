@@ -21,7 +21,7 @@ import {
 } from '../collab/invites.js';
 import { agencyCan, type AgencyRole } from './access.js';
 import { recordAgencyAudit } from './audit.js';
-import { emitProposalCreated } from '../realtime/enquiryEvents.js';
+import { emitProposalCreated, emitProposalDeclined } from '../realtime/enquiryEvents.js';
 import {
   markEnquiryQuotedByProposal,
   markEnquiryWonByAcceptance,
@@ -589,6 +589,24 @@ async function acceptLink(
     throw new AppError('This proposal is not ready to accept yet.', 409);
   }
 
+  // A trip can carry several versions, each with its own link. Accepting a
+  // second one would leave the agency with two accepted quotes for the same
+  // booking, so the first answer stands until staff send something new.
+  const acceptedElsewhere = await AgencyQuote.findOne({
+    agencyId: link.agencyId,
+    tripId: quote.tripId,
+    status: 'accepted',
+    _id: { $ne: quote._id },
+  })
+    .select('_id')
+    .lean();
+  if (acceptedElsewhere) {
+    throw new AppError(
+      'You already accepted another version of this proposal. Ask the agency to send an update if your plans changed.',
+      409
+    );
+  }
+
   const accepted = await AgencyQuote.findOneAndUpdate(
     { _id: quote._id, status: 'sent' },
     { $set: { status: 'accepted', acceptedAt: new Date() } },
@@ -715,6 +733,12 @@ export async function declineAgencyProposalForUser(
       quoteId: String(link.quoteId),
       via: 'in-app',
     },
+  });
+  emitProposalDeclined({
+    agencyId: link.agencyId,
+    enquiryId: link.enquiryId,
+    linkId: link._id,
+    declinedAt: declined.declinedAt,
   });
 
   return { status: 'declined', declinedAt: declined.declinedAt! };

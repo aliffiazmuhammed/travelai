@@ -8,6 +8,7 @@ import { useAuth } from "@/context/UserContext";
 import { useGalleryEnabled } from "@/hooks/useGalleryEnabled";
 import { useAgencyDirectoryEnabled } from "@/hooks/useAgencyDirectoryEnabled";
 import { avatarSrc, initialsFor } from "@/lib/avatar";
+import { ENQUIRY_BADGE_EVENT } from "@/lib/enquiryBadge";
 import { api } from "@/services/api";
 import { cn } from "@/lib/utils";
 
@@ -66,29 +67,35 @@ const Navbar = () => {
     }
   }, []);
 
-  // M9 R6: refetch the badge counters when the page changes, so opening a
-  // thread (which clears its unread count) is reflected on the next screen.
+  // M9 R6/R7: refetch the badge counters when the page changes, and when a
+  // page announces the counters moved without navigating (a thread marked read,
+  // a proposal answered) — so the pill never lags behind the visitor.
   useEffect(() => {
     if (!isAuthenticated) {
       setEnquiryBadge({ unread: 0, proposals: 0 });
       return;
     }
     let cancelled = false;
-    void api
-      .getMyEnquirySummary()
-      .then((result) => {
-        if (!cancelled) {
-          setEnquiryBadge({
-            unread: result.summary.unread,
-            proposals: result.summary.liveProposals,
-          });
-        }
-      })
-      .catch(() => {
-        /* badge only */
-      });
+    const refresh = () => {
+      void api
+        .getMyEnquirySummary()
+        .then((result) => {
+          if (!cancelled) {
+            setEnquiryBadge({
+              unread: result.summary.unread,
+              proposals: result.summary.liveProposals,
+            });
+          }
+        })
+        .catch(() => {
+          /* badge only */
+        });
+    };
+    refresh();
+    window.addEventListener(ENQUIRY_BADGE_EVENT, refresh);
     return () => {
       cancelled = true;
+      window.removeEventListener(ENQUIRY_BADGE_EVENT, refresh);
     };
   }, [isAuthenticated, location.pathname]);
 

@@ -1370,12 +1370,70 @@ test('the personal summary counts unread replies and live proposals', async () =
       messages: [],
     }),
   ];
+  // The badge counts only what the traveller can still answer (R7): the pinned
+  // quote decides, and one accepted version settles its whole trip.
+  const TRIP_OPEN = '64c000000000000000000801';
+  const TRIP_ACCEPTED = '64c000000000000000000802';
+  const TRIP_LAPSED = '64c000000000000000000803';
+  const TRIP_CANCELLED = '64c000000000000000000804';
+  const TRIP_SETTLED = '64c000000000000000000805';
+  const LIVE_QUOTE = '64c000000000000000000701';
+  const ANSWERED_QUOTE = '64c000000000000000000702';
+  const AGENCY_ACCEPTED_QUOTE = '64c000000000000000000703';
+  const LAPSED_QUOTE = '64c000000000000000000704';
+  const CANCELLED_QUOTE = '64c000000000000000000705';
+  const OPEN_SIBLING_QUOTE = '64c000000000000000000706';
+  const ACCEPTED_SIBLING_QUOTE = '64c000000000000000000707';
+  quoteRows = [
+    {
+      _id: LIVE_QUOTE,
+      tripId: TRIP_OPEN,
+      status: 'sent',
+      validUntil: new Date(Date.now() + 86_400_000),
+    },
+    {
+      _id: ANSWERED_QUOTE,
+      tripId: TRIP_OPEN,
+      status: 'sent',
+      validUntil: new Date(Date.now() + 86_400_000),
+    },
+    {
+      _id: AGENCY_ACCEPTED_QUOTE,
+      tripId: TRIP_ACCEPTED,
+      status: 'accepted',
+      validUntil: new Date(Date.now() + 86_400_000),
+    },
+    {
+      _id: LAPSED_QUOTE,
+      tripId: TRIP_LAPSED,
+      status: 'sent',
+      validUntil: new Date('2020-01-01T00:00:00.000Z'),
+    },
+    {
+      _id: CANCELLED_QUOTE,
+      tripId: TRIP_CANCELLED,
+      status: 'cancelled',
+      validUntil: new Date(Date.now() + 86_400_000),
+    },
+    {
+      _id: OPEN_SIBLING_QUOTE,
+      tripId: TRIP_SETTLED,
+      status: 'sent',
+      validUntil: new Date(Date.now() + 86_400_000),
+    },
+    {
+      _id: ACCEPTED_SIBLING_QUOTE,
+      tripId: TRIP_SETTLED,
+      status: 'accepted',
+      validUntil: new Date(Date.now() + 86_400_000),
+    },
+  ];
   proposalLinkRows = [
     {
       _id: '64c0000000000000000006f3',
       agencyId: AGENCY_ID,
       enquiryId: OTHER_ENQUIRY_ID,
-      quoteId: null,
+      quoteId: LIVE_QUOTE,
       revokedAt: null,
       expiresAt: new Date(Date.now() + 86_400_000),
       createdAt: new Date('2026-10-28T11:00:00.000Z'),
@@ -1386,7 +1444,7 @@ test('the personal summary counts unread replies and live proposals', async () =
       _id: '64c0000000000000000006f4',
       agencyId: AGENCY_ID,
       enquiryId: OTHER_ENQUIRY_ID,
-      quoteId: null,
+      quoteId: ANSWERED_QUOTE,
       revokedAt: null,
       expiresAt: new Date(Date.now() + 86_400_000),
       acceptedAt: new Date('2026-10-28T12:00:00.000Z'),
@@ -1396,11 +1454,52 @@ test('the personal summary counts unread replies and live proposals', async () =
       _id: '64c0000000000000000006f5',
       agencyId: AGENCY_ID,
       enquiryId: OTHER_ENQUIRY_ID,
-      quoteId: null,
+      quoteId: ANSWERED_QUOTE,
       revokedAt: null,
       expiresAt: new Date(Date.now() + 86_400_000),
       declinedAt: new Date('2026-10-28T12:10:00.000Z'),
       createdAt: new Date('2026-10-28T11:20:00.000Z'),
+    },
+    // R7: the agency accepted from its own quote screen, which never stamps the
+    // link; the quote itself is the truth.
+    {
+      _id: '64c0000000000000000006f6',
+      agencyId: AGENCY_ID,
+      enquiryId: OTHER_ENQUIRY_ID,
+      quoteId: AGENCY_ACCEPTED_QUOTE,
+      revokedAt: null,
+      expiresAt: new Date(Date.now() + 86_400_000),
+      createdAt: new Date('2026-10-28T11:30:00.000Z'),
+    },
+    // R7: a lapsed or withdrawn quote leaves its link looking live.
+    {
+      _id: '64c0000000000000000006f7',
+      agencyId: AGENCY_ID,
+      enquiryId: OTHER_ENQUIRY_ID,
+      quoteId: LAPSED_QUOTE,
+      revokedAt: null,
+      expiresAt: new Date(Date.now() + 86_400_000),
+      createdAt: new Date('2026-10-28T11:40:00.000Z'),
+    },
+    {
+      _id: '64c0000000000000000006f8',
+      agencyId: AGENCY_ID,
+      enquiryId: OTHER_ENQUIRY_ID,
+      quoteId: CANCELLED_QUOTE,
+      revokedAt: null,
+      expiresAt: new Date(Date.now() + 86_400_000),
+      createdAt: new Date('2026-10-28T11:50:00.000Z'),
+    },
+    // R7: the version itself is open, but the same trip is already accepted
+    // somewhere else, so accepting this one would be refused.
+    {
+      _id: '64c0000000000000000006f9',
+      agencyId: AGENCY_ID,
+      enquiryId: OTHER_ENQUIRY_ID,
+      quoteId: OPEN_SIBLING_QUOTE,
+      revokedAt: null,
+      expiresAt: new Date(Date.now() + 86_400_000),
+      createdAt: new Date('2026-10-28T12:00:00.000Z'),
     },
   ];
 

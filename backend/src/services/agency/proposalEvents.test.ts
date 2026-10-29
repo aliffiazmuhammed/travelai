@@ -91,7 +91,23 @@ function quoteQuery(value: any): any {
   quoteVersion: 2,
   templateName: 'Classic',
 });
-(AgencyQuote as any).findOne = () => quoteQuery(quoteRow);
+(AgencyQuote as any).findOne = (filter: any) => {
+  if (!quoteRow) return quoteQuery(null);
+  // R7 adds a sibling read (another accepted quote on the trip); honour the
+  // filters so this row is never mistaken for a sibling.
+  const id = filter?._id;
+  const matches =
+    (filter?.agencyId === undefined ||
+      String(quoteRow.agencyId) === String(filter.agencyId)) &&
+    (filter?.tripId === undefined ||
+      String(quoteRow.tripId) === String(filter.tripId)) &&
+    (filter?.status === undefined || quoteRow.status === filter.status) &&
+    (id === undefined ||
+      (typeof id === 'object'
+        ? id.$ne === undefined || String(quoteRow._id) !== String(id.$ne)
+        : String(quoteRow._id) === String(id)));
+  return quoteQuery(matches ? quoteRow : null);
+};
 (AgencyQuote as any).findOneAndUpdate = (filter: any, update: any) => {
   const matches =
     quoteRow &&

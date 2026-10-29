@@ -45,7 +45,14 @@ export type EnquiryFrame =
       at: string;
     }
   | { type: 'enquiry:read'; enquiryId: string; side: AgencyConversationAuthor; at: string }
-  | { type: 'proposal:new'; enquiryId: string; linkId: string; at: string };
+  | { type: 'proposal:new'; enquiryId: string; linkId: string; at: string }
+  | {
+      type: 'proposal:declined';
+      enquiryId: string;
+      linkId: string;
+      declinedAt: string | null;
+      at: string;
+    };
 
 /**
  * - `off`     — caller disabled the channel (the guest link has no account).
