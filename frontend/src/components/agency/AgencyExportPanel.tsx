@@ -745,6 +745,14 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
                           Accepted
                         </Badge>
                       ) : null}
+                      {link.declinedAt ? (
+                        <Badge
+                          variant="outline"
+                          className="border-rose-300 bg-rose-50 text-[10px] text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300"
+                        >
+                          Declined
+                        </Badge>
+                      ) : null}
                       {link.revokedAt ? (
                         <Badge
                           variant="outline"
@@ -783,6 +791,9 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
                         : ' · not viewed yet'}
                       {link.acceptedAt
                         ? ` · accepted ${formatAgencyDate(link.acceptedAt)}`
+                        : ''}
+                      {link.declinedAt
+                        ? ` · declined ${formatAgencyDate(link.declinedAt)}`
                         : ''}
                     </p>
                   </div>

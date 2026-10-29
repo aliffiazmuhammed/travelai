@@ -291,6 +291,8 @@ export interface AgencyEnquiry {
   package: { id: string; title: string; tripId?: string | null } | null;
   agency?: { name: string; slug: string } | null;
   client: { id: string; name: string } | null;
+  /** Tenant-only: the trip started from this lead, for the quote hand-off. */
+  tripId: string | null;
   assignedTo: string | null;
   assignee: { id: string; name: string } | null;
   consentAt: string | null;
@@ -393,6 +395,20 @@ export interface AgencyEnquirySummary {
   summary: AgencyEnquirySummaryView;
 }
 
+/** The traveller's own badge counters (M9 R1), used by the personal nav. */
+export interface MyEnquirySummary {
+  /** Agency messages this account has not opened, across every enquiry. */
+  unread: number;
+  /** Live proposals answering any of them. */
+  liveProposals: number;
+  lastMessageAt: string | null;
+}
+
+export interface MyEnquirySummaryResponse {
+  success: boolean;
+  summary: MyEnquirySummary;
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Enquiry conversations (M9 D8)                                             */
 /* -------------------------------------------------------------------------- */
@@ -462,6 +478,8 @@ export interface AgencyProposalSummary {
   createdAt: string | null;
   expiresAt: string | null;
   acceptedAt: string | null;
+  /** The traveller turned down this version in-app (M9 R6). */
+  declinedAt: string | null;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -866,6 +884,8 @@ export interface AgencyProposalView {
   canAccept: boolean;
   accepted: boolean;
   acceptedAt: string | null;
+  declined: boolean;
+  declinedAt: string | null;
   html: string;
   /** `pdf` means the viewer must show the pinned export PDF instead. */
   documentMode: 'html' | 'pdf';
@@ -881,6 +901,12 @@ export interface AgencyProposalAcceptResult {
   quote: AgencyQuote;
 }
 
+/** The traveller answered "not this one" (M9 R6); the version is closed. */
+export interface AgencyProposalDeclineResult {
+  status: 'declined';
+  declinedAt: string;
+}
+
 /** Staff-side row in the trip's share list. The token itself never returns. */
 export interface AgencyProposalLink {
   _id: string;
@@ -894,6 +920,7 @@ export interface AgencyProposalLink {
   lastViewedAt: string | null;
   viewCount: number;
   acceptedAt: string | null;
+  declinedAt: string | null;
 }
 
 /* -------------------------------------------------------------------------- */

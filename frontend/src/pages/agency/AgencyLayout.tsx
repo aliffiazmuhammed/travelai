@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   BriefcaseBusiness,
@@ -30,6 +30,7 @@ import { useAgency } from '@/context/AgencyContext';
 import { avatarSrc, initialsFor } from '@/lib/avatar';
 import { agencyRoleBadgeClass, agencyRoleLabel } from '@/lib/agency';
 import { cn } from '@/lib/utils';
+import { useEnquiryLiveRefresh } from '@/hooks/useEnquiryEvents';
 import { api } from '@/services/api';
 
 const navItems = [
@@ -63,26 +64,36 @@ const AgencyLayout: React.FC = () => {
   const { activeAgency, activeAgencyId, loading, error, canManage } = useAgency();
   const [newLeads, setNewLeads] = useState(0);
 
-  // D6: the nav badge is the cheapest possible nudge — it refetches on route
-  // changes and stays silent when the summary fails (the inbox still works).
+  // D6: the cheapest possible nudge. It refetches on route changes and stays
+  // silent when the summary fails (the inbox still works).
+  const refreshBadge = useCallback(async () => {
+    if (!activeAgencyId) return;
+    try {
+      const result = await api.getAgencyEnquirySummary();
+      setNewLeads(result.summary.byStatus.new);
+    } catch {
+      /* badge only */
+    }
+  }, [activeAgencyId]);
+
   useEffect(() => {
     if (!activeAgencyId) {
       setNewLeads(0);
       return;
     }
-    let cancelled = false;
-    void api
-      .getAgencyEnquirySummary()
-      .then((result) => {
-        if (!cancelled) setNewLeads(result.summary.byStatus.new);
-      })
-      .catch(() => {
-        /* badge only */
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [activeAgencyId, location.pathname]);
+    void refreshBadge();
+  }, [activeAgencyId, location.pathname, refreshBadge]);
+
+  // R6: outside the inbox the badge listens to the workspace stream, so a lead
+  // that arrives while the team is on Trips still shows. The inbox page runs
+  // its own stream and refreshes the same counter, so this one stays closed
+  // there rather than opening a second connection.
+  const onInbox = location.pathname.startsWith('/agency/enquiries');
+  useEnquiryLiveRefresh(refreshBadge, {
+    enabled: Boolean(activeAgencyId) && !onInbox,
+    channel: 'agency',
+    streamKey: activeAgencyId ?? undefined,
+  });
 
   const visibleNavItems = navItems.filter(
     (item) => !('adminOnly' in item && item.adminOnly) || canManage

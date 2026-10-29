@@ -82,3 +82,35 @@ export const AGENCY_ENQUIRY_BUDGET_LABELS: Record<AgencyEnquiryBudgetBand, strin
   above_1l: 'Above ₹1,00,000 per person',
   not_sure: 'Not sure yet',
 };
+
+/**
+ * The same funnel, in the traveller's words (M9 R6).
+ *
+ * The agency vocabulary describes its own pipeline (`new` = work to pick up,
+ * `won` = revenue), which reads as an internal status on the traveller's
+ * screens. These labels say what the traveller is waiting for instead, and
+ * "Accepted" deliberately avoids implying a booking: accepting a proposal
+ * confirms the quote, it does not take a payment.
+ */
+export const TRAVELLER_ENQUIRY_STATUS_LABELS: Record<AgencyEnquiryStatus, string> = {
+  new: 'Sent',
+  replied: 'Replied',
+  quoted: 'Proposal ready',
+  won: 'Accepted',
+  lost: 'Closed',
+};
+
+export function travellerEnquiryStatusBadgeClass(
+  status: AgencyEnquiryStatus
+): string {
+  switch (status) {
+    case 'replied':
+      return 'border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-700 dark:bg-sky-950/40 dark:text-sky-300';
+    case 'quoted':
+      return 'border-indigo-300 bg-indigo-50 text-indigo-800 dark:border-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300';
+    case 'won':
+      return 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300';
+    default:
+      return 'border-border bg-muted text-foreground/75';
+  }
+}

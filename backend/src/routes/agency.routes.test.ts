@@ -84,6 +84,7 @@ test('A1-A8 agency API exposes the expected route table', () => {
     '/enquiries/:enquiryId GET',
     '/enquiries/:enquiryId PATCH',
     '/enquiries/:enquiryId/convert POST',
+    '/enquiries/:enquiryId/trip POST',
     '/enquiries/:enquiryId/messages POST',
     '/enquiries/:enquiryId/read POST',
     '/:agencyId GET',
@@ -328,6 +329,7 @@ test('trip writes, directory writes, quote actions and exports require planner r
     '/:agencyId/trips/:tripId/quote/cancel POST',
     '/enquiries/:enquiryId PATCH',
     '/enquiries/:enquiryId/convert POST',
+    '/enquiries/:enquiryId/trip POST',
     '/enquiries/:enquiryId/messages POST',
   ]);
   for (const layer of routeLayers()) {

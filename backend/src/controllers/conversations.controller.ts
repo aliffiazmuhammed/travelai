@@ -7,6 +7,8 @@ import type { AuthenticatedRequest } from '../types/index.js';
 import { AppError } from '../utils/AppError.js';
 import { catchAsync } from '../utils/catchAsync.js';
 import {
+  acceptAgencyProposalForUser,
+  declineAgencyProposalForUser,
   getAgencyProposalForUser,
   getProposalForEnquiry,
   listConsumerProposals,
@@ -174,5 +176,27 @@ export const downloadMyProposalHandler = catchAsync(
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(buffer);
+  }
+);
+
+/** `POST /api/proposals/:linkId/accept` — the owner accepts in-app (R6). */
+export const acceptMyProposalHandler = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const acceptance = await acceptAgencyProposalForUser(
+      String(req.params.linkId || ''),
+      requireUserId(req)
+    );
+    res.json({ success: true, acceptance });
+  }
+);
+
+/** `POST /api/proposals/:linkId/decline` — the owner turns down this version. */
+export const declineMyProposalHandler = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const decline = await declineAgencyProposalForUser(
+      String(req.params.linkId || ''),
+      requireUserId(req)
+    );
+    res.json({ success: true, decline });
   }
 );

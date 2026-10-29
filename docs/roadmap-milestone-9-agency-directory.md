@@ -1,6 +1,6 @@
 # Milestone 9 — Agency Directory & Enquiries
 
-**Status:** D1–D9 implemented (2026-10-29) — profile contract, agency-side editor, the public listing + profile pages with the public logo route, packages as snapshot cards with a builder and from-price, the public enquiry form with a tenant inbox, the D6 inbox actions + idempotent conversion into a directory client with a quote hand-off, D7 verification, reply time, ops delisting and the launch gate, D8 two-way enquiry conversations and proposal comparison, D9 requiring a personal account to send an enquiry, and R1–R3 of the live tier (SSE streams behind `ENABLE_ENQUIRY_SSE`, live traveller list/thread and agency inbox, 20s poll fallback). The defaults below stand as shipped unless a later decision says otherwise.
+**Status:** D1–D9 implemented (2026-10-29) — profile contract, agency-side editor, the public listing + profile pages with the public logo route, packages as snapshot cards with a builder and from-price, the public enquiry form with a tenant inbox, the D6 inbox actions + idempotent conversion into a directory client with a quote hand-off, D7 verification, reply time, ops delisting and the launch gate, D8 two-way enquiry conversations and proposal comparison, D9 requiring a personal account to send an enquiry, R1–R3 of the live tier (SSE streams behind `ENABLE_ENQUIRY_SSE`, live traveller list/thread and agency inbox, 20s poll fallback), **R5** closing the loop (start a trip from any lead, quotes written back to the funnel, guarded status moves), and **R6** the polish batch (in-app accept/decline, a traveller vocabulary for the funnel, nav badges outside the inboxes). The defaults below stand as shipped unless a later decision says otherwise.
 **Scope:** give onboarded agencies a public, searchable profile with services and package cards, and give travellers a single enquiry form that lands in the agency's workspace as a lead that can become a client and a quote.
 
 **Basis:** planning read the existing agency domain (`backend/src/models/Agency.ts`, `AgencyQuote.ts`, `AgencyClient`, `services/agency/access.ts`, `plan.ts`, `routes/agency.routes.ts`), the gallery's public-surface patterns (`services/gallery/explore.ts`, `projection.ts`, `traveler.ts`) and the shared gating hook (`frontend/src/hooks/useGalleryEnabled.ts`). No market research is implied.
@@ -44,6 +44,7 @@ The directory is intentionally separate from the proposal pipeline: a directory 
 5. **Enquiries are inert.** Submitting one creates exactly one enquiry row — no client, no quote, no membership, no notification of anyone outside the owning tenant. Conversion is an explicit agency action.
 6. **Tenant isolation on every agency-realm route**: an enquiry, package or profile is reachable only through `protectAgency` + the owning `agencyId`; a member of agency A gets 404 for agency B's rows.
 7. **The enquiry write requires a personal session (D9).** It sits behind `protectPersonal`, is rate-limited per IP, per email and per agency, CSRF-protected, consent-stamped, attributed to the signed-in account, and never echoes submitted PII back in URLs or logs. Directory reads stay anonymous.
+8. **The funnel only moves when the work moves (R5).** A share writes `quoted`, an acceptance writes `won`, and manual moves follow a transition map with `won` requiring a directory client; conversion to a client is bookkeeping and never a win. A declined proposal (R6) moves nothing: it closes that version of the share, not the lead.
 
 ## 3. Data model
 
@@ -51,7 +52,7 @@ The directory is intentionally separate from the proposal pipeline: a directory 
 |---|---|
 | `AgencyProfile` (new) | `agencyId` (unique), `state: 'draft' \| 'published' \| 'hidden'`, `about` (≤1200), `baseCity`, `destinations[]`, `specialties[]`, `languages[]`, `services: { id, label }[]` or enum list, `showPhone`, `showGstin`, `publishedAt`, `verifiedAt?`, `moderation: { hiddenAt?, hiddenBy?, reason? }`, timestamps |
 | `AgencyPackage` (new) | `agencyId`, `tripId?` (never projected), `title`, `coverUrl`, `nights`, `fromPricePerPerson?`, `currency` (default INR), `summary` (≤280), `highlights[]` (≤6), `inclusions[]`, `state: 'draft' \| 'published'`, `order`, `publishedAt`, timestamps |
-| `AgencyEnquiry` (new) | `agencyId`, `packageId?`, `userId?`, `contact { name, email, phone? }`, `party { adults, children }`, `dates { start?, end?, flexible }`, `budgetBand?`, `message` (≤1500), `source: 'profile' \| 'package'`, `status: 'new' \| 'replied' \| 'quoted' \| 'won' \| 'lost'`, `lostReason?`, `assignedTo?`, `consentAt`, `repliedAt?`, `convertedAt?`, timestamps; **D8:** `messages[]` (author, authorId?, authorName, body ≤2000, timestamps, per-side read receipts, cap 500), `lastMessageAt?`, `lastMessageBy?`, `conversationTokenHash?` (partial unique), `conversationTokenHint?`, `conversationTokenExpiresAt?` |
+| `AgencyEnquiry` (new) | `agencyId`, `packageId?`, `userId?`, `contact { name, email, phone? }`, `party { adults, children }`, `dates { start?, end?, flexible }`, `budgetBand?`, `message` (≤1500), `source: 'profile' \| 'package'`, `status: 'new' \| 'replied' \| 'quoted' \| 'won' \| 'lost'`, `lostReason?`, `assignedTo?`, `consentAt`, `repliedAt?`, `convertedAt?`, **R5:** `tripId?` (tenant-only, the trip started from this lead), timestamps; **D8:** `messages[]` (author, authorId?, authorName, body ≤2000, timestamps, per-side read receipts, cap 500), `lastMessageAt?`, `lastMessageBy?`, `conversationTokenHash?` (partial unique), `conversationTokenHint?`, `conversationTokenExpiresAt?` |
 | `AgencyClient` | add optional `sourceEnquiryId` so lead → client attribution survives |
 | `AgencyProposalLink` | **D8:** optional `enquiryId` (resolved through the quote's client) so a proposal can be grouped with the conversation it answers |
 | `Agency` | no schema change; profile and packages live in their own collections so the tenant document stays billing/shape-focused |
@@ -92,6 +93,8 @@ Personal realm (D8) — `routes/enquiries.routes.ts` and `routes/proposals.route
 | `POST /api/enquiries/:id/messages` | signed-in reply |
 | `GET /api/proposals` | every live proposal answering this account's own enquiries |
 | `GET /api/proposals/:linkId` / `/pdf` | the full pinned document / PDF, owner-only (resolved by id; the proposal token never leaves the agency's link) |
+| `POST /api/proposals/:linkId/accept` | **R6:** accept in-app; same quote CAS, audits (`via: in-app`) and lead-won write as the token page |
+| `POST /api/proposals/:linkId/decline` | **R6:** decline this version only — `declinedAt` on the link, quote and lead untouched; idempotent |
 
 `GET /api/enquiries` (the traveller's own list) also carries `proposals: { count, lastAt }`
 per row — live links only, resolved by the stamped `enquiryId` or, for older
@@ -113,9 +116,10 @@ Agency realm (`protectAgency`, mounted under `/api/agency`; D1 ships the four pr
 | `GET /api/agency/enquiries/events` | SSE stream of this tenant's enquiry frames; 404 while the live tier is off (R1) |
 | `GET /api/agency/enquiries/:id` | one enquiry, tenant-scoped |
 | `POST /api/agency/enquiries/:id/read` | explicit read receipt for the agency side |
-| `PATCH /api/agency/enquiries/:id` | claim (`assignedTo`), change status, record `lostReason` |
+| `PATCH /api/agency/enquiries/:id` | claim (`assignedTo`), change status through the R5 transition map, record `lostReason` |
 | `POST /api/agency/enquiries/:enquiryId/messages` | **D8:** reply in the thread (planner+); stamps `repliedAt` and moves `new → replied` |
-| `POST /api/agency/enquiries/:id/convert-to-client` | create/reuse an `AgencyClient` with `sourceEnquiryId`; returns the client id |
+| `POST /api/agency/enquiries/:id/convert` | create/reuse an `AgencyClient` with `sourceEnquiryId`; returns the client id. **R5:** bookkeeping only — the status is left alone |
+| `POST /api/agency/enquiries/:id/trip` | **R5:** convert if needed, open a blank trip with the lead's dates and client, stamp `tripId`; idempotent under a double click |
 | `GET /api/agency/directory/insights` | profile views, package views, enquiries, conversion counts (P1) |
 
 Platform admin (`PLATFORM_ADMIN_ENABLED`):
@@ -313,6 +317,33 @@ Admin routes deliberately do **not** expose enquiry contents; that is client PII
 
 **Verified 2026-10-29:** backend suite 884/884; frontend typecheck, lint and production build clean. Browser smokes with `ENABLE_ENQUIRY_SSE=true`: the traveller list flipped to "Replied · N new" in place, an open thread appended a reply without navigating, the agency inbox gained a lead at the top with counters moving, an agency reply flipped sheet and card to Replied, and a `Won` filter correctly withheld a new lead. With the flag off, R2 proved the 20s poll path (stale at ~10s, updated after the tick). Synthetic accounts, enquiries and audit rows were deleted afterwards.
 
+### R5 — Close the loop: quote hand-off, status truth and the funnel guard
+
+**Status:** implemented and verified 2026-10-29, the four "close the loop" gaps from the process audit. The polish gaps (in-app accept/decline, traveller-facing status labels, counts outside the inboxes) shipped afterwards as R6.
+
+**Goal:** every step of lead → client → trip → quote → acceptance leaves a trace the other screens can see, and the funnel cannot claim work that did not happen.
+
+- **A profile lead can start a trip.** `POST /api/agency/enquiries/:id/trip` converts the lead to a client (reusing the directory's create-or-reuse rules), opens a blank trip titled "Trip for <name>" with the dates the traveller asked for, and stamps `AgencyEnquiry.tripId` — tenant-only, absent from the traveller's view. The trip id is generated first and claimed with a compare-and-set, so a double click cannot leave two blank trips; the loser reads the winner's link, and a link to a trip deleted by hand is replaced rather than kept. The inbox footer offers "Quote this trip" when the lead has a package trip or a started trip; both land on `/agency/trips/:tripId?tab=quote&client=…&adults=…&children=…`, so a profile lead is no longer a dead end.
+- **The funnel follows the work.** Sharing a proposal moves a `new`/`replied` lead to `quoted` (stamping `repliedAt` when it was empty) *before* the traveller's `proposal:new` frame, so both screens resync to one status. Accepting a proposal — through the public link, or an agency marking the quote accepted for a phone booking — sets the lead to `won` and `convertedAt`, clears a parked `lostReason`, and fans `enquiry:updated` to both channels. A won or lost lead keeps the status its agency chose if another proposal goes out.
+- **Conversion is bookkeeping, not a win.** `POST …/convert` writes `clientId`/`convertedAt` and leaves the status where it was; `won` now arrives only from an acceptance or a manual move.
+- **Manual moves are guarded.** Allowed: `new → replied|quoted|won|lost`, `replied → quoted|won|lost`, `quoted → replied|won|lost`, `won → quoted|replied|lost`, `lost → new|replied|quoted`. Everything else is a `409`; a lost lead must be reopened before it can be won, and a manual `won` requires a client ("Convert this lead to a client before marking it won."). Automation writes its own transitions and is not limited by the map.
+- **Deferred with reasons:** a system message in the thread on acceptance — `AGENCY_ENQUIRY_MESSAGE_AUTHORS` is `traveller|agency`, so a system bubble needs a thread-contract change. (The traveller-facing label map and in-app answers are closed by R6.)
+
+**Verified 2026-10-29:** backend suite **894/894** (52 in the touched suites), backend `tsc --noEmit`, frontend typecheck and production build clean. Browser smoke on `m9-hills-horizons` with a synthetic traveller: the profile enquiry appeared in the inbox; a manual `PATCH { status: "won" }` was refused `409` "Convert this lead to a client before marking it won."; "Start a trip" navigated to `/agency/trips/<id>?tab=quote&client=<id>&adults=2&children=1` with the quote form prefilled (client name/email, 2 adults, 1 child) and the trip titled "Trip for R5 Smoke Traveller"; the lead stayed `New` with a client chip, its timeline read "Converted", and "Quote this trip" returned to the same trip. The synthetic user, enquiry, client, trip and audit rows were deleted afterwards.
+
+### R6 — The polish batch: answer in-app, speak traveller, count outside the inbox
+
+**Status:** implemented and verified 2026-10-29. The three gaps R5 left open.
+
+**Goal:** the traveller can finish the deal where they read the proposal, the screens speak their language rather than the agency's funnel, and nothing important waits for them to open an inbox to be noticed.
+
+- **Accept and decline in place (gap 4).** `POST /api/proposals/:linkId/accept` and `/decline` sit on the personal router. Accept reuses the token page's acceptance core (`acceptLink`), so the quote CAS, the two audit rows and the lead-won write are identical; only `via` changes to `in-app`. Decline stamps `declinedAt` on the link — the quote stays `sent`, the lead keeps its funnel status, and no audit row claims work that did not happen beyond `share.declined`. A declined version cannot then be accepted ("You declined this proposal. Ask the agency for an updated one."), on either surface; the agency answers with a new proposal. Both actions are two-step in the card, idempotent on retry, and owner-scoped by the same `enquiry → client → quote` proof as the rest of `/proposals`. The agency's share list shows a rose `Declined` badge and the date.
+- **Traveller vocabulary (gap 5).** `TRAVELLER_ENQUIRY_STATUS_LABELS` maps the funnel to `Sent / Replied / Proposal ready / Accepted / Closed`, with its own badge classes, on `/enquiries`, the thread header and the profile preview. `Accepted` is deliberate: accepting confirms the quote, it does not take a payment. The agency inbox keeps the internal words. Proposal cards also stopped showing raw quote states (`sent`, `cancelled`) and now read `Awaiting you / Accepted / Declined / Expired / Withdrawn`.
+- **Counts outside the inboxes (gap 6).** The personal navbar reads `GET /api/enquiries/summary` on each route change and shows a badge on Enquiries: unread agency replies win the pill, and with an empty inbox a live proposal shows an indigo proposal count instead. The summary counts **unanswered** proposals only — a proposal the traveller accepted or declined is still live in the thread, but it is no longer work waiting for them (the smoke caught the badge nagging after an answer). The per-row count on `/enquiries` stays a history count of the thread's proposals. It is a read per navigation, not a second SSE stream, because the navbar is mounted on every page. The agency sidebar badge, which R4 left as refetch-on-navigation, now also listens to `agency:<id>` via `useEnquiryLiveRefresh` while the team is anywhere but the inbox; the inbox page keeps its own stream so only one connection is open.
+- **Deferred:** decline from the public token page (the link keeps accept only), an optional decline note or system thread message (still blocked on the thread-author contract), and a live traveller nav badge (would need the SSE connection the navbar deliberately avoids).
+
+**Verified 2026-10-29:** backend suite **903/903** (46 in the touched suites: `enquiries`, `proposals`, `proposalActions`), backend `tsc --noEmit`, frontend typecheck and production build clean; lint on the twelve touched files reports only the repo's pre-existing `no-explicit-any` hits on untouched lines. Browser smoke on a seeded `r6-smoke-agency` tenant with one synthetic traveller and two sent proposals: the navbar showed `1 unread replies` on the dashboard; `/enquiries` read `Proposal ready` (never `Quoted`) with `1 new`; `/proposals` showed both cards `Awaiting you`; "Not this one" → "Confirm decline" stamped only the link (`declinedAt` set, quote stayed `sent`) and the card switched to `Declined` with the "stays in this conversation" note; "Accept proposal" → "Confirm acceptance" flipped the other quote to `accepted`, its link to `acceptedAt`, the lead to `won`, and wrote `share.accepted` + `quote.accepted` (`via: in-app`); the audit trail held exactly one `share.declined` (the unit suite pins the 409 when a declined version is answered again); the thread read `Accepted` with both cards showing their answer and no buttons, and the nav badge cleared once the reply was read and nothing was left unanswered. On the agency side the sidebar showed no badge on `/agency/trips` (the only lead was `won`), then a lead submitted through the public API from outside the browser raised it to `1` in place — no reload — proving the `agency:<id>` stream. All synthetic rows were deleted and both sessions logged out afterwards.
+
 ## 6. Build order and dependencies
 
 | Order | Milestone | Depends on |
@@ -327,6 +358,8 @@ Admin routes deliberately do **not** expose enquiry contents; that is client PII
 | 8 | D8 conversations + proposal comparison | D5, D6, A7 |
 | 9 | D9 sign-in gate on the enquiry write | D5, D8 |
 | 10 | R1–R3 live enquiry tier | D5, D8 |
+| 11 | R5 close the loop (trip hand-off, funnel write-back, guards) | D6, D8, A7 |
+| 12 | R6 polish batch (in-app answers, traveller vocabulary, nav badges) | D8, R5 |
 
 D4 can run in parallel with D5 if split across sessions; nothing else parallelises cleanly because the projection contract is shared.
 

@@ -182,8 +182,14 @@ test('a traveller’s proposal comparison is personal-realm only', () => {
   const layers = routeLayers(proposalsRouter);
   assert.deepEqual(
     layers.map((layer) => `${pathOf(layer)} ${Object.keys(layer.route?.methods ?? {})}`),
-    ['/ get', '/:linkId get', '/:linkId/pdf get'],
-    'The comparison surface is the list, one pinned document and its PDF'
+    [
+      '/ get',
+      '/:linkId get',
+      '/:linkId/pdf get',
+      '/:linkId/accept post',
+      '/:linkId/decline post',
+    ],
+    'The comparison surface is the list, one pinned document, its PDF, and the two in-app answers'
   );
   assert.deepEqual(
     layers.filter((layer) => guardKind(layer) !== 'personal').map(pathOf),

@@ -11,6 +11,7 @@ import AgencyMember from '../../models/AgencyMember.js';
 import AgencyPackage from '../../models/AgencyPackage.js';
 import AgencyProposalLink from '../../models/AgencyProposalLink.js';
 import AgencyQuote from '../../models/AgencyQuote.js';
+import Trip from '../../models/Trip.js';
 import User from '../../models/User.js';
 import { AppError } from '../../utils/AppError.js';
 import { agencyCan, type AgencyRole } from '../agency/access.js';
@@ -19,6 +20,7 @@ import {
   projectAgencyClient,
   type AgencyClientSummary,
 } from '../agency/clients.js';
+import { createAgencyTrip } from '../agency/trips.js';
 import { userLabel } from '../collab/comments.js';
 import {
   applyConversationRead,
@@ -104,6 +106,8 @@ export interface AgencyEnquiryView {
   agency?: { name: string; slug: string } | null;
   /** The directory client this lead became, once converted (tenant view). */
   client: AgencyEnquiryClientView | null;
+  /** Tenant-only: the trip started from this lead, for the quote hand-off. */
+  tripId: string | null;
   assignedTo: string | null;
   /** Display name for `assignedTo`; null when unclaimed. */
   assignee: AgencyEnquiryAssigneeView | null;
@@ -599,6 +603,9 @@ export function viewAgencyEnquiry(
     // rather than linking a quote to a missing client.
     client:
       !consumer && clientId ? relations?.clients.get(clientId) ?? null : null,
+    // The trip a lead became is agency bookkeeping; a traveller's own history
+    // never carries an internal trip id.
+    tripId: !consumer && row?.tripId ? String(row.tripId) : null,
     assignedTo: consumer ? null : assigneeId || null,
     assignee:
       !consumer && assigneeId
@@ -708,9 +715,14 @@ export async function getAgencyEnquiry(
  * enquiry by its stamped `enquiryId` or, for links minted before that field
  * existed, through the quote's directory client. Only live links count, so the
  * badge agrees with what the conversation will actually show.
+ *
+ * `unansweredOnly` is what the nav badge wants: an accepted or declined link is
+ * still a live proposal in the thread, but it is no longer work waiting for the
+ * traveller.
  */
 async function liveProposalsByEnquiry(
-  rows: any[]
+  rows: any[],
+  options: { unansweredOnly?: boolean } = {}
 ): Promise<Map<string, AgencyEnquiryProposalsView>> {
   const counts = new Map<string, AgencyEnquiryProposalsView>();
   if (rows.length === 0) return counts;
@@ -738,6 +750,7 @@ async function liveProposalsByEnquiry(
   const links = (await AgencyProposalLink.find({
     revokedAt: null,
     expiresAt: { $gt: new Date() },
+    ...(options.unansweredOnly ? { acceptedAt: null, declinedAt: null } : {}),
     $or: [
       { enquiryId: { $in: enquiryIds } },
       ...(quotes.length ? [{ quoteId: { $in: quotes.map((quote) => quote._id) } }] : []),
@@ -857,7 +870,7 @@ export async function listOwnEnquiries(input: {
 export interface OwnEnquirySummaryView {
   /** Agency messages this account has not opened, across every enquiry. */
   unread: number;
-  /** Live proposals answering any of them (same rule as the list badge). */
+  /** Live proposals this account has not answered (accept or decline). */
   liveProposals: number;
   lastMessageAt: string | null;
 }
@@ -887,7 +900,7 @@ export async function getOwnEnquirySummary(
     }
   }
 
-  const proposals = await liveProposalsByEnquiry(rows);
+  const proposals = await liveProposalsByEnquiry(rows, { unansweredOnly: true });
   let liveProposals = 0;
   for (const entry of proposals.values()) liveProposals += entry.count;
 
@@ -945,6 +958,51 @@ export interface UpdateAgencyEnquiryResult {
 }
 
 /**
+ * Which status moves a member may make by hand (M9 R5).
+ *
+ * The funnel has to mean what the counters say, so a lead cannot jump from
+ * "new" straight to "quoted", or reopen a won lead as untouched. Automation —
+ * a shared or accepted proposal — writes its own transitions and is not
+ * limited by this map.
+ */
+const MANUAL_STATUS_TRANSITIONS: Record<
+  AgencyEnquiryStatus,
+  AgencyEnquiryStatus[]
+> = {
+  new: ['replied', 'quoted', 'won', 'lost'],
+  replied: ['quoted', 'won', 'lost'],
+  quoted: ['replied', 'won', 'lost'],
+  won: ['quoted', 'replied', 'lost'],
+  lost: ['new', 'replied', 'quoted'],
+};
+
+/**
+ * "Won" means a person booked; it needs a directory client to belong to. The
+ * accepted-proposal path is the exception and writes its own row.
+ */
+function assertManualStatusChange(
+  current: AgencyEnquiryStatus,
+  next: AgencyEnquiryStatus,
+  hasClient: boolean
+): void {
+  if (current === next) return;
+  if (!MANUAL_STATUS_TRANSITIONS[current].includes(next)) {
+    throw new AppError(
+      current === 'lost'
+        ? 'Reopen this lead before marking it won or quoted.'
+        : `A ${current} lead cannot move straight to ${next}.`,
+      409
+    );
+  }
+  if (next === 'won' && !hasClient) {
+    throw new AppError(
+      'Convert this lead to a client before marking it won.',
+      409
+    );
+  }
+}
+
+/**
  * Status transitions, claiming and assignment for one lead.
  *
  * The claim is a compare-and-set on `assignedTo: null`, so two members clicking
@@ -962,6 +1020,11 @@ export async function updateAgencyEnquiry(
 
   if (input.status !== undefined) {
     const status = input.status;
+    assertManualStatusChange(
+      (row.status ?? 'new') as AgencyEnquiryStatus,
+      status,
+      Boolean(row.clientId)
+    );
     $set.status = status;
 
     if (status === 'lost') {
@@ -1136,14 +1199,15 @@ async function markEnquiryConverted(
   clientId: Types.ObjectId | string,
   now: Date
 ): Promise<any> {
+  // Conversion is CRM bookkeeping, not a win: the client row is what the quote
+  // needs. The lead keeps its status until a proposal goes out ("quoted") or
+  // the traveller accepts ("won").
   const updated = await AgencyEnquiry.findOneAndUpdate(
     { _id: row._id, agencyId: row.agencyId },
     {
       $set: {
         clientId,
-        status: 'won',
         convertedAt: row.convertedAt ?? now,
-        repliedAt: row.repliedAt ?? now,
       },
       $unset: { lostReason: 1 },
     },
@@ -1176,7 +1240,8 @@ async function finishConversion(
 }
 
 /**
- * Turns a lead into a directory client and marks the enquiry won.
+ * Turns a lead into a directory client. The status stays where it is: a client
+ * row is CRM bookkeeping, and the lead is only won when a proposal is accepted.
  *
  * **Idempotent by construction.** The enquiry's `clientId` is the first check,
  * and a unique partial index on `AgencyClient.sourceEnquiryId` catches the race
@@ -1268,6 +1333,196 @@ export async function convertAgencyEnquiry(input: {
   });
 
   return finishConversion(input.agencyId, updated, client, !created, created);
+}
+
+/**
+ * A live proposal just answered this lead, so the funnel moves to "quoted"
+ * (M9 R5). Only a fresh lead moves automatically: a won or lost row keeps the
+ * status its agency chose.
+ */
+export async function markEnquiryQuotedByProposal(
+  enquiryId: string
+): Promise<void> {
+  if (!mongoose.isValidObjectId(enquiryId)) return;
+  const row = (await AgencyEnquiry.findOne({ _id: enquiryId })
+    .select('status repliedAt')
+    .lean()) as any;
+  if (!row) return;
+  if (row.status !== 'new' && row.status !== 'replied') return;
+
+  const updated = (await AgencyEnquiry.findOneAndUpdate(
+    { _id: enquiryId, status: row.status },
+    {
+      $set: {
+        status: 'quoted',
+        ...(row.repliedAt ? {} : { repliedAt: new Date() }),
+      },
+    },
+    { new: true }
+  ).lean()) as any;
+  if (updated) emitEnquiryUpdated(updated);
+}
+
+/**
+ * The traveller accepted a proposal. That is the moment a lead is won, whether
+ * the acceptance came through the private link or an agency member marked the
+ * quote accepted on their behalf, so the enquiry closes either way.
+ */
+export async function markEnquiryWonByAcceptance(
+  agencyId: string,
+  enquiryId: string
+): Promise<void> {
+  if (!mongoose.isValidObjectId(agencyId) || !mongoose.isValidObjectId(enquiryId)) {
+    return;
+  }
+  const row = (await AgencyEnquiry.findOne({ _id: enquiryId, agencyId }).lean()) as any;
+  if (!row || row.status === 'won') return;
+
+  const now = new Date();
+  const updated = (await AgencyEnquiry.findOneAndUpdate(
+    { _id: enquiryId, agencyId, status: row.status },
+    {
+      $set: {
+        status: 'won',
+        repliedAt: row.repliedAt ?? now,
+        convertedAt: row.convertedAt ?? now,
+      },
+      // A booking supersedes whatever reason the lead was parked under.
+      $unset: { lostReason: 1 },
+    },
+    { new: true }
+  ).lean()) as any;
+  if (updated) emitEnquiryUpdated(updated);
+}
+
+export interface StartTripFromEnquiryResult {
+  tripId: string;
+  clientId: string | null;
+  enquiry: AgencyEnquiryView;
+}
+
+/**
+ * Starts a trip from a lead and links it back (M9 R5).
+ *
+ * A package enquiry already has a trip behind its package; a profile enquiry
+ * has nothing to quote. This turns the lead into a client, opens a blank trip
+ * carrying the dates the traveller asked for, and stamps the trip on the lead
+ * so the inbox can hand it straight to the quote tab.
+ *
+ * The trip id is generated first and claimed on the enquiry with a
+ * compare-and-set, so a double click cannot leave two blank trips behind; the
+ * loser of the race reads the winner's link.
+ */
+export async function startTripFromEnquiry(input: {
+  agencyId: string;
+  enquiryId: string;
+  actorId: string;
+  role: AgencyRole;
+}): Promise<StartTripFromEnquiryResult> {
+  const row: any = await loadScopedEnquiryRow(input.agencyId, input.enquiryId);
+
+  if (row.tripId) {
+    const existing = await Trip.exists({
+      _id: String(row.tripId),
+      agencyId: input.agencyId,
+      workspace: 'agency',
+      isDeleted: false,
+    });
+    if (existing) {
+      return {
+        tripId: String(row.tripId),
+        clientId: row.clientId ? String(row.clientId) : null,
+        enquiry: await getAgencyEnquiry(input.agencyId, input.enquiryId),
+      };
+    }
+  }
+
+  // A dangling link (the client was deleted by hand) re-resolves through the
+  // same create-or-reuse rules as a fresh conversion.
+  const linkedClient = row.clientId
+    ? await AgencyClient.exists({
+        _id: String(row.clientId),
+        agencyId: input.agencyId,
+      })
+    : null;
+  const clientId = linkedClient
+    ? String(row.clientId)
+    : (
+        await convertAgencyEnquiry({
+          agencyId: input.agencyId,
+          enquiryId: input.enquiryId,
+          actorId: input.actorId,
+        })
+      ).client._id;
+
+  const tripId = new Types.ObjectId();
+  const claimed = (await AgencyEnquiry.findOneAndUpdate(
+    {
+      _id: row._id,
+      agencyId: input.agencyId,
+      // An unset link, or the stale link to a trip that no longer exists, may be
+      // replaced; two clicks still have exactly one winner.
+      $or: [
+        { tripId: null },
+        { tripId: { $exists: false } },
+        ...(row.tripId ? [{ tripId: row.tripId }] : []),
+      ],
+    },
+    { $set: { tripId } },
+    { new: true }
+  ).lean()) as any;
+
+  if (!claimed) {
+    const current = (await AgencyEnquiry.findOne({ _id: row._id }).lean()) as any;
+    if (current?.tripId) {
+      return {
+        tripId: String(current.tripId),
+        clientId,
+        enquiry: await getAgencyEnquiry(input.agencyId, input.enquiryId),
+      };
+    }
+    throw new AppError(
+      'This enquiry changed before the trip could start. Reload it.',
+      409
+    );
+  }
+
+  const start = row.dates?.start ? new Date(row.dates.start) : undefined;
+  const end = row.dates?.end ? new Date(row.dates.end) : undefined;
+  try {
+    await createAgencyTrip({
+      agencyId: input.agencyId,
+      userId: input.actorId,
+      role: input.role,
+      title: `Trip for ${text(row.contact?.name) || 'a travel enquiry'}`,
+      startDate: start?.toISOString(),
+      endDate: end?.toISOString(),
+      clientId,
+      tripId,
+    });
+  } catch (error) {
+    // The lead must not point at a trip that was never created.
+    await AgencyEnquiry.updateOne(
+      { _id: row._id, agencyId: input.agencyId },
+      { $unset: { tripId: 1 } }
+    ).catch(() => {});
+    throw error;
+  }
+
+  await recordAgencyAudit({
+    agencyId: input.agencyId,
+    actorId: input.actorId,
+    action: 'enquiry.trip_started',
+    targetType: 'enquiry',
+    targetId: String(row._id),
+    metadata: { tripId: String(tripId), clientId },
+  });
+
+  return {
+    tripId: String(tripId),
+    clientId,
+    enquiry: await getAgencyEnquiry(input.agencyId, input.enquiryId),
+  };
 }
 
 const SUMMARY_STATUSES: AgencyEnquiryStatus[] = [

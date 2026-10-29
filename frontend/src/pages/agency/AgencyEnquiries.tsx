@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   ArrowUpRight,
   BriefcaseBusiness,
@@ -151,6 +151,7 @@ const StatCard: React.FC<{
 );
 
 const AgencyEnquiries: React.FC = () => {
+  const navigate = useNavigate();
   const { activeAgency, activeAgencyId } = useAgency();
   const { user } = useAgencyAuth();
   const role = activeAgency?.role;
@@ -416,6 +417,36 @@ const AgencyEnquiries: React.FC = () => {
     setSheetOpen(true);
   };
 
+  const startTrip = useCallback(
+    async (enquiry: AgencyEnquiry) => {
+      setBusy('trip');
+      try {
+        const result = await api.startAgencyEnquiryTrip(enquiry.id);
+        setSelected(result.enquiry);
+        setEnquiries((prev) =>
+          prev.map((row) =>
+            row.id === result.enquiry.id ? result.enquiry : row
+          )
+        );
+        await loadSummary();
+        const params = new URLSearchParams({
+          tab: 'quote',
+          ...(result.clientId ? { client: result.clientId } : {}),
+          adults: String(result.enquiry.party.adults),
+          children: String(result.enquiry.party.children),
+        });
+        navigate(`/agency/trips/${result.tripId}?${params.toString()}`);
+      } catch (err) {
+        toast.error(
+          errorMessage(err, 'Could not start a trip from this enquiry.')
+        );
+      } finally {
+        setBusy(null);
+      }
+    },
+    [loadSummary, navigate]
+  );
+
   const changeStatus = (status: AgencyEnquiryStatus) => {
     if (!selected) return;
     if (status === 'lost') {
@@ -489,7 +520,7 @@ const AgencyEnquiries: React.FC = () => {
 
   const quoteHref = useMemo(() => {
     if (!selected?.client) return null;
-    const tripId = selected.package?.tripId;
+    const tripId = selected.package?.tripId ?? selected.tripId;
     if (!tripId) return null;
     const params = new URLSearchParams({
       tab: 'quote',
@@ -1001,40 +1032,18 @@ const AgencyEnquiries: React.FC = () => {
 
                   <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
                     {selected.client ? (
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge
-                          variant="outline"
-                          className="gap-1 border-teal-300 bg-teal-50 text-[10px] text-teal-800 dark:border-teal-900 dark:bg-teal-950/40 dark:text-teal-300"
-                        >
-                          <BriefcaseBusiness className="h-3 w-3" />
-                          {selected.client.name}
-                        </Badge>
-                        {quoteHref ? (
-                          <Button
-                            asChild
-                            size="sm"
-                            className="rounded-xl text-xs font-bold gap-1.5"
-                          >
-                            <Link to={quoteHref}>
-                              <Receipt className="h-3.5 w-3.5" />
-                              Quote this trip
-                              <ArrowUpRight className="h-3.5 w-3.5" />
-                            </Link>
-                          </Button>
-                        ) : (
-                          <Button asChild size="sm" variant="outline" className="rounded-xl text-xs font-bold gap-1.5">
-                            <Link to="/agency/trips">
-                              <Receipt className="h-3.5 w-3.5" />
-                              Open trips to quote
-                              <ArrowUpRight className="h-3.5 w-3.5" />
-                            </Link>
-                          </Button>
-                        )}
-                      </div>
+                      <Badge
+                        variant="outline"
+                        className="gap-1 border-teal-300 bg-teal-50 text-[10px] text-teal-800 dark:border-teal-900 dark:bg-teal-950/40 dark:text-teal-300"
+                      >
+                        <BriefcaseBusiness className="h-3 w-3" />
+                        {selected.client.name}
+                      </Badge>
                     ) : (
                       <Button
                         type="button"
                         size="sm"
+                        variant="outline"
                         className="rounded-xl text-xs font-bold gap-1.5"
                         onClick={() => void convert(selected)}
                         disabled={busy !== null}
@@ -1047,18 +1056,49 @@ const AgencyEnquiries: React.FC = () => {
                         Convert to client
                       </Button>
                     )}
+
+                    {quoteHref ? (
+                      <Button
+                        asChild
+                        size="sm"
+                        className="rounded-xl text-xs font-bold gap-1.5"
+                      >
+                        <Link to={quoteHref}>
+                          <Receipt className="h-3.5 w-3.5" />
+                          Quote this trip
+                          <ArrowUpRight className="h-3.5 w-3.5" />
+                        </Link>
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="rounded-xl text-xs font-bold gap-1.5"
+                        onClick={() => void startTrip(selected)}
+                        disabled={busy !== null}
+                      >
+                        {busy === 'trip' ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Receipt className="h-3.5 w-3.5" />
+                        )}
+                        Start a trip
+                        <ArrowUpRight className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                   </div>
-                  {!quoteHref && selected.client ? (
+                  {!quoteHref ? (
                     <p className="text-[11px] text-muted-foreground">
-                      This lead did not come from a package card. Create a trip
-                      first, then quote it with this client and party size.
+                      {selected.client
+                        ? 'No trip is linked to this lead yet. Starting one opens a blank trip with these dates, ready to quote.'
+                        : 'Starting a trip turns this lead into a client and opens a blank trip with these dates, ready to quote.'}
                     </p>
                   ) : null}
                 </div>
               ) : (
                 <p className="rounded-2xl border border-dashed border-border/70 p-3 text-[11px] text-muted-foreground">
                   Viewers can read the inbox. Ask an owner, admin or planner to
-                  reply, claim or convert a lead.
+                  reply, claim or quote a lead.
                 </p>
               )}
             </div>

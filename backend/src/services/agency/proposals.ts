@@ -22,6 +22,10 @@ import {
 import { agencyCan, type AgencyRole } from './access.js';
 import { recordAgencyAudit } from './audit.js';
 import { emitProposalCreated } from '../realtime/enquiryEvents.js';
+import {
+  markEnquiryQuotedByProposal,
+  markEnquiryWonByAcceptance,
+} from '../directory/enquiries.js';
 import { renderPinnedAgencyExport } from './exports/exports.js';
 import { readAgencyExportFile } from './exports/storage.js';
 import {
@@ -79,7 +83,33 @@ export function projectAgencyProposalLink(link: IAgencyProposalLink | any) {
     lastViewedAt: link.lastViewedAt ?? null,
     viewCount: Number(link.viewCount ?? 0),
     acceptedAt: link.acceptedAt ?? null,
+    declinedAt: link.declinedAt ?? null,
   };
+}
+
+export interface ProposalActionState {
+  accepted: boolean;
+  declined: boolean;
+  canAccept: boolean;
+  canDecline: boolean;
+}
+
+/**
+ * What a viewer may still do with one share (M9 R6).
+ *
+ * A decline is final for that version: accepting afterwards would contradict
+ * the answer the agency already received, so it has to send a new proposal.
+ * Both actions need the quote to still be `sent`; an accepted, expired or
+ * cancelled quote offers neither.
+ */
+export function proposalActionState(
+  link: Pick<IAgencyProposalLink, 'acceptedAt' | 'declinedAt'>,
+  status: string | null
+): ProposalActionState {
+  const accepted = Boolean(link.acceptedAt) || status === 'accepted';
+  const declined = Boolean(link.declinedAt);
+  const open = status === 'sent' && !accepted && !declined;
+  return { accepted, declined, canAccept: open, canDecline: open };
 }
 
 export function agencyProposalLinkFor(
@@ -180,6 +210,7 @@ export interface AgencyProposalSummary {
   createdAt: string | null;
   expiresAt: string | null;
   acceptedAt: string | null;
+  declinedAt: string | null;
 }
 
 function iso(value: unknown): string | null {
@@ -271,6 +302,7 @@ async function summarizeLinks(links: any[]): Promise<AgencyProposalSummary[]> {
       createdAt: iso(link.createdAt),
       expiresAt: iso(link.expiresAt),
       acceptedAt: iso(link.acceptedAt),
+      declinedAt: iso(link.declinedAt),
     };
   });
 }
@@ -410,6 +442,8 @@ export interface AgencyProposalView {
   canAccept: boolean;
   accepted: boolean;
   acceptedAt: Date | null;
+  declined: boolean;
+  declinedAt: Date | null;
   /**
    * `html` re-renders the pinned HTML template; `pdf` points the page at the
    * token-only PDF route because an uploaded PDF design is already the exact
@@ -482,13 +516,16 @@ async function buildAgencyProposalView(
   });
 
   const status = quote ? effectiveQuoteStatus(quote) : null;
+  const action = proposalActionState(link, status);
   return {
     agency: { name: String(agency.name ?? '') },
     trip: { _id: String(trip._id), title: String(trip.tripDetails?.trip_title || trip.title || 'Proposal') },
     quote: quote ? projectQuoteForClient(quote) : null,
-    canAccept: status === 'sent',
-    accepted: status === 'accepted',
+    canAccept: action.canAccept,
+    accepted: action.accepted,
     acceptedAt: quote?.acceptedAt ?? link.acceptedAt ?? null,
+    declined: action.declined,
+    declinedAt: link.declinedAt ?? null,
     documentMode: pdfMode ? 'pdf' : 'html',
     html: rendered?.html ?? '',
     pageCount: pdfMode
@@ -509,21 +546,35 @@ export interface AgencyProposalAcceptResult {
   quote: QuoteProjection;
 }
 
-export async function acceptAgencyProposal(
-  rawToken: unknown
+export type ProposalAnswerSurface = 'share' | 'in-app';
+
+/**
+ * The one acceptance path for both surfaces (M9 R6): the public token page and
+ * the traveller's own comparison. Ownership is already proved by the caller —
+ * link by token, or link by account — so the quote CAS and the funnel write are
+ * identical.
+ */
+async function acceptLink(
+  link: IAgencyProposalLink,
+  surface: ProposalAnswerSurface
 ): Promise<AgencyProposalAcceptResult> {
-  const link = await loadLink(rawToken);
   const { quote } = await loadPinnedRows(link);
   if (!quote) throw new AppError('Proposal not found', 404);
 
-  // Acceptance is idempotent: a retry returns the same accepted row.
   const status = effectiveQuoteStatus(quote);
+  // Acceptance is idempotent: a retry returns the same accepted row.
   if (status === 'accepted') {
     return {
       status: 'accepted',
       acceptedAt: quote.acceptedAt ?? link.acceptedAt ?? new Date(),
       quote: projectQuoteForClient(quote),
     };
+  }
+  if (link.declinedAt) {
+    throw new AppError(
+      'You declined this proposal. Ask the agency for an updated one.',
+      409
+    );
   }
   if (status === 'expired') {
     throw new AppError(
@@ -567,14 +618,106 @@ export async function acceptAgencyProposal(
     action: 'quote.accepted',
     targetType: 'AgencyQuote',
     targetId: String(accepted._id),
-    metadata: { ...metadata, via: 'share' },
+    metadata: { ...metadata, via: surface },
   });
+
+  // The traveller said yes: close the lead that asked for this proposal, so the
+  // inbox stops showing it as open work.
+  if (link.enquiryId) {
+    await markEnquiryWonByAcceptance(
+      String(link.agencyId),
+      String(link.enquiryId)
+    );
+  }
 
   return {
     status: 'accepted',
     acceptedAt: accepted.acceptedAt!,
     quote: projectQuoteForClient(accepted),
   };
+}
+
+export async function acceptAgencyProposal(
+  rawToken: unknown
+): Promise<AgencyProposalAcceptResult> {
+  const link = await loadLink(rawToken);
+  return acceptLink(link, 'share');
+}
+
+/** The same acceptance for the proposal's own traveller (M9 R6). */
+export async function acceptAgencyProposalForUser(
+  linkId: string,
+  userId: string
+): Promise<AgencyProposalAcceptResult> {
+  const link = await loadOwnedLink(linkId, userId);
+  return acceptLink(link, 'in-app');
+}
+
+export interface AgencyProposalDeclineResult {
+  status: 'declined';
+  declinedAt: Date;
+}
+
+/**
+ * The traveller turns down this version (M9 R6). Only the link is stamped:
+ * the quote stays `sent` and the lead keeps its funnel status, because the
+ * conversation is still open and the agency may answer with a new proposal.
+ */
+export async function declineAgencyProposalForUser(
+  linkId: string,
+  userId: string
+): Promise<AgencyProposalDeclineResult> {
+  const link = await loadOwnedLink(linkId, userId);
+  const { quote } = await loadPinnedRows(link);
+  if (!quote) throw new AppError('Proposal not found', 404);
+
+  if (link.declinedAt) {
+    return { status: 'declined', declinedAt: link.declinedAt };
+  }
+  const status = effectiveQuoteStatus(quote);
+  if (status === 'accepted') {
+    throw new AppError('This proposal is already accepted.', 409);
+  }
+  if (status === 'expired') {
+    throw new AppError('This proposal has expired.', 409);
+  }
+  if (status === 'cancelled') {
+    throw new AppError('This proposal was cancelled.', 409);
+  }
+  if (status !== 'sent') {
+    throw new AppError('This proposal is not ready to answer yet.', 409);
+  }
+
+  const declinedAt = new Date();
+  const declined = await AgencyProposalLink.findOneAndUpdate(
+    { _id: link._id, acceptedAt: null, declinedAt: null },
+    { $set: { declinedAt } },
+    { new: true }
+  );
+  if (!declined) {
+    const current = await AgencyProposalLink.findById(link._id);
+    if (current?.declinedAt) {
+      return { status: 'declined', declinedAt: current.declinedAt };
+    }
+    throw new AppError(
+      'This proposal changed before it could be declined. Reload it.',
+      409
+    );
+  }
+
+  await recordAgencyAudit({
+    agencyId: String(link.agencyId),
+    action: 'share.declined',
+    targetType: 'AgencyProposalLink',
+    targetId: String(link._id),
+    metadata: {
+      tripId: String(link.tripId),
+      quoteId: String(link.quoteId),
+      via: 'in-app',
+    },
+  });
+
+  return { status: 'declined', declinedAt: declined.declinedAt! };
 }
 
 export async function readAgencyProposalPdf(rawToken: unknown): Promise<{
@@ -701,6 +844,9 @@ export async function createAgencyProposalLink(
   // Tell the traveller's own channel; the enquiry row is where their account
   // id lives. A legacy guest enquiry simply has none, and the frame no-ops.
   if (enquiryId) {
+    // A proposal went out: that is what "quoted" means in the funnel. Write it
+    // before the proposal frame so both screens resync to the same status.
+    await markEnquiryQuotedByProposal(String(enquiryId));
     const enquiry = (await AgencyEnquiry.findOne({ _id: enquiryId })
       .select('userId')
       .lean()) as any;

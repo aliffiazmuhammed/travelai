@@ -144,6 +144,11 @@ export interface CreateAgencyTripInput {
   endDate?: string;
   assignedTo?: string;
   clientId?: string | null;
+  /**
+   * Pre-generated id for callers that must claim the id before creating the
+   * trip (the enquiry hand-off links the lead to the trip in one step).
+   */
+  tripId?: Types.ObjectId;
 }
 
 function parseDate(value?: string): Date | undefined {
@@ -236,6 +241,7 @@ export async function createAgencyTrip(input: CreateAgencyTripInput) {
   }
 
   const trip = new Trip({
+    ...(input.tripId ? { _id: input.tripId } : {}),
     userId: input.userId,
     workspace: 'agency',
     agencyId: input.agencyId,

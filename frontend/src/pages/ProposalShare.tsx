@@ -123,6 +123,13 @@ const ProposalShare: React.FC = () => {
     : null;
 
   const statusBadge = () => {
+    if (proposal?.declined) {
+      return (
+        <Badge className="bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300">
+          Declined
+        </Badge>
+      );
+    }
     if (!quote) return null;
     switch (quote.status) {
       case "accepted":
@@ -219,7 +226,7 @@ const ProposalShare: React.FC = () => {
                 </div>
               </div>
 
-              {/* Accept / accepted banner */}
+              {/* Accept / accepted / declined banner */}
               {proposal.accepted ? (
                 <div className="flex items-center gap-3 p-3 rounded-2xl bg-emerald-100/80 border border-emerald-200 text-emerald-800 dark:bg-emerald-950/40 dark:border-emerald-900 dark:text-emerald-300">
                   <CheckCircle2 className="w-5 h-5 shrink-0" />
@@ -234,6 +241,16 @@ const ProposalShare: React.FC = () => {
                       </p>
                     ) : null}
                   </div>
+                </div>
+              ) : proposal.declined ? (
+                <div className="p-3 rounded-2xl bg-rose-100/70 border border-rose-200 text-rose-800 dark:bg-rose-950/40 dark:border-rose-900 dark:text-rose-300">
+                  <p className="text-xs font-bold">
+                    You declined this proposal.
+                  </p>
+                  <p className="text-[11px] opacity-80">
+                    Ask {proposal.agency.name || "your agent"} for an updated
+                    one if you change your mind.
+                  </p>
                 </div>
               ) : proposal.canAccept ? (
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 rounded-2xl bg-primary/10 border border-primary/20">

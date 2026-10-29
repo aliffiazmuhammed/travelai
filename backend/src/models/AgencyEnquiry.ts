@@ -112,6 +112,11 @@ export interface IAgencyEnquiry extends Document {
   userId?: Types.ObjectId | null;
   /** Directory client created or reused when the lead was converted (D6). */
   clientId?: Types.ObjectId | null;
+  /**
+   * The agency trip started from this lead (R5). Tenant-only: it is what turns
+   * a profile enquiry, which has no package behind it, into a quotable trip.
+   */
+  tripId?: Types.ObjectId | null;
   contact: IAgencyEnquiryContact;
   party: IAgencyEnquiryParty;
   dates: IAgencyEnquiryDates;
@@ -241,6 +246,11 @@ const agencyEnquirySchema = new Schema<IAgencyEnquiry>(
     clientId: {
       type: Schema.Types.ObjectId,
       ref: 'AgencyClient',
+      default: null,
+    },
+    tripId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Trip',
       default: null,
     },
     contact: { type: contactSchema, required: true },

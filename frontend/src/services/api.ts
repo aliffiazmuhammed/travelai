@@ -95,10 +95,12 @@ import type {
   AgencyTemplateVersion,
   AgencyTemplateVersionPreview,
   AgencyProposalAcceptResult,
+  AgencyProposalDeclineResult,
   AgencyProposalLink,
   AgencyProposalView,
   AgencyAuditEntry,
   AgencyUsage,
+  MyEnquirySummaryResponse,
   PlatformAuthSession,
   PlatformHealth,
   PlatformAccountDetail,
@@ -1058,12 +1060,27 @@ class ApiClient {
     );
   }
 
-  /** D6: idempotent convert to a directory client, marked won. */
+  /** D6: idempotent convert to a directory client. Status is left alone. */
   async convertAgencyEnquiry(
     enquiryId: string
   ): Promise<AgencyEnquiryConversion> {
     return this.request(
       `/api/agency/enquiries/${encodeURIComponent(enquiryId)}/convert`,
+      { method: 'POST' }
+    );
+  }
+
+  /** R5: open a trip for this lead (converts it first) and link it back. */
+  async startAgencyEnquiryTrip(
+    enquiryId: string
+  ): Promise<{
+    success: boolean;
+    tripId: string;
+    clientId: string | null;
+    enquiry: AgencyEnquiry;
+  }> {
+    return this.request(
+      `/api/agency/enquiries/${encodeURIComponent(enquiryId)}/trip`,
       { method: 'POST' }
     );
   }
@@ -2252,12 +2269,35 @@ class ApiClient {
     );
   }
 
+  /** M9 R1: unread replies and live proposals for the personal nav badges. */
+  async getMyEnquirySummary(): Promise<MyEnquirySummaryResponse> {
+    return this.request('/api/enquiries/summary');
+  }
+
   /** M9 D8: every live proposal answering this account's own enquiries. */
   async getMyProposals(): Promise<{
     success: boolean;
     proposals: AgencyProposalSummary[];
   }> {
     return this.request('/api/proposals');
+  }
+
+  /** M9 R6: accept a proposal from the comparison instead of the token page. */
+  async acceptMyProposal(
+    linkId: string
+  ): Promise<{ success: boolean; acceptance: AgencyProposalAcceptResult }> {
+    return this.request(`/api/proposals/${encodeURIComponent(linkId)}/accept`, {
+      method: 'POST',
+    });
+  }
+
+  /** M9 R6: turn down this version; the conversation stays open. */
+  async declineMyProposal(
+    linkId: string
+  ): Promise<{ success: boolean; decline: AgencyProposalDeclineResult }> {
+    return this.request(`/api/proposals/${encodeURIComponent(linkId)}/decline`, {
+      method: 'POST',
+    });
   }
 
   /** The full pinned document for its owner; the token never leaves the link. */

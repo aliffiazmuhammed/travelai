@@ -10,8 +10,8 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   AGENCY_ENQUIRY_BUDGET_LABELS,
-  AGENCY_ENQUIRY_STATUS_LABELS,
-  agencyEnquiryStatusBadgeClass,
+  TRAVELLER_ENQUIRY_STATUS_LABELS,
+  travellerEnquiryStatusBadgeClass,
   formatAgencyDate,
 } from '@/lib/agency';
 import { cn } from '@/lib/utils';
@@ -119,6 +119,26 @@ const ConversationPage: React.FC = () => {
     toast.success('Message sent.');
   };
 
+  // R6: the thread answers a proposal in place, then re-reads the thread so the
+  // status badge and the proposal card agree with the server.
+  const acceptProposal = useCallback(
+    async (proposal: AgencyProposalSummary) => {
+      await api.acceptMyProposal(proposal.id);
+      await load(true);
+      toast.success(`${proposal.agency.name} has your acceptance.`);
+    },
+    [load]
+  );
+
+  const declineProposal = useCallback(
+    async (proposal: AgencyProposalSummary) => {
+      await api.declineMyProposal(proposal.id);
+      await load(true);
+      toast.success('Proposal declined. The conversation stays open.');
+    },
+    [load]
+  );
+
   const datesLabel = useMemo(() => {
     const dates = conversation?.enquiry.dates;
     if (!dates) return '';
@@ -191,10 +211,10 @@ const ConversationPage: React.FC = () => {
                     variant="outline"
                     className={cn(
                       'text-[10px]',
-                      agencyEnquiryStatusBadgeClass(conversation.status)
+                      travellerEnquiryStatusBadgeClass(conversation.status)
                     )}
                   >
-                    {AGENCY_ENQUIRY_STATUS_LABELS[conversation.status]}
+                    {TRAVELLER_ENQUIRY_STATUS_LABELS[conversation.status]}
                   </Badge>
                   {liveMode === 'live' ? (
                     <span
@@ -286,8 +306,9 @@ const ConversationPage: React.FC = () => {
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base">Proposals to compare</CardTitle>
                   <p className="text-[11px] text-muted-foreground">
-                    Nothing is merged automatically. Open a document, then ask
-                    about the price, dates or inclusions on the thread.
+                    Nothing is merged automatically. Open a document, ask about
+                    the price or inclusions on the thread, then accept the one
+                    you want.
                   </p>
                 </CardHeader>
                 <CardContent className="pt-0">
@@ -301,6 +322,8 @@ const ConversationPage: React.FC = () => {
                     onMessage={async (_proposal, body) => {
                       await send(body);
                     }}
+                    onAccept={guest ? undefined : acceptProposal}
+                    onDecline={guest ? undefined : declineProposal}
                     empty="No proposal has been sent for this enquiry yet. The agency will send one to this thread."
                   />
                 </CardContent>

@@ -1,9 +1,11 @@
 import Agency from '../../models/Agency.js';
+import AgencyClient from '../../models/AgencyClient.js';
 import AgencyQuote, { IAgencyQuote, QuoteStatus } from '../../models/AgencyQuote.js';
 import Trip from '../../models/Trip.js';
 import { AppError } from '../../utils/AppError.js';
 import { agencyCan, type AgencyRole } from './access.js';
 import { assertAgencyClient } from './clients.js';
+import { markEnquiryWonByAcceptance } from '../directory/enquiries.js';
 import {
   AGENCY_TERMS_MAX_ITEMS,
   AGENCY_TERMS_MAX_LENGTH,
@@ -810,6 +812,23 @@ export async function acceptQuote(input: {
   if (!accepted) {
     throw new AppError('This quote changed before it could be accepted. Reload it.', 409);
   }
+
+  // A quote accepted by phone still closes the directory lead behind it.
+  const client = accepted.clientId
+    ? ((await AgencyClient.findOne({
+        _id: accepted.clientId,
+        agencyId: input.agencyId,
+      })
+        .select('sourceEnquiryId')
+        .lean()) as any)
+    : null;
+  if (client?.sourceEnquiryId) {
+    await markEnquiryWonByAcceptance(
+      input.agencyId,
+      String(client.sourceEnquiryId)
+    );
+  }
+
   return accepted;
 }
 

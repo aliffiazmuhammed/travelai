@@ -15,8 +15,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { api } from '@/services/api';
 import {
-  AGENCY_ENQUIRY_STATUS_LABELS,
-  agencyEnquiryStatusBadgeClass,
+  TRAVELLER_ENQUIRY_STATUS_LABELS,
+  travellerEnquiryStatusBadgeClass,
   formatAgencyDate,
 } from '@/lib/agency';
 import { cn } from '@/lib/utils';
@@ -278,10 +278,10 @@ const Enquiries: React.FC = () => {
                         <span
                           className={cn(
                             'rounded-full border px-2 py-0.5 text-[10px] font-bold',
-                            agencyEnquiryStatusBadgeClass(enquiry.status)
+                            travellerEnquiryStatusBadgeClass(enquiry.status)
                           )}
                         >
-                          {AGENCY_ENQUIRY_STATUS_LABELS[enquiry.status]}
+                          {TRAVELLER_ENQUIRY_STATUS_LABELS[enquiry.status]}
                         </span>
                         {enquiry.unread.traveller > 0 ? (
                           <span className="inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground">

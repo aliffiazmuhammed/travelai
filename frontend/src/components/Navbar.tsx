@@ -1,20 +1,51 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Menu, Plane, Sun, Moon, Sparkles, LogOut, UserCircle2, Globe2 } from "lucide-react";
+import { Menu, Plane, Sun, Moon, Sparkles, LogOut, UserCircle2, Globe2, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/context/UserContext";
 import { useGalleryEnabled } from "@/hooks/useGalleryEnabled";
 import { useAgencyDirectoryEnabled } from "@/hooks/useAgencyDirectoryEnabled";
 import { avatarSrc, initialsFor } from "@/lib/avatar";
+import { api } from "@/services/api";
 import { cn } from "@/lib/utils";
+
+/**
+ * The one count that needs a home outside the inbox (M9 R6). Unread agency
+ * replies win; with an empty inbox a live proposal still gets a nudge, because
+ * the traveller has to open `/proposals` to answer it.
+ */
+const EnquiryBadge = ({ unread, proposals }: { unread: number; proposals: number }) => {
+  const count = unread > 0 ? unread : proposals;
+  if (count === 0) return null;
+  const label = unread > 0 ? `${unread} unread replies` : `${proposals} new proposals`;
+  return (
+    <span
+      title={label}
+      aria-label={label}
+      className={cn(
+        "ml-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none",
+        unread > 0
+          ? "bg-primary text-primary-foreground"
+          : "bg-indigo-600 text-white"
+      )}
+    >
+      {unread > 0 ? null : <FileText className="h-2.5 w-2.5" />}
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+};
 
 const Navbar = () => {
   const { isAuthenticated, user, logout } = useAuth();
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const [isDark, setIsDark] = useState(false);
+  // The navbar sits on every personal page, so the badge is a cheap read on
+  // navigation rather than a second live stream (the pages that own one open
+  // their own).
+  const [enquiryBadge, setEnquiryBadge] = useState({ unread: 0, proposals: 0 });
 
   // F14: the chip shows the display name (or the email local part without one).
   const displayName =
@@ -34,6 +65,32 @@ const Navbar = () => {
       document.documentElement.classList.remove("dark");
     }
   }, []);
+
+  // M9 R6: refetch the badge counters when the page changes, so opening a
+  // thread (which clears its unread count) is reflected on the next screen.
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setEnquiryBadge({ unread: 0, proposals: 0 });
+      return;
+    }
+    let cancelled = false;
+    void api
+      .getMyEnquirySummary()
+      .then((result) => {
+        if (!cancelled) {
+          setEnquiryBadge({
+            unread: result.summary.unread,
+            proposals: result.summary.liveProposals,
+          });
+        }
+      })
+      .catch(() => {
+        /* badge only */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, location.pathname]);
 
   const toggleTheme = () => {
     const nextDark = !isDark;
@@ -113,6 +170,12 @@ const Navbar = () => {
                   )}
                 >
                   {item.label}
+                  {item.path === "/enquiries" ? (
+                    <EnquiryBadge
+                      unread={enquiryBadge.unread}
+                      proposals={enquiryBadge.proposals}
+                    />
+                  ) : null}
                 </Link>
               );
             })}
@@ -248,6 +311,12 @@ const Navbar = () => {
                           )}
                         >
                           {item.label}
+                          {item.path === "/enquiries" ? (
+                            <EnquiryBadge
+                              unread={enquiryBadge.unread}
+                              proposals={enquiryBadge.proposals}
+                            />
+                          ) : null}
                         </Link>
                       );
                     })}

@@ -80,6 +80,7 @@ import {
   getAgencyEnquirySummaryHandler,
   listAgencyEnquiriesHandler,
   markAgencyEnquiryReadHandler,
+  startAgencyEnquiryTripHandler,
   subscribeAgencyEnquiryEvents,
   updateAgencyEnquiryHandler,
 } from '../controllers/enquiries.controller.js';
@@ -244,6 +245,14 @@ router.post(
   protectAgency,
   requireAgencyRole('planner'),
   convertAgencyEnquiryHandler
+);
+// R5: a lead with no package behind it still needs a trip before it can be
+// quoted. This opens one and links it back to the enquiry.
+router.post(
+  '/enquiries/:enquiryId/trip',
+  protectAgency,
+  requireAgencyRole('planner'),
+  startAgencyEnquiryTripHandler
 );
 // Two-way thread reply (M9 D8). Same rank as moving a lead: a reply changes
 // `new → replied` and stamps the reply time the public profile advertises.

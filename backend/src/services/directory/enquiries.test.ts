@@ -9,6 +9,7 @@ import AgencyPackage from '../../models/AgencyPackage.js';
 import AgencyProfile from '../../models/AgencyProfile.js';
 import AgencyProposalLink from '../../models/AgencyProposalLink.js';
 import AgencyQuote from '../../models/AgencyQuote.js';
+import Trip from '../../models/Trip.js';
 import User from '../../models/User.js';
 import {
   createAgencyEnquirySchema,
@@ -31,7 +32,10 @@ import {
   getOwnEnquirySummary,
   listAgencyEnquiries,
   listOwnEnquiries,
+  markEnquiryQuotedByProposal,
+  markEnquiryWonByAcceptance,
   normalizeEnquiryDates,
+  startTripFromEnquiry,
   submitAgencyEnquiry,
   updateAgencyEnquiry,
 } from './enquiries.js';
@@ -73,6 +77,7 @@ let proposalLinkRows: any[] = [];
 let userRows: any[] = [];
 let memberIds: string[] = [];
 let auditRows: any[] = [];
+let savedTrips: any[] = [];
 let lastEnquiryFilter: any = null;
 let lastEnquiryCount: any = null;
 let lastPackageFilter: any = null;
@@ -95,6 +100,8 @@ const original = {
   clientUpdateOne: AgencyClient.updateOne,
   memberExists: AgencyMember.exists,
   userFind: User.find,
+  tripExists: Trip.exists,
+  tripSave: Trip.prototype.save,
   auditCreate: AgencyAudit.create,
   quoteFind: AgencyQuote.find,
   proposalLinkFind: AgencyProposalLink.find,
@@ -252,6 +259,21 @@ function matchesFilter(row: any, filter: any): boolean {
   if (update?.$set) Object.assign(row, update.$set);
   return { matchedCount: 1, modifiedCount: 1 };
 };
+(AgencyClient as any).exists = async (filter: any) =>
+  clientRows.some((row) => matchesFilter(row, filter))
+    ? { _id: CLIENT_ID }
+    : null;
+
+// R5: the enquiry hand-off opens a trip. Saving it is all this suite needs to
+// observe; the trip's own rules are pinned elsewhere.
+(Trip as any).exists = async (filter: any) =>
+  savedTrips.some((row) => matchesFilter(row, filter))
+    ? { _id: filter?._id }
+    : null;
+(Trip.prototype as any).save = async function (this: any) {
+  savedTrips.push(this);
+  return this;
+};
 
 (AgencyMember as any).exists = async (filter: any) =>
   memberIds.includes(String(filter?.userId)) ? { _id: 'member' } : null;
@@ -290,6 +312,7 @@ function reset() {
   ];
   memberIds = [ACTOR_ID, ADMIN_ID, OTHER_MEMBER_ID];
   auditRows = [];
+  savedTrips = [];
   lastEnquiryFilter = null;
   lastEnquiryCount = null;
   lastPackageFilter = null;
@@ -833,6 +856,20 @@ test('status rules require a lost reason and stamp reply/win times once', async 
   });
   assert.equal(quoted.enquiry.repliedAt, firstReply, 'the first reply time is kept');
 
+  // R5: won means booked, and a booking belongs to a client.
+  await assert.rejects(
+    () =>
+      updateAgencyEnquiry({
+        agencyId: AGENCY_ID,
+        enquiryId: ENQUIRY_ID,
+        actorId: ACTOR_ID,
+        actorRole: 'planner',
+        status: 'won',
+      }),
+    /client/
+  );
+  enquiryRows[0].clientId = CLIENT_ID;
+
   const won = await updateAgencyEnquiry({
     agencyId: AGENCY_ID,
     enquiryId: ENQUIRY_ID,
@@ -852,6 +889,114 @@ test('status rules require a lost reason and stamp reply/win times once', async 
   assert.equal(reopened.enquiry.convertedAt, null, 'only won counts as converted');
 });
 
+test('a hand-moved lead cannot skip the funnel or reopen a win as new', async () => {
+  reset();
+  enquiryRows = [enquiryRow({ status: 'new' })];
+  const move = (status: string) =>
+    updateAgencyEnquiry({
+      agencyId: AGENCY_ID,
+      enquiryId: ENQUIRY_ID,
+      actorId: ACTOR_ID,
+      actorRole: 'planner',
+      status: status as any,
+    });
+
+  // R5: the funnel is a ladder, so a leader cannot rewind a replied lead.
+  enquiryRows[0].status = 'replied';
+  await assert.rejects(() => move('new'), (error: any) => {
+    assert.equal(error.statusCode, 409);
+    assert.match(error.message, /cannot move straight to new/);
+    return true;
+  });
+
+  // Quoting a fresh lead is the normal first move: the proposal does it.
+  enquiryRows[0].status = 'new';
+  const quoted = await move('quoted');
+  assert.equal(quoted.enquiry.status, 'quoted');
+
+  // "Won" means booked, and a booking belongs to a client.
+  await assert.rejects(() => move('won'), /Convert this lead to a client/);
+
+  enquiryRows[0].status = 'lost';
+  enquiryRows[0].lostReason = 'Dates did not work';
+  await assert.rejects(() => move('won'), /Reopen this lead/);
+
+  enquiryRows[0].status = 'won';
+  enquiryRows[0].clientId = CLIENT_ID;
+  await assert.rejects(() => move('new'), /cannot move straight to new/);
+
+  // A no-op move is not a transition and must not throw.
+  enquiryRows[0].status = 'new';
+  const same = await move('new');
+  assert.equal(same.enquiry.status, 'new');
+});
+
+test('sharing a proposal moves a fresh lead to quoted and leaves a closed one alone', async () => {
+  reset();
+  enquiryRows = [enquiryRow({ status: 'new', userId: USER_ID })];
+  const seen = watchFrames(agencyChannel(AGENCY_ID), userChannel(USER_ID));
+
+  await markEnquiryQuotedByProposal(ENQUIRY_ID);
+
+  assert.equal(enquiryRows[0].status, 'quoted');
+  assert.ok(enquiryRows[0].repliedAt, 'quoting counts as the first reply');
+  for (const channel of [agencyChannel(AGENCY_ID), userChannel(USER_ID)]) {
+    const frames = seen.get(channel)!;
+    assert.deepEqual(
+      frames.map((event) => event.type),
+      ['enquiry:updated']
+    );
+    assert.equal((frames[0] as any).status, 'quoted');
+  }
+
+  // A won or lost lead keeps the status its agency chose.
+  enquiryRows[0].status = 'won';
+  await markEnquiryQuotedByProposal(ENQUIRY_ID);
+  assert.equal(enquiryRows[0].status, 'won');
+  assert.equal(seen.get(agencyChannel(AGENCY_ID))!.length, 1);
+});
+
+test('accepting a proposal wins the lead once, even after it was parked lost', async () => {
+  reset();
+  enquiryRows = [
+    enquiryRow({
+      status: 'lost',
+      lostReason: 'Too pricey',
+      lostAt: new Date('2026-10-28T09:00:00.000Z'),
+      userId: USER_ID,
+    }),
+  ];
+  const seen = watchFrames(agencyChannel(AGENCY_ID), userChannel(USER_ID));
+
+  await markEnquiryWonByAcceptance(AGENCY_ID, ENQUIRY_ID);
+
+  assert.equal(enquiryRows[0].status, 'won');
+  assert.equal(enquiryRows[0].lostReason, undefined, 'a booking clears the parked reason');
+  assert.ok(enquiryRows[0].convertedAt);
+  assert.ok(enquiryRows[0].repliedAt);
+  const frames = seen.get(userChannel(USER_ID))!;
+  assert.deepEqual(
+    frames.map((event) => event.type),
+    ['enquiry:updated']
+  );
+  assert.equal((frames[0] as any).status, 'won');
+
+  // Acceptance is idempotent: a second call cannot re-win or re-emit.
+  await markEnquiryWonByAcceptance(AGENCY_ID, ENQUIRY_ID);
+  assert.equal(seen.get(agencyChannel(AGENCY_ID))!.length, 1);
+});
+
+test('a proposal accepted for one tenant cannot close another tenant’s lead', async () => {
+  reset();
+  enquiryRows = [enquiryRow({ status: 'new', userId: USER_ID })];
+  const seen = watchFrames(userChannel(USER_ID));
+
+  await markEnquiryWonByAcceptance(OTHER_AGENCY_ID, ENQUIRY_ID);
+
+  assert.equal(enquiryRows[0].status, 'new');
+  assert.equal(seen.get(userChannel(USER_ID))!.length, 0);
+});
+
 test('conversion creates one tagged client and a second click reuses it', async () => {
   reset();
   enquiryRows = [enquiryRow()];
@@ -865,7 +1010,11 @@ test('conversion creates one tagged client and a second click reuses it', async 
   assert.equal(first.reused, false);
   assert.equal(first.client.name, 'Asha Rao');
   assert.equal(first.client.email, 'asha@example.com');
-  assert.equal(first.enquiry.status, 'won');
+  assert.equal(
+    first.enquiry.status,
+    'new',
+    'a client row is CRM bookkeeping, not a win'
+  );
   assert.ok(first.enquiry.convertedAt);
   assert.equal(first.enquiry.client?.id, CLIENT_ID);
   assert.equal(String(clientRows[0].sourceEnquiryId), ENQUIRY_ID);
@@ -906,6 +1055,98 @@ test('conversion reuses an existing client by email and tags its source once', a
   assert.equal(result.reused, true);
   assert.equal(clientRows.length, 1);
   assert.equal(String(clientRows[0].sourceEnquiryId), ENQUIRY_ID);
+});
+
+test('starting a trip turns the lead into a client and opens exactly one trip', async () => {
+  reset();
+  enquiryRows = [enquiryRow({ status: 'new', userId: USER_ID })];
+
+  const started = await startTripFromEnquiry({
+    agencyId: AGENCY_ID,
+    enquiryId: ENQUIRY_ID,
+    actorId: ACTOR_ID,
+    role: 'planner',
+  });
+
+  assert.equal(started.clientId, CLIENT_ID, 'a profile lead is converted on the way');
+  assert.equal(clientRows.length, 1);
+  assert.equal(savedTrips.length, 1);
+
+  const trip: any = savedTrips[0];
+  assert.equal(String(trip._id), started.tripId);
+  assert.equal(trip.title, 'Trip for Asha Rao');
+  assert.equal(String(trip.agencyId), AGENCY_ID);
+  assert.equal(trip.workspace, 'agency');
+  assert.equal(String(trip.clientId), CLIENT_ID);
+  assert.equal(trip.startDate.toISOString(), '2027-01-10T00:00:00.000Z');
+
+  assert.equal(String(enquiryRows[0].tripId), started.tripId, 'the lead remembers its trip');
+  assert.equal(enquiryRows[0].status, 'new', 'opening a trip is not a win');
+  assert.equal(started.enquiry.tripId, started.tripId);
+  assert.deepEqual(
+    auditRows.filter((row) => row.action === 'enquiry.trip_started').map((row) => row.metadata.tripId),
+    [started.tripId]
+  );
+
+  // A double click hands back the same trip instead of opening a second one.
+  const again = await startTripFromEnquiry({
+    agencyId: AGENCY_ID,
+    enquiryId: ENQUIRY_ID,
+    actorId: OTHER_MEMBER_ID,
+    role: 'planner',
+  });
+  assert.equal(again.tripId, started.tripId);
+  assert.equal(savedTrips.length, 1);
+  assert.equal(clientRows.length, 1);
+
+  // The hand-off is tenant-scoped like every other enquiry write.
+  await assert.rejects(
+    () =>
+      startTripFromEnquiry({
+        agencyId: OTHER_AGENCY_ID,
+        enquiryId: ENQUIRY_ID,
+        actorId: ACTOR_ID,
+        role: 'planner',
+      }),
+    (error: any) => error.statusCode === 404
+  );
+});
+
+test('a lead whose trip was deleted by hand gets a new one', async () => {
+  reset();
+  enquiryRows = [
+    enquiryRow({ status: 'replied', clientId: CLIENT_ID, tripId: TRIP_ID }),
+  ];
+  clientRows = [{ _id: CLIENT_ID, agencyId: AGENCY_ID, name: 'Asha Rao' }];
+
+  const started = await startTripFromEnquiry({
+    agencyId: AGENCY_ID,
+    enquiryId: ENQUIRY_ID,
+    actorId: ACTOR_ID,
+    role: 'planner',
+  });
+
+  assert.notEqual(started.tripId, TRIP_ID);
+  assert.equal(savedTrips.length, 1);
+  assert.equal(clientRows.length, 1, 'the existing client is reused, never duplicated');
+});
+
+test('a lead whose client was deleted re-resolves the client before quoting', async () => {
+  reset();
+  const DELETED_CLIENT_ID = '64c0000000000000000006aa';
+  enquiryRows = [enquiryRow({ status: 'replied', clientId: DELETED_CLIENT_ID })];
+
+  const started = await startTripFromEnquiry({
+    agencyId: AGENCY_ID,
+    enquiryId: ENQUIRY_ID,
+    actorId: ACTOR_ID,
+    role: 'planner',
+  });
+
+  assert.equal(clientRows.length, 1, 'conversion creates a fresh client');
+  assert.equal(started.clientId, CLIENT_ID);
+  assert.equal(String(enquiryRows[0].clientId), CLIENT_ID);
+  assert.equal(savedTrips.length, 1);
 });
 
 test('the summary counts a rolling week and rounds the conversion rate', async () => {
@@ -966,6 +1207,7 @@ test('the quote hand-off trip id and the internal fields are tenant-only', async
       packageId: PACKAGE_ID,
       source: 'package',
       clientId: CLIENT_ID,
+      tripId: TRIP_ID,
       assignedTo: ACTOR_ID,
       lostReason: 'Internal note',
       status: 'lost',
@@ -978,12 +1220,14 @@ test('the quote hand-off trip id and the internal fields are tenant-only', async
 
   const inbox = await listAgencyEnquiries({ agencyId: AGENCY_ID });
   assert.equal(inbox.enquiries[0].package?.tripId, TRIP_ID);
+  assert.equal(inbox.enquiries[0].tripId, TRIP_ID);
   assert.equal(inbox.enquiries[0].client?.name, 'Asha Rao');
   assert.equal(inbox.enquiries[0].assignee?.name, 'Asha Planner');
   assert.equal(inbox.enquiries[0].lostReason, 'Internal note');
 
   const own = await listOwnEnquiries({ userId: USER_ID });
   assert.equal(own.enquiries[0].package?.tripId, undefined, 'consumers never see a trip id');
+  assert.equal(own.enquiries[0].tripId, null, 'the started trip is tenant-only');
   assert.equal(own.enquiries[0].client, null);
   assert.equal(own.enquiries[0].assignedTo, null);
   assert.equal(own.enquiries[0].assignee, null);
@@ -1053,7 +1297,7 @@ test('a status change fans out to both sides without the internal assignee', asy
   }
 });
 
-test('converting a lead tells the traveller it was won', async () => {
+test('converting a lead resyncs the traveller without moving the funnel', async () => {
   reset();
   enquiryRows = [enquiryRow({ userId: USER_ID })];
   const seen = watchFrames(userChannel(USER_ID));
@@ -1068,7 +1312,7 @@ test('converting a lead tells the traveller it was won', async () => {
     seen.get(userChannel(USER_ID))!.map((event) => event.type),
     ['enquiry:updated']
   );
-  assert.equal((seen.get(userChannel(USER_ID))![0] as any).status, 'won');
+  assert.equal((seen.get(userChannel(USER_ID))![0] as any).status, 'new');
 });
 
 test('opening a lead in the inbox sends a read receipt only once', async () => {
@@ -1135,6 +1379,28 @@ test('the personal summary counts unread replies and live proposals', async () =
       revokedAt: null,
       expiresAt: new Date(Date.now() + 86_400_000),
       createdAt: new Date('2026-10-28T11:00:00.000Z'),
+    },
+    // Answered in-app (R6): live in the thread, but not work waiting for the
+    // traveller, so the nav badge must not count them.
+    {
+      _id: '64c0000000000000000006f4',
+      agencyId: AGENCY_ID,
+      enquiryId: OTHER_ENQUIRY_ID,
+      quoteId: null,
+      revokedAt: null,
+      expiresAt: new Date(Date.now() + 86_400_000),
+      acceptedAt: new Date('2026-10-28T12:00:00.000Z'),
+      createdAt: new Date('2026-10-28T11:10:00.000Z'),
+    },
+    {
+      _id: '64c0000000000000000006f5',
+      agencyId: AGENCY_ID,
+      enquiryId: OTHER_ENQUIRY_ID,
+      quoteId: null,
+      revokedAt: null,
+      expiresAt: new Date(Date.now() + 86_400_000),
+      declinedAt: new Date('2026-10-28T12:10:00.000Z'),
+      createdAt: new Date('2026-10-28T11:20:00.000Z'),
     },
   ];
 

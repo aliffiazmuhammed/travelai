@@ -35,6 +35,12 @@ export interface IAgencyProposalLink extends Document {
   lastViewedAt?: Date;
   viewCount: number;
   acceptedAt?: Date;
+  /**
+   * The traveller answered "not this one" in-app (M9 R6). A decline closes
+   * that version only: the quote stays `sent` and the agency can share a new
+   * proposal, but the declined link can no longer be accepted.
+   */
+  declinedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -79,6 +85,7 @@ const agencyProposalLinkSchema = new Schema<IAgencyProposalLink>(
     lastViewedAt: { type: Date },
     viewCount: { type: Number, default: 0, min: 0 },
     acceptedAt: { type: Date },
+    declinedAt: { type: Date },
   },
   { timestamps: true }
 );

@@ -1,5 +1,12 @@
 import React, { useState } from 'react';
-import { CheckCircle2, FileText, Loader2, MessageSquare, Send } from 'lucide-react';
+import {
+  CheckCircle2,
+  FileText,
+  Loader2,
+  MessageSquare,
+  Send,
+  XCircle,
+} from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -11,16 +18,19 @@ import type { AgencyProposalSummary } from '@/types/agency';
 /**
  * The traveller's proposal comparison (Milestone 9 D8).
  *
- * Deliberately read-only and side-by-side: nothing is merged and no trip is
- * created. A row can open the pinned document or start a message on the thread
- * that proposal answers, which is the "the price is high" path the agency sees
- * in its inbox.
+ * Read-only by default: nothing is merged and no trip is created. On the
+ * traveller's own surfaces (R6) each open proposal can be accepted or declined
+ * in place; the guest link keeps the plain comparison because its capability is
+ * the agency's token, not an account.
  */
 
 interface ProposalComparisonProps {
   proposals: AgencyProposalSummary[];
   onPreview: (proposal: AgencyProposalSummary) => void;
   onMessage?: (proposal: AgencyProposalSummary, body: string) => Promise<void>;
+  /** Both are passed together on signed-in surfaces; omitted for guests. */
+  onAccept?: (proposal: AgencyProposalSummary) => Promise<void>;
+  onDecline?: (proposal: AgencyProposalSummary) => Promise<void>;
   empty?: React.ReactNode;
   className?: string;
 }
@@ -29,6 +39,8 @@ export const ProposalComparison: React.FC<ProposalComparisonProps> = ({
   proposals,
   onPreview,
   onMessage,
+  onAccept,
+  onDecline,
   empty,
   className,
 }) => {
@@ -53,6 +65,8 @@ export const ProposalComparison: React.FC<ProposalComparisonProps> = ({
           proposal={proposal}
           onPreview={onPreview}
           onMessage={onMessage}
+          onAccept={onAccept}
+          onDecline={onDecline}
         />
       ))}
     </div>
@@ -63,15 +77,70 @@ const ProposalCard: React.FC<{
   proposal: AgencyProposalSummary;
   onPreview: (proposal: AgencyProposalSummary) => void;
   onMessage?: (proposal: AgencyProposalSummary, body: string) => Promise<void>;
-}> = ({ proposal, onPreview, onMessage }) => {
+  onAccept?: (proposal: AgencyProposalSummary) => Promise<void>;
+  onDecline?: (proposal: AgencyProposalSummary) => Promise<void>;
+}> = ({ proposal, onPreview, onMessage, onAccept, onDecline }) => {
   const [composing, setComposing] = useState(false);
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [answering, setAnswering] = useState<'accept' | 'decline' | null>(null);
+  const [working, setWorking] = useState(false);
+  const [answerError, setAnswerError] = useState<string | null>(null);
 
   const quote = proposal.quote;
   const accepted = Boolean(proposal.acceptedAt) || quote?.status === 'accepted';
+  const declined = Boolean(proposal.declinedAt);
+  const canAnswer =
+    Boolean(onAccept && onDecline) && quote?.status === 'sent' && !accepted && !declined;
+
+  const answer = async (choice: 'accept' | 'decline') => {
+    const handler = choice === 'accept' ? onAccept : onDecline;
+    if (!handler) return;
+    // First click asks, the second one answers: both are final for this version.
+    if (answering !== choice) {
+      setAnswering(choice);
+      setAnswerError(null);
+      return;
+    }
+    setWorking(true);
+    setAnswerError(null);
+    try {
+      await handler(proposal);
+      setAnswering(null);
+    } catch (err) {
+      setAnswerError(
+        err instanceof Error && err.message
+          ? err.message
+          : 'Your answer could not be sent.'
+      );
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const statusBadge = accepted
+    ? {
+        label: 'Accepted',
+        tone: 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300',
+      }
+    : declined
+      ? {
+          label: 'Declined',
+          tone: 'border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300',
+        }
+      : quote?.status === 'expired' || quote?.status === 'cancelled'
+        ? {
+            label: quote.status === 'expired' ? 'Expired' : 'Withdrawn',
+            tone: 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300',
+          }
+        : quote?.status === 'sent'
+          ? {
+              label: 'Awaiting you',
+              tone: 'border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300',
+            }
+          : { label: 'Proposal', tone: '' };
 
   const send = async () => {
     if (!onMessage || !body.trim() || sending) return;
@@ -109,16 +178,9 @@ const ProposalCard: React.FC<{
         </div>
         <Badge
           variant="outline"
-          className={cn(
-            'text-[10px] capitalize',
-            accepted
-              ? 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300'
-              : quote?.status === 'expired' || quote?.status === 'cancelled'
-                ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300'
-                : ''
-          )}
+          className={cn('text-[10px]', statusBadge.tone)}
         >
-          {accepted ? 'Accepted' : quote?.status ?? 'Proposal'}
+          {statusBadge.label}
         </Badge>
       </div>
 
@@ -207,6 +269,79 @@ const ProposalCard: React.FC<{
           </Button>
         ) : null}
       </div>
+
+      {declined ? (
+        <p className="rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-[10px] font-semibold text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
+          You declined this proposal. It stays in this conversation — message{' '}
+          {proposal.agency.name} if you want a new version.
+        </p>
+      ) : null}
+
+      {canAnswer ? (
+        answering ? (
+          <div className="space-y-1.5 border-t border-border/60 pt-2">
+            <p className="text-[10px] font-semibold text-foreground">
+              {answering === 'accept'
+                ? 'Accepting confirms this quote and tells the agency. No payment is taken here.'
+                : 'Declining closes this version. The conversation stays open.'}
+            </p>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Button
+                type="button"
+                size="sm"
+                variant={answering === 'decline' ? 'destructive' : 'default'}
+                className="rounded-xl text-xs font-bold gap-1.5"
+                onClick={() => void answer(answering)}
+                disabled={working}
+              >
+                {working ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : answering === 'accept' ? (
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                ) : (
+                  <XCircle className="h-3.5 w-3.5" />
+                )}
+                {answering === 'accept' ? 'Confirm acceptance' : 'Confirm decline'}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="rounded-xl text-xs font-bold"
+                onClick={() => setAnswering(null)}
+                disabled={working}
+              >
+                Cancel
+              </Button>
+            </div>
+            {answerError ? (
+              <p className="text-[10px] font-semibold text-destructive">{answerError}</p>
+            ) : null}
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-1.5 border-t border-border/60 pt-2">
+            <Button
+              type="button"
+              size="sm"
+              className="rounded-xl text-xs font-bold gap-1.5"
+              onClick={() => void answer('accept')}
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Accept proposal
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="rounded-xl text-xs font-bold gap-1.5 text-muted-foreground hover:text-destructive"
+              onClick={() => void answer('decline')}
+            >
+              <XCircle className="h-3.5 w-3.5" />
+              Not this one
+            </Button>
+          </div>
+        )
+      ) : null}
 
       {sent ? (
         <p className="flex items-center gap-1.5 text-[10px] text-emerald-600 dark:text-emerald-400">

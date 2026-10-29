@@ -19,6 +19,7 @@ import {
   convertAgencyEnquiry,
   listAgencyEnquiries,
   listOwnEnquiries,
+  startTripFromEnquiry,
   submitAgencyEnquiry,
   updateAgencyEnquiry,
 } from '../services/directory/enquiries.js';
@@ -132,6 +133,24 @@ export const convertAgencyEnquiryHandler = catchAsync(
       agencyId: String(agency._id),
       enquiryId: String(req.params.enquiryId || ''),
       actorId: req.userId!,
+    });
+    res.json({ success: true, ...result });
+  }
+);
+
+/**
+ * `POST /api/agency/enquiries/:enquiryId/trip` — open a trip for this lead.
+ * The lead becomes a client, the trip carries the enquiry's dates, and the
+ * trip id is stamped on the enquiry so the quote tab can be opened directly.
+ */
+export const startAgencyEnquiryTripHandler = catchAsync(
+  async (req: AgencyAccessRequest, res: Response) => {
+    const { agency, role } = agencyContext(req);
+    const result = await startTripFromEnquiry({
+      agencyId: String(agency._id),
+      enquiryId: String(req.params.enquiryId || ''),
+      actorId: req.userId!,
+      role,
     });
     res.json({ success: true, ...result });
   }

@@ -60,6 +60,34 @@ const MyProposals: React.FC = () => {
     toast.success(`Message sent to ${proposal.agency.name}.`);
   }, []);
 
+  const accept = useCallback(async (proposal: AgencyProposalSummary) => {
+    const result = await api.acceptMyProposal(proposal.id);
+    setProposals((rows) =>
+      rows.map((row) =>
+        row.id === proposal.id
+          ? {
+              ...row,
+              acceptedAt: result.acceptance.acceptedAt,
+              quote: row.quote ? { ...row.quote, status: 'accepted' } : row.quote,
+            }
+          : row
+      )
+    );
+    toast.success(`${proposal.agency.name} has your acceptance.`);
+  }, []);
+
+  const decline = useCallback(async (proposal: AgencyProposalSummary) => {
+    const result = await api.declineMyProposal(proposal.id);
+    setProposals((rows) =>
+      rows.map((row) =>
+        row.id === proposal.id
+          ? { ...row, declinedAt: result.decline.declinedAt }
+          : row
+      )
+    );
+    toast.success('Proposal declined. The conversation stays open.');
+  }, []);
+
   const agencies = new Set(proposals.map((proposal) => proposal.agency.slug || proposal.agency.name));
 
   return (
@@ -78,7 +106,8 @@ const MyProposals: React.FC = () => {
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
               Every proposal an agency sent in answer to your enquiries, side by
               side. Compare the price and what is included, open the full
-              document, then message the agency with any question.
+              document, ask a question, then accept the one you want — nothing
+              is booked or charged here.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -167,6 +196,8 @@ const MyProposals: React.FC = () => {
               setPreviewOpen(true);
             }}
             onMessage={send}
+            onAccept={accept}
+            onDecline={decline}
           />
         )}
       </main>
