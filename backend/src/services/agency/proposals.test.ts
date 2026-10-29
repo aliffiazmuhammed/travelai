@@ -7,6 +7,7 @@ import {
   projectAgencyProposalLink,
   proposalActionState,
   proposalLinkIsViewable,
+  proposalLinkKind,
   resolveProposalTtlDays,
 } from './proposals.js';
 
@@ -91,6 +92,8 @@ test('the projection never exposes the raw token or its hash', () => {
   assert.equal(projected.declinedAt, null);
   assert.ok(!('tokenHash' in projected), 'token hash must never leak');
   assert.ok(!('token' in projected), 'raw token must never leak');
+  assert.equal(projected.kind, 'pdf', 'a row without kind is a legacy PDF share');
+  assert.equal(projected.quoteId, null);
 
   const sparse = projectAgencyProposalLink({
     _id: 'link-2',
@@ -106,6 +109,14 @@ test('the projection never exposes the raw token or its hash', () => {
   assert.equal(sparse.revokedAt, null);
   assert.equal(sparse.acceptedAt, null);
   assert.equal(sparse.declinedAt, null);
+  assert.equal(sparse.kind, 'pdf');
+});
+
+test('live and legacy rows are labelled without touching storage (R9)', () => {
+  assert.equal(proposalLinkKind({ kind: 'live' }), 'live');
+  assert.equal(proposalLinkKind({ kind: 'pdf' }), 'pdf');
+  assert.equal(proposalLinkKind({}), 'pdf');
+  assert.equal(proposalLinkKind(null), 'pdf');
 });
 
 test('only a sent, unanswered proposal can be accepted or declined (R6)', () => {

@@ -148,6 +148,7 @@ test('the summary keeps its exact key set', async () => {
     'enquiryId',
     'expiresAt',
     'id',
+    'kind',
     'quote',
     'settledByAcceptedTrip',
     'trip',

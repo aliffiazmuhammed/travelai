@@ -5,6 +5,7 @@ import Trip from '../../models/Trip.js';
 import { AppError } from '../../utils/AppError.js';
 import { agencyCan, type AgencyRole } from './access.js';
 import { assertAgencyClient } from './clients.js';
+import { ensureLiveProposalForQuote } from './liveProposal.js';
 import {
   markEnquiryQuotedByProposal,
   markEnquiryWonByAcceptance,
@@ -741,11 +742,40 @@ async function requireLatestQuote(
   return latest;
 }
 
+export interface SendQuoteResult {
+  quote: IAgencyQuote;
+  /**
+   * The in-app proposal minted (or reused) for the quote's traveller (M9 R9).
+   * Null when the client has no directory enquiry, or when the mint failed:
+   * a delivery problem never undoes a send.
+   */
+  proposal: { id: string; created: boolean } | null;
+}
+
+async function mintLiveProposal(
+  quote: IAgencyQuote,
+  input: { agencyId: string; tripId: string; actorId?: string }
+): Promise<SendQuoteResult['proposal']> {
+  try {
+    const result = await ensureLiveProposalForQuote({
+      agencyId: input.agencyId,
+      tripId: input.tripId,
+      quote,
+      actorId: input.actorId,
+    });
+    return result ? { id: String(result.link._id), created: result.created } : null;
+  } catch (error) {
+    console.warn('Could not create the in-app proposal for a sent quote:', error);
+    return null;
+  }
+}
+
 export async function sendQuote(input: {
   agencyId: string;
   tripId: string;
   role: AgencyRole;
-}): Promise<IAgencyQuote> {
+  actorId?: string;
+}): Promise<SendQuoteResult> {
   if (!agencyCan(input.role, 'planner')) {
     throw new AppError("You don't have permission to send this quote.", 403);
   }
@@ -754,7 +784,10 @@ export async function sendQuote(input: {
   );
   if (!latest) throw new AppError('Create a quote for this trip first.', 404);
 
-  if (latest.status === 'sent') return latest;
+  if (latest.status === 'sent') {
+    // A retry heals a send whose mint failed; the mint itself is idempotent.
+    return { quote: latest, proposal: await mintLiveProposal(latest, input) };
+  }
   if (latest.status === 'accepted') {
     throw new AppError('This quote was already accepted.', 409);
   }
@@ -795,7 +828,9 @@ export async function sendQuote(input: {
     }
   }
 
-  return sent;
+  // Sending is the share (M9 R9): the traveller's thread gets the quote plus
+  // the itinerary as it stands now. No export, no PDF, no quota.
+  return { quote: sent, proposal: await mintLiveProposal(sent, input) };
 }
 
 export async function acceptQuote(input: {

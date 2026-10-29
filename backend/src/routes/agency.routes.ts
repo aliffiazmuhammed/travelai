@@ -23,6 +23,7 @@ import {
   getAgencyAssetContentHandler,
   getAgencyInvitePreview,
   getAgencyProposalHandler,
+  getAgencyProposalShareHandler,
   getAgencyPdfTokenCatalogHandler,
   getAgencyQuoteHandler,
   getAgencyTemplateBackgroundHandler,
@@ -54,6 +55,7 @@ import {
   saveAgencyTemplateSourceHandler,
   sendAgencyQuoteHandler,
   setDefaultAgencyTemplateHandler,
+  shareAgencyQuoteHandler,
   updateAgency,
   updateAgencyClientHandler,
   updateAgencyPlanHandler,
@@ -601,6 +603,13 @@ router.get(
   requireAgencyTripRole('viewer'),
   listAgencyProposalLinksHandler
 );
+router.get(
+  '/:agencyId/trips/:tripId/shares/:shareId',
+  protectAgency,
+  requireAgencyMember(),
+  requireAgencyTripRole('viewer'),
+  getAgencyProposalShareHandler
+);
 router.delete(
   '/:agencyId/trips/:tripId/shares/:shareId',
   protectAgency,
@@ -717,6 +726,13 @@ router.post(
   requireAgencyRole('planner'),
   requireAgencyTripRole('planner'),
   sendAgencyQuoteHandler
+);
+router.post(
+  '/:agencyId/trips/:tripId/quote/share',
+  protectAgency,
+  requireAgencyRole('planner'),
+  requireAgencyTripRole('planner'),
+  shareAgencyQuoteHandler
 );
 router.post(
   '/:agencyId/trips/:tripId/quote/accept',

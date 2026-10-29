@@ -1,22 +1,31 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
+import type { ExportDocument } from '../services/agency/exports/document.js';
 
 /**
- * A revocable public share for one client proposal (Agency Workspace A7).
+ * A revocable share for one client proposal (Agency Workspace A7/M9).
  *
- * The link pins the exact things the client saw: the ready client export
- * (which itself pins template, version and quote) and the quote row. Later
- * quote versions, template activations or archive actions never change what
- * an existing link renders or accepts.
+ * Two kinds share this row:
+ *
+ * - `pdf` pins the exact things the client saw: the ready client export
+ *   (which itself pins template, version and quote) and the quote row. It is
+ *   served by the public token page.
+ * - `live` is minted when a quote is sent (M9 R9). It carries a snapshot of
+ *   the itinerary taken at send time and has no public URL: only the signed-in
+ *   traveller it answers can read or answer it.
  *
  * Token hygiene mirrors invites: the raw token exists only at mint time and in
  * the copied link; `tokenHash` (sha256) is the lookup key. Expired or revoked
  * rows answer the same generic 404 as unknown tokens.
  */
+export type AgencyProposalLinkKind = 'pdf' | 'live';
+
 export interface IAgencyProposalLink extends Document {
+  kind: AgencyProposalLinkKind;
   agencyId: Types.ObjectId;
   tripId: Types.ObjectId;
   quoteId: Types.ObjectId;
-  exportId: Types.ObjectId;
+  /** The pinned export; only `pdf` links have one. */
+  exportId?: Types.ObjectId | null;
   /**
    * The enquiry this proposal answers, when the quote's client came from one
    * (M9 D8). It lets the traveller's `/proposals` page group links by thread
@@ -32,6 +41,12 @@ export interface IAgencyProposalLink extends Document {
   quoteNumber?: string;
   quoteVersion?: number;
   templateName?: string;
+  /**
+   * The trip as it stood when the quote was sent (`live` links only). Hidden
+   * from every query by default so list projections never drag the whole
+   * document along; the proposal view loaders opt in explicitly.
+   */
+  itinerarySnapshot?: ExportDocument | null;
   lastViewedAt?: Date;
   viewCount: number;
   acceptedAt?: Date;
@@ -47,6 +62,12 @@ export interface IAgencyProposalLink extends Document {
 
 const agencyProposalLinkSchema = new Schema<IAgencyProposalLink>(
   {
+    kind: {
+      type: String,
+      enum: ['pdf', 'live'],
+      default: 'pdf',
+      required: true,
+    },
     agencyId: {
       type: Schema.Types.ObjectId,
       ref: 'Agency',
@@ -67,7 +88,7 @@ const agencyProposalLinkSchema = new Schema<IAgencyProposalLink>(
     exportId: {
       type: Schema.Types.ObjectId,
       ref: 'AgencyExport',
-      required: true,
+      default: null,
     },
     enquiryId: {
       type: Schema.Types.ObjectId,
@@ -82,6 +103,7 @@ const agencyProposalLinkSchema = new Schema<IAgencyProposalLink>(
     quoteNumber: { type: String, trim: true, maxlength: 20 },
     quoteVersion: { type: Number, min: 1 },
     templateName: { type: String, trim: true, maxlength: 80 },
+    itinerarySnapshot: { type: Schema.Types.Mixed, select: false },
     lastViewedAt: { type: Date },
     viewCount: { type: Number, default: 0, min: 0 },
     acceptedAt: { type: Date },

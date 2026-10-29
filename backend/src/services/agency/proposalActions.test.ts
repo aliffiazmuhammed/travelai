@@ -127,8 +127,8 @@ const original = {
   return chain({ ...quoteRow });
 };
 
-(AgencyProposalLink as any).findById = async (id: any) =>
-  linkRow && String(linkRow._id) === String(id) ? linkRow : null;
+(AgencyProposalLink as any).findById = (id: any) =>
+  linkRow && String(linkRow._id) === String(id) ? chain(linkRow) : null;
 (AgencyProposalLink as any).findOneAndUpdate = (filter: any, update: any) => {
   const matches =
     linkRow &&

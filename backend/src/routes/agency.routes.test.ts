@@ -67,7 +67,7 @@ test('the feature gate is mounted on the whole namespace', () => {
   );
 });
 
-test('A1-A8 agency API exposes the expected route table', () => {
+test('A1-A9 agency API exposes the expected route table', () => {
   const routes = routeLayers().map(
     (layer) => `${pathOf(layer)} ${methodsOf(layer).join(',')}`
   );
@@ -130,6 +130,7 @@ test('A1-A8 agency API exposes the expected route table', () => {
     '/:agencyId/exports/:exportId/download GET',
     '/:agencyId/trips/:tripId/exports/:exportId/share POST',
     '/:agencyId/trips/:tripId/shares GET',
+    '/:agencyId/trips/:tripId/shares/:shareId GET',
     '/:agencyId/trips/:tripId/shares/:shareId DELETE',
     '/:agencyId/trips GET',
     '/:agencyId/trips POST',
@@ -145,6 +146,7 @@ test('A1-A8 agency API exposes the expected route table', () => {
     '/:agencyId/trips/:tripId/quote/versions GET',
     '/:agencyId/trips/:tripId/quote PUT',
     '/:agencyId/trips/:tripId/quote/send POST',
+    '/:agencyId/trips/:tripId/quote/share POST',
     '/:agencyId/trips/:tripId/quote/accept POST',
     '/:agencyId/trips/:tripId/quote/cancel POST',
     '/:agencyId/members GET',
@@ -297,6 +299,7 @@ test('read-only tenant routes require membership, not admin', () => {
     '/:agencyId/trips/:tripId GET',
     '/:agencyId/trips/:tripId/exports GET',
     '/:agencyId/trips/:tripId/shares GET',
+    '/:agencyId/trips/:tripId/shares/:shareId GET',
     '/:agencyId/exports/:exportId/download GET',
     '/:agencyId/trips/:tripId/quote GET',
     '/:agencyId/trips/:tripId/quote/versions GET',
@@ -325,6 +328,7 @@ test('trip writes, directory writes, quote actions and exports require planner r
     '/:agencyId/trips/:tripId/shares/:shareId DELETE',
     '/:agencyId/trips/:tripId/quote PUT',
     '/:agencyId/trips/:tripId/quote/send POST',
+    '/:agencyId/trips/:tripId/quote/share POST',
     '/:agencyId/trips/:tripId/quote/accept POST',
     '/:agencyId/trips/:tripId/quote/cancel POST',
     '/enquiries/:enquiryId PATCH',

@@ -19,6 +19,12 @@ export interface AgencyClientSummary {
   phone?: string;
   company?: string;
   notes?: string;
+  /**
+   * The directory enquiry this client came from, when there is one. The quote
+   * panel uses it to tell a traveller account (in-app proposal) from an ad-hoc
+   * client (PDF share only).
+   */
+  sourceEnquiryId?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -31,6 +37,9 @@ export function projectAgencyClient(client: IAgencyClient | any): AgencyClientSu
     phone: client.phone ?? undefined,
     company: client.company ?? undefined,
     notes: client.notes ?? undefined,
+    sourceEnquiryId: client.sourceEnquiryId
+      ? String(client.sourceEnquiryId)
+      : null,
     createdAt: client.createdAt,
     updatedAt: client.updatedAt,
   };

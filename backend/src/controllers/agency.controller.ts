@@ -73,10 +73,13 @@ import {
   acceptAgencyProposal,
   createAgencyProposalLink,
   getAgencyProposal,
+  getAgencyProposalSharePreview,
   listAgencyProposalLinks,
+  projectAgencyProposalLink,
   readAgencyProposalPdf,
   revokeAgencyProposalLink,
 } from '../services/agency/proposals.js';
+import { shareLatestQuoteWithTraveller } from '../services/agency/liveProposal.js';
 import {
   ensureBuiltinTemplates,
   listAgencyTemplates,
@@ -537,12 +540,34 @@ export const saveAgencyQuoteHandler = catchAsync(
 export const sendAgencyQuoteHandler = catchAsync(
   async (req: AgencyAccessRequest, res: Response) => {
     const { agency, role } = agencyContext(req);
-    const quote = await sendQuote({
+    const { quote, proposal } = await sendQuote({
       agencyId: String(agency._id),
       tripId: guardedTripId(req),
       role,
+      actorId: req.userId!,
     });
-    res.json({ success: true, quote: projectQuote(quote, role) });
+    res.json({ success: true, quote: projectQuote(quote, role), proposal });
+  }
+);
+
+/**
+ * The quote panel's retry: put the latest sent quote in the traveller's
+ * enquiries when the send-time mint did not happen (M9 R9).
+ */
+export const shareAgencyQuoteHandler = catchAsync(
+  async (req: AgencyAccessRequest, res: Response) => {
+    const { agency, role } = agencyContext(req);
+    const result = await shareLatestQuoteWithTraveller({
+      agencyId: String(agency._id),
+      tripId: guardedTripId(req),
+      actorId: req.userId!,
+      role,
+    });
+    res.json({
+      success: true,
+      created: result.created,
+      link: projectAgencyProposalLink(result.link),
+    });
   }
 );
 
@@ -1110,6 +1135,23 @@ export const revokeAgencyProposalLinkHandler = catchAsync(
       role,
     });
     res.json({ success: true, message: 'Share link revoked.', link });
+  }
+);
+
+/**
+ * Staff view of an in-app proposal: exactly what the traveller sees, without
+ * counting as a view (M9 R9).
+ */
+export const getAgencyProposalShareHandler = catchAsync(
+  async (req: AgencyAccessRequest, res: Response) => {
+    const { agency, role } = agencyContext(req);
+    const proposal = await getAgencyProposalSharePreview({
+      agencyId: String(agency._id),
+      tripId: guardedTripId(req),
+      linkId: String(req.params.shareId || ''),
+      role,
+    });
+    res.json({ success: true, proposal });
   }
 );
 

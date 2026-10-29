@@ -263,7 +263,7 @@ const ProposalCard: React.FC<{
           onClick={() => onPreview(proposal)}
         >
           <FileText className="h-3.5 w-3.5" />
-          View document
+          {proposal.kind === 'live' ? 'View trip & quote' : 'View document'}
         </Button>
         {onMessage && proposal.enquiryId ? (
           <Button

@@ -459,6 +459,11 @@ export interface AgencyConversation {
 /** One live proposal in the traveller's comparison page. */
 export interface AgencyProposalSummary {
   id: string;
+  /**
+   * `live` is the in-app share minted when the agency sends a quote; `pdf` is
+   * a public link to a generated document (M9 R9).
+   */
+  kind: 'pdf' | 'live';
   /** The conversation this proposal answers, when it can be resolved. */
   enquiryId: string | null;
   agency: { name: string; slug: string };
@@ -892,12 +897,110 @@ export interface AgencyProposalView {
   declined: boolean;
   declinedAt: string | null;
   html: string;
-  /** `pdf` means the viewer must show the pinned export PDF instead. */
-  documentMode: 'html' | 'pdf';
+  /**
+   * `live` renders the itinerary snapshot sent with the quote; `html`/`pdf`
+   * are generated exports (A7).
+   */
+  documentMode: 'live' | 'html' | 'pdf';
+  /** The client-safe snapshot behind a `live` proposal; null for exports. */
+  itinerary: AgencyExportDocument | null;
   pageCount: number;
   templateName: string;
   pdf: { bytes: number } | null;
   expiresAt: string;
+}
+
+/**
+ * The renderer-ready document a live proposal snapshots at send time. Mirrors
+ * the server's `ExportDocument`: client-safe by construction (no markup, cost
+ * or chat content).
+ */
+export interface AgencyExportDocument {
+  schemaVersion: number;
+  generatedAt: string;
+  agency: {
+    name: string;
+    logoUrl: string | null;
+    mascotUrl: string | null;
+    primaryColor: string | null;
+    accentColor: string | null;
+    fontHeading: string | null;
+    fontBody: string | null;
+    address: string | null;
+    phone: string | null;
+    email: string | null;
+    website: string | null;
+    gstin: string | null;
+  };
+  trip: {
+    id: string;
+    title: string;
+    destination: string;
+    startDate: string | null;
+    endDate: string | null;
+    durationDays: number;
+    nights: number;
+    groupType: string | null;
+    season: string | null;
+    days: AgencyExportDay[];
+  };
+  client: {
+    name: string;
+    email: string | null;
+    phone: string | null;
+    adults: number | null;
+    children: number | null;
+    rooms: number | null;
+  } | null;
+  quote: {
+    id: string;
+    number: string;
+    version: number;
+    status: string;
+    date: string | null;
+    validUntil: string | null;
+    currency: string;
+    total: number;
+    perPerson: number;
+    inclusions: string[];
+    exclusions: string[];
+    terms: string[];
+  } | null;
+  recommendations: string[];
+  thingsToCarry: string[];
+  cancellationPolicy: string[];
+  contact: {
+    phone: string | null;
+    email: string | null;
+    website: string | null;
+    instagram: string | null;
+  };
+}
+
+export interface AgencyExportDay {
+  day: number;
+  date: string | null;
+  title: string;
+  summary: string | null;
+  activities: Array<{
+    title: string;
+    time: string | null;
+    description: string | null;
+    location: string | null;
+    cost: number | null;
+  }>;
+  stay: Array<{
+    name: string;
+    location: string | null;
+    description: string | null;
+    vibe: string | null;
+    pricePerNight: string | null;
+  }>;
+  food: string[];
+  transport: string[];
+  tips: string[];
+  permitRequired: boolean;
+  imageUrl: string | null;
 }
 
 export interface AgencyProposalAcceptResult {
@@ -915,6 +1018,8 @@ export interface AgencyProposalDeclineResult {
 /** Staff-side row in the trip's share list. The token itself never returns. */
 export interface AgencyProposalLink {
   _id: string;
+  kind: 'pdf' | 'live';
+  quoteId: string | null;
   tokenHint: string;
   quoteNumber: string | null;
   quoteVersion: number;

@@ -27,6 +27,7 @@ import {
   markEnquiryWonByAcceptance,
 } from '../directory/enquiries.js';
 import { renderPinnedAgencyExport } from './exports/exports.js';
+import type { ExportDocument } from './exports/document.js';
 import { readAgencyExportFile } from './exports/storage.js';
 import {
   effectiveQuoteStatus,
@@ -70,9 +71,17 @@ export function proposalLinkIsViewable(
   return Number.isFinite(expiresAt) && expiresAt > now.getTime();
 }
 
+export function proposalLinkKind(
+  link: Pick<IAgencyProposalLink, 'kind'> | any
+): 'pdf' | 'live' {
+  return link?.kind === 'live' ? 'live' : 'pdf';
+}
+
 export function projectAgencyProposalLink(link: IAgencyProposalLink | any) {
   return {
     _id: String(link._id),
+    kind: proposalLinkKind(link),
+    quoteId: link.quoteId ? String(link.quoteId) : null,
     tokenHint: String(link.tokenHint ?? ''),
     quoteNumber: link.quoteNumber ?? null,
     quoteVersion: Number(link.quoteVersion ?? 1),
@@ -121,7 +130,12 @@ export function agencyProposalLinkFor(
 
 async function loadLink(rawToken: unknown): Promise<IAgencyProposalLink> {
   const hash = hashToken(String(rawToken ?? ''));
-  const link = await AgencyProposalLink.findOne({ tokenHash: hash });
+  // Live shares have no public page: their token is never exposed, and even a
+  // leaked one must answer the same 404 as an unknown token.
+  const link = await AgencyProposalLink.findOne({
+    tokenHash: hash,
+    kind: { $ne: 'live' },
+  });
   if (!link || !proposalLinkIsViewable(link)) {
     throw new AppError('Proposal not found', 404);
   }
@@ -168,7 +182,10 @@ async function loadOwnedLink(
   if (!mongoose.isValidObjectId(linkId)) {
     throw new AppError('Proposal not found', 404);
   }
-  const link = await AgencyProposalLink.findById(linkId);
+  // Live links carry their itinerary snapshot; select it back explicitly.
+  const link = await AgencyProposalLink.findById(linkId).select(
+    '+itinerarySnapshot'
+  );
   if (!link || !proposalLinkIsViewable(link)) {
     throw new AppError('Proposal not found', 404);
   }
@@ -191,6 +208,11 @@ async function loadOwnedLink(
 
 export interface AgencyProposalSummary {
   id: string;
+  /**
+   * `live` is the in-app share minted by a send; `pdf` is a public link to a
+   * generated document. The card labels its preview button from this.
+   */
+  kind: 'pdf' | 'live';
   /** The conversation this proposal answers, when it can be resolved. */
   enquiryId: string | null;
   agency: { name: string; slug: string };
@@ -309,6 +331,7 @@ async function summarizeLinks(links: any[]): Promise<AgencyProposalSummary[]> {
 
     return {
       id: String(link._id),
+      kind: proposalLinkKind(link),
       enquiryId,
       agency: {
         name: String(agency?.name ?? 'The agency'),
@@ -374,7 +397,11 @@ export async function listConsumerProposals(
   return summarizeLinks(links);
 }
 
-/** The proposals one enquiry's thread can compare (guest or personal). */
+/**
+ * The proposals a guest conversation can compare. Only public `pdf` shares
+ * appear: a `live` proposal belongs to a signed-in account and is read through
+ * `/api/proposals`, never a conversation token.
+ */
 export async function listProposalsForEnquiry(
   row: any
 ): Promise<AgencyProposalSummary[]> {
@@ -394,6 +421,7 @@ export async function listProposalsForEnquiry(
 
   const links = (await AgencyProposalLink.find({
     agencyId: row.agencyId,
+    kind: { $ne: 'live' },
     revokedAt: null,
     expiresAt: { $gt: new Date() },
     $or: [{ enquiryId: row._id }, ...quoteFilters],
@@ -412,9 +440,11 @@ async function loadEnquiryLink(row: any, linkId: string): Promise<IAgencyProposa
   const link = await AgencyProposalLink.findOne({
     _id: linkId,
     agencyId: row.agencyId,
+    // A guest thread never opens a signed-in-only live proposal.
+    kind: { $ne: 'live' },
     revokedAt: null,
     expiresAt: { $gt: new Date() },
-  });
+  }).select('+itinerarySnapshot');
   if (!link) throw new AppError('Proposal not found', 404);
   if (link.enquiryId && String(link.enquiryId) === String(row._id)) {
     return link;
@@ -451,6 +481,7 @@ export async function readProposalPdfForEnquiry(
 async function loadPinnedRows(link: IAgencyProposalLink) {
   const agencyId = String(link.agencyId);
   const tripId = String(link.tripId);
+  const kind = proposalLinkKind(link);
   const [agency, trip, quoteRow, job] = await Promise.all([
     Agency.findById(link.agencyId),
     Trip.findOne({
@@ -460,15 +491,18 @@ async function loadPinnedRows(link: IAgencyProposalLink) {
       isDeleted: { $ne: true },
     }),
     AgencyQuote.findOne({ _id: link.quoteId, agencyId, tripId }),
-    AgencyExport.findOne({ _id: link.exportId, agencyId, tripId }),
+    // A live share has no export to pin: it renders its own snapshot.
+    link.exportId
+      ? AgencyExport.findOne({ _id: link.exportId, agencyId, tripId })
+      : Promise.resolve(null),
   ]);
-  if (!agency || agency.status !== 'active' || !trip || !job) {
+  if (!agency || agency.status !== 'active' || !trip || (kind === 'pdf' && !job)) {
     // A suspended tenant fails closed, and a public link must not reveal
     // whether the tenant exists at all.
     throw new AppError('Proposal not found', 404);
   }
   const quote = quoteRow ? await reconcileQuoteExpiry(quoteRow) : null;
-  return { agency, trip, quote, job };
+  return { agency, trip, quote, job, kind };
 }
 
 export interface AgencyProposalView {
@@ -481,11 +515,14 @@ export interface AgencyProposalView {
   declined: boolean;
   declinedAt: Date | null;
   /**
+   * `live` is the itinerary snapshot taken when the quote was sent (M9 R9).
    * `html` re-renders the pinned HTML template; `pdf` points the page at the
    * token-only PDF route because an uploaded PDF design is already the exact
    * document the agency approved.
    */
-  documentMode: 'html' | 'pdf';
+  documentMode: 'live' | 'html' | 'pdf';
+  /** The send-time itinerary for `live` proposals; null for pinned shares. */
+  itinerary: ExportDocument | null;
   html: string;
   pageCount: number;
   templateName: string;
@@ -512,10 +549,97 @@ export async function getAgencyProposalForUser(
   return buildAgencyProposalView(link);
 }
 
+/**
+ * The agency's own preview of an in-app proposal (M9 R9). It reads the same
+ * snapshot the traveller sees and deliberately does not count as a view.
+ */
+export async function getAgencyProposalSharePreview(input: {
+  agencyId: string;
+  tripId: string;
+  linkId: string;
+  role: AgencyRole;
+}): Promise<AgencyProposalView> {
+  if (!agencyCan(input.role, 'viewer')) {
+    throw new AppError("You don't have permission to view shares.", 403);
+  }
+  if (!mongoose.isValidObjectId(input.linkId)) {
+    throw new AppError('Proposal not found', 404);
+  }
+  const link = await AgencyProposalLink.findOne({
+    _id: input.linkId,
+    agencyId: input.agencyId,
+    tripId: input.tripId,
+    kind: 'live',
+  }).select('+itinerarySnapshot');
+  if (!link || !proposalLinkIsViewable(link)) {
+    throw new AppError('Proposal not found', 404);
+  }
+  return buildAgencyProposalView(link, { trackView: false });
+}
+
+async function recordProposalView(link: IAgencyProposalLink): Promise<void> {
+  await AgencyProposalLink.updateOne(
+    { _id: link._id },
+    { $inc: { viewCount: 1 }, $set: { lastViewedAt: new Date() } }
+  );
+  await recordAgencyAudit({
+    agencyId: String(link.agencyId),
+    action: 'share.viewed',
+    targetType: 'AgencyProposalLink',
+    targetId: String(link._id),
+    metadata: { tripId: String(link.tripId), quoteId: String(link.quoteId) },
+  });
+}
+
+/**
+ * `trackView: false` is for the agency's own preview: staff reading the share
+ * must not inflate the traveller's view count.
+ */
 async function buildAgencyProposalView(
-  link: IAgencyProposalLink
+  link: IAgencyProposalLink,
+  options: { trackView?: boolean } = {}
 ): Promise<AgencyProposalView> {
-  const { agency, trip, quote, job } = await loadPinnedRows(link);
+  const { agency, trip, quote, job, kind } = await loadPinnedRows(link);
+  const status = quote ? effectiveQuoteStatus(quote) : null;
+  const action = proposalActionState(link, status);
+  const track = options.trackView !== false;
+
+  if (kind === 'live') {
+    const itinerary = (link.itinerarySnapshot ?? null) as ExportDocument | null;
+    if (!itinerary) {
+      // A live row without its snapshot cannot be rebuilt; fail closed rather
+      // than showing the current trip as if it were what was sent.
+      throw new AppError('Proposal not found', 404);
+    }
+    if (track) await recordProposalView(link);
+    return {
+      agency: { name: String(agency.name ?? '') },
+      trip: {
+        _id: String(trip._id),
+        title: String(
+          itinerary.trip?.title ||
+            trip.tripDetails?.trip_title ||
+            trip.title ||
+            'Proposal'
+        ),
+      },
+      quote: quote ? projectQuoteForClient(quote) : null,
+      canAccept: action.canAccept,
+      accepted: action.accepted,
+      acceptedAt: quote?.acceptedAt ?? link.acceptedAt ?? null,
+      declined: action.declined,
+      declinedAt: link.declinedAt ?? null,
+      documentMode: 'live',
+      itinerary,
+      html: '',
+      pageCount: 0,
+      templateName: '',
+      pdf: null,
+      expiresAt: link.expiresAt,
+    };
+  }
+
+  if (!job) throw new AppError('Proposal not found', 404);
 
   // Uploaded PDF designs are served from the finished export file through the
   // token-only PDF route; only HTML templates are re-rendered here.
@@ -539,20 +663,8 @@ async function buildAgencyProposalView(
         client,
       });
 
-  await AgencyProposalLink.updateOne(
-    { _id: link._id },
-    { $inc: { viewCount: 1 }, $set: { lastViewedAt: new Date() } }
-  );
-  await recordAgencyAudit({
-    agencyId: String(link.agencyId),
-    action: 'share.viewed',
-    targetType: 'AgencyProposalLink',
-    targetId: String(link._id),
-    metadata: { tripId: String(link.tripId), quoteId: String(link.quoteId) },
-  });
+  if (track) await recordProposalView(link);
 
-  const status = quote ? effectiveQuoteStatus(quote) : null;
-  const action = proposalActionState(link, status);
   return {
     agency: { name: String(agency.name ?? '') },
     trip: { _id: String(trip._id), title: String(trip.tripDetails?.trip_title || trip.title || 'Proposal') },
@@ -563,6 +675,7 @@ async function buildAgencyProposalView(
     declined: action.declined,
     declinedAt: link.declinedAt ?? null,
     documentMode: pdfMode ? 'pdf' : 'html',
+    itinerary: null,
     html: rendered?.html ?? '',
     pageCount: pdfMode
       ? Number(job.pageCount ?? 0)
@@ -802,6 +915,12 @@ async function readPdfForLink(link: IAgencyProposalLink): Promise<{
   filename: string;
 }> {
   const { job } = await loadPinnedRows(link);
+  if (!job) {
+    throw new AppError(
+      'This proposal has no PDF. Generate one from the trip export to download it.',
+      409
+    );
+  }
   if (job.status !== 'ready' || !job.outputKey) {
     throw new AppError('The proposal PDF is not ready yet.', 409);
   }
@@ -872,6 +991,7 @@ export async function createAgencyProposalLink(
 
   const rawToken = mintInviteToken();
   const link = await AgencyProposalLink.create({
+    kind: 'pdf',
     agencyId: input.agencyId,
     tripId: input.tripId,
     quoteId: quote._id,

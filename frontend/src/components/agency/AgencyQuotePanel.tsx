@@ -16,6 +16,7 @@ import {
   Users,
   XCircle,
 } from 'lucide-react';
+import ProposalPreviewDialog from '@/components/directory/ProposalPreviewDialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -441,6 +442,10 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
   );
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   const [prefillApplied, setPrefillApplied] = useState(false);
+  /** The live share minted by a send (R9); its id is all the preview needs. */
+  const [liveShareId, setLiveShareId] = useState<string | null>(null);
+  const [sharing, setSharing] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const requestRef = useRef(0);
 
   const loadQuote = useCallback(async () => {
@@ -448,14 +453,24 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
     setLoading(true);
     setLoadError(null);
     try {
-      const [quoteResult, versionsResult] = await Promise.all([
+      const [quoteResult, versionsResult, sharesResult] = await Promise.all([
         api.getAgencyQuote(agencyId, tripId),
         api.getAgencyQuoteVersions(agencyId, tripId),
+        // The share list is optional here: a viewer without export access can
+        // still read the quote, and the card simply stays quiet.
+        api.getAgencyProposalLinks(agencyId, tripId).catch(() => null),
       ]);
       if (requestId !== requestRef.current) return;
       const latest = quoteResult.quote;
       setQuote(latest);
       setVersions(versionsResult.versions || []);
+      setLiveShareId(
+        latest
+          ? sharesResult?.links.find(
+              (link) => link.kind === 'live' && link.quoteId === latest._id
+            )?._id ?? null
+          : null
+      );
       setSelectedVersionId(null);
       if (latest) {
         setEditor(editorFromQuote(latest));
@@ -627,8 +642,11 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
       }
       const result = await api.sendAgencyQuote(agencyId, tripId);
       applySavedQuote(result.quote);
+      setLiveShareId(result.proposal?.id ?? null);
       toast.success(
-        'Quote sent and locked as a version. Share the proposal to send it to the traveller.'
+        result.proposal
+          ? 'Quote sent. The traveller can open the trip and quote from their enquiry.'
+          : 'Quote sent and locked as a version.'
       );
     } catch (err) {
       toast.error(
@@ -636,6 +654,24 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
       );
     } finally {
       setAction(null);
+    }
+  };
+
+  /** Retry for a quote sent before R9, or a send whose share did not land. */
+  const handleShare = async () => {
+    setSharing(true);
+    try {
+      const result = await api.shareAgencyQuote(agencyId, tripId);
+      setLiveShareId(result.link._id);
+      toast.success(
+        quote ? `Shared with ${quote.client.name}.` : "Shared with the traveller."
+      );
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : 'Could not share this quote.'
+      );
+    } finally {
+      setSharing(false);
     }
   };
 
@@ -924,7 +960,7 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
                     disabled={busy}
                   >
                     <Share2 className="mr-1.5 h-3.5 w-3.5" />
-                    Send proposal to traveller
+                    Export a PDF proposal
                   </Button>
                 ) : null}
                 {quote.status === 'sent' && !viewingOldVersion ? (
@@ -975,6 +1011,57 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
           </div>
         </CardContent>
       </Card>
+
+      {quote && !editing && !viewingOldVersion && quote.status === 'sent' ? (
+        <Card className="rounded-3xl border-border/70">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+            <div className="flex items-start gap-3">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
+                <Send className="h-4 w-4" />
+              </span>
+              <div>
+                <p className="text-sm font-semibold">
+                  {liveShareId
+                    ? `Shared with ${quote.client.name}`
+                    : "Not in the traveller's thread yet"}
+                </p>
+                <p className="mt-0.5 max-w-xl text-xs text-slate-500 dark:text-slate-400">
+                  {liveShareId
+                    ? 'They can open the trip and quote, accept or decline, or keep talking to you in their enquiry.'
+                    : 'Sending shares the quote with the itinerary as it stands. If this client has no travel account here, export a PDF proposal instead.'}
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {liveShareId ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setPreviewOpen(true)}
+                  disabled={busy}
+                >
+                  <Eye className="mr-1.5 h-3.5 w-3.5" />
+                  View trip &amp; quote
+                </Button>
+              ) : canPlan ? (
+                <Button
+                  size="sm"
+                  onClick={() => void handleShare()}
+                  disabled={busy || sharing}
+                  className="bg-teal-600 hover:bg-teal-700"
+                >
+                  {sharing ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Share2 className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  Share with traveller
+                </Button>
+              ) : null}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {!editing && !quote ? (
         <Card className="rounded-3xl border-dashed">
@@ -1108,6 +1195,18 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
           </div>
         </div>
       )}
+
+      {liveShareId ? (
+        <ProposalPreviewDialog
+          open={previewOpen}
+          onOpenChange={setPreviewOpen}
+          load={() =>
+            api
+              .getAgencyProposalShare(agencyId, tripId, liveShareId)
+              .then((result) => result.proposal)
+          }
+        />
+      ) : null}
     </div>
   );
 };

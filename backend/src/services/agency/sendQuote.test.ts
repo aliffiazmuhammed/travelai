@@ -2,16 +2,20 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import AgencyClient from '../../models/AgencyClient.js';
 import AgencyEnquiry from '../../models/AgencyEnquiry.js';
+import AgencyProposalLink from '../../models/AgencyProposalLink.js';
 import AgencyQuote from '../../models/AgencyQuote.js';
 import { sendQuote } from './quotes.js';
 
 /**
  * M9 R8 — sending a quote is the funnel's quote step.
  *
- * The traveller's proposal gets its own document later (the Export tab), but
- * the lead must not sit on "Replied" while a sent quote exists. The write-back
+ * The lead must not sit on "Replied" while a sent quote exists. The write-back
  * reuses the share-time rule, so a won or lost lead keeps the status its agency
  * chose.
+ *
+ * M9 R9 — sending is also the share: the traveller's thread gets the quote and
+ * the itinerary snapshot. These tests stub the link row that already exists,
+ * so the mint's own behaviour lives in `liveProposal.test.ts`.
  */
 
 const AGENCY_ID = '64d000000000000000000b01';
@@ -55,6 +59,7 @@ let enquiryRow: any = { _id: ENQUIRY_ID, status: 'new', repliedAt: null };
 let clientDoc: any = { _id: CLIENT_ID, sourceEnquiryId: ENQUIRY_ID };
 let enquiryWrites = 0;
 let lastEnquirySet: any = null;
+let linkError: Error | null = null;
 
 const originals = {
   quoteFindOne: AgencyQuote.findOne,
@@ -62,6 +67,7 @@ const originals = {
   clientFindOne: AgencyClient.findOne,
   enquiryFindOne: AgencyEnquiry.findOne,
   enquiryUpdate: AgencyEnquiry.findOneAndUpdate,
+  linkFindOne: AgencyProposalLink.findOne,
 };
 
 (AgencyQuote as any).findOne = () => ({ sort: async () => latest });
@@ -76,6 +82,10 @@ const originals = {
   lastEnquirySet = update.$set;
   return { lean: async () => ({ ...enquiryRow, ...update.$set }) };
 };
+(AgencyProposalLink as any).findOne = async () => {
+  if (linkError) throw linkError;
+  return { _id: '64d000000000000000000b09', kind: 'live' };
+};
 
 function reset() {
   latest = quoteRow();
@@ -83,16 +93,22 @@ function reset() {
   clientDoc = { _id: CLIENT_ID, sourceEnquiryId: ENQUIRY_ID };
   enquiryWrites = 0;
   lastEnquirySet = null;
+  linkError = null;
 }
 
 test('sending a draft moves a fresh lead to quoted and stamps the reply time', async () => {
   reset();
-  const sent = await sendQuote({ agencyId: AGENCY_ID, tripId: TRIP_ID, role: 'planner' });
+  const { quote: sent, proposal } = await sendQuote({
+    agencyId: AGENCY_ID,
+    tripId: TRIP_ID,
+    role: 'planner',
+  });
 
   assert.equal(sent.status, 'sent');
   assert.equal(enquiryWrites, 1);
   assert.equal(lastEnquirySet.status, 'quoted');
   assert.ok(lastEnquirySet.repliedAt instanceof Date);
+  assert.deepEqual(proposal, { id: '64d000000000000000000b09', created: false });
 });
 
 test('a won lead keeps the status its agency chose', async () => {
@@ -121,10 +137,32 @@ test('an already-sent quote is idempotent and does not re-write the lead', async
   reset();
   latest = quoteRow({ status: 'sent' });
 
-  const sent = await sendQuote({ agencyId: AGENCY_ID, tripId: TRIP_ID, role: 'planner' });
+  const { quote: sent } = await sendQuote({
+    agencyId: AGENCY_ID,
+    tripId: TRIP_ID,
+    role: 'planner',
+  });
 
   assert.equal(sent.status, 'sent');
   assert.equal(enquiryWrites, 0);
+});
+
+test('a failed share mint never blocks the send', async () => {
+  reset();
+  linkError = new Error('mongo hiccup');
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    const { quote: sent, proposal } = await sendQuote({
+      agencyId: AGENCY_ID,
+      tripId: TRIP_ID,
+      role: 'planner',
+    });
+    assert.equal(sent.status, 'sent');
+    assert.equal(proposal, null);
+  } finally {
+    console.warn = warn;
+  }
 });
 
 test('sending still requires the planner role', async () => {
@@ -145,4 +183,5 @@ test.after(() => {
   (AgencyClient as any).findOne = originals.clientFindOne;
   (AgencyEnquiry as any).findOne = originals.enquiryFindOne;
   (AgencyEnquiry as any).findOneAndUpdate = originals.enquiryUpdate;
+  (AgencyProposalLink as any).findOne = originals.linkFindOne;
 });

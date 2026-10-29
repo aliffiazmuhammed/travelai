@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { AlertCircle, Download, FileText, Loader2 } from 'lucide-react';
 import PdfDocumentViewer from '@/components/agency/PdfDocumentViewer';
+import LiveProposalDocument from '@/components/directory/LiveProposalDocument';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,6 +23,9 @@ import type { AgencyProposalView } from '@/types/agency';
  * signed-in traveller resolves the row by id, while a guest uses the private
  * conversation link. Both callers pass the loader, so this component never
  * knows (or stores) a proposal token.
+ *
+ * An in-app proposal (R9) renders the itinerary snapshot the agency sent with
+ * the quote; a PDF/html row renders its pinned export instead.
  */
 interface ProposalPreviewDialogProps {
   open: boolean;
@@ -118,7 +122,7 @@ export const ProposalPreviewDialog: React.FC<ProposalPreviewDialogProps> = ({
           <DialogDescription className="text-xs">
             {proposal?.agency.name ?? 'Your agency'}
             {quote ? ` · ${formatMoney(quote.total, quote.currency)} total` : ''}
-            {proposal?.expiresAt
+            {proposal && proposal.documentMode !== 'live' && proposal.expiresAt
               ? ` · link valid until ${formatDate(proposal.expiresAt)}`
               : ''}
           </DialogDescription>
@@ -153,8 +157,9 @@ export const ProposalPreviewDialog: React.FC<ProposalPreviewDialogProps> = ({
 
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-[11px] text-muted-foreground">
-                {proposal.pageCount} page{proposal.pageCount === 1 ? '' : 's'} ·{' '}
-                {proposal.templateName}
+                {proposal.documentMode === 'live'
+                  ? 'The itinerary as it stood when the quote was sent.'
+                  : `${proposal.pageCount} page${proposal.pageCount === 1 ? '' : 's'} · ${proposal.templateName}`}
               </p>
               {proposal.pdf && downloadUrl ? (
                 <Button asChild size="sm" className="rounded-xl text-xs font-bold gap-1.5">
@@ -166,7 +171,19 @@ export const ProposalPreviewDialog: React.FC<ProposalPreviewDialogProps> = ({
               ) : null}
             </div>
 
-            {proposal.documentMode === 'pdf' ? (
+            {proposal.documentMode === 'live' ? (
+              proposal.itinerary ? (
+                <LiveProposalDocument
+                  document={proposal.itinerary}
+                  className="max-h-[70vh] overflow-y-auto"
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-border/70 px-6 py-16 text-center text-xs text-muted-foreground">
+                  <AlertCircle className="h-5 w-5" />
+                  This proposal's itinerary could not be loaded.
+                </div>
+              )
+            ) : proposal.documentMode === 'pdf' ? (
               pdfError ? (
                 <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50/60 px-6 py-16 text-center text-xs text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-300">
                   <AlertCircle className="h-5 w-5" />

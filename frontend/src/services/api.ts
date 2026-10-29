@@ -1316,13 +1316,44 @@ class ApiClient {
     );
   }
 
+  /**
+   * Sending is also the share (M9 R9): the traveller's thread gets the quote
+   * plus the itinerary as it stood. `proposal` is null when the client has no
+   * traveller account to open it from.
+   */
   async sendAgencyQuote(
     agencyId: string,
     tripId: string
-  ): Promise<{ success: boolean; quote: AgencyQuote }> {
+  ): Promise<{
+    success: boolean;
+    quote: AgencyQuote;
+    proposal: { id: string; created: boolean } | null;
+  }> {
     return this.request(
       `/api/agency/${encodeURIComponent(agencyId)}/trips/${encodeURIComponent(tripId)}/quote/send`,
       { method: 'POST' }
+    );
+  }
+
+  /** The quote panel's retry when the send-time share did not happen (R9). */
+  async shareAgencyQuote(
+    agencyId: string,
+    tripId: string
+  ): Promise<{ success: boolean; created: boolean; link: AgencyProposalLink }> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(agencyId)}/trips/${encodeURIComponent(tripId)}/quote/share`,
+      { method: 'POST' }
+    );
+  }
+
+  /** Staff preview of an in-app proposal; reads like the traveller's screen. */
+  async getAgencyProposalShare(
+    agencyId: string,
+    tripId: string,
+    shareId: string
+  ): Promise<{ success: boolean; proposal: AgencyProposalView }> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(agencyId)}/trips/${encodeURIComponent(tripId)}/shares/${encodeURIComponent(shareId)}`
     );
   }
 

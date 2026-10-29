@@ -245,7 +245,10 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
       applyExports(exportsResult.exports || [], false);
       setTemplates(templatesResult.templates || []);
       setQuote(quoteResult.quote ?? null);
-      setShares(sharesResult.links || []);
+      // In-app proposals belong to the quote panel, not this PDF-share list.
+      setShares(
+        (sharesResult.links || []).filter((link) => link.kind !== 'live')
+      );
 
       const available = (templatesResult.templates || []).filter(
         (template) => template.audience !== 'internal' || canAdmin
@@ -467,7 +470,7 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
         job._id
       );
       const links = await api.getAgencyProposalLinks(agencyId, tripId);
-      setShares(links.links || []);
+      setShares((links.links || []).filter((link) => link.kind !== 'live'));
       setCreatedShare({
         url: result.url,
         quoteNumber: result.link.quoteNumber,
