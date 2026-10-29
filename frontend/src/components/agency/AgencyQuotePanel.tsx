@@ -444,6 +444,8 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
   const [prefillApplied, setPrefillApplied] = useState(false);
   /** The live share minted by a send (R9); its id is all the preview needs. */
   const [liveShareId, setLiveShareId] = useState<string | null>(null);
+  /** The traveller's answer to the newest share of this quote version, if any. */
+  const [shareDeclinedAt, setShareDeclinedAt] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const requestRef = useRef(0);
@@ -471,6 +473,15 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
             )?._id ?? null
           : null
       );
+      // A decline leaves the quote `sent`, so the shares are the only place the
+      // answer lives. The newest share speaks for the version: a later send
+      // replaces it and clears the notice.
+      const shares = latest
+        ? (sharesResult?.links ?? [])
+            .filter((link) => link.quoteId === latest._id && !link.revokedAt)
+            .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        : [];
+      setShareDeclinedAt(shares[0]?.declinedAt ?? null);
       setSelectedVersionId(null);
       if (latest) {
         setEditor(editorFromQuote(latest));
@@ -643,6 +654,7 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
       const result = await api.sendAgencyQuote(agencyId, tripId);
       applySavedQuote(result.quote);
       setLiveShareId(result.proposal?.id ?? null);
+      setShareDeclinedAt(null);
       toast.success(
         result.proposal
           ? 'Quote sent. The traveller can open the trip and quote from their enquiry.'
@@ -663,6 +675,7 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
     try {
       const result = await api.shareAgencyQuote(agencyId, tripId);
       setLiveShareId(result.link._id);
+      setShareDeclinedAt(null);
       toast.success(
         quote ? `Shared with ${quote.client.name}.` : "Shared with the traveller."
       );
@@ -1013,22 +1026,44 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
       </Card>
 
       {quote && !editing && !viewingOldVersion && quote.status === 'sent' ? (
-        <Card className="rounded-3xl border-border/70">
+        <Card
+          className={cn(
+            'rounded-3xl',
+            shareDeclinedAt
+              ? 'border-rose-200 dark:border-rose-900/60'
+              : 'border-border/70'
+          )}
+        >
           <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
             <div className="flex items-start gap-3">
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
-                <Send className="h-4 w-4" />
+              <span
+                className={cn(
+                  'grid h-9 w-9 shrink-0 place-items-center rounded-2xl',
+                  shareDeclinedAt
+                    ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-300'
+                    : 'bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300'
+                )}
+              >
+                {shareDeclinedAt ? (
+                  <XCircle className="h-4 w-4" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
               </span>
               <div>
                 <p className="text-sm font-semibold">
-                  {liveShareId
-                    ? `Shared with ${quote.client.name}`
-                    : "Not in the traveller's thread yet"}
+                  {shareDeclinedAt
+                    ? `${quote.client.name} declined this proposal`
+                    : liveShareId
+                      ? `Shared with ${quote.client.name}`
+                      : "Not in the traveller's thread yet"}
                 </p>
                 <p className="mt-0.5 max-w-xl text-xs text-slate-500 dark:text-slate-400">
-                  {liveShareId
-                    ? 'They can open the trip and quote, accept or decline, or keep talking to you in their enquiry.'
-                    : 'Sending shares the quote with the itinerary as it stands. If this client has no travel account here, export a PDF proposal instead.'}
+                  {shareDeclinedAt
+                    ? `On ${formatAgencyDate(shareDeclinedAt)}. The quote is still open — send a new version or keep the conversation going in their enquiry.`
+                    : liveShareId
+                      ? 'They can open the trip and quote, accept or decline, or keep talking to you in their enquiry.'
+                      : 'Sending shares the quote with the itinerary as it stands. If this client has no travel account here, export a PDF proposal instead.'}
                 </p>
               </div>
             </div>
@@ -1043,7 +1078,7 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
                   <Eye className="mr-1.5 h-3.5 w-3.5" />
                   View trip &amp; quote
                 </Button>
-              ) : canPlan ? (
+              ) : shareDeclinedAt ? null : canPlan ? (
                 <Button
                   size="sm"
                   onClick={() => void handleShare()}
@@ -1056,6 +1091,17 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
                     <Share2 className="mr-1.5 h-3.5 w-3.5" />
                   )}
                   Share with traveller
+                </Button>
+              ) : null}
+              {shareDeclinedAt ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={startEditing}
+                  disabled={busy}
+                >
+                  <Plus className="mr-1.5 h-3.5 w-3.5" />
+                  New version
                 </Button>
               ) : null}
             </div>

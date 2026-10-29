@@ -632,11 +632,55 @@ test('own history counts only the live proposals answering each enquiry', async 
   assert.deepEqual(page.enquiries[0].proposals, {
     count: 2,
     lastAt: '2026-10-28T12:00:00.000Z',
+    lastDeclinedAt: null,
   });
   assert.deepEqual(page.enquiries[1].proposals, {
     count: 1,
     lastAt: '2026-10-27T08:00:00.000Z',
+    lastDeclinedAt: null,
   });
+});
+
+test('an inbox row carries the latest share’s decline until a new version is sent', async () => {
+  reset();
+  enquiryRows = [enquiryRow({ clientId: CLIENT_ID })];
+  const expiresAt = new Date('2027-01-01T00:00:00.000Z');
+  proposalLinkRows = [
+    {
+      _id: 'link-old',
+      enquiryId: ENQUIRY_ID,
+      quoteId: QUOTE_ID,
+      expiresAt,
+      createdAt: new Date('2026-10-27T08:00:00.000Z'),
+      declinedAt: new Date('2026-10-27T09:00:00.000Z'),
+    },
+    {
+      _id: 'link-declined',
+      enquiryId: ENQUIRY_ID,
+      quoteId: QUOTE_ID,
+      expiresAt,
+      createdAt: new Date('2026-10-28T12:00:00.000Z'),
+      declinedAt: new Date('2026-10-28T12:30:00.000Z'),
+    },
+  ];
+
+  let inbox = await listAgencyEnquiries({ agencyId: AGENCY_ID });
+  assert.equal(
+    inbox.enquiries[0].proposals?.lastDeclinedAt,
+    '2026-10-28T12:30:00.000Z'
+  );
+
+  // Sending a new version mints a newer open share: the badge clears itself.
+  proposalLinkRows.push({
+    _id: 'link-open',
+    enquiryId: ENQUIRY_ID,
+    quoteId: QUOTE_ID,
+    expiresAt,
+    createdAt: new Date('2026-10-29T08:00:00.000Z'),
+  });
+  inbox = await listAgencyEnquiries({ agencyId: AGENCY_ID });
+  assert.equal(inbox.enquiries[0].proposals?.lastDeclinedAt, null);
+  assert.equal(inbox.enquiries[0].proposals?.count, 3);
 });
 
 test('own history reports no proposals when none answer an enquiry', async () => {
@@ -648,7 +692,11 @@ test('own history reports no proposals when none answer an enquiry', async () =>
 
   const page = await listOwnEnquiries({ userId: USER_ID });
 
-  assert.deepEqual(page.enquiries[0].proposals, { count: 0, lastAt: null });
+  assert.deepEqual(page.enquiries[0].proposals, {
+    count: 0,
+    lastAt: null,
+    lastDeclinedAt: null,
+  });
 });
 
 test('cursors round-trip and garbage is a friendly 400', () => {

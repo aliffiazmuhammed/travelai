@@ -709,6 +709,18 @@ const AgencyEnquiries: React.FC = () => {
                           Client
                         </Badge>
                       ) : null}
+                      {enquiry.proposals?.lastDeclinedAt ? (
+                        <Badge
+                          variant="outline"
+                          className="gap-1 border-rose-300 bg-rose-50 text-[10px] text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300"
+                          title={`Traveller declined the proposal on ${formatAgencyDate(
+                            enquiry.proposals.lastDeclinedAt
+                          )}`}
+                        >
+                          <XCircle className="h-2.5 w-2.5" />
+                          Proposal declined
+                        </Badge>
+                      ) : null}
                       {enquiry.unread.agency > 0 ? (
                         <Badge className="gap-1 text-[10px]">
                           <MessageSquare className="h-2.5 w-2.5" />
@@ -822,6 +834,15 @@ const AgencyEnquiries: React.FC = () => {
                   {selected.package ? (
                     <Badge variant="secondary" className="text-[10px]">
                       {selected.package.title}
+                    </Badge>
+                  ) : null}
+                  {selected.proposals?.lastDeclinedAt ? (
+                    <Badge
+                      variant="outline"
+                      className="gap-1 border-rose-300 bg-rose-50 text-[10px] text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300"
+                    >
+                      <XCircle className="h-2.5 w-2.5" />
+                      Proposal declined {formatAgencyDate(selected.proposals.lastDeclinedAt)}
                     </Badge>
                   ) : null}
                 </div>

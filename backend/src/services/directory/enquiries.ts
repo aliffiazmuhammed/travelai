@@ -91,6 +91,12 @@ export interface AgencyEnquiryAssigneeView {
 export interface AgencyEnquiryProposalsView {
   count: number;
   lastAt: string | null;
+  /**
+   * When the traveller turned down the newest live share, else null. A send
+   * creates a new link, so a new proposal clears the agency's decline notice
+   * without anyone dismissing it.
+   */
+  lastDeclinedAt: string | null;
 }
 
 export interface AgencyEnquiryView {
@@ -667,15 +673,22 @@ export async function listAgencyEnquiries(input: {
   ]);
 
   const pageRows = rows.slice(0, limit);
-  const [packages, relations] = await Promise.all([
+  const [packages, relations, proposals] = await Promise.all([
     packageViews(input.agencyId, pageRows, true),
     loadEnquiryRelations(input.agencyId, pageRows),
+    liveProposalsByEnquiry(pageRows),
   ]);
   const last = pageRows[pageRows.length - 1];
 
   return {
     enquiries: pageRows.map((row) =>
-      viewAgencyEnquiry(row, packages, undefined, relations)
+      viewAgencyEnquiry(row, packages, undefined, relations, {
+        proposals: proposals.get(String(row._id)) ?? {
+          count: 0,
+          lastAt: null,
+          lastDeclinedAt: null,
+        },
+      })
     ),
     nextCursor: rows.length > limit && last ? encodeEnquiryCursor(last) : null,
     hasMore: rows.length > limit,
@@ -702,12 +715,18 @@ export async function getAgencyEnquiry(
   const now = await markAgencyConversationRead(agencyId, String(row._id));
   applyConversationRead(row, 'agency', now);
   if (hadUnread) emitEnquiryRead(row, 'agency');
-  const [packages, relations] = await Promise.all([
+  const [packages, relations, proposals] = await Promise.all([
     packageViews(agencyId, [row], true),
     loadEnquiryRelations(agencyId, [row]),
+    liveProposalsByEnquiry([row]),
   ]);
   return viewAgencyEnquiry(row as any, packages, undefined, relations, {
     includeMessages: true,
+    proposals: proposals.get(String(row._id)) ?? {
+      count: 0,
+      lastAt: null,
+      lastDeclinedAt: null,
+    },
   });
 }
 
@@ -759,7 +778,7 @@ async function liveProposalsByEnquiry(
       ...(quotes.length ? [{ quoteId: { $in: quotes.map((quote) => quote._id) } }] : []),
     ],
   })
-    .select('enquiryId quoteId createdAt')
+    .select('enquiryId quoteId createdAt declinedAt')
     .lean()) as any[];
 
   let answerable: Set<string> | null = null;
@@ -805,10 +824,19 @@ async function liveProposalsByEnquiry(
         : quoteToEnquiry.get(String(link.quoteId));
     if (!enquiryId) continue;
 
-    const entry = counts.get(enquiryId) ?? { count: 0, lastAt: null };
+    const entry = counts.get(enquiryId) ?? {
+      count: 0,
+      lastAt: null,
+      lastDeclinedAt: null,
+    };
     entry.count += 1;
     const at = iso(link.createdAt);
-    if (at && (!entry.lastAt || at > entry.lastAt)) entry.lastAt = at;
+    if (at && (!entry.lastAt || at > entry.lastAt)) {
+      entry.lastAt = at;
+      // The newest viewable share owns the answer badge: sending a new version
+      // clears the decline without a dismissal step.
+      entry.lastDeclinedAt = iso(link.declinedAt) ?? null;
+    }
     counts.set(enquiryId, entry);
   }
   return counts;
@@ -895,7 +923,11 @@ export async function listOwnEnquiries(input: {
         undefined,
         {
           consumer: true,
-          proposals: proposals.get(String(row._id)) ?? { count: 0, lastAt: null },
+          proposals: proposals.get(String(row._id)) ?? {
+            count: 0,
+            lastAt: null,
+            lastDeclinedAt: null,
+          },
         }
       )
     ),

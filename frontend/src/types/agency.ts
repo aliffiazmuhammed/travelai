@@ -307,10 +307,14 @@ export interface AgencyEnquiry {
   /** Full thread on the detail read; omitted from list projections. */
   messages?: AgencyConversationMessage[];
   /**
-   * Live proposals answering this enquiry — consumer history only. Absent on
-   * the agency inbox, which has its own quote surfaces.
+   * Live proposals answering this enquiry. `lastDeclinedAt` belongs to the
+   * newest share, so sending a new version clears the decline notice.
    */
-  proposals?: { count: number; lastAt: string | null };
+  proposals?: {
+    count: number;
+    lastAt: string | null;
+    lastDeclinedAt: string | null;
+  };
   /** When the guest link stops working (agency view only). */
   conversationExpiresAt: string | null;
   createdAt: string | null;
