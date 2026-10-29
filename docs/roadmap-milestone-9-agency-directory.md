@@ -359,6 +359,19 @@ Admin routes deliberately do **not** expose enquiry contents; that is client PII
 
 **Verified 2026-10-29:** backend suite **907/907** (34 `enquiries`, 25 `proposalActions` + `enquiryEvents`, 16 `proposalActions` + `proposalEvents` in the touched runs), backend `tsc --noEmit`, frontend typecheck, production build and lint on the touched files clean. Browser smoke on a synthetic `r7-smoke-travel` tenant with one traveller thread and six proposals: the thread's badge cleared on read while the proposals pill read `4`; `/proposals` rendered six cards with the `Live` pill, no "link until", and "Price held until …" on each; the two-step accept on `Q-2026-9004` persisted (`accepted`, link stamped) and the card flipped to `Accepted`, with the summary dropping to `2` — the sibling version on the same trip was excluded as designed; `POST …/accept` for the sibling answered the new `409`; declining `Q-2026-9006` flipped the card to `Declined`, raised the "conversation stays open" toast and left the summary at `1`; an agency session with `/api/agency/enquiries/events` open received exactly one `proposal:declined` frame carrying the same `enquiryId`, `linkId` and `declinedAt`. All synthetic rows were deleted and the temporary script removed.
 
+### R7 follow-up — the sibling card tells the truth, and the price line follows the quote
+
+**Status:** implemented and verified 2026-10-29, the two logic gaps left after R7 (the third, a concurrent double-accept race, stays deferred).
+
+**Goal:** a card never advertises work the server will refuse, and the card's price line stops implying a hold that no longer exists.
+
+- **The server projects the settled trip.** `summarizeLinks` loads the accepted quotes for every pinned trip in one query and exposes `settledByAcceptedTrip` on `AgencyProposalSummary`: true when *another* version of the same trip is already accepted. The card stays readable; it is the buttons that are withheld. Projecting it server-side (rather than inferring from sibling cards on the client) keeps the rule in one place and works on a filtered or paginated list.
+- **The refused workflow is no longer offered.** `ProposalComparison` treats a settled sibling like an answered card: the badge reads `Another version accepted` in muted tones instead of `Awaiting you`, and neither Accept nor Decline renders, because the `409` guard would refuse them. Accepting in place also patches the row's other versions in `MyProposals` optimistically, so the screen matches what the next read from the server will project.
+- **"Price held until" only on open quotes.** The line renders just when the card is answerable (`sent`, not answered, not settled); accepted, declined, expired, cancelled and withdrawn cards drop it, matching the earlier removal of internal expiry wording.
+- **Still deferred:** concurrent double-accept is protected by the quote CAS and the sibling read, but a true same-instant race between two requests on two versions of one trip is not closed by a unique index yet.
+
+**Verified 2026-10-29:** backend suite **909/909** with `src/services/agency/proposalSummary.test.ts` (registered in the explicit test list) pinning the sibling/own/open projection and the exact key sets; backend `tsc --noEmit`, frontend typecheck, production build and lint clean. The test stub mimics Mongoose field selection, and that caught a real defect in this pass: the summary's quote query did not `select('tripId')`, so the settled rule would have been silently dead in production while the permissive stub passed. The projection is fixed and the test now fails if `tripId` drops out of the select again. The browser pass was not repeated for this refinement: the card logic is the one already smoked in R7, with `settled` fed by the new field.
+
 ## 6. Build order and dependencies
 
 | Order | Milestone | Depends on |
@@ -376,6 +389,7 @@ Admin routes deliberately do **not** expose enquiry contents; that is client PII
 | 11 | R5 close the loop (trip hand-off, funnel write-back, guards) | D6, D8, A7 |
 | 12 | R6 polish batch (in-app answers, traveller vocabulary, nav badges) | D8, R5 |
 | 13 | R7 audit fixes (badge truth, one-acceptance rule, live comparison, decline frame) | R6 |
+| 14 | R7 follow-up (settled-trip projection, price line only on open quotes) | R7 |
 
 D4 can run in parallel with D5 if split across sessions; nothing else parallelises cleanly because the projection contract is shared.
 

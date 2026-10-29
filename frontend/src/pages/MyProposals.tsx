@@ -78,15 +78,21 @@ const MyProposals: React.FC = () => {
   const accept = useCallback(async (proposal: AgencyProposalSummary) => {
     const result = await api.acceptMyProposal(proposal.id);
     setProposals((rows) =>
-      rows.map((row) =>
-        row.id === proposal.id
-          ? {
-              ...row,
-              acceptedAt: result.acceptance.acceptedAt,
-              quote: row.quote ? { ...row.quote, status: 'accepted' } : row.quote,
-            }
-          : row
-      )
+      rows.map((row) => {
+        if (row.id === proposal.id) {
+          return {
+            ...row,
+            acceptedAt: result.acceptance.acceptedAt,
+            quote: row.quote ? { ...row.quote, status: 'accepted' } : row.quote,
+          };
+        }
+        // The trip is settled for its other versions too, exactly as the
+        // server will project it on the next read.
+        if (row.trip.id === proposal.trip.id) {
+          return { ...row, settledByAcceptedTrip: true };
+        }
+        return row;
+      })
     );
     notifyEnquiryBadgeChanged();
     toast.success(`${proposal.agency.name} has your acceptance.`);

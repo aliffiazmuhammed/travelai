@@ -92,8 +92,11 @@ const ProposalCard: React.FC<{
   const quote = proposal.quote;
   const accepted = Boolean(proposal.acceptedAt) || quote?.status === 'accepted';
   const declined = Boolean(proposal.declinedAt);
-  const canAnswer =
-    Boolean(onAccept && onDecline) && quote?.status === 'sent' && !accepted && !declined;
+  // Another version of this trip already won; the server refuses a second
+  // acceptance, so the card stops offering one.
+  const settled = Boolean(proposal.settledByAcceptedTrip) && !accepted && !declined;
+  const open = quote?.status === 'sent' && !accepted && !declined && !settled;
+  const canAnswer = Boolean(onAccept && onDecline) && open;
 
   const answer = async (choice: 'accept' | 'decline') => {
     const handler = choice === 'accept' ? onAccept : onDecline;
@@ -130,7 +133,12 @@ const ProposalCard: React.FC<{
           label: 'Declined',
           tone: 'border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300',
         }
-      : quote?.status === 'expired' || quote?.status === 'cancelled'
+      : settled
+        ? {
+            label: 'Another version accepted',
+            tone: 'border-border bg-muted text-muted-foreground',
+          }
+        : quote?.status === 'expired' || quote?.status === 'cancelled'
         ? {
             label: quote.status === 'expired' ? 'Expired' : 'Withdrawn',
             tone: 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300',
@@ -202,9 +210,11 @@ const ProposalCard: React.FC<{
               {formatMoney(quote.perPerson, quote.currency)}
             </p>
           </div>
-          <div className="col-span-2 text-[10px] text-muted-foreground">
-            {quote.validUntil ? `Price held until ${formatDate(quote.validUntil)}` : 'No expiry given'}
-          </div>
+          {open ? (
+            <div className="col-span-2 text-[10px] text-muted-foreground">
+              {quote.validUntil ? `Price held until ${formatDate(quote.validUntil)}` : 'No expiry given'}
+            </div>
+          ) : null}
         </div>
       ) : null}
 

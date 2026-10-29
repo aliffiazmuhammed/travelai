@@ -480,6 +480,11 @@ export interface AgencyProposalSummary {
   acceptedAt: string | null;
   /** The traveller turned down this version in-app (M9 R6). */
   declinedAt: string | null;
+  /**
+   * Another version of this trip is already accepted, so this one is shown for
+   * reference only — accepting it is refused by the server (M9 R7).
+   */
+  settledByAcceptedTrip: boolean;
 }
 
 /* -------------------------------------------------------------------------- */

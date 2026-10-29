@@ -211,6 +211,12 @@ export interface AgencyProposalSummary {
   expiresAt: string | null;
   acceptedAt: string | null;
   declinedAt: string | null;
+  /**
+   * True when another version of this trip is already accepted. The card stays
+   * readable, but it is neither answerable nor acceptable: the acceptance guard
+   * refuses a second quote for the same trip.
+   */
+  settledByAcceptedTrip: boolean;
 }
 
 function iso(value: unknown): string | null {
@@ -234,7 +240,7 @@ async function summarizeLinks(links: any[]): Promise<AgencyProposalSummary[]> {
       .lean(),
     AgencyQuote.find({ _id: { $in: quoteIds } })
       .select(
-        'number version status clientId currency total perPerson validUntil inclusions exclusions createdAt lineItems subtotal markupPct markupAmount taxPct taxAmount discount terms sentAt acceptedAt cancelledAt updatedAt'
+        'number version status clientId tripId currency total perPerson validUntil inclusions exclusions createdAt lineItems subtotal markupPct markupAmount taxPct taxAmount discount terms sentAt acceptedAt cancelledAt updatedAt'
       )
       .lean(),
   ])) as [any[], any[], any[]];
@@ -255,6 +261,28 @@ async function summarizeLinks(links: any[]): Promise<AgencyProposalSummary[]> {
     ])
   );
 
+  // The comparison and the badge share one rule: a trip settles on its first
+  // acceptance, so its other versions are shown for reference but not offered.
+  const quoteTripIds = [
+    ...new Set(quotes.map((quote) => String(quote.tripId ?? '')).filter(Boolean)),
+  ];
+  const acceptedByTrip = new Map<string, Set<string>>();
+  if (quoteTripIds.length) {
+    const accepted = (await AgencyQuote.find({
+      agencyId: { $in: agencyIds },
+      tripId: { $in: quoteTripIds },
+      status: 'accepted',
+    })
+      .select('_id tripId')
+      .lean()) as any[];
+    for (const quote of accepted) {
+      const key = String(quote.tripId);
+      const ids = acceptedByTrip.get(key) ?? new Set<string>();
+      ids.add(String(quote._id));
+      acceptedByTrip.set(key, ids);
+    }
+  }
+
   const agencyMap = new Map(
     agencies.map((agency) => [String(agency._id), agency])
   );
@@ -266,6 +294,13 @@ async function summarizeLinks(links: any[]): Promise<AgencyProposalSummary[]> {
     const trip = tripMap.get(String(link.tripId));
     const quote = quoteMap.get(String(link.quoteId));
     const projected = quote ? projectQuoteForClient(quote) : null;
+    const acceptedSiblings = quote?.tripId
+      ? acceptedByTrip.get(String(quote.tripId))
+      : undefined;
+    const settledByAcceptedTrip = Boolean(
+      acceptedSiblings &&
+        [...acceptedSiblings].some((id) => id !== String(quote._id))
+    );
     const enquiryId = link.enquiryId
       ? String(link.enquiryId)
       : quote?.clientId
@@ -303,6 +338,7 @@ async function summarizeLinks(links: any[]): Promise<AgencyProposalSummary[]> {
       expiresAt: iso(link.expiresAt),
       acceptedAt: iso(link.acceptedAt),
       declinedAt: iso(link.declinedAt),
+      settledByAcceptedTrip,
     };
   });
 }
