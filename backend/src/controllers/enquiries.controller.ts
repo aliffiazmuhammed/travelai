@@ -3,6 +3,7 @@ import {
   agencyContext,
   type AgencyAccessRequest,
 } from '../middleware/agencyAccess.middleware.js';
+import { linkOriginHints } from '../services/collab/invites.js';
 import type { AuthenticatedRequest } from '../types/index.js';
 import { AppError } from '../utils/AppError.js';
 import { catchAsync } from '../utils/catchAsync.js';
@@ -45,6 +46,7 @@ export const createAgencyEnquiryHandler = catchAsync(
       slug: String(req.params.slug || ''),
       body: req.body ?? {},
       userId: auth.realm === 'personal' ? auth.userId : undefined,
+      linkOrigins: linkOriginHints(req),
     });
     res.status(201).json({ success: true, enquiry: acknowledgement });
   }

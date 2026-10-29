@@ -18,6 +18,17 @@ import {
   type AgencyClientSummary,
 } from '../agency/clients.js';
 import { userLabel } from '../collab/comments.js';
+import type { LinkOriginHints } from '../collab/invites.js';
+import {
+  applyConversationRead,
+  conversationMessages,
+  conversationMeta,
+  conversationUrl,
+  markAgencyConversationRead,
+  mintConversationToken,
+  type ConversationMessageView,
+  type ConversationUnreadView,
+} from './conversations.js';
 import { loadPublicAgencyRecord } from './profile.js';
 
 /**
@@ -91,6 +102,15 @@ export interface AgencyEnquiryView {
   repliedAt: string | null;
   convertedAt: string | null;
   lostReason: string | null;
+  /** D8: replies after the opening enquiry. */
+  replyCount: number;
+  unread: ConversationUnreadView;
+  lastMessageAt: string | null;
+  lastMessageBy: 'traveller' | 'agency' | null;
+  /** Full thread on the detail read; omitted from list projections. */
+  messages?: ConversationMessageView[];
+  /** When the guest link stops working (agency view only). */
+  conversationExpiresAt: string | null;
   createdAt: string | null;
   updatedAt: string | null;
 }
@@ -325,6 +345,11 @@ export interface EnquiryAcknowledgement {
   id: string;
   status: AgencyEnquiryStatus;
   createdAt: string | null;
+  /**
+   * The private guest thread (D8). The raw token exists only in this URL; the
+   * success screen shows it once and the traveller keeps it like a proposal link.
+   */
+  conversation: { url: string; expiresAt: string | null };
 }
 
 /**
@@ -338,6 +363,8 @@ export async function submitAgencyEnquiry(input: {
   slug: string;
   body: EnquirySubmissionInput;
   userId?: string;
+  /** Where the guest conversation link should point (see `pickLinkOrigin`). */
+  linkOrigins?: LinkOriginHints;
 }): Promise<EnquiryAcknowledgement> {
   const record = await loadPublicAgencyRecord(input.slug);
   if (!record) {
@@ -371,6 +398,7 @@ export async function submitAgencyEnquiry(input: {
       ? new Types.ObjectId(input.userId)
       : null;
 
+  const token = mintConversationToken();
   const enquiry = await AgencyEnquiry.create({
     agencyId: record.agency._id,
     packageId,
@@ -378,12 +406,19 @@ export async function submitAgencyEnquiry(input: {
     ...fields,
     source: packageId ? 'package' : 'profile',
     status: 'new',
+    conversationTokenHash: token.hash,
+    conversationTokenHint: token.hint,
+    conversationTokenExpiresAt: token.expiresAt,
   });
 
   return {
     id: String(enquiry._id),
     status: enquiry.status,
     createdAt: iso(enquiry.createdAt),
+    conversation: {
+      url: conversationUrl(token.raw, input.linkOrigins),
+      expiresAt: iso(token.expiresAt),
+    },
   };
 }
 
@@ -525,12 +560,13 @@ export function viewAgencyEnquiry(
   packages: Map<string, AgencyEnquiryPackageView> = new Map(),
   agency?: { name: string; slug: string } | null,
   relations?: EnquiryRelations,
-  options: { consumer?: boolean } = {}
+  options: { consumer?: boolean; includeMessages?: boolean } = {}
 ): AgencyEnquiryView {
   const consumer = options.consumer === true;
   const packageId = row?.packageId ? String(row.packageId) : '';
   const clientId = row?.clientId ? String(row.clientId) : '';
   const assigneeId = row?.assignedTo ? String(row.assignedTo) : '';
+  const meta = conversationMeta(row);
   return {
     id: String(row?._id ?? ''),
     status: (row?.status ?? 'new') as AgencyEnquiryStatus,
@@ -568,6 +604,18 @@ export function viewAgencyEnquiry(
     repliedAt: iso(row?.repliedAt),
     convertedAt: iso(row?.convertedAt),
     lostReason: consumer ? null : text(row?.lostReason) || null,
+    replyCount: meta.replyCount,
+    unread: meta.unread,
+    lastMessageAt: meta.lastMessageAt,
+    lastMessageBy: meta.lastMessageBy,
+    ...(options.includeMessages
+      ? { messages: conversationMessages(row) }
+      : {}),
+    // The guest link belongs to the traveller; the agency only needs to know it
+    // exists and when it lapses.
+    conversationExpiresAt: consumer
+      ? null
+      : iso(row?.conversationTokenExpiresAt),
     createdAt: iso(row?.createdAt),
     updatedAt: iso(row?.updatedAt),
   };
@@ -634,11 +682,17 @@ export async function getAgencyEnquiry(
   if (!row) {
     throw new AppError('Enquiry not found.', 404);
   }
+  // Opening a lead is reading its thread (D8): stamp the receipts before the
+  // projection, so the badge and the messages agree.
+  const now = await markAgencyConversationRead(agencyId, String(row._id));
+  applyConversationRead(row, 'agency', now);
   const [packages, relations] = await Promise.all([
     packageViews(agencyId, [row], true),
     loadEnquiryRelations(agencyId, [row]),
   ]);
-  return viewAgencyEnquiry(row as any, packages, undefined, relations);
+  return viewAgencyEnquiry(row as any, packages, undefined, relations, {
+    includeMessages: true,
+  });
 }
 
 /** A consumer's own history: only rows attributed to their verified session. */

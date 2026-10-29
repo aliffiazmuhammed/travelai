@@ -54,6 +54,39 @@ export const AGENCY_ENQUIRY_LIMITS = {
   dateSpanDays: 90,
 } as const;
 
+/**
+ * The two-way thread that turns a lead into a conversation (M9 D8).
+ *
+ * Messages are subdocuments because a thread is always read with its enquiry
+ * and never queried across tenants on its own. The cap is a guard against a
+ * single document growing without bound, not a product limit.
+ */
+export const AGENCY_ENQUIRY_THREAD_LIMITS = {
+  body: 2000,
+  messages: 500,
+  /** How long a guest can come back through their private link. */
+  tokenTtlDays: 90,
+  tokenMaxTtlDays: 365,
+} as const;
+
+export const AGENCY_ENQUIRY_MESSAGE_AUTHORS = ['traveller', 'agency'] as const;
+export type AgencyEnquiryMessageAuthor =
+  (typeof AGENCY_ENQUIRY_MESSAGE_AUTHORS)[number];
+
+export interface IAgencyEnquiryMessage {
+  _id?: Types.ObjectId;
+  author: AgencyEnquiryMessageAuthor;
+  /** Agency member or personal account, when one was signed in. */
+  authorId?: Types.ObjectId | null;
+  /** Snapshot of the display name at send time. */
+  authorName: string;
+  body: string;
+  createdAt: Date;
+  /** Read receipts; the side that did not write the message fills these in. */
+  readByAgencyAt?: Date | null;
+  readByTravellerAt?: Date | null;
+}
+
 export interface IAgencyEnquiryContact {
   name: string;
   email: string;
@@ -94,6 +127,18 @@ export interface IAgencyEnquiry extends Document {
   consentAt: Date;
   repliedAt?: Date | null;
   convertedAt?: Date | null;
+  /** D8: the thread, oldest first. */
+  messages: IAgencyEnquiryMessage[];
+  lastMessageAt?: Date | null;
+  lastMessageBy?: AgencyEnquiryMessageAuthor | null;
+  /**
+   * Guest access to the thread (D8). The raw token exists only in the link the
+   * traveller kept; the row stores a sha256 hash and a short hint, exactly like
+   * trip invites and proposal shares.
+   */
+  conversationTokenHash?: string | null;
+  conversationTokenHint?: string | null;
+  conversationTokenExpiresAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -147,6 +192,33 @@ const datesSchema = new Schema<IAgencyEnquiryDates>(
     flexible: { type: Boolean, default: false, required: true },
   },
   { _id: false }
+);
+
+const messageSchema = new Schema<IAgencyEnquiryMessage>(
+  {
+    author: {
+      type: String,
+      enum: [...AGENCY_ENQUIRY_MESSAGE_AUTHORS],
+      required: true,
+    },
+    authorId: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+    authorName: {
+      type: String,
+      trim: true,
+      maxlength: AGENCY_ENQUIRY_LIMITS.name,
+      default: '',
+    },
+    body: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: AGENCY_ENQUIRY_THREAD_LIMITS.body,
+    },
+    createdAt: { type: Date, default: () => new Date(), required: true },
+    readByAgencyAt: { type: Date, default: null },
+    readByTravellerAt: { type: Date, default: null },
+  },
+  { _id: true }
 );
 
 const agencyEnquirySchema = new Schema<IAgencyEnquiry>(
@@ -206,6 +278,20 @@ const agencyEnquirySchema = new Schema<IAgencyEnquiry>(
     consentAt: { type: Date, required: true },
     repliedAt: { type: Date, default: null },
     convertedAt: { type: Date, default: null },
+    messages: { type: [messageSchema], default: () => [] },
+    lastMessageAt: { type: Date, default: null },
+    lastMessageBy: {
+      type: String,
+      enum: [...AGENCY_ENQUIRY_MESSAGE_AUTHORS, null],
+      default: null,
+    },
+    conversationTokenHash: {
+      type: String,
+      default: null,
+      select: false,
+    },
+    conversationTokenHint: { type: String, default: null },
+    conversationTokenExpiresAt: { type: Date, default: null },
   },
   { timestamps: true }
 );
@@ -244,6 +330,16 @@ agencyEnquirySchema.index(
   {
     name: 'agencyId_1_clientId_1',
     partialFilterExpression: { clientId: { $type: 'objectId' } },
+  }
+);
+// Guest thread access (D8). Partial so the many enquiries without a token stay
+// out of the index; the token is never stored in the clear.
+agencyEnquirySchema.index(
+  { conversationTokenHash: 1 },
+  {
+    name: 'conversationTokenHash_1',
+    unique: true,
+    partialFilterExpression: { conversationTokenHash: { $type: 'string' } },
   }
 );
 

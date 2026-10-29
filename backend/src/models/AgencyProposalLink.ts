@@ -17,6 +17,12 @@ export interface IAgencyProposalLink extends Document {
   tripId: Types.ObjectId;
   quoteId: Types.ObjectId;
   exportId: Types.ObjectId;
+  /**
+   * The enquiry this proposal answers, when the quote's client came from one
+   * (M9 D8). It lets the traveller's `/proposals` page group links by thread
+   * without guessing from quote ids. Older links simply have no value.
+   */
+  enquiryId?: Types.ObjectId | null;
   tokenHash: string;
   tokenHint: string;
   createdBy: Types.ObjectId;
@@ -57,6 +63,11 @@ const agencyProposalLinkSchema = new Schema<IAgencyProposalLink>(
       ref: 'AgencyExport',
       required: true,
     },
+    enquiryId: {
+      type: Schema.Types.ObjectId,
+      ref: 'AgencyEnquiry',
+      default: null,
+    },
     tokenHash: { type: String, required: true, unique: true, index: true },
     tokenHint: { type: String, required: true },
     createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
@@ -76,6 +87,15 @@ const agencyProposalLinkSchema = new Schema<IAgencyProposalLink>(
 agencyProposalLinkSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 // The trip's share list.
 agencyProposalLinkSchema.index({ agencyId: 1, tripId: 1, createdAt: -1 });
+// A traveller's proposal comparison (D8). Partial so links that answer no
+// enquiry stay out of the index.
+agencyProposalLinkSchema.index(
+  { agencyId: 1, enquiryId: 1, createdAt: -1 },
+  {
+    name: 'agencyId_1_enquiryId_1_createdAt_-1',
+    partialFilterExpression: { enquiryId: { $type: 'objectId' } },
+  }
+);
 
 export default mongoose.model<IAgencyProposalLink>(
   'AgencyProposalLink',

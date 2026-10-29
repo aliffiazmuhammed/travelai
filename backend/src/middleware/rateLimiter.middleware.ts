@@ -604,3 +604,37 @@ export const enquiryAgencyLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+/* -------------------------------------------------------------------------- */
+/*  Enquiry conversations (M9 D8)                                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A guest thread is a capability link, not a session, so it gets its own pair of
+ * buckets instead of the enquiry-form ones: reading is cheap and can be
+ * generous, while writing is the spam surface. The read limit also leaves room
+ * for a traveller refreshing the thread and the proposals beside it.
+ */
+export const conversationReadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 120,
+  message: {
+    success: false,
+    error: 'This conversation is being opened too often. Please try again shortly.',
+    message: 'This conversation is being opened too often. Please try again shortly.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+export const conversationWriteLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: {
+    success: false,
+    error: 'You have sent a lot of messages. Please try again in a few minutes.',
+    message: 'You have sent a lot of messages. Please try again in a few minutes.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});

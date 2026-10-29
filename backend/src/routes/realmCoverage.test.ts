@@ -9,6 +9,8 @@ import exploreRouter from './explore.routes.js';
 import blocksRouter from './blocks.routes.js';
 import reportsRouter from './reports.routes.js';
 import enquiriesRouter from './enquiries.routes.js';
+import proposalsRouter from './proposals.routes.js';
+import conversationsRouter from './conversations.routes.js';
 import agenciesRouter from './agencies.routes.js';
 import { AUTH_GUARD_TAG } from '../middleware/auth.middleware.js';
 
@@ -162,17 +164,45 @@ test('public agency directory routes are anonymous and classified', () => {
   );
 });
 
-test('a traveller’s own enquiry history is personal-realm only', () => {
+test('a traveller’s own enquiry history and thread are personal-realm only', () => {
   const layers = routeLayers(enquiriesRouter);
   assert.deepEqual(
     layers.map((layer) => `${pathOf(layer)} ${Object.keys(layer.route?.methods ?? {})}`),
-    ['/ get'],
-    'The consumer side of enquiries is one read; the write is public and lives on the directory router'
+    ['/ get', '/:id get', '/:id/messages post'],
+    'The consumer side owns the history and the thread; the write is public and lives on the directory router, guest replies on the conversation router'
   );
   assert.deepEqual(
     layers.filter((layer) => guardKind(layer) !== 'personal').map(pathOf),
     [],
     'An enquiry history carries contact details, so agency and platform sessions must be refused'
+  );
+});
+
+test('a traveller’s proposal comparison is personal-realm only', () => {
+  const layers = routeLayers(proposalsRouter);
+  assert.deepEqual(
+    layers.map((layer) => `${pathOf(layer)} ${Object.keys(layer.route?.methods ?? {})}`),
+    ['/ get', '/:linkId get', '/:linkId/pdf get'],
+    'The comparison surface is the list, one pinned document and its PDF'
+  );
+  assert.deepEqual(
+    layers.filter((layer) => guardKind(layer) !== 'personal').map(pathOf),
+    [],
+    'Proposal links are the agency’s capability; the personal page proves ownership instead'
+  );
+});
+
+test('guest conversation links are anonymous and classified', () => {
+  const layers = routeLayers(conversationsRouter);
+  assert.deepEqual(
+    layers.map((layer) => `${pathOf(layer)} ${Object.keys(layer.route?.methods ?? {})}`),
+    ['/:token get', '/:token/proposals get', '/:token/proposals/:linkId get', '/:token/proposals/:linkId/pdf get', '/:token/messages post'],
+    'The guest thread is one read, one proposal list, one pinned document, its PDF and one reply'
+  );
+  assert.deepEqual(
+    layers.filter((layer) => guardKind(layer) !== undefined).map(pathOf),
+    [],
+    'The private token is the capability; a conversation link must never require a session'
   );
 });
 

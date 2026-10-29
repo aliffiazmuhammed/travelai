@@ -190,6 +190,25 @@ function matchesFilter(row: any, filter: any): boolean {
   lastEnquiryCount = filter;
   return enquiryRows.filter((row) => matchesFilter(row, filter)).length;
 };
+// D8 read receipts: the only update this suite needs is "mark the other side's
+// messages read", so the stub understands that one array-filter shape.
+(AgencyEnquiry as any).updateOne = async (filter: any, update: any) => {
+  const row = enquiryRows.find((entry) => matchesFilter(entry, filter));
+  if (!row) return { matchedCount: 0, modifiedCount: 0 };
+  const field = Object.keys(update?.$set ?? {}).find((key) =>
+    key.startsWith('messages.$[')
+  );
+  if (field && Array.isArray(row.messages)) {
+    const path = field.slice('messages.$[m].'.length);
+    const other = path === 'readByAgencyAt' ? 'traveller' : 'agency';
+    for (const message of row.messages) {
+      if (message.author === other && !message[path]) {
+        message[path] = update.$set[field];
+      }
+    }
+  }
+  return { matchedCount: 1, modifiedCount: 1 };
+};
 
 (AgencyClient as any).find = (filter: any) =>
   queryChain(clientRows.filter((row) => matchesFilter(row, filter)));

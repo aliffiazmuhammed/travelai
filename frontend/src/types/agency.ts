@@ -297,6 +297,15 @@ export interface AgencyEnquiry {
   repliedAt: string | null;
   convertedAt: string | null;
   lostReason: string | null;
+  /** D8: replies after the opening enquiry. */
+  replyCount: number;
+  unread: AgencyConversationUnread;
+  lastMessageAt: string | null;
+  lastMessageBy: AgencyConversationAuthor | null;
+  /** Full thread on the detail read; omitted from list projections. */
+  messages?: AgencyConversationMessage[];
+  /** When the guest link stops working (agency view only). */
+  conversationExpiresAt: string | null;
   createdAt: string | null;
   updatedAt: string | null;
 }
@@ -329,6 +338,8 @@ export interface AgencyEnquiryAcknowledgement {
   id: string;
   status: AgencyEnquiryStatus;
   createdAt: string | null;
+  /** D8: the private guest thread link, shown once on the success screen. */
+  conversation: { url: string; expiresAt: string | null };
 }
 
 export interface AgencyEnquiryFilters {
@@ -377,6 +388,77 @@ export interface AgencyEnquirySummaryView {
 export interface AgencyEnquirySummary {
   success: boolean;
   summary: AgencyEnquirySummaryView;
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Enquiry conversations (M9 D8)                                             */
+/* -------------------------------------------------------------------------- */
+
+export type AgencyConversationAuthor = 'traveller' | 'agency';
+
+export interface AgencyConversationMessage {
+  id: string;
+  author: AgencyConversationAuthor;
+  authorName: string;
+  body: string;
+  createdAt: string | null;
+  /** Read receipts: the side that did not write the message fills these in. */
+  readByAgencyAt: string | null;
+  readByTravellerAt: string | null;
+}
+
+export interface AgencyConversationUnread {
+  agency: number;
+  traveller: number;
+}
+
+/** The thread as the guest link or the signed-in traveller reads it. */
+export interface AgencyConversation {
+  id: string;
+  status: AgencyEnquiryStatus;
+  agency: { name: string; slug: string };
+  traveller: { name: string };
+  enquiry: {
+    source: AgencyEnquirySource;
+    message: string;
+    party: { adults: number; children: number };
+    dates: AgencyEnquiryDateView;
+    budgetBand: AgencyEnquiryBudgetBand | null;
+    packageTitle: string | null;
+    createdAt: string | null;
+  };
+  messages: AgencyConversationMessage[];
+  unread: AgencyConversationUnread;
+  lastMessageAt: string | null;
+  lastMessageBy: AgencyConversationAuthor | null;
+  repliedAt: string | null;
+  /** Guest link expiry; null for a signed-in traveller. */
+  expiresAt: string | null;
+  canReply: boolean;
+}
+
+/** One live proposal in the traveller's comparison page. */
+export interface AgencyProposalSummary {
+  id: string;
+  /** The conversation this proposal answers, when it can be resolved. */
+  enquiryId: string | null;
+  agency: { name: string; slug: string };
+  trip: { id: string; title: string };
+  quote: {
+    number: string;
+    version: number;
+    status: string;
+    currency: string;
+    total: number;
+    perPerson: number;
+    validUntil: string | null;
+    inclusions: string[];
+    exclusions: string[];
+    createdAt: string | null;
+  } | null;
+  createdAt: string | null;
+  expiresAt: string | null;
+  acceptedAt: string | null;
 }
 
 /* -------------------------------------------------------------------------- */

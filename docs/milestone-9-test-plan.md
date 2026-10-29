@@ -1,11 +1,12 @@
 # Milestone 9 — Agency directory & enquiries acceptance test plan
 
-**Status:** D1–D7 shipped (2026-10-28). This plan is the release gate for
+**Status:** D1–D8 shipped (2026-10-29). This plan is the release gate for
 `docs/roadmap-milestone-9-agency-directory.md`; run it whole against staging
 before announcing the directory.
 
 It covers the public directory and profile, packages, the two-sided enquiry
-flow, ops verification/delisting and the launch gate. Companion documents:
+flow, verification/delisting, the launch gate and the D8 conversation and
+proposal-comparison surfaces. Companion documents:
 `docs/agency-operations-runbook.md` (operating procedures) and
 `docs/agency-a9-test-plan.md` (workspace baseline).
 
@@ -219,6 +220,56 @@ Automated coverage: `services/directory/insights.test.ts`,
 
 ---
 
+## 9A. D8 — conversations and proposal comparison
+
+### Guest link
+
+- [ ] Submitting an enquiry shows the private conversation URL once, with a
+      copy action; a signed-out traveller is warned that it is the only way back.
+- [ ] The link opens `/conversation/:token` with the opening enquiry, the agency
+      name and every reply; opening it marks the agency's replies read.
+- [ ] A guest reply appears in the agency inbox with an unread badge.
+- [ ] The link stops working after `conversationTokenExpiresAt`; an unknown,
+      expired or suspended-agency token shows the same not-available state.
+- [ ] The raw token never appears in the agency inbox, logs or audit metadata.
+
+### Signed-in traveller
+
+- [ ] `/profile` lists each enquiry with its status, unread replies and an
+      "Open conversation" link to `/enquiry/:id`.
+- [ ] Another account, an agency session and a platform session all get 404/403
+      for that thread.
+- [ ] Sending a reply marks the agency's earlier messages read and shows the
+      traveller's own message as sent/read.
+
+### Agency inbox
+
+- [ ] The inbox card shows an unread count for new traveller messages.
+- [ ] Opening the detail sheet loads the thread and clears the unread badge.
+- [ ] A planner can reply; a viewer sees the thread read-only with no composer.
+- [ ] The first reply stamps `Replied <date>`, moves `new → replied` and writes
+      one `enquiry.replied` audit row.
+
+### Proposal comparison
+
+- [ ] `/proposals` lists every live proposal answering the traveller's own
+      enquiries, side by side (agency, trip, total, per-person, validity,
+      inclusions/exclusions).
+- [ ] "View document" opens the exact pinned document (HTML or PDF) and the PDF
+      downloads with the same bytes as the agency's share link.
+- [ ] "Ask about this" sends a message on the thread the proposal answers; a
+      proposal with no resolvable conversation shows no message action.
+- [ ] Nothing is merged or created; the page has no booking, acceptance or trip
+      action.
+- [ ] An expired or revoked proposal link disappears; a foreign link id is 404
+      for a signed-in traveller and for a guest whose enquiry it does not answer.
+
+Automated coverage: `services/directory/conversations.test.ts`,
+`services/directory/enquiries.test.ts`, `services/agency/proposals.test.ts`,
+`routes/realmCoverage.test.ts`, `routes/agency.routes.test.ts`.
+
+---
+
 ## 10. Limits, validation and indexes
 
 - [ ] Every tenant mutation sits behind `protectAgency` + CSRF; every ops
@@ -251,8 +302,8 @@ npm run typecheck
 npm run build
 ```
 
-Latest local run (2026-10-28): backend **831/831**, backend typecheck clean,
-frontend typecheck and production build clean; targeted D7 suites 83/83.
+Latest local run (2026-10-29): backend **849/849**, backend typecheck clean,
+frontend typecheck and production build clean; targeted D8 suites 16/16.
 
 Browser pass (synthetic agency, all rows deleted afterwards):
 
@@ -265,3 +316,8 @@ Browser pass (synthetic agency, all rows deleted afterwards):
    restore returns it in the same state.
 5. Run the launch gate against the seeded staging database and confirm PASS on
    all three checks.
+6. Submit a guest enquiry, copy the private link, open it in a clean profile,
+   reply, then sign in as the agency and confirm the unread badge and the thread.
+7. Send a proposal from the agency, open `/proposals` as the traveller, compare
+   two proposals and ask a question from a card; confirm it lands on the right
+   thread.

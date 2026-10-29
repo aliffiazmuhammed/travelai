@@ -81,6 +81,7 @@ import {
   listAgencyEnquiriesHandler,
   updateAgencyEnquiryHandler,
 } from '../controllers/enquiries.controller.js';
+import { sendAgencyEnquiryMessageHandler } from '../controllers/conversations.controller.js';
 import { protectAgency } from '../middleware/auth.middleware.js';
 import { deleteTrip, purgeTrip, restoreTrip } from '../controllers/itinerary.controller.js';
 import { requireAgencyWorkspace } from '../middleware/agencyWorkspace.middleware.js';
@@ -95,7 +96,10 @@ import {
   handleAgencyTemplateUpload,
 } from '../middleware/upload.middleware.js';
 import { validate } from '../middleware/validate.middleware.js';
-import { updateAgencyEnquirySchema } from '../schemas/agencyEnquiry.schema.js';
+import {
+  conversationMessageSchema,
+  updateAgencyEnquirySchema,
+} from '../schemas/agencyEnquiry.schema.js';
 import {
   createAgencyPackageSchema,
   saveAgencyDirectoryProfileSchema,
@@ -229,6 +233,15 @@ router.post(
   protectAgency,
   requireAgencyRole('planner'),
   convertAgencyEnquiryHandler
+);
+// Two-way thread reply (M9 D8). Same rank as moving a lead: a reply changes
+// `new → replied` and stamps the reply time the public profile advertises.
+router.post(
+  '/enquiries/:enquiryId/messages',
+  protectAgency,
+  requireAgencyRole('planner'),
+  validate(conversationMessageSchema),
+  sendAgencyEnquiryMessageHandler
 );
 
 // PA0: self-service agency creation is gone. Tenants are provisioned by the

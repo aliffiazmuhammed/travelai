@@ -3,6 +3,7 @@ import {
   AGENCY_ENQUIRY_BUDGET_BANDS,
   AGENCY_ENQUIRY_LIMITS,
   AGENCY_ENQUIRY_STATUSES,
+  AGENCY_ENQUIRY_THREAD_LIMITS,
 } from '../models/AgencyEnquiry.js';
 
 /**
@@ -173,3 +174,25 @@ export const myEnquiryQuerySchema = z
   .strict();
 
 export type MyEnquiryQueryInput = z.infer<typeof myEnquiryQuerySchema>;
+
+/**
+ * One threaded reply (D8). Strict for the same reason the enquiry form is: the
+ * body is a capability-scoped write and an unknown key is a client bug. The
+ * service re-checks emptiness and the limit so a direct call cannot bypass it.
+ */
+export const conversationMessageSchema = z
+  .object({
+    body: z
+      .string()
+      .trim()
+      .min(1, 'Write a message before sending it.')
+      .max(
+        AGENCY_ENQUIRY_THREAD_LIMITS.body,
+        `Keep your message under ${AGENCY_ENQUIRY_THREAD_LIMITS.body} characters.`
+      ),
+  })
+  .strict();
+
+export type ConversationMessageInput = z.infer<
+  typeof conversationMessageSchema
+>;

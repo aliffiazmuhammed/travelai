@@ -58,6 +58,8 @@ import type {
   AgencyDirectoryPublicProfileResponse,
   AgencyEnquiry,
   AgencyEnquiryAcknowledgement,
+  AgencyConversation,
+  AgencyProposalSummary,
   AgencyEnquiryConversion,
   AgencyEnquiryFilters,
   AgencyEnquiryInput,
@@ -2161,6 +2163,134 @@ class ApiClient {
     if (filters.limit) query.append('limit', String(filters.limit));
     const suffix = query.toString() ? `?${query.toString()}` : '';
     return this.request(`/api/enquiries${suffix}`);
+  }
+
+  /**
+   * M9 D8: the guest thread. The token is the capability, so no session is
+   * required; the server returns the same conversation the profile page shows.
+   */
+  async getConversation(
+    token: string
+  ): Promise<{ success: boolean; conversation: AgencyConversation }> {
+    return this.request(
+      `/api/conversations/${encodeURIComponent(token)}`
+    );
+  }
+
+  async sendConversationMessage(
+    token: string,
+    body: string
+  ): Promise<{ success: boolean; conversation: AgencyConversation }> {
+    return this.request(
+      `/api/conversations/${encodeURIComponent(token)}/messages`,
+      { method: 'POST', body: JSON.stringify({ body }) }
+    );
+  }
+
+  /** The agency's live proposals for this thread, comparable in place. */
+  async getConversationProposals(
+    token: string
+  ): Promise<{ success: boolean; proposals: AgencyProposalSummary[] }> {
+    return this.request(
+      `/api/conversations/${encodeURIComponent(token)}/proposals`
+    );
+  }
+
+  async getConversationProposal(
+    token: string,
+    linkId: string
+  ): Promise<{ success: boolean; proposal: AgencyProposalView }> {
+    return this.request(
+      `/api/conversations/${encodeURIComponent(token)}/proposals/${encodeURIComponent(linkId)}`
+    );
+  }
+
+  getConversationProposalPdfUrl(token: string, linkId: string): string {
+    return `${this.baseUrl}/api/conversations/${encodeURIComponent(
+      token
+    )}/proposals/${encodeURIComponent(linkId)}/pdf`;
+  }
+
+  async getConversationProposalPdfBlob(
+    token: string,
+    linkId: string
+  ): Promise<Blob> {
+    const response = await fetch(
+      this.getConversationProposalPdfUrl(token, linkId)
+    );
+    if (!response.ok) {
+      throw new ApiError('The proposal PDF could not be loaded.', response.status);
+    }
+    return response.blob();
+  }
+
+  /** M9 D8: the signed-in traveller's own thread (marks it read). */
+  async getMyEnquiry(
+    enquiryId: string
+  ): Promise<{ success: boolean; conversation: AgencyConversation }> {
+    return this.request(`/api/enquiries/${encodeURIComponent(enquiryId)}`);
+  }
+
+  async sendMyEnquiryMessage(
+    enquiryId: string,
+    body: string
+  ): Promise<{ success: boolean; conversation: AgencyConversation }> {
+    return this.request(
+      `/api/enquiries/${encodeURIComponent(enquiryId)}/messages`,
+      { method: 'POST', body: JSON.stringify({ body }) }
+    );
+  }
+
+  /** M9 D8: the agency's reply in the inbox sheet. */
+  async sendAgencyEnquiryMessage(
+    enquiryId: string,
+    body: string
+  ): Promise<{ success: boolean; conversation: AgencyConversation }> {
+    return this.request(
+      `/api/agency/enquiries/${encodeURIComponent(enquiryId)}/messages`,
+      { method: 'POST', body: JSON.stringify({ body }) }
+    );
+  }
+
+  /** M9 D8: every live proposal answering this account's own enquiries. */
+  async getMyProposals(): Promise<{
+    success: boolean;
+    proposals: AgencyProposalSummary[];
+  }> {
+    return this.request('/api/proposals');
+  }
+
+  /** The full pinned document for its owner; the token never leaves the link. */
+  async getMyProposal(
+    linkId: string
+  ): Promise<{ success: boolean; proposal: AgencyProposalView }> {
+    return this.request(`/api/proposals/${encodeURIComponent(linkId)}`);
+  }
+
+  getMyProposalPdfUrl(linkId: string): string {
+    return `${this.baseUrl}/api/proposals/${encodeURIComponent(linkId)}/pdf`;
+  }
+
+  async getMyProposalPdfBlob(linkId: string): Promise<Blob> {
+    let response: Response;
+    try {
+      response = await fetch(this.getMyProposalPdfUrl(linkId), {
+        credentials: 'include',
+      });
+    } catch {
+      throw new ApiError('Could not reach the server.', 0);
+    }
+    if (!response.ok) {
+      let message = 'The proposal PDF could not be loaded.';
+      try {
+        const payload = await response.json();
+        message = payload?.error || payload?.message || message;
+      } catch {
+        /* Binary or empty error body. */
+      }
+      throw new ApiError(message, response.status);
+    }
+    return response.blob();
   }
 
   /**

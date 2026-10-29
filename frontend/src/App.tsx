@@ -23,6 +23,8 @@ const GalleryTrip = lazy(() => import("./pages/GalleryTrip"));
 const Agencies = lazy(() => import("./pages/Agencies"));
 const AgencyProfile = lazy(() => import("./pages/AgencyProfile"));
 const ProposalShare = lazy(() => import("./pages/ProposalShare"));
+const ConversationPage = lazy(() => import("./pages/ConversationPage"));
+const MyProposals = lazy(() => import("./pages/MyProposals"));
 const InviteAccept = lazy(() => import("./pages/InviteAccept"));
 const Profile = lazy(() => import("./pages/Profile"));
 const AgencyApp = lazy(() => import("./pages/agency/AgencyApp"));
@@ -92,6 +94,8 @@ const App = () => (
                 <Route path="/agencies" element={<Agencies />} />
                 <Route path="/agencies/:slug" element={<AgencyProfile />} />
                 <Route path="/proposal/:token" element={<ProposalShare />} />
+                {/* M9 D8: the guest's private thread. */}
+                <Route path="/conversation/:token" element={<ConversationPage />} />
                 <Route path="/invite/:token" element={<InviteAccept />} />
                 <Route
                   path="/dashboard"
@@ -106,6 +110,23 @@ const App = () => (
                   element={
                     <ProtectedRoute>
                       <Profile />
+                    </ProtectedRoute>
+                  }
+                />
+                {/* M9 D8: a signed-in traveller's thread and comparison. */}
+                <Route
+                  path="/enquiry/:enquiryId"
+                  element={
+                    <ProtectedRoute>
+                      <ConversationPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/proposals"
+                  element={
+                    <ProtectedRoute>
+                      <MyProposals />
                     </ProtectedRoute>
                   }
                 />

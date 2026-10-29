@@ -18,6 +18,8 @@ import agenciesRoutes from './routes/agencies.routes.js';
 import blocksRoutes from './routes/blocks.routes.js';
 import reportsRoutes from './routes/reports.routes.js';
 import enquiriesRoutes from './routes/enquiries.routes.js';
+import conversationsRoutes from './routes/conversations.routes.js';
+import proposalsRoutes from './routes/proposals.routes.js';
 import agencyRoutes from './routes/agency.routes.js';
 import agencyAuthRoutes from './routes/agencyAuth.routes.js';
 import adminAuthRoutes from './routes/adminAuth.routes.js';
@@ -239,6 +241,12 @@ app.use('/api/reports', reportsRoutes);
 // A traveller's own enquiries (M9 D5): personal realm only, read-only. The
 // public enquiry *write* lives on `/api/agencies/:slug/enquiries`.
 app.use('/api/enquiries', enquiriesRoutes);
+// Guest enquiry threads (M9 D8): the private token is the capability, so this
+// router stays outside both realm guards. It resolves exactly one enquiry.
+app.use('/api/conversations', conversationsRoutes);
+// A traveller's proposal comparison (M9 D8): personal-realm only, ownership
+// proven through the enquiry → client → quote chain.
+app.use('/api/proposals', proposalsRoutes);
 // Agency Workspace (A0): read-only placeholder namespace, gated per request.
 // PA0 auth lives under the same gate, before the tenant routes — it is public
 // bootstrap (`/context`, `/csrf`, `/signin`, `/logout`) plus agency-session

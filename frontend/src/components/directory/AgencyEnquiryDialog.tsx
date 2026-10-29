@@ -1,5 +1,16 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { CalendarDays, CheckCircle2, Loader2, Mail, MessageSquare, Send } from "lucide-react";
+import { Link } from "react-router-dom";
+import {
+  CalendarDays,
+  Check,
+  CheckCircle2,
+  Copy,
+  Loader2,
+  Mail,
+  MessageSquare,
+  Send,
+  ShieldCheck,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -16,7 +27,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/context/UserContext";
 import { AGENCY_ENQUIRY_BUDGET_LABELS } from "@/lib/agency";
 import { api, ApiError } from "@/services/api";
-import type { AgencyEnquiryBudgetBand, AgencyEnquiryInput } from "@/types/agency";
+import type {
+  AgencyEnquiryAcknowledgement,
+  AgencyEnquiryBudgetBand,
+  AgencyEnquiryInput,
+} from "@/types/agency";
 
 /**
  * Public enquiry form (Milestone 9 D5).
@@ -84,6 +99,8 @@ const AgencyEnquiryDialog: React.FC<AgencyEnquiryDialogProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const [ack, setAck] = useState<AgencyEnquiryAcknowledgement | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const minDate = useMemo(todayIso, []);
 
@@ -105,6 +122,8 @@ const AgencyEnquiryDialog: React.FC<AgencyEnquiryDialogProps> = ({
     setError(null);
     setSending(false);
     setSent(false);
+    setAck(null);
+    setCopied(false);
   }, [open, user?.name, user?.email]);
 
   // A flexible enquiry has no dates at all: clear them so a stale value cannot
@@ -177,7 +196,8 @@ const AgencyEnquiryDialog: React.FC<AgencyEnquiryDialogProps> = ({
         ...(packageId ? { packageId } : {}),
         consent: true,
       };
-      await api.submitAgencyEnquiry(slug, payload);
+      const result = await api.submitAgencyEnquiry(slug, payload);
+      setAck(result.enquiry);
       setSent(true);
       onSubmitted?.();
     } catch (err) {
@@ -212,10 +232,8 @@ const AgencyEnquiryDialog: React.FC<AgencyEnquiryDialogProps> = ({
               <div className="space-y-1 text-xs text-foreground">
                 <p className="font-bold">Your enquiry is with {agencyName}.</p>
                 <p className="text-muted-foreground">
-                  They reply in-app.{" "}
-                  {user
-                    ? "Signed in? Your sent enquiries appear on your profile page."
-                    : "Sign in before your next enquiry to keep a copy in your profile."}
+                  You can read and answer their reply right here — no email
+                  needed.
                 </p>
                 {packageTitle ? (
                   <p className="text-muted-foreground">
@@ -224,6 +242,63 @@ const AgencyEnquiryDialog: React.FC<AgencyEnquiryDialogProps> = ({
                 ) : null}
               </div>
             </div>
+
+            {ack ? (
+              <div className="space-y-2 rounded-2xl border border-primary/20 bg-primary/5 p-3">
+                <p className="flex items-center gap-1.5 text-[11px] font-bold text-primary">
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  Keep this private conversation link
+                </p>
+                <div className="flex items-center gap-1.5">
+                  <code className="min-w-0 flex-1 truncate rounded-lg border border-border/60 bg-background/80 px-2 py-1.5 text-[10px] text-muted-foreground">
+                    {ack.conversation.url}
+                  </code>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="rounded-xl text-xs font-bold gap-1.5 shrink-0"
+                    onClick={() => {
+                      void navigator.clipboard
+                        .writeText(ack.conversation.url)
+                        .then(() => setCopied(true))
+                        .catch(() => setCopied(false));
+                    }}
+                  >
+                    {copied ? (
+                      <Check className="h-3.5 w-3.5 text-emerald-600" />
+                    ) : (
+                      <Copy className="h-3.5 w-3.5" />
+                    )}
+                    {copied ? "Copied" : "Copy"}
+                  </Button>
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  Anyone with this link can read the thread
+                  {ack.conversation.expiresAt
+                    ? ` until ${new Date(ack.conversation.expiresAt).toLocaleDateString()}`
+                    : ""}
+                  .{" "}
+                  {user
+                    ? "You can also open it from your profile."
+                    : "Keep it if you did not sign in — it is your only way back to the reply."}
+                </p>
+                {user ? (
+                  <Button
+                    asChild
+                    size="sm"
+                    variant="outline"
+                    className="rounded-xl text-xs font-bold gap-1.5"
+                  >
+                    <Link to={`/enquiry/${ack.id}`} onClick={onClose}>
+                      <MessageSquare className="h-3.5 w-3.5" />
+                      Open conversation
+                    </Link>
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
+
             <DialogFooter>
               <Button type="button" className="rounded-xl text-xs font-bold" onClick={onClose}>
                 Done

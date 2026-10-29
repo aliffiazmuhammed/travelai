@@ -46,6 +46,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
+import ConversationThread from '@/components/directory/ConversationThread';
 import { useAgency } from '@/context/AgencyContext';
 import { useAgencyAuth } from '@/context/AgencyAuthContext';
 import {
@@ -171,6 +172,8 @@ const AgencyEnquiries: React.FC = () => {
 
   const [selected, setSelected] = useState<AgencyEnquiry | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [members, setMembers] = useState<AgencyMember[]>([]);
   const [lostOpen, setLostOpen] = useState(false);
@@ -236,6 +239,51 @@ const AgencyEnquiries: React.FC = () => {
       cancelled = true;
     };
   }, [activeAgencyId, canAssign]);
+
+  // Opening a lead is reading its thread (D8): the detail GET returns the
+  // messages and stamps the agency's read receipts, so the badge clears as the
+  // sheet opens.
+  useEffect(() => {
+    if (!sheetOpen || !selected?.id) return;
+    let cancelled = false;
+    setDetailLoading(true);
+    setDetailError(null);
+    void api
+      .getAgencyEnquiry(selected.id)
+      .then((result) => {
+        if (cancelled) return;
+        setSelected(result.enquiry);
+        setEnquiries((prev) =>
+          prev.map((row) =>
+            row.id === result.enquiry.id
+              ? {
+                  ...row,
+                  status: result.enquiry.status,
+                  unread: result.enquiry.unread,
+                  replyCount: result.enquiry.replyCount,
+                  lastMessageAt: result.enquiry.lastMessageAt,
+                  lastMessageBy: result.enquiry.lastMessageBy,
+                }
+              : row
+          )
+        );
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setDetailError(
+            errorMessage(err, 'Could not open this conversation.')
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setDetailLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // `selected` is replaced by this effect's own result, so only its identity
+    // should trigger a reload.
+  }, [sheetOpen, selected?.id]);
 
   const loadMore = useCallback(async () => {
     if (!cursor || loadingMore) return;
@@ -358,6 +406,40 @@ const AgencyEnquiries: React.FC = () => {
     );
   };
 
+  const sendReply = useCallback(
+    async (body: string) => {
+      if (!selected) return;
+      const result = await api.sendAgencyEnquiryMessage(selected.id, body);
+      const conversation = result.conversation;
+      const patch = {
+        status: conversation.status,
+        repliedAt: conversation.repliedAt,
+        messages: conversation.messages,
+        unread: conversation.unread,
+        lastMessageAt: conversation.lastMessageAt,
+        lastMessageBy: conversation.lastMessageBy,
+        replyCount: conversation.messages.length,
+      };
+      setSelected((prev) =>
+        prev && prev.id === conversation.id ? { ...prev, ...patch } : prev
+      );
+      setEnquiries((prev) => {
+        const next = prev.map((row) =>
+          row.id === conversation.id ? { ...row, ...patch } : row
+        );
+        if (filter !== 'all' && conversation.status !== filter) {
+          return next.filter((row) => row.id !== conversation.id);
+        }
+        return next;
+      });
+      if (filter !== 'all' && conversation.status !== filter) {
+        setTotal((count) => Math.max(0, count - 1));
+      }
+      await loadSummary();
+    },
+    [filter, loadSummary, selected]
+  );
+
   const quoteHref = useMemo(() => {
     if (!selected?.client) return null;
     const tripId = selected.package?.tripId;
@@ -411,8 +493,9 @@ const AgencyEnquiries: React.FC = () => {
           <h1 className="text-2xl font-semibold tracking-tight">Enquiries</h1>
           <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
             Leads from your public directory page and package cards. Claim one,
-            reply, quote, then convert it into a client — everything stays inside
-            this workspace, never in email.
+            reply in the thread, quote, then convert it into a client — the
+            traveller reads every reply in their own conversation, and the
+            workspace keeps the whole history.
           </p>
         </div>
         <Button
@@ -535,6 +618,12 @@ const AgencyEnquiries: React.FC = () => {
                           className="text-[10px] text-teal-700 dark:text-teal-300"
                         >
                           Client
+                        </Badge>
+                      ) : null}
+                      {enquiry.unread.agency > 0 ? (
+                        <Badge className="gap-1 text-[10px]">
+                          <MessageSquare className="h-2.5 w-2.5" />
+                          {enquiry.unread.agency} new
                         </Badge>
                       ) : null}
                       {enquiry.assignee ? (
@@ -699,11 +788,55 @@ const AgencyEnquiries: React.FC = () => {
                 </span>
               </div>
 
-              <div className="flex items-start gap-2 rounded-2xl bg-muted/40 p-3">
-                <MessageSquare className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-                <p className="whitespace-pre-line text-xs leading-relaxed text-foreground">
-                  {selected.message}
-                </p>
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                    <MessageSquare className="h-3.5 w-3.5 text-primary" />
+                    Conversation
+                  </p>
+                  {selected.unread.agency > 0 ? (
+                    <Badge variant="secondary" className="text-[10px]">
+                      {selected.unread.agency} unread
+                    </Badge>
+                  ) : selected.replyCount > 0 ? (
+                    <span className="text-[10px] text-muted-foreground">
+                      {selected.replyCount}{' '}
+                      {selected.replyCount === 1 ? 'reply' : 'replies'}
+                    </span>
+                  ) : null}
+                </div>
+
+                {detailLoading ? (
+                  <div className="flex items-center justify-center gap-2 rounded-2xl border border-border/70 py-10 text-[11px] text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading the thread…
+                  </div>
+                ) : detailError ? (
+                  <p className="rounded-2xl border border-destructive/30 bg-destructive/5 p-3 text-[11px] font-semibold text-destructive">
+                    {detailError}
+                  </p>
+                ) : (
+                  <ConversationThread
+                    messages={selected.messages ?? []}
+                    viewer="agency"
+                    opening={{
+                      authorName: selected.contact.name,
+                      body: selected.message,
+                      createdAt: selected.createdAt,
+                    }}
+                    canReply={canPlan}
+                    onSend={sendReply}
+                    placeholder={`Reply to ${selected.contact.name}…`}
+                    emptyHint="No reply yet. The traveller sees your answer in their conversation."
+                  />
+                )}
+
+                {selected.conversationExpiresAt ? (
+                  <p className="text-[10px] text-muted-foreground">
+                    The traveller's private guest link works until{' '}
+                    {formatAgencyDate(selected.conversationExpiresAt)}.
+                  </p>
+                ) : null}
               </div>
 
               {selected.status === 'lost' && selected.lostReason ? (

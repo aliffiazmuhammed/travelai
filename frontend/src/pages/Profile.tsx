@@ -9,6 +9,7 @@ import {
   Inbox,
   Loader2,
   Mail,
+  MessageSquare,
   ShieldCheck,
   Trash2,
   UserCircle2,
@@ -667,9 +668,21 @@ const Profile = () => {
                 Enquiries you've sent
               </CardTitle>
               <CardDescription>
-                Each enquiry went only to the agency you chose. They reply in
-                their workspace, so you may not get an email copy.
+                Each enquiry went only to the agency you chose. Replies arrive in
+                your conversation here, so no email copy is needed — open a
+                thread to read it and answer back.
               </CardDescription>
+              <Button
+                asChild
+                variant="outline"
+                size="sm"
+                className="mt-2 w-fit rounded-xl text-[11px] font-bold gap-1.5"
+              >
+                <Link to="/proposals">
+                  <MessageSquare className="h-3.5 w-3.5" />
+                  Compare your proposals
+                </Link>
+              </Button>
             </CardHeader>
             <CardContent className="space-y-2">
               {(showAllEnquiries ? myEnquiries : myEnquiries.slice(0, 3)).map(
@@ -700,6 +713,15 @@ const Profile = () => {
                         >
                           {AGENCY_ENQUIRY_STATUS_LABELS[enquiry.status]}
                         </span>
+                        {enquiry.unread.traveller > 0 && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground">
+                            <MessageSquare className="h-2.5 w-2.5" />
+                            {enquiry.unread.traveller}{" "}
+                            {enquiry.unread.traveller === 1
+                              ? "new reply"
+                              : "new replies"}
+                          </span>
+                        )}
                       </div>
                       {enquiry.createdAt && (
                         <span className="text-[10px] text-muted-foreground">
@@ -720,6 +742,27 @@ const Profile = () => {
                     <p className="line-clamp-2 text-xs leading-relaxed text-foreground/80">
                       {enquiry.message}
                     </p>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+                      <span className="text-[10px] text-muted-foreground">
+                        {enquiry.replyCount > 0
+                          ? `${enquiry.replyCount} ${
+                              enquiry.replyCount === 1 ? "reply" : "replies"
+                            } in this thread`
+                          : "No reply yet"}
+                      </span>
+                      <Button
+                        asChild
+                        variant="outline"
+                        size="sm"
+                        className="h-7 rounded-lg text-[10px] font-bold gap-1 px-2"
+                      >
+                        <Link to={`/enquiry/${enquiry.id}`}>
+                          <MessageSquare className="h-3 w-3" />
+                          Open conversation
+                        </Link>
+                      </Button>
+                    </div>
                   </div>
                 )
               )}
