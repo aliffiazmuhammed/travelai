@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowUpRight,
@@ -20,6 +20,7 @@ import {
   formatAgencyDate,
 } from '@/lib/agency';
 import { cn } from '@/lib/utils';
+import { useEnquiryLiveRefresh } from '@/hooks/useEnquiryEvents';
 import type { AgencyEnquiry } from '@/types/agency';
 
 const PAGE_SIZE = 20;
@@ -58,44 +59,62 @@ const Enquiries: React.FC = () => {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  // Newer reads win: a quiet refresh can start while the first page is still in
+  // flight, and an older response must never overwrite a fresher list.
+  const requestSeq = useRef(0);
 
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
+  /**
+   * `quiet` is the live/poll path: it refreshes in place without the spinner
+   * and, on failure, leaves the rows already on screen alone.
+   */
+  const loadFirstPage = useCallback(async (quiet: boolean) => {
+    const seq = ++requestSeq.current;
+    if (!quiet) {
       setLoading(true);
       setError(null);
-      try {
-        const page = await api.getMyEnquiries({ limit: PAGE_SIZE });
-        if (cancelled) return;
-        setEnquiries(page.enquiries || []);
-        setTotal(page.total ?? 0);
-        setNextCursor(page.hasMore ? page.nextCursor : null);
-      } catch (err) {
-        if (cancelled) return;
-        setError(
-          err instanceof Error && err.message
-            ? err.message
-            : 'Your enquiries could not be loaded right now.'
-        );
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [reloadKey]);
+    }
+    try {
+      const page = await api.getMyEnquiries({ limit: PAGE_SIZE });
+      if (seq !== requestSeq.current) return;
+      setEnquiries(page.enquiries || []);
+      setTotal(page.total ?? 0);
+      setNextCursor(page.hasMore ? page.nextCursor : null);
+      setError(null);
+    } catch (err) {
+      if (seq !== requestSeq.current || quiet) return;
+      setError(
+        err instanceof Error && err.message
+          ? err.message
+          : 'Your enquiries could not be loaded right now.'
+      );
+    } finally {
+      // Clear the spinner even when a fresher quiet read already won the race.
+      if (!quiet) setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadFirstPage(false);
+  }, [loadFirstPage, reloadKey]);
+
+  // Live replies on frames; 20s polling while the tier is off (R2).
+  const liveMode = useEnquiryLiveRefresh(
+    useCallback(() => loadFirstPage(true), [loadFirstPage])
+  );
 
   const loadMore = async () => {
     if (!nextCursor || loadingMore) return;
+    const seq = requestSeq.current;
     setLoadingMore(true);
     try {
       const page = await api.getMyEnquiries({ limit: PAGE_SIZE, cursor: nextCursor });
+      if (seq !== requestSeq.current) return;
       setEnquiries((previous) => [...previous, ...(page.enquiries || [])]);
       setNextCursor(page.hasMore ? page.nextCursor : null);
     } catch {
-      setError('Older enquiries could not be loaded. Try again.');
+      if (seq === requestSeq.current) {
+        setError('Older enquiries could not be loaded. Try again.');
+      }
     } finally {
       setLoadingMore(false);
     }
@@ -128,6 +147,15 @@ const Enquiries: React.FC = () => {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {liveMode === 'live' ? (
+              <span
+                className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-2.5 py-1 text-[10px] font-bold text-primary"
+                title="Replies appear here as they arrive"
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+                Live
+              </span>
+            ) : null}
             <Button
               asChild
               variant="outline"

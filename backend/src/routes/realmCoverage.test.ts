@@ -168,8 +168,8 @@ test('a traveller’s own enquiry history and thread are personal-realm only', (
   const layers = routeLayers(enquiriesRouter);
   assert.deepEqual(
     layers.map((layer) => `${pathOf(layer)} ${Object.keys(layer.route?.methods ?? {})}`),
-    ['/ get', '/:id get', '/:id/messages post'],
-    'The consumer side owns the history and the thread; the write is public and lives on the directory router, guest replies on the conversation router'
+    ['/ get', '/summary get', '/events get', '/:id/read post', '/:id get', '/:id/messages post'],
+    'The consumer side owns the history, its badge summary, the live stream, the thread and one read receipt; the write is public and lives on the directory router, guest replies on the conversation router'
   );
   assert.deepEqual(
     layers.filter((layer) => guardKind(layer) !== 'personal').map(pathOf),

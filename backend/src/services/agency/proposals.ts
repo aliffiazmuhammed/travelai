@@ -21,6 +21,7 @@ import {
 } from '../collab/invites.js';
 import { agencyCan, type AgencyRole } from './access.js';
 import { recordAgencyAudit } from './audit.js';
+import { emitProposalCreated } from '../realtime/enquiryEvents.js';
 import { renderPinnedAgencyExport } from './exports/exports.js';
 import { readAgencyExportFile } from './exports/storage.js';
 import {
@@ -696,6 +697,19 @@ export async function createAgencyProposalLink(
       quoteId: String(quote._id),
     },
   });
+
+  // Tell the traveller's own channel; the enquiry row is where their account
+  // id lives. A legacy guest enquiry simply has none, and the frame no-ops.
+  if (enquiryId) {
+    const enquiry = (await AgencyEnquiry.findOne({ _id: enquiryId })
+      .select('userId')
+      .lean()) as any;
+    emitProposalCreated({
+      enquiryId,
+      userId: enquiry?.userId,
+      linkId: link._id,
+    });
+  }
 
   return {
     link: projectAgencyProposalLink(link),

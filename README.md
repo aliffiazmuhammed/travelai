@@ -112,6 +112,7 @@ Traditional trip planning involves juggling dozen of browser tabs: reading confl
 - **Package Cards**: A trip can be published as a snapshot package — title, nights, highlights, inclusions, a cover image and an optional per-person price. The card never reads the source trip again, so editing or deleting the trip cannot break a public listing. Unpriced packages show "on request", and "from ₹…" on the listing is always the cheapest live package.
 - **Guest Enquiries**: Travellers can send an enquiry from a profile or package with consent, dates, party size, budget band and a message. The agency gets it in an in-app inbox (no email dependency) with claim/assign, status transitions (`new → replied → quoted → won/lost`), and one-click conversion into a client with a prefilled quote.
 - **Two-Way Conversations**: Every enquiry is a thread. Signed-in travellers read and reply from `/profile` or `/enquiry/:id`; guests get a private 90-day link that works without an account. The agency replies from the inbox, unread counts are per side, and the first reply stamps the "replies in ~X h" signal. Raw tokens are never stored — only a sha256 hash, a short hint and an expiry.
+- **Live Enquiries**: new leads, replies and read receipts land without a refresh on the agency inbox and the traveller's `/enquiries` list, through a per-account stream discovered from `/api/health`. With the live tier off, both fall back to a 20-second visible-tab poll; private guest links keep plain reads.
 - **Proposal Comparison**: `/proposals` puts every live proposal that answers a traveller's own enquiries side by side — total and per-person price, validity, inclusions and exclusions. A proposal can be opened as the exact pinned document or PDF, and "Ask about this" sends a question to the thread it answers. Nothing is merged and no trip is created.
 - **Trust Signals**: A human-reviewed verification badge, and "Usually replies in ~X h" computed from the median of recent replies — hidden until the agency has answered at least five enquiries, so a new listing never over-promises.
 - **Ops Moderation**: Platform admins can verify/unverify and hide/restore profiles or individual packages from the admin console. A takedown is effective on the listing, facets, direct URLs, logos, covers and enquiry forms, keeps the agency's own draft/published choice, and is audited on both the platform and tenant trails. A read-only launch gate (`scripts/launch-gate-m9.mts`) checks the announcement bar: ≥5 verified live profiles, a priced package on each, and at least one answered test enquiry.
@@ -384,6 +385,13 @@ ENABLE_TRIP_SSE=false          # true enables the SSE presence stream (+ heartbe
 PRESENCE_TTL_MS=30000          # presence entry TTL — clients heartbeat at ≥2x this rate
 # When SSE is off, the SPA polls comments/polls/decisions every 20s. Render's
 # blueprint sets ENABLE_TRIP_SSE=true; check GET /api/health → collab.sse.
+
+# Enquiry live tier (Milestone 9 — optional locally, ON in render.yaml)
+ENABLE_ENQUIRY_SSE=false       # true enables /api/enquiries/events and /api/agency/enquiries/events
+ENQUIRY_SSE_MAX_STREAMS=25     # concurrent streams per channel; past it the oldest is closed
+# Off means both stream routes answer 404 (not "empty") and the lists fall back
+# to a 20s visible-tab poll. Render's blueprint sets ENABLE_ENQUIRY_SSE=true;
+# check GET /api/health → enquiries.sse.
 
 # Version history (Milestone 6, sprint E5 / flaw F13)
 VERSIONS_MAX=30                # version snapshots retained per trip (each stores a full itinerary)

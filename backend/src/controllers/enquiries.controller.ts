@@ -15,12 +15,24 @@ import {
 import {
   getAgencyEnquiry,
   getAgencyEnquirySummary,
+  getOwnEnquirySummary,
   convertAgencyEnquiry,
   listAgencyEnquiries,
   listOwnEnquiries,
   submitAgencyEnquiry,
   updateAgencyEnquiry,
 } from '../services/directory/enquiries.js';
+import {
+  markAgencyEnquiryRead,
+  markOwnConversationRead,
+} from '../services/directory/conversations.js';
+import {
+  agencyChannel,
+  isEnquirySseEnabled,
+  openStream,
+  userChannel,
+  type EnquiryEvent,
+} from '../services/realtime/enquiryEvents.js';
 
 /**
  * Agency enquiries (Milestone 9 D5), mounted at `/api/agencies` (public write)
@@ -140,3 +152,149 @@ export const listMyEnquiriesHandler = catchAsync(
     res.json({ success: true, ...page });
   }
 );
+
+/** `GET /api/enquiries/summary` — unread and proposal badges for the nav. */
+export const getMyEnquirySummaryHandler = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    if (!req.userId) {
+      throw new AppError('Please sign in to see your enquiries.', 401);
+    }
+    const summary = await getOwnEnquirySummary(String(req.userId));
+    res.json({ success: true, summary });
+  }
+);
+
+/** `POST /api/enquiries/:id/read` — the traveller opened this thread. */
+export const markMyEnquiryReadHandler = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    if (!req.userId) {
+      throw new AppError('Please sign in to see your enquiries.', 401);
+    }
+    const unread = await markOwnConversationRead(
+      String(req.userId),
+      String(req.params.id || '')
+    );
+    res.json({ success: true, unread });
+  }
+);
+
+/** `POST /api/agency/enquiries/:enquiryId/read` — the inbox opened the lead. */
+export const markAgencyEnquiryReadHandler = catchAsync(
+  async (req: AgencyAccessRequest, res: Response) => {
+    const { agency } = agencyContext(req);
+    const unread = await markAgencyEnquiryRead(
+      String(agency._id),
+      String(req.params.enquiryId || '')
+    );
+    res.json({ success: true, unread });
+  }
+);
+
+/* -------------------------------------------------------------------------- */
+/*  Live tier (R1) — enquiry and inbox streams                                */
+/* -------------------------------------------------------------------------- */
+
+const ENQUIRY_KEEPALIVE_MS = 15000;
+
+/**
+ * Wires one SSE response to a channel.
+ *
+ * Exported for the controller test (which drives it with a fake response); the
+ * two handlers below are what routes mount. `hello` is the first frame so a
+ * client can tell a live stream from a proxy holding the connection open.
+ */
+export function startEnquiryStream(
+  req: Request,
+  res: Response,
+  channel: string
+): void {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+  res.write(':ok\n\n');
+
+  const write = (event: unknown) => {
+    try {
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
+    } catch {
+      // Closing sockets are cleaned up by their own close handler.
+    }
+  };
+
+  const hello: EnquiryEvent = {
+    type: 'hello',
+    channel,
+    at: new Date().toISOString(),
+  };
+  write(hello);
+
+  let cleaned = false;
+  let unsubscribe: () => void = () => {};
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+    clearInterval(keepAlive);
+    unsubscribe();
+  };
+
+  unsubscribe = openStream(channel, {
+    deliver: write,
+    close: () => {
+      // Eviction is the one path where the socket never fires `close` itself,
+      // so ending it must also drop the keepalive or the timer leaks.
+      cleanup();
+      try {
+        res.end();
+      } catch {
+        // Already gone.
+      }
+    },
+  });
+  const keepAlive = setInterval(() => {
+    try {
+      res.write(':ping\n\n');
+    } catch {
+      // Same rule as above: never throw from a timer.
+    }
+  }, ENQUIRY_KEEPALIVE_MS);
+
+  req.on('close', cleanup);
+  res.on('close', cleanup);
+}
+
+/** Dark by default, exactly like the admin namespace: off means "no such path". */
+function streamUnavailable(res: Response): boolean {
+  if (isEnquirySseEnabled()) return false;
+  res.status(404).json({
+    success: false,
+    error: 'Not found',
+    message: 'Not found',
+  });
+  return true;
+}
+
+/** `GET /api/enquiries/events` — the traveller's own live channel. */
+export const subscribeMyEnquiryEvents = (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  if (streamUnavailable(res)) return;
+  if (!req.userId) {
+    res.status(401).json({ success: false, error: 'Please sign in to continue.' });
+    return;
+  }
+  startEnquiryStream(req, res, userChannel(String(req.userId)));
+};
+
+/** `GET /api/agency/enquiries/events` — the tenant inbox's live channel. */
+export const subscribeAgencyEnquiryEvents = (
+  req: AgencyAccessRequest,
+  res: Response
+) => {
+  if (streamUnavailable(res)) return;
+  const { agency } = agencyContext(req);
+  startEnquiryStream(req, res, agencyChannel(String(agency._id)));
+};

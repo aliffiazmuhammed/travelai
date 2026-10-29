@@ -25,7 +25,10 @@ export interface PresenceUser {
 }
 
 interface HealthFeatures {
+  /** Trip collaboration stream (`collab.sse`). */
   sse: boolean;
+  /** Enquiry and inbox stream (`enquiries.sse`, M9 R1). */
+  enquirySse: boolean;
 }
 
 let featuresCache: Promise<HealthFeatures> | null = null;
@@ -37,12 +40,15 @@ export function appFeatures(): Promise<HealthFeatures> {
       const response = await fetch(`${API_BASE_URL}/api/health`);
       if (response.ok) {
         const data = await response.json();
-        return { sse: Boolean(data?.collab?.sse) };
+        return {
+          sse: Boolean(data?.collab?.sse),
+          enquirySse: Boolean(data?.enquiries?.sse),
+        };
       }
     } catch {
       /* offline — treat as disabled */
     }
-    return { sse: false };
+    return { sse: false, enquirySse: false };
   })();
   return featuresCache;
 }

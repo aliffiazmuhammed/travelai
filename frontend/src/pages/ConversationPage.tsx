@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { AlertCircle, ArrowLeft, ArrowUpRight, CalendarDays, Loader2, MessageSquare, ShieldCheck, Users, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
@@ -15,6 +15,7 @@ import {
   formatAgencyDate,
 } from '@/lib/agency';
 import { cn } from '@/lib/utils';
+import { useEnquiryLiveRefresh } from '@/hooks/useEnquiryEvents';
 import { api } from '@/services/api';
 import type {
   AgencyConversation,
@@ -42,33 +43,50 @@ const ConversationPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<AgencyProposalSummary | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+  // A quiet live refresh may overlap the first load; an older read must not
+  // overwrite a newer thread.
+  const requestSeq = useRef(0);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const load = useCallback(async (quiet = false) => {
+    const seq = ++requestSeq.current;
+    if (!quiet) {
+      setLoading(true);
+      setError(null);
+    }
     try {
+      let next: {
+        conversation: AgencyConversation;
+        proposals: AgencyProposalSummary[];
+      };
       if (guest && token) {
         const [thread, list] = await Promise.all([
           api.getConversation(token),
           api.getConversationProposals(token).catch(() => ({ proposals: [] })),
         ]);
-        setConversation(thread.conversation);
-        setProposals(list.proposals ?? []);
+        next = {
+          conversation: thread.conversation,
+          proposals: list.proposals ?? [],
+        };
       } else if (enquiryId) {
         const [thread, list] = await Promise.all([
           api.getMyEnquiry(enquiryId),
           api.getMyProposals().catch(() => ({ proposals: [] })),
         ]);
-        setConversation(thread.conversation);
-        setProposals(
-          (list.proposals ?? []).filter(
+        next = {
+          conversation: thread.conversation,
+          proposals: (list.proposals ?? []).filter(
             (proposal) => proposal.enquiryId === enquiryId
-          )
-        );
+          ),
+        };
       } else {
         throw new Error('This conversation link is incomplete.');
       }
+      if (seq !== requestSeq.current) return;
+      setConversation(next.conversation);
+      setProposals(next.proposals);
+      if (quiet) setError(null);
     } catch (err) {
+      if (seq !== requestSeq.current || quiet) return;
       setError(
         err instanceof Error && err.message
           ? err.message
@@ -76,13 +94,21 @@ const ConversationPage: React.FC = () => {
       );
       setConversation(null);
     } finally {
-      setLoading(false);
+      // Clear the spinner even when a fresher quiet read already won the race.
+      if (!quiet) setLoading(false);
     }
   }, [enquiryId, guest, token]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  // M9 R2: replies, receipts, status changes and new proposals arrive live.
+  // The guest link has no account channel, so it keeps its plain reads.
+  const liveMode = useEnquiryLiveRefresh(
+    useCallback(() => load(true), [load]),
+    { enabled: !guest && Boolean(enquiryId), enquiryId }
+  );
 
   const send = async (body: string) => {
     const result =
@@ -170,6 +196,15 @@ const ConversationPage: React.FC = () => {
                   >
                     {AGENCY_ENQUIRY_STATUS_LABELS[conversation.status]}
                   </Badge>
+                  {liveMode === 'live' ? (
+                    <span
+                      className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary"
+                      title="Replies appear here as they arrive"
+                    >
+                      <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+                      Live
+                    </span>
+                  ) : null}
                 </h1>
                 <p className="text-xs text-muted-foreground">
                   Enquiry sent{' '}

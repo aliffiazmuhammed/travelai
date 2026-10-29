@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowUpRight,
@@ -49,6 +49,7 @@ import { Textarea } from '@/components/ui/textarea';
 import ConversationThread from '@/components/directory/ConversationThread';
 import { useAgency } from '@/context/AgencyContext';
 import { useAgencyAuth } from '@/context/AgencyAuthContext';
+import { useEnquiryLiveRefresh } from '@/hooks/useEnquiryEvents';
 import {
   AGENCY_ENQUIRY_BUDGET_LABELS,
   AGENCY_ENQUIRY_STATUSES,
@@ -179,15 +180,29 @@ const AgencyEnquiries: React.FC = () => {
   const [lostOpen, setLostOpen] = useState(false);
   const [lostReason, setLostReason] = useState('');
 
-  const loadSummary = useCallback(async () => {
-    setSummaryLoading(true);
+  // Newer reads win: a quiet live refresh can overlap the first page load, and
+  // an older response must never overwrite a fresher list or thread.
+  const requestSeq = useRef(0);
+  const detailSeq = useRef(0);
+  // Read by the live callback, which runs outside React's render cycle.
+  const selectedIdRef = useRef<string | null>(null);
+  const sheetOpenRef = useRef(false);
+  selectedIdRef.current = selected?.id ?? null;
+  sheetOpenRef.current = sheetOpen;
+
+  /**
+   * `quiet` is the live/poll path: it refreshes the counters in place without
+   * the spinner and keeps the last known numbers when the read fails.
+   */
+  const loadSummary = useCallback(async (quiet = false) => {
+    if (!quiet) setSummaryLoading(true);
     try {
       const result = await api.getAgencyEnquirySummary();
       setSummary(result.summary);
     } catch {
       // Counters are secondary: a failed summary must not hide the inbox.
     } finally {
-      setSummaryLoading(false);
+      if (!quiet) setSummaryLoading(false);
     }
   }, []);
 
@@ -195,34 +210,43 @@ const AgencyEnquiries: React.FC = () => {
     void loadSummary();
   }, [loadSummary, reloadKey]);
 
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      setLoading(true);
-      setError(null);
+  /**
+   * `quiet` keeps the rows already on screen: a live refresh that fails must not
+   * replace a working inbox with an error card.
+   */
+  const loadFirstPage = useCallback(
+    async (quiet: boolean) => {
+      const seq = ++requestSeq.current;
+      if (!quiet) {
+        setLoading(true);
+        setError(null);
+      }
       try {
         const page = await api.getAgencyEnquiries({
           status: filter === 'all' ? undefined : filter,
           limit: 20,
         });
-        if (cancelled) return;
+        if (seq !== requestSeq.current) return;
         setEnquiries(page.enquiries);
         setCursor(page.nextCursor);
         setHasMore(page.hasMore);
         setTotal(page.total);
+        setError(null);
       } catch (err) {
-        if (cancelled) return;
+        if (seq !== requestSeq.current || quiet) return;
         setError(errorMessage(err, 'Could not load enquiries right now.'));
         setEnquiries([]);
       } finally {
-        if (!cancelled) setLoading(false);
+        // Clear the spinner even when a fresher quiet read already won the race.
+        if (!quiet) setLoading(false);
       }
-    };
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [filter, reloadKey]);
+    },
+    [filter]
+  );
+
+  useEffect(() => {
+    void loadFirstPage(false);
+  }, [loadFirstPage, reloadKey]);
 
   useEffect(() => {
     if (!canAssign || !activeAgencyId) return;
@@ -240,53 +264,55 @@ const AgencyEnquiries: React.FC = () => {
     };
   }, [activeAgencyId, canAssign]);
 
-  // Opening a lead is reading its thread (D8): the detail GET returns the
+  // Reading a lead's thread is reading it (D8): the detail GET returns the
   // messages and stamps the agency's read receipts, so the badge clears as the
-  // sheet opens.
+  // sheet opens — and again when a live frame says the traveller replied while
+  // the thread is on screen.
+  const loadDetail = useCallback(async (id: string, quiet: boolean) => {
+    const seq = ++detailSeq.current;
+    if (!quiet) {
+      setDetailLoading(true);
+      setDetailError(null);
+    }
+    try {
+      const result = await api.getAgencyEnquiry(id);
+      if (seq !== detailSeq.current || selectedIdRef.current !== id) return;
+      setSelected((prev) =>
+        prev && prev.id === result.enquiry.id ? result.enquiry : prev
+      );
+      setEnquiries((prev) =>
+        prev.map((row) =>
+          row.id === result.enquiry.id
+            ? {
+                ...row,
+                status: result.enquiry.status,
+                unread: result.enquiry.unread,
+                replyCount: result.enquiry.replyCount,
+                lastMessageAt: result.enquiry.lastMessageAt,
+                lastMessageBy: result.enquiry.lastMessageBy,
+              }
+            : row
+        )
+      );
+      if (quiet) setDetailError(null);
+    } catch (err) {
+      if (seq !== detailSeq.current || quiet) return;
+      setDetailError(errorMessage(err, 'Could not open this conversation.'));
+    } finally {
+      if (!quiet) setDetailLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (!sheetOpen || !selected?.id) return;
-    let cancelled = false;
-    setDetailLoading(true);
-    setDetailError(null);
-    void api
-      .getAgencyEnquiry(selected.id)
-      .then((result) => {
-        if (cancelled) return;
-        setSelected(result.enquiry);
-        setEnquiries((prev) =>
-          prev.map((row) =>
-            row.id === result.enquiry.id
-              ? {
-                  ...row,
-                  status: result.enquiry.status,
-                  unread: result.enquiry.unread,
-                  replyCount: result.enquiry.replyCount,
-                  lastMessageAt: result.enquiry.lastMessageAt,
-                  lastMessageBy: result.enquiry.lastMessageBy,
-                }
-              : row
-          )
-        );
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setDetailError(
-            errorMessage(err, 'Could not open this conversation.')
-          );
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setDetailLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+    void loadDetail(selected.id, false);
     // `selected` is replaced by this effect's own result, so only its identity
     // should trigger a reload.
-  }, [sheetOpen, selected?.id]);
+  }, [sheetOpen, selected?.id, loadDetail]);
 
   const loadMore = useCallback(async () => {
     if (!cursor || loadingMore) return;
+    const seq = requestSeq.current;
     setLoadingMore(true);
     try {
       const page = await api.getAgencyEnquiries({
@@ -294,16 +320,37 @@ const AgencyEnquiries: React.FC = () => {
         cursor,
         limit: 20,
       });
+      // A live refresh that landed first already replaced the list.
+      if (seq !== requestSeq.current) return;
       setEnquiries((prev) => [...prev, ...page.enquiries]);
       setCursor(page.nextCursor);
       setHasMore(page.hasMore);
       setTotal(page.total);
     } catch (err) {
-      toast.error(errorMessage(err, 'Could not load more enquiries.'));
+      if (seq === requestSeq.current) {
+        toast.error(errorMessage(err, 'Could not load more enquiries.'));
+      }
     } finally {
       setLoadingMore(false);
     }
   }, [cursor, filter, loadingMore]);
+
+  // R3: new leads, traveller replies, read receipts and status changes arrive
+  // as frames. One quiet resync covers the counters and the list; an open sheet
+  // re-reads its thread, which is also what clears its unread badge.
+  const refreshLive = useCallback(async () => {
+    const openId = sheetOpenRef.current ? selectedIdRef.current : null;
+    // Read the open thread first: that GET stamps the receipts, so the list
+    // read that follows cannot put a stale unread badge back on the row.
+    if (openId) await loadDetail(openId, true);
+    await Promise.all([loadFirstPage(true), loadSummary(true)]);
+  }, [loadFirstPage, loadSummary, loadDetail]);
+
+  const liveMode = useEnquiryLiveRefresh(refreshLive, {
+    enabled: Boolean(activeAgencyId),
+    channel: 'agency',
+    streamKey: activeAgencyId ?? undefined,
+  });
 
   const applyUpdate = useCallback(
     async (enquiry: AgencyEnquiry, payload: AgencyEnquiryUpdateInput, label: string) => {
@@ -498,21 +545,32 @@ const AgencyEnquiries: React.FC = () => {
             workspace keeps the whole history.
           </p>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="rounded-xl text-xs font-bold gap-1.5"
-          onClick={() => setReloadKey((key) => key + 1)}
-          disabled={loading || summaryLoading}
-        >
-          {loading || summaryLoading ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <RefreshCw className="h-3.5 w-3.5" />
-          )}
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          {liveMode === 'live' ? (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-2.5 py-1 text-[10px] font-bold text-primary"
+              title="New leads and replies appear here as they arrive"
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+              Live
+            </span>
+          ) : null}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="rounded-xl text-xs font-bold gap-1.5"
+            onClick={() => setReloadKey((key) => key + 1)}
+            disabled={loading || summaryLoading}
+          >
+            {loading || summaryLoading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5" />
+            )}
+            Refresh
+          </Button>
+        </div>
       </div>
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

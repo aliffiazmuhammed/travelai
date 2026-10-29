@@ -1,6 +1,6 @@
 # Milestone 9 — Agency Directory & Enquiries
 
-**Status:** D1–D9 implemented (2026-10-29) — profile contract, agency-side editor, the public listing + profile pages with the public logo route, packages as snapshot cards with a builder and from-price, the public enquiry form with a tenant inbox, the D6 inbox actions + idempotent conversion into a directory client with a quote hand-off, D7 verification, reply time, ops delisting and the launch gate, D8 two-way enquiry conversations and proposal comparison, and D9 requiring a personal account to send an enquiry. The defaults below stand as shipped unless a later decision says otherwise.
+**Status:** D1–D9 implemented (2026-10-29) — profile contract, agency-side editor, the public listing + profile pages with the public logo route, packages as snapshot cards with a builder and from-price, the public enquiry form with a tenant inbox, the D6 inbox actions + idempotent conversion into a directory client with a quote hand-off, D7 verification, reply time, ops delisting and the launch gate, D8 two-way enquiry conversations and proposal comparison, D9 requiring a personal account to send an enquiry, and R1–R3 of the live tier (SSE streams behind `ENABLE_ENQUIRY_SSE`, live traveller list/thread and agency inbox, 20s poll fallback). The defaults below stand as shipped unless a later decision says otherwise.
 **Scope:** give onboarded agencies a public, searchable profile with services and package cards, and give travellers a single enquiry form that lands in the agency's workspace as a lead that can become a client and a quote.
 
 **Basis:** planning read the existing agency domain (`backend/src/models/Agency.ts`, `AgencyQuote.ts`, `AgencyClient`, `services/agency/access.ts`, `plan.ts`, `routes/agency.routes.ts`), the gallery's public-surface patterns (`services/gallery/explore.ts`, `projection.ts`, `traveler.ts`) and the shared gating hook (`frontend/src/hooks/useGalleryEnabled.ts`). No market research is implied.
@@ -84,6 +84,10 @@ Personal realm (D8) — `routes/enquiries.routes.ts` and `routes/proposals.route
 
 | Route | Purpose |
 |---|---|
+| `GET /api/enquiries` | the traveller's own list, cursor paginated, with `proposals: { count, lastAt }` per row |
+| `GET /api/enquiries/summary` | unread, live proposal count and last message time, for badges (R1) |
+| `GET /api/enquiries/events` | SSE stream of this account's enquiry frames; 404 while the live tier is off (R1) |
+| `POST /api/enquiries/:id/read` | explicit read receipt (the thread GET stamps it too) |
 | `GET /api/enquiries/:id` | a signed-in traveller's own thread; marks the agency's replies read |
 | `POST /api/enquiries/:id/messages` | signed-in reply |
 | `GET /api/proposals` | every live proposal answering this account's own enquiries |
@@ -105,7 +109,10 @@ Agency realm (`protectAgency`, mounted under `/api/agency`; D1 ships the four pr
 | `PATCH /api/agency/:agencyId/packages/:packageId` | edit snapshot fields (planner/admin/owner) |
 | `POST /api/agency/:agencyId/packages/:packageId/publish` / `/unpublish`, `DELETE /api/agency/:agencyId/packages/:packageId` | package lifecycle (admin/owner) |
 | `GET /api/agency/enquiries` | inbox: status filter, cursor pagination |
+| `GET /api/agency/enquiries/summary` | counters for the inbox cards and the nav badge |
+| `GET /api/agency/enquiries/events` | SSE stream of this tenant's enquiry frames; 404 while the live tier is off (R1) |
 | `GET /api/agency/enquiries/:id` | one enquiry, tenant-scoped |
+| `POST /api/agency/enquiries/:id/read` | explicit read receipt for the agency side |
 | `PATCH /api/agency/enquiries/:id` | claim (`assignedTo`), change status, record `lostReason` |
 | `POST /api/agency/enquiries/:enquiryId/messages` | **D8:** reply in the thread (planner+); stamps `repliedAt` and moves `new → replied` |
 | `POST /api/agency/enquiries/:id/convert-to-client` | create/reuse an `AgencyClient` with `sourceEnquiryId`; returns the client id |
@@ -291,6 +298,21 @@ Admin routes deliberately do **not** expose enquiry contents; that is client PII
 
 **Acceptance:** a guest sees the sign-in prompt and no form, and a guest `POST` is refused; a signed-in submission lands in the agency inbox and in `/enquiries`; the `/auth` round-trip reopens the dialog with the package preselected; a new enquiry never stores a conversation token.
 
+### R1–R3 — Live enquiry updates
+
+**Status:** implemented and verified 2026-10-29 in three phases — R1 backend streams, R2 traveller list and thread, R3 agency inbox. R4 (this documentation pass, the blueprint flag and the polling audit) closes the batch.
+
+**Goal:** replies, new leads and read receipts appear without a refresh, without turning delivery into an authorization path.
+
+- **Transport is SSE, not Socket.IO.** `services/realtime/enquiryEvents.ts` keeps an in-process bus keyed `user:<id>` / `agency:<id>`, with frames `enquiry:new|message|updated|read` and `proposal:new`. Frames are hints: the client answers each burst with a quiet GET, so a missed frame, a reconnect or a deploy degrades to "the next read is right". Live delivery never authorizes anything — every read and write stays scoped by the personal or agency session.
+- **Dark by default.** `ENABLE_ENQUIRY_SSE` gates both stream routes (they answer the standard JSON 404 when off) and is advertised as `enquiries.sse` on `GET /api/health`; `render.yaml` turns it on, mirroring `ENABLE_TRIP_SSE`. `ENQUIRY_SSE_MAX_STREAMS` caps concurrent streams per channel, closing the oldest first.
+- **Single-instance fan-out.** The bus lives in process memory; a multi-instance deployment would need a shared transport. The free blueprint runs one service, so this is deferred rather than hidden.
+- **Client behaviour** (`frontend/src/hooks/useEnquiryEvents.ts`): opens the account's stream, coalesces a burst into one refresh (1s debounce), deliberately drops frames while the tab is hidden and does one catch-up read on return, and falls back to a 20s visible-tab poll when the tier is off or the stream errors. `/enquiries`, `/enquiry/:id`, `/agency/enquiries` and its open sheet all use it; the private guest link keeps plain reads because it has no account channel.
+- **Read receipts stay meaningful.** Opening a thread (either side) still marks that side read. With the agency sheet open, a frame re-reads the thread before the list, so the list cannot restore an unread badge the read just cleared.
+- **Deferred:** email/WhatsApp notification, a live nav badge outside the inbox, cross-instance fan-out, and a multi-epoch thread archive.
+
+**Verified 2026-10-29:** backend suite 884/884; frontend typecheck, lint and production build clean. Browser smokes with `ENABLE_ENQUIRY_SSE=true`: the traveller list flipped to "Replied · N new" in place, an open thread appended a reply without navigating, the agency inbox gained a lead at the top with counters moving, an agency reply flipped sheet and card to Replied, and a `Won` filter correctly withheld a new lead. With the flag off, R2 proved the 20s poll path (stale at ~10s, updated after the tick). Synthetic accounts, enquiries and audit rows were deleted afterwards.
+
 ## 6. Build order and dependencies
 
 | Order | Milestone | Depends on |
@@ -304,6 +326,7 @@ Admin routes deliberately do **not** expose enquiry contents; that is client PII
 | 7 | D7 verification, ops, launch | D3–D6 |
 | 8 | D8 conversations + proposal comparison | D5, D6, A7 |
 | 9 | D9 sign-in gate on the enquiry write | D5, D8 |
+| 10 | R1–R3 live enquiry tier | D5, D8 |
 
 D4 can run in parallel with D5 if split across sessions; nothing else parallelises cleanly because the projection contract is shared.
 

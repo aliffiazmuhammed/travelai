@@ -28,6 +28,11 @@ import {
   type ConversationMessageView,
   type ConversationUnreadView,
 } from './conversations.js';
+import {
+  emitEnquiryCreated,
+  emitEnquiryRead,
+  emitEnquiryUpdated,
+} from '../realtime/enquiryEvents.js';
 import { loadPublicAgencyRecord } from './profile.js';
 
 /**
@@ -408,6 +413,8 @@ export async function submitAgencyEnquiry(input: {
     status: 'new',
   });
 
+  emitEnquiryCreated(enquiry);
+
   return {
     id: String(enquiry._id),
     status: enquiry.status,
@@ -681,9 +688,12 @@ export async function getAgencyEnquiry(
     throw new AppError('Enquiry not found.', 404);
   }
   // Opening a lead is reading its thread (D8): stamp the receipts before the
-  // projection, so the badge and the messages agree.
+  // projection, so the badge and the messages agree. The traveller's channel
+  // hears about it only when a receipt actually moved (R1).
+  const hadUnread = conversationMeta(row).unread.agency > 0;
   const now = await markAgencyConversationRead(agencyId, String(row._id));
   applyConversationRead(row, 'agency', now);
+  if (hadUnread) emitEnquiryRead(row, 'agency');
   const [packages, relations] = await Promise.all([
     packageViews(agencyId, [row], true),
     loadEnquiryRelations(agencyId, [row]),
@@ -842,6 +852,46 @@ export async function listOwnEnquiries(input: {
     hasMore: rows.length > limit,
     total,
   };
+}
+
+export interface OwnEnquirySummaryView {
+  /** Agency messages this account has not opened, across every enquiry. */
+  unread: number;
+  /** Live proposals answering any of them (same rule as the list badge). */
+  liveProposals: number;
+  lastMessageAt: string | null;
+}
+
+/**
+ * Badge counters for the traveller's nav and `/enquiries` (R1).
+ *
+ * Deliberately one read over the account's own rows: a traveller has few
+ * enquiries, the thread array is capped, and computing both counters from the
+ * same rows keeps them consistent with the list the page renders. No thread
+ * content leaves this function — just numbers and one timestamp.
+ */
+export async function getOwnEnquirySummary(
+  userId: string
+): Promise<OwnEnquirySummaryView> {
+  const rows = (await AgencyEnquiry.find({ userId })
+    .select('_id clientId messages lastMessageAt')
+    .lean()) as any[];
+
+  let unread = 0;
+  let lastMessageAt: string | null = null;
+  for (const row of rows) {
+    const meta = conversationMeta(row);
+    unread += meta.unread.traveller;
+    if (meta.lastMessageAt && (!lastMessageAt || meta.lastMessageAt > lastMessageAt)) {
+      lastMessageAt = meta.lastMessageAt;
+    }
+  }
+
+  const proposals = await liveProposalsByEnquiry(rows);
+  let liveProposals = 0;
+  for (const entry of proposals.values()) liveProposals += entry.count;
+
+  return { unread, liveProposals, lastMessageAt };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1059,6 +1109,8 @@ export async function updateAgencyEnquiry(
     },
   });
 
+  emitEnquiryUpdated(updated);
+
   const [packages, relations] = await Promise.all([
     packageViews(input.agencyId, [updated], true),
     loadEnquiryRelations(input.agencyId, [updated]),
@@ -1100,6 +1152,7 @@ async function markEnquiryConverted(
   if (!updated) {
     throw new AppError('Enquiry not found.', 404);
   }
+  emitEnquiryUpdated(updated);
   return updated;
 }
 

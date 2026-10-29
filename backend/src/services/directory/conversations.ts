@@ -19,6 +19,10 @@ import {
   tokenHint,
   type LinkOriginHints,
 } from '../collab/invites.js';
+import {
+  emitEnquiryMessage,
+  emitEnquiryRead,
+} from '../realtime/enquiryEvents.js';
 
 /**
  * The two-way enquiry thread (Milestone 9 D8).
@@ -294,6 +298,10 @@ async function pushMessage(input: PushMessageInput): Promise<any> {
   const now = new Date();
   const row = input.row;
 
+  // Replying is reading, so capture whether the other side still had unread
+  // messages: the stream only tells them "seen" when a receipt actually moved.
+  const readSomething = conversationMeta(row).unread[input.author] > 0;
+
   await markRead(row._id, input.author, now);
 
   const message = {
@@ -336,6 +344,22 @@ async function pushMessage(input: PushMessageInput): Promise<any> {
   if (!updated) {
     throw new AppError('Enquiry not found.', 404);
   }
+
+  if (readSomething) emitEnquiryRead(updated, input.author);
+
+  const last = Array.isArray(updated.messages)
+    ? updated.messages[updated.messages.length - 1]
+    : null;
+  if (last) {
+    const meta = conversationMeta(updated);
+    emitEnquiryMessage(updated, {
+      message: projectConversationMessage(last),
+      unread: meta.unread,
+      lastMessageAt: meta.lastMessageAt,
+      lastMessageBy: meta.lastMessageBy,
+    });
+  }
+
   return updated;
 }
 
@@ -466,9 +490,11 @@ export async function getConversationByToken(
   rawToken: unknown
 ): Promise<ConversationView> {
   const { row, agency } = await loadConversationByToken(rawToken);
+  const hadUnread = conversationMeta(row).unread.traveller > 0;
   const now = new Date();
   await markRead(row._id, 'traveller', now);
   applyReadInMemory(row, 'traveller', now);
+  if (hadUnread) emitEnquiryRead(row, 'traveller');
   return buildConversationView(row, agency, {
     expiresAt: row.conversationTokenExpiresAt,
   });
@@ -483,10 +509,48 @@ export async function getOwnConversation(
   const agency = (await Agency.findById(row.agencyId)
     .select('name slug')
     .lean()) as any;
+  const hadUnread = conversationMeta(row).unread.traveller > 0;
   const now = new Date();
   await markRead(row._id, 'traveller', now);
   applyReadInMemory(row, 'traveller', now);
+  if (hadUnread) emitEnquiryRead(row, 'traveller');
   return buildConversationView(row, agency);
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Read receipts (R1)                                                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A traveller's explicit receipt, without re-reading the thread.
+ *
+ * The GET above also marks read, which is convenient but dangerous for live
+ * updates: a background refresh would silently clear a badge. The SPA calls
+ * this when the thread is actually on screen instead.
+ */
+export async function markOwnConversationRead(
+  userId: string,
+  enquiryId: string
+): Promise<ConversationUnreadView> {
+  const row = await loadOwnRow(userId, enquiryId);
+  const unread = conversationMeta(row).unread;
+  if (unread.traveller === 0) return unread;
+  await markRead(row._id, 'traveller', new Date());
+  emitEnquiryRead(row, 'traveller');
+  return { ...unread, traveller: 0 };
+}
+
+/** The same receipt on the tenant side, scoped to the session agency. */
+export async function markAgencyEnquiryRead(
+  agencyId: string,
+  enquiryId: string
+): Promise<ConversationUnreadView> {
+  const row = await loadAgencyRow(agencyId, enquiryId);
+  const unread = conversationMeta(row).unread;
+  if (unread.agency === 0) return unread;
+  await markAgencyConversationRead(agencyId, String(row._id));
+  emitEnquiryRead(row, 'agency');
+  return { ...unread, agency: 0 };
 }
 
 /* -------------------------------------------------------------------------- */

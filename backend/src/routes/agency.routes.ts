@@ -79,6 +79,8 @@ import {
   getAgencyEnquiryHandler,
   getAgencyEnquirySummaryHandler,
   listAgencyEnquiriesHandler,
+  markAgencyEnquiryReadHandler,
+  subscribeAgencyEnquiryEvents,
   updateAgencyEnquiryHandler,
 } from '../controllers/enquiries.controller.js';
 import { sendAgencyEnquiryMessageHandler } from '../controllers/conversations.controller.js';
@@ -134,6 +136,7 @@ import {
   agencyInviteCreateLimiter,
   agencyTemplateUploadLimiter,
   agencyWideExportLimiter,
+  enquiryStreamLimiter,
   inviteAcceptLimiter,
   inviteManageLimiter,
   invitePreviewLimiter,
@@ -215,6 +218,14 @@ router.get(
   requireAgencyMember(),
   getAgencyEnquirySummaryHandler
 );
+// Live inbox stream (M9 R1). Same reason as `summary`: "events" is not an id.
+router.get(
+  '/enquiries/events',
+  protectAgency,
+  requireAgencyMember(),
+  enquiryStreamLimiter,
+  subscribeAgencyEnquiryEvents
+);
 router.get(
   '/enquiries/:enquiryId',
   protectAgency,
@@ -242,6 +253,14 @@ router.post(
   requireAgencyRole('planner'),
   validate(conversationMessageSchema),
   sendAgencyEnquiryMessageHandler
+);
+// Explicit inbox receipt (M9 R1): opening the lead also stamps it, but the SPA
+// needs a way to clear the badge without re-fetching a thread it holds.
+router.post(
+  '/enquiries/:enquiryId/read',
+  protectAgency,
+  requireAgencyMember(),
+  markAgencyEnquiryReadHandler
 );
 
 // PA0: self-service agency creation is gone. Tenants are provisioned by the

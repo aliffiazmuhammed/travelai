@@ -38,6 +38,11 @@ services:
       # 20s poll for comments, polls and decisions), but production wants it on.
       - key: ENABLE_TRIP_SSE
         value: "true"
+      # Enquiry live tier (M9 R1-R3). Off means both enquiry streams answer 404
+      # and the lists fall back to a 20s visible-tab poll, so it is safe to
+      # leave off — but production wants it on.
+      - key: ENABLE_ENQUIRY_SSE
+        value: "true"
       # Agency workspace (A1-A9). Enabled after local hardening and the
       # simulated pilot; set to "false" as the emergency kill switch.
       - key: AGENCY_WORKSPACE_ENABLED

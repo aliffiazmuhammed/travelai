@@ -7,6 +7,13 @@ import AgencyPackage from '../../models/AgencyPackage.js';
 import User from '../../models/User.js';
 import { hashToken } from '../collab/invites.js';
 import {
+  agencyChannel,
+  openStream,
+  resetForTests as resetBus,
+  userChannel,
+  type EnquiryEvent,
+} from '../realtime/enquiryEvents.js';
+import {
   appendAgencyMessage,
   appendGuestMessage,
   appendOwnMessage,
@@ -16,6 +23,8 @@ import {
   getConversationByToken,
   getOwnConversation,
   markAgencyConversationRead,
+  markAgencyEnquiryRead,
+  markOwnConversationRead,
   mintConversationToken,
   projectConversationMessage,
 } from './conversations.js';
@@ -162,6 +171,8 @@ function matchesFilter(row: any, filter: any): boolean {
   auditRows.push(doc);
   return doc;
 };
+
+test.beforeEach(() => resetBus());
 
 const HOUR = 3_600_000;
 
@@ -569,6 +580,136 @@ test('a package enquiry resolves its title from the same tenant', async () => {
 
   const conversation = await getConversationByToken(GUEST_TOKEN);
   assert.equal(conversation.enquiry.packageTitle, 'Spiti Loop');
+});
+
+/* -------------------------------------------------------------------------- */
+/*  Live frames (R1)                                                          */
+/* -------------------------------------------------------------------------- */
+
+function watch(...channels: string[]): Map<string, EnquiryEvent[]> {
+  const seen = new Map<string, EnquiryEvent[]>();
+  for (const channel of channels) {
+    const events: EnquiryEvent[] = [];
+    openStream(channel, { deliver: (event) => events.push(event), close: () => {} });
+    seen.set(channel, events);
+  }
+  return seen;
+}
+
+test('an agency reply fans out to the tenant and the traveller', async () => {
+  reset();
+  enquiryRows = [row({ messages: [message({ author: 'traveller' })] })];
+  const seen = watch(agencyChannel(AGENCY_ID), userChannel(USER_ID));
+
+  await appendAgencyMessage({
+    agencyId: AGENCY_ID,
+    enquiryId: ENQUIRY_ID,
+    actorId: ACTOR_ID,
+    actorRole: 'planner',
+    body: 'Sending a plan today.',
+  });
+
+  const tenant = seen.get(agencyChannel(AGENCY_ID))!;
+  assert.deepEqual(
+    tenant.map((event) => event.type),
+    ['enquiry:message']
+  );
+
+  const traveller = seen.get(userChannel(USER_ID))!;
+  assert.deepEqual(
+    traveller.map((event) => event.type),
+    ['enquiry:read', 'enquiry:message'],
+    'replying is reading, then the reply itself'
+  );
+
+  const frame = traveller[1] as any;
+  assert.equal(frame.message.author, 'agency');
+  assert.equal(frame.message.body, 'Sending a plan today.');
+  assert.equal(frame.status, 'replied', 'the frame carries the new status');
+  assert.deepEqual(frame.unread, { agency: 0, traveller: 1 });
+  assert.equal(frame.lastMessageBy, 'agency');
+});
+
+test('a traveller reply notifies the inbox', async () => {
+  reset();
+  userRow = { _id: USER_ID, name: 'Asha Rao', email: 'asha@example.com' };
+  enquiryRows = [
+    row({
+      status: 'replied',
+      messages: [
+        message({ author: 'agency', authorName: 'Ravi', readByTravellerAt: null }),
+      ],
+    }),
+  ];
+  const seen = watch(agencyChannel(AGENCY_ID));
+
+  await appendOwnMessage({
+    userId: USER_ID,
+    enquiryId: ENQUIRY_ID,
+    body: 'That works, thank you.',
+  });
+
+  const tenant = seen.get(agencyChannel(AGENCY_ID))!;
+  assert.deepEqual(
+    tenant.map((event) => event.type),
+    ['enquiry:read', 'enquiry:message'],
+    'the traveller replying also reads the agency’s earlier reply'
+  );
+  const frame = tenant[1] as any;
+  assert.equal(frame.message.author, 'traveller');
+  assert.equal(frame.message.authorName, 'Asha Rao');
+  assert.deepEqual(frame.unread, { agency: 1, traveller: 0 });
+});
+
+test('opening a lead notifies the traveller only when a receipt moved', async () => {
+  reset();
+  enquiryRows = [
+    row({ messages: [message({ author: 'traveller', readByAgencyAt: null })] }),
+  ];
+  const seen = watch(userChannel(USER_ID));
+
+  const first = await markAgencyEnquiryRead(AGENCY_ID, ENQUIRY_ID);
+  assert.deepEqual(first, { agency: 0, traveller: 0 });
+  assert.deepEqual(
+    seen.get(userChannel(USER_ID))!.map((event) => event.type),
+    ['enquiry:read']
+  );
+
+  // A second open has nothing left to stamp, so it must stay silent.
+  await markAgencyEnquiryRead(AGENCY_ID, ENQUIRY_ID);
+  assert.equal(seen.get(userChannel(USER_ID))!.length, 1);
+});
+
+test('the traveller’s explicit receipt notifies the inbox and clears the counter', async () => {
+  reset();
+  enquiryRows = [
+    row({
+      messages: [message({ author: 'agency', authorName: 'Ravi', readByTravellerAt: null })],
+    }),
+  ];
+  const seen = watch(agencyChannel(AGENCY_ID));
+
+  const unread = await markOwnConversationRead(USER_ID, ENQUIRY_ID);
+
+  assert.deepEqual(unread, { agency: 0, traveller: 0 });
+  assert.deepEqual(
+    seen.get(agencyChannel(AGENCY_ID))!.map((event) => event.type),
+    ['enquiry:read']
+  );
+  assert.equal(enquiryRows[0].messages[0].readByTravellerAt !== null, true);
+});
+
+test('a thread read that was already clear emits nothing', async () => {
+  reset();
+  enquiryRows = [
+    row({
+      messages: [message({ author: 'agency', readByTravellerAt: new Date() })],
+    }),
+  ];
+  const seen = watch(agencyChannel(AGENCY_ID));
+
+  await markOwnConversationRead(USER_ID, ENQUIRY_ID);
+  assert.equal(seen.get(agencyChannel(AGENCY_ID))!.length, 0);
 });
 
 /* Restore the model methods this suite replaced. */

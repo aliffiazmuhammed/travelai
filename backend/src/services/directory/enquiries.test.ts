@@ -15,12 +15,20 @@ import {
   updateAgencyEnquirySchema,
 } from '../../schemas/agencyEnquiry.schema.js';
 import {
+  agencyChannel,
+  openStream,
+  resetForTests as resetBus,
+  userChannel,
+  type EnquiryEvent,
+} from '../realtime/enquiryEvents.js';
+import {
   buildAgencyEnquiryFields,
   convertAgencyEnquiry,
   decodeEnquiryCursor,
   encodeEnquiryCursor,
   getAgencyEnquiry,
   getAgencyEnquirySummary,
+  getOwnEnquirySummary,
   listAgencyEnquiries,
   listOwnEnquiries,
   normalizeEnquiryDates,
@@ -287,6 +295,8 @@ function reset() {
   lastPackageFilter = null;
   agencyFindResults = [];
 }
+
+test.beforeEach(() => resetBus());
 
 function validBody(overrides: Record<string, unknown> = {}) {
   return {
@@ -978,6 +988,162 @@ test('the quote hand-off trip id and the internal fields are tenant-only', async
   assert.equal(own.enquiries[0].assignedTo, null);
   assert.equal(own.enquiries[0].assignee, null);
   assert.equal(own.enquiries[0].lostReason, null);
+});
+
+/* -------------------------------------------------------------------------- */
+/*  Live frames and the personal summary (R1)                                 */
+/* -------------------------------------------------------------------------- */
+
+function watchFrames(...channels: string[]): Map<string, EnquiryEvent[]> {
+  const seen = new Map<string, EnquiryEvent[]>();
+  for (const channel of channels) {
+    const events: EnquiryEvent[] = [];
+    openStream(channel, { deliver: (event) => events.push(event), close: () => {} });
+    seen.set(channel, events);
+  }
+  return seen;
+}
+
+test('submitting an enquiry notifies the tenant inbox', async () => {
+  reset();
+  const seen = watchFrames(agencyChannel(AGENCY_ID), userChannel(USER_ID));
+
+  await submitAgencyEnquiry({
+    slug: 'himalaya-trails',
+    body: validBody(),
+    userId: USER_ID,
+  });
+
+  const tenant = seen.get(agencyChannel(AGENCY_ID))!;
+  assert.deepEqual(
+    tenant.map((event) => event.type),
+    ['enquiry:new']
+  );
+  assert.equal((tenant[0] as any).enquiryId, ENQUIRY_ID);
+  assert.equal((tenant[0] as any).status, 'new');
+  assert.equal(
+    seen.get(userChannel(USER_ID))!.length,
+    0,
+    'the traveller already has the acknowledgement inline'
+  );
+});
+
+test('a status change fans out to both sides without the internal assignee', async () => {
+  reset();
+  enquiryRows = [enquiryRow({ userId: USER_ID })];
+  const seen = watchFrames(agencyChannel(AGENCY_ID), userChannel(USER_ID));
+
+  await updateAgencyEnquiry({
+    agencyId: AGENCY_ID,
+    enquiryId: ENQUIRY_ID,
+    actorId: ACTOR_ID,
+    actorRole: 'planner',
+    status: 'lost',
+    lostReason: 'Budget too small',
+  });
+
+  for (const channel of [agencyChannel(AGENCY_ID), userChannel(USER_ID)]) {
+    const frames = seen.get(channel)!;
+    assert.deepEqual(
+      frames.map((event) => event.type),
+      ['enquiry:updated']
+    );
+    assert.equal((frames[0] as any).status, 'lost');
+    assert.deepEqual(Object.keys(frames[0]).sort(), ['at', 'enquiryId', 'status', 'type']);
+  }
+});
+
+test('converting a lead tells the traveller it was won', async () => {
+  reset();
+  enquiryRows = [enquiryRow({ userId: USER_ID })];
+  const seen = watchFrames(userChannel(USER_ID));
+
+  await convertAgencyEnquiry({
+    agencyId: AGENCY_ID,
+    enquiryId: ENQUIRY_ID,
+    actorId: ACTOR_ID,
+  });
+
+  assert.deepEqual(
+    seen.get(userChannel(USER_ID))!.map((event) => event.type),
+    ['enquiry:updated']
+  );
+  assert.equal((seen.get(userChannel(USER_ID))![0] as any).status, 'won');
+});
+
+test('opening a lead in the inbox sends a read receipt only once', async () => {
+  reset();
+  enquiryRows = [
+    enquiryRow({
+      userId: USER_ID,
+      messages: [
+        {
+          _id: '64c0000000000000000006f1',
+          author: 'traveller',
+          authorName: 'Asha Rao',
+          body: 'Hello there',
+          createdAt: new Date('2026-10-28T09:00:00.000Z'),
+          readByAgencyAt: null,
+          readByTravellerAt: null,
+        },
+      ],
+    }),
+  ];
+  const seen = watchFrames(userChannel(USER_ID));
+
+  await getAgencyEnquiry(AGENCY_ID, ENQUIRY_ID);
+  await getAgencyEnquiry(AGENCY_ID, ENQUIRY_ID);
+
+  assert.deepEqual(
+    seen.get(userChannel(USER_ID))!.map((event) => event.type),
+    ['enquiry:read']
+  );
+});
+
+test('the personal summary counts unread replies and live proposals', async () => {
+  reset();
+  enquiryRows = [
+    enquiryRow({
+      userId: USER_ID,
+      messages: [
+        {
+          _id: '64c0000000000000000006f2',
+          author: 'agency',
+          authorName: 'Ravi',
+          body: 'Here is a plan',
+          createdAt: new Date('2026-10-28T10:00:00.000Z'),
+          readByAgencyAt: new Date('2026-10-28T10:00:00.000Z'),
+          readByTravellerAt: null,
+        },
+      ],
+      lastMessageAt: new Date('2026-10-28T10:00:00.000Z'),
+      lastMessageBy: 'agency',
+    }),
+    enquiryRow({
+      _id: OTHER_ENQUIRY_ID,
+      userId: USER_ID,
+      clientId: CLIENT_ID,
+      messages: [],
+    }),
+  ];
+  proposalLinkRows = [
+    {
+      _id: '64c0000000000000000006f3',
+      agencyId: AGENCY_ID,
+      enquiryId: OTHER_ENQUIRY_ID,
+      quoteId: null,
+      revokedAt: null,
+      expiresAt: new Date(Date.now() + 86_400_000),
+      createdAt: new Date('2026-10-28T11:00:00.000Z'),
+    },
+  ];
+
+  const summary = await getOwnEnquirySummary(USER_ID);
+
+  assert.equal(summary.unread, 1);
+  assert.equal(summary.liveProposals, 1);
+  assert.equal(summary.lastMessageAt, '2026-10-28T10:00:00.000Z');
+  assert.deepEqual(lastEnquiryFilter, { userId: USER_ID }, 'the summary stays account-scoped');
 });
 
 test.after(() => {

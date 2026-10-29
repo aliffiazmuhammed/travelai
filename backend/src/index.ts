@@ -162,6 +162,11 @@ app.get('/api/health', (_req, res) => {
     collab: {
       sse: env.ENABLE_TRIP_SSE,
     },
+    // M9 R1: the SPA subscribes to `/api/enquiries/events` and the agency
+    // inbox stream only when this is true, so a dark tier never retry-spams.
+    enquiries: {
+      sse: env.ENABLE_ENQUIRY_SSE,
+    },
     // Agency feature discovery. The namespace is dark by default; the
     // frontend must not render agency navigation or call `/api/agency` unless
     // this is true. The milestone marker tracks the latest implemented

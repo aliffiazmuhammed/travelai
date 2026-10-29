@@ -638,3 +638,30 @@ export const conversationWriteLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+/* -------------------------------------------------------------------------- */
+/*  Enquiry live streams (M9 R1)                                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * One SSE connection is one tab; EventSource reconnects after a deploy, a wake
+ * from sleep or a flaky network. Sixty per quarter hour per signed-in account
+ * (falling back to the IP) absorbs that churn while still bounding a client
+ * that reconnects in a tight loop. The per-channel stream cap is the backstop.
+ */
+const enquiryStreamKey = (req: any): string =>
+  req?.userId ? `user:${req.userId}` : `ip:${req?.ip ?? 'anonymous'}`;
+
+export const enquiryStreamLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  keyGenerator: enquiryStreamKey,
+  validate: false,
+  message: {
+    success: false,
+    error: 'Live updates are reconnecting too often. Please refresh in a moment.',
+    message: 'Live updates are reconnecting too often. Please refresh in a moment.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});

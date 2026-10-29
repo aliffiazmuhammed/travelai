@@ -73,6 +73,17 @@ const envSchema = z.object({
     .optional()
     .transform((value) => value !== undefined && value !== '' && value !== 'false'),
   PRESENCE_TTL_MS: z.coerce.number().positive().default(30000),
+  // M9 R1 enquiry live tier. Same string-first parse as ENABLE_TRIP_SSE, and
+  // dark by default: `/api/enquiries/events` and its agency twin answer 404
+  // until this is explicitly on.
+  ENABLE_ENQUIRY_SSE: z
+    .string()
+    .optional()
+    .transform((value) => value !== undefined && value !== '' && value !== 'false'),
+  // Concurrent streams kept per channel (`user:<id>` / `agency:<id>`). The
+  // oldest stream is closed past the cap so a single runaway tab cannot pin
+  // unbounded memory; an agency channel is shared by every member's tab.
+  ENQUIRY_SSE_MAX_STREAMS: z.coerce.number().int().positive().default(25),
   // Agency Workspace (A0). Dark by default; A1 adds the tenancy layer and the
   // first write routes. Only explicit truthy values enable the namespace.
   AGENCY_WORKSPACE_ENABLED: z
