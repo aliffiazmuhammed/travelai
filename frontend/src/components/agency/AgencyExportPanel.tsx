@@ -40,6 +40,7 @@ import PdfDocumentViewer from '@/components/agency/PdfDocumentViewer';
 import { API_BASE_URL } from '@/config';
 import { useAgency } from '@/context/AgencyContext';
 import { formatAgencyDate } from '@/lib/agency';
+import { formatDateOnly } from '@/lib/date';
 import { base64PdfToBytes } from '@/lib/pdfjs';
 import { templateVersionNumber } from '@/lib/templates';
 import { cn } from '@/lib/utils';
@@ -1022,7 +1023,7 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
                       {quoteStatusLabel[quote.status]}
                     </Badge>
                     <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                      Valid until {formatAgencyDate(quote.validUntil)}
+                      Valid until {formatDateOnly(quote.validUntil)}
                     </span>
                   </div>
                   <div className="grid grid-cols-2 gap-2">

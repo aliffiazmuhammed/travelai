@@ -33,6 +33,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useAgency } from '@/context/AgencyContext';
 import { useAgencyAuth } from '@/context/AgencyAuthContext';
 import { formatAgencyDate } from '@/lib/agency';
+import { formatDateOnly } from '@/lib/date';
 import { cn } from '@/lib/utils';
 import { api } from '@/services/api';
 import type {
@@ -398,6 +399,8 @@ interface AgencyQuotePanelProps {
   prefillParty?: { adults: number; children: number };
   /** Sending a quote does not deliver a document; the Export tab does. */
   onOpenExportTab?: () => void;
+  /** Days with real content in the trip's plan; zero means a blank trip. */
+  plannedDayCount?: number;
 }
 
 /**
@@ -416,6 +419,7 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
   prefillClientId,
   prefillParty,
   onOpenExportTab,
+  plannedDayCount,
 }) => {
   const { activeAgency, canManage } = useAgency();
   const { user } = useAgencyAuth();
@@ -1006,24 +1010,46 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
                     Cancel quote
                   </Button>
                 ) : null}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={startEditing}
-                  disabled={busy}
-                >
-                  <Plus className="mr-1.5 h-3.5 w-3.5" />
-                  {quote.status === 'expired'
-                    ? 'Renew quote'
-                    : quote.status === 'cancelled'
-                      ? 'Revise quote'
-                      : 'New version'}
-                </Button>
+                {quote.status !== 'accepted' ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={startEditing}
+                    disabled={busy}
+                  >
+                    <Plus className="mr-1.5 h-3.5 w-3.5" />
+                    {quote.status === 'expired'
+                      ? 'Renew quote'
+                      : quote.status === 'cancelled'
+                        ? 'Revise quote'
+                        : 'New version'}
+                  </Button>
+                ) : null}
               </>
             ) : null}
           </div>
         </CardContent>
       </Card>
+
+      {canPlan && !quote?.acceptedAt && (plannedDayCount ?? 0) === 0 ? (
+        <Card className="rounded-3xl border-amber-200 bg-amber-50/60 dark:border-amber-900/60 dark:bg-amber-950/20">
+          <CardContent className="flex items-start gap-3 p-4">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
+              <AlertTriangle className="h-4 w-4" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold">
+                This trip has no day-by-day plan yet
+              </p>
+              <p className="mt-0.5 max-w-xl text-xs text-slate-600 dark:text-slate-400">
+                The quote can still go out, but the traveller would open an
+                empty itinerary beside it. Add a few days first if you want
+                them to see what they are paying for.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {quote && !editing && !viewingOldVersion && quote.status === 'sent' ? (
         <Card
@@ -1717,7 +1743,7 @@ const QuoteDetails: React.FC<{
           </div>
           <div className="mt-0.5 flex items-center gap-1.5 text-sm font-semibold">
             <CalendarDays className="h-3.5 w-3.5" />
-            {formatAgencyDate(quote.validUntil)}
+            {formatDateOnly(quote.validUntil)}
           </div>
           <div className="text-xs text-slate-500">
             {quote.sentAt
@@ -2039,7 +2065,7 @@ const QuotePreviewCard: React.FC<QuotePreviewCardProps> = ({
         <div className="flex items-center justify-between gap-2 rounded-xl border border-dashed border-slate-200 px-3 py-2 text-[11px] text-slate-600 dark:border-slate-800 dark:text-slate-400">
           <span className="flex items-center gap-1.5">
             <CalendarDays className="h-3.5 w-3.5" />
-            Valid until {formatAgencyDate(data.validUntil)}
+            Valid until {formatDateOnly(data.validUntil)}
           </span>
           {!hideMargin && data.preparedBy ? (
             <span>Prepared by {data.preparedBy}</span>

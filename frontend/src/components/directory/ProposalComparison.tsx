@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { formatMoney } from '@/lib/currency';
-import { formatDate } from '@/lib/date';
+import { formatDate, formatDateOnly } from '@/lib/date';
 import { cn } from '@/lib/utils';
 import type { AgencyProposalSummary } from '@/types/agency';
 
@@ -212,7 +212,7 @@ const ProposalCard: React.FC<{
           </div>
           {open ? (
             <div className="col-span-2 text-[10px] text-muted-foreground">
-              {quote.validUntil ? `Price held until ${formatDate(quote.validUntil)}` : 'No expiry given'}
+              {quote.validUntil ? `Price held until ${formatDateOnly(quote.validUntil)}` : 'No expiry given'}
             </div>
           ) : null}
         </div>

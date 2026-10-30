@@ -12,7 +12,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { formatMoney } from '@/lib/currency';
-import { formatDate } from '@/lib/date';
+import { formatDate, formatDateOnly } from '@/lib/date';
 import type { AgencyProposalView } from '@/types/agency';
 
 /**
@@ -150,7 +150,7 @@ export const ProposalPreviewDialog: React.FC<ProposalPreviewDialogProps> = ({
                 <Summary label="Status" value={quote.status} />
                 <Summary
                   label="Valid until"
-                  value={quote.validUntil ? formatDate(quote.validUntil) : '—'}
+                  value={quote.validUntil ? formatDateOnly(quote.validUntil) : '—'}
                 />
               </div>
             ) : null}

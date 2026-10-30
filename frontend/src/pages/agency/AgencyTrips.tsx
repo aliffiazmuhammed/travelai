@@ -66,6 +66,26 @@ const errorMessage = (error: unknown, fallback: string): string =>
   error instanceof Error && error.message ? error.message : fallback;
 
 /**
+ * Every agency trip is seeded with placeholder days ("Day 1", empty lists), so
+ * the raw day count never says whether the plan was written. A day counts once
+ * it holds something the traveller would actually read.
+ */
+function plannedDayCount(data?: ItineraryData | null): number {
+  const days = data?.day_by_day_itinerary ?? [];
+  return days.filter((day) => {
+    const title = (day.title ?? '').trim();
+    return (
+      (title.length > 0 && title !== `Day ${day.day}`) ||
+      (day.activities?.length ?? 0) > 0 ||
+      (day.stay_recommendations?.length ?? 0) > 0 ||
+      (day.transport?.length ?? 0) > 0 ||
+      (day.food_spots?.length ?? 0) > 0 ||
+      (day.pro_tip?.length ?? 0) > 0
+    );
+  }).length;
+}
+
+/**
  * Agency trip library (A2).
  *
  * The personal Dashboard and this page intentionally share the presentation
@@ -608,6 +628,7 @@ const AgencyTrips: React.FC = () => {
                 tripEndDate={selectedTrip.endDate}
                 prefillClientId={prefillClientId}
                 prefillParty={prefillParty}
+                plannedDayCount={plannedDayCount(selectedTrip.tripDetails)}
                 onOpenExportTab={() => switchTab('export')}
               />
             </div>

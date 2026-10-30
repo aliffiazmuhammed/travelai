@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/services/api";
 import { formatMoney } from "@/lib/currency";
-import { formatDate } from "@/lib/date";
+import { formatDate, formatDateOnly } from "@/lib/date";
 import type { AgencyProposalView } from "@/types/agency";
 import {
   AlertCircle,
@@ -381,7 +381,7 @@ const ProposalShare: React.FC = () => {
                       <div className="flex justify-between text-[11px] text-muted-foreground">
                         <span>Quote valid until</span>
                         <span>
-                          {formatDate(quote.validUntil)}
+                          {formatDateOnly(quote.validUntil)}
                         </span>
                       </div>
                     ) : null}

@@ -8,7 +8,7 @@ import {
   ShieldAlert,
   Utensils,
 } from 'lucide-react';
-import { formatDate } from '@/lib/date';
+import { formatDate, formatDateOnly } from '@/lib/date';
 import { formatMoney } from '@/lib/currency';
 import type { AgencyExportDocument, AgencyExportDay } from '@/types/agency';
 
@@ -75,7 +75,7 @@ export const LiveProposalDocument: React.FC<LiveProposalDocumentProps> = ({
           <p className="text-[11px] text-muted-foreground">
             {quote.number} · v{quote.version} ·{' '}
             {formatMoney(quote.total, quote.currency)} total
-            {quote.validUntil ? ` · price held until ${formatDate(quote.validUntil)}` : ''}
+            {quote.validUntil ? ` · price held until ${formatDateOnly(quote.validUntil)}` : ''}
           </p>
         ) : null}
       </header>

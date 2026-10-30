@@ -18,6 +18,18 @@ const dateFormatter = new Intl.DateTimeFormat(undefined, {
   month: "short",
   year: "numeric",
 });
+/**
+ * Calendar days are stored as UTC midnight or UTC end-of-day. Formatting them
+ * in the visitor's timezone would move a quote's "valid until" to the next day
+ * east of Greenwich, and the PDF (rendered in UTC) would disagree with the
+ * screen. This formatter always reads the stored calendar day.
+ */
+const dateOnlyFormatter = new Intl.DateTimeFormat(undefined, {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  timeZone: "UTC",
+});
 const shortFormatter = new Intl.DateTimeFormat(undefined, {
   day: "numeric",
   month: "short",
@@ -37,6 +49,12 @@ const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
 export function formatDate(value: DateInput): string {
   const date = toDate(value);
   return date ? dateFormatter.format(date) : "";
+}
+
+/** Same shape, but read in UTC: use it for date-only values (quote validity). */
+export function formatDateOnly(value: DateInput): string {
+  const date = toDate(value);
+  return date ? dateOnlyFormatter.format(date) : "";
 }
 
 /** "26 Oct" — wizard summaries where the year is already known. */
