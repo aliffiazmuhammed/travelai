@@ -12,6 +12,8 @@ import {
   Star,
   Upload,
 } from 'lucide-react';
+import { AgencyPageHeader } from '@/components/agency/AgencyPageHeader';
+import { AgencySegmented } from '@/components/agency/AgencySegmented';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -22,13 +24,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import PdfLayoutMapperDialog from '@/components/agency/PdfLayoutMapperDialog';
 import PdfTemplateUploadDialog, {
   type PdfTemplateDraft,
@@ -272,78 +267,65 @@ const AgencyTemplates: React.FC = () => {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight">
-              Templates
-            </h1>
-            <Badge variant="outline" className="text-[10px]">
-              {visibleTemplates.length}{' '}
-              {visibleTemplates.length === 1 ? 'template' : 'templates'}
-            </Badge>
-          </div>
-          <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
-            Branded proposal layouts for every trip. Exports pin the template
-            version and quote they used, so later changes never rewrite an
-            existing document.
-          </p>
-        </div>
-        {canManage ? (
-          <Button
-            className="bg-teal-600 hover:bg-teal-700"
-            onClick={() => setUploadChoiceOpen(true)}
-          >
-            <Upload className="mr-1.5 h-4 w-4" />
-            Upload template
-          </Button>
-        ) : (
-          <Badge
-            variant="outline"
-            className="gap-1 text-[10px] text-slate-500"
-          >
-            <Lock className="h-3 w-3" />
-            Read-only
+      <AgencyPageHeader
+        title="Templates"
+        meta={
+          <Badge variant="outline" className="text-[10px]">
+            {visibleTemplates.length}{' '}
+            {visibleTemplates.length === 1 ? 'template' : 'templates'}
           </Badge>
-        )}
-      </div>
+        }
+        description="Branded proposal layouts for every trip. Exports pin the template version and quote they used, so later changes never rewrite an existing document."
+        actions={
+          canManage ? (
+            <Button
+              className="bg-teal-600 hover:bg-teal-700"
+              onClick={() => setUploadChoiceOpen(true)}
+            >
+              <Upload className="mr-1.5 h-4 w-4" />
+              Upload template
+            </Button>
+          ) : (
+            <Badge
+              variant="outline"
+              className="gap-1 text-[10px] text-slate-500"
+            >
+              <Lock className="h-3 w-3" />
+              Read-only
+            </Badge>
+          )
+        }
+      />
 
       {canManage ? (
         <div className="flex flex-wrap items-center gap-2">
-          <Select
+          <AgencySegmented
+            ariaLabel="Template status"
             value={statusFilter}
-            onValueChange={(value) =>
+            onChange={(value) =>
               setStatusFilter(value as AgencyTemplateListStatus)
             }
-          >
-            <SelectTrigger className="h-9 w-full rounded-xl text-xs sm:w-[170px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {(
-                Object.keys(statusFilterLabel) as AgencyTemplateListStatus[]
-              ).map((status) => (
-                <SelectItem key={status} value={status}>
-                  {statusFilterLabel[status]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select
+            options={(
+              Object.keys(statusFilterLabel) as AgencyTemplateListStatus[]
+            ).map((status) => ({
+              value: status,
+              label: statusFilterLabel[status],
+            }))}
+          />
+          <AgencySegmented
+            ariaLabel="Template audience"
             value={audienceFilter}
-            onValueChange={(value) =>
+            onChange={(value) =>
               setAudienceFilter(value as 'all' | AgencyTemplateAudience)
             }
-          >
-            <SelectTrigger className="h-9 w-full rounded-xl text-xs sm:w-[170px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All audiences</SelectItem>
-              <SelectItem value="client">Client</SelectItem>
-              <SelectItem value="internal">Internal</SelectItem>
-            </SelectContent>
-          </Select>
+            options={
+              [
+                { value: 'all', label: 'All audiences' },
+                { value: 'client', label: 'Clients' },
+                { value: 'internal', label: 'Internal' },
+              ] as Array<{ value: 'all' | AgencyTemplateAudience; label: string }>
+            }
+          />
           <Button
             variant="ghost"
             size="sm"
@@ -365,14 +347,14 @@ const AgencyTemplates: React.FC = () => {
       )}
 
       {loading ? (
-        <Card className="rounded-3xl border-border/70">
-          <CardContent className="flex items-center justify-center gap-2 py-20 text-sm text-muted-foreground">
+        <Card className="rounded-xl border-slate-200 dark:border-slate-800">
+          <CardContent className="flex items-center justify-center gap-2 py-20 text-sm text-slate-500 dark:text-slate-400">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading templates...
           </CardContent>
         </Card>
       ) : error ? (
-        <Card className="rounded-3xl border-rose-200 dark:border-rose-900/60">
+        <Card className="rounded-xl border-rose-200 dark:border-rose-900/60">
           <CardContent className="space-y-3 py-14 text-center">
             <AlertTriangle className="mx-auto h-6 w-6 text-rose-500" />
             <p className="text-sm text-rose-700 dark:text-rose-300">{error}</p>
@@ -387,7 +369,7 @@ const AgencyTemplates: React.FC = () => {
           </CardContent>
         </Card>
       ) : visibleTemplates.length === 0 ? (
-        <Card className="rounded-3xl border-border/70">
+        <Card className="rounded-xl border-dashed border-slate-300 dark:border-slate-700">
           <CardContent className="space-y-3 py-16 text-center">
             <LayoutTemplate className="mx-auto h-7 w-7 text-slate-300 dark:text-slate-700" />
             <p className="text-sm font-medium">
@@ -422,7 +404,7 @@ const AgencyTemplates: React.FC = () => {
             return (
               <Card
                 key={template._id}
-                className="flex rounded-3xl border-border/70"
+                className="flex rounded-xl border-slate-200 dark:border-slate-800"
               >
                 <CardContent className="flex flex-1 flex-col p-4">
                   <div className="flex items-start gap-3">

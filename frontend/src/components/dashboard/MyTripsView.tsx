@@ -87,6 +87,8 @@ interface MyTripsViewProps {
   canArchiveTrip?: (trip: Trip) => boolean;
   /** Personal library: link to the owner's public travel page once they hold a handle. */
   travelPageHandle?: string;
+  /** The agency page supplies its own shared page header; the library keeps only its controls. */
+  hideHeader?: boolean;
 }
 
 const DESTINATION_IMAGES: Record<string, string> = {
@@ -150,6 +152,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
   variant = "personal",
   heading,
   eyebrow,
+  hideHeader = false,
   newPlanLabel,
   emptyTitle,
   emptyBody,
@@ -315,8 +318,9 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
     formatDate(trip.deletedAt || trip.updatedAt || "") || "recently";
 
   return (
-    <div className="space-y-6 animate-fade-in max-w-6xl mx-auto">
+    <div className={`space-y-6 animate-fade-in${hideHeader ? "" : " max-w-6xl mx-auto"}`}>
       {/* Top Controls Header */}
+      {hideHeader ? null : (
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-3xl bg-card border border-border/70 shadow-xs">
         <div>
           <div className="flex items-center gap-2">
@@ -356,6 +360,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
           </Button>
         </div>
       </div>
+      )}
 
       {/* Filter & Search Bar */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">

@@ -42,6 +42,16 @@ All colors MUST be HSL.
     --input: 220 16% 88%;
     --ring: 200 95% 44%;
 
+    /* Agency sidebar: white rail, teal hover/active, matching the workspace. */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 220 25% 15%;
+    --sidebar-primary: 175 84% 32%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 174 60% 95%;
+    --sidebar-accent-foreground: 176 72% 24%;
+    --sidebar-border: 220 16% 88%;
+    --sidebar-ring: 200 95% 44%;
+
     --radius: 0.75rem;
 
     /* Travel-specific design tokens (Light Mode) */
@@ -85,6 +95,16 @@ All colors MUST be HSL.
     --border: 220 20% 22%;
     --input: 220 20% 22%;
     --ring: 200 90% 56%;
+
+    /* Agency sidebar (dark): the panel sits just above the page floor. */
+    --sidebar-background: 220 28% 10%;
+    --sidebar-foreground: 40 30% 96%;
+    --sidebar-primary: 174 70% 45%;
+    --sidebar-primary-foreground: 220 30% 8%;
+    --sidebar-accent: 220 22% 17%;
+    --sidebar-accent-foreground: 40 30% 96%;
+    --sidebar-border: 220 20% 20%;
+    --sidebar-ring: 200 90% 56%;
     
     /* Travel-specific design tokens (Dark Mode) */
     --gradient-sky: linear-gradient(135deg, hsl(200 90% 50%), hsl(220 85% 58%));

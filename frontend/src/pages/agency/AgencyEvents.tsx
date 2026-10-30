@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   CalendarRange,
   CalendarX,
@@ -18,6 +19,8 @@ import {
   Users,
   X,
 } from 'lucide-react';
+import { AgencyPageHeader } from '@/components/agency/AgencyPageHeader';
+import { AgencySegmented } from '@/components/agency/AgencySegmented';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -188,8 +191,17 @@ function publishBlocker(event: AgencyEvent): string | null {
   return null;
 }
 
-function statusOf(event: AgencyEvent): { label: string; className: string } {
-  if (event.hidden) {
+type EventFilter = 'all' | 'draft' | 'published' | 'closed' | 'hidden';
+
+/** The tab an event belongs to; hidden takes precedence, as it does in the badge. */
+function filterKeyOf(event: AgencyEvent): Exclude<EventFilter, 'all'> {
+  if (event.hidden) return 'hidden';
+  if (event.state === 'draft') return 'draft';
+  if (event.closedAt) return 'closed';
+  return 'published';
+}
+
+function statusOf(event: AgencyEvent): { label: string; className: string } {  if (event.hidden) {
     return {
       label: 'Under review',
       className:
@@ -352,6 +364,14 @@ const ROSTER_FILTERS: Array<{ value: 'all' | AgencyEventInterestStatus; label: s
   { value: 'declined', label: 'Declined' },
 ];
 
+const EVENT_FILTERS: Array<{ value: EventFilter; label: string }> = [
+  { value: 'all', label: 'All' },
+  { value: 'draft', label: 'Drafts' },
+  { value: 'published', label: 'Live' },
+  { value: 'closed', label: 'Closed' },
+  { value: 'hidden', label: 'Under review' },
+];
+
 const AgencyEvents: React.FC = () => {
   const { activeAgency, activeAgencyId, canManage, refreshEventBadge } = useAgency();
   const role = activeAgency?.role;
@@ -359,6 +379,8 @@ const AgencyEvents: React.FC = () => {
 
   const [events, setEvents] = useState<AgencyEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<EventFilter>('all');
+  const [searchParams, setSearchParams] = useSearchParams();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<AgencyEvent | null>(null);
   const [form, setForm] = useState<EventForm>(emptyForm);
@@ -427,6 +449,38 @@ const AgencyEvents: React.FC = () => {
     setUploadedCover(null);
     setDialogOpen(true);
   };
+
+  // The ⌘K palette lands here with ?new=1; consume it once and open the form.
+  useEffect(() => {
+    if (searchParams.get('new') !== '1') return;
+    setSearchParams({}, { replace: true });
+    if (!canPlan) return;
+    setEditing(null);
+    setForm(emptyForm);
+    setCoverChoice(undefined);
+    setUploadedCover(null);
+    setDialogOpen(true);
+  }, [canPlan, searchParams, setSearchParams]);
+
+  const filterCounts = useMemo(() => {
+    const counts: Record<EventFilter, number> = {
+      all: events.length,
+      draft: 0,
+      published: 0,
+      closed: 0,
+      hidden: 0,
+    };
+    for (const event of events) counts[filterKeyOf(event)] += 1;
+    return counts;
+  }, [events]);
+
+  const visibleEvents = useMemo(
+    () =>
+      statusFilter === 'all'
+        ? events
+        : events.filter((event) => filterKeyOf(event) === statusFilter),
+    [events, statusFilter]
+  );
 
   const openEdit = (event: AgencyEvent) => {
     setEditing(event);
@@ -698,33 +752,47 @@ const AgencyEvents: React.FC = () => {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight">Events</h1>
-            <Badge
-              variant="outline"
-              className={cn('text-[10px]', agencyRoleBadgeClass(role || 'viewer'))}
-            >
-              {agencyRoleLabel(role || 'viewer')}
-            </Badge>
-          </div>
-          <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
-            Camps, group trips and retreats on a real date. Publish one and
-            travellers can raise their hand from its page; the roster here is
-            where you confirm who is coming.
-          </p>
-        </div>
-        {canPlan ? (
-          <Button onClick={openCreate}>
-            <Plus className="mr-2 h-4 w-4" />
-            New event
-          </Button>
-        ) : null}
-      </div>
+      <AgencyPageHeader
+        title="Events"
+        meta={
+          <Badge
+            variant="outline"
+            className={cn('text-[10px]', agencyRoleBadgeClass(role || 'viewer'))}
+          >
+            {agencyRoleLabel(role || 'viewer')}
+          </Badge>
+        }
+        description="Camps, group trips and retreats on a real date. Publish one and travellers can raise their hand from its page; the roster here is where you confirm who is coming."
+        actions={
+          canPlan ? (
+            <Button onClick={openCreate}>
+              <Plus className="mr-2 h-4 w-4" />
+              New event
+            </Button>
+          ) : null
+        }
+      />
 
-      <Card>
+      <Card className="rounded-xl border-slate-200 dark:border-slate-800">
         <CardContent className="space-y-4 p-4 sm:p-5">
+          {!loading && events.length > 0 ? (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <AgencySegmented
+                ariaLabel="Filter events by status"
+                value={statusFilter}
+                onChange={(value) => setStatusFilter(value)}
+                options={EVENT_FILTERS.map((option) => ({
+                  ...option,
+                  count: filterCounts[option.value],
+                }))}
+              />
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                {visibleEvents.length} of {events.length}{' '}
+                {events.length === 1 ? 'event' : 'events'}
+              </span>
+            </div>
+          ) : null}
+
           {loading ? (
             <div className="flex items-center justify-center gap-2 py-16 text-sm text-slate-500">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -745,9 +813,26 @@ const AgencyEvents: React.FC = () => {
                 </Button>
               ) : null}
             </div>
+          ) : visibleEvents.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-200 px-6 py-14 text-center dark:border-slate-800">
+              <CalendarRange className="mx-auto h-8 w-8 text-slate-300 dark:text-slate-700" />
+              <h3 className="mt-3 text-sm font-semibold">Nothing in this view</h3>
+              <p className="mx-auto mt-1 max-w-md text-xs text-slate-500 dark:text-slate-400">
+                No event is in this state right now. Try another status, or
+                switch back to All.
+              </p>
+              <Button
+                className="mt-4"
+                size="sm"
+                variant="outline"
+                onClick={() => setStatusFilter('all')}
+              >
+                Show all events
+              </Button>
+            </div>
           ) : (
             <div className="space-y-3">
-              {events.map((event) => {
+              {visibleEvents.map((event) => {
                 const status = statusOf(event);
                 const totalInterests =
                   event.interests.pending +
@@ -1247,25 +1332,18 @@ const AgencyEvents: React.FC = () => {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex flex-wrap items-center gap-1.5">
-            {ROSTER_FILTERS.map((filter) => {
-              const count =
-                filter.value === 'all' ? roster.length : rosterCounts[filter.value];
-              return (
-                <Button
-                  key={filter.value}
-                  type="button"
-                  variant={rosterFilter === filter.value ? 'default' : 'outline'}
-                  size="sm"
-                  className="rounded-full text-xs"
-                  onClick={() => setRosterFilter(filter.value)}
-                >
-                  {filter.label}
-                  <span className="ml-1 opacity-70">{count}</span>
-                </Button>
-              );
-            })}
-          </div>
+          <AgencySegmented
+            ariaLabel="Filter the roster"
+            value={rosterFilter}
+            onChange={(value) => setRosterFilter(value)}
+            options={ROSTER_FILTERS.map((filter) => ({
+              ...filter,
+              count:
+                filter.value === 'all'
+                  ? roster.length
+                  : rosterCounts[filter.value],
+            }))}
+          />
 
           {rosterLoading ? (
             <div className="flex items-center justify-center gap-2 py-12 text-sm text-slate-500">

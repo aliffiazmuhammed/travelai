@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   BriefcaseBusiness,
   Inbox,
@@ -12,9 +12,10 @@ import {
   Search,
   Trash2,
 } from 'lucide-react';
+import { AgencyEmptyState } from '@/components/agency/AgencyEmptyState';
+import { AgencyPageHeader } from '@/components/agency/AgencyPageHeader';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -25,6 +26,14 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { useAgency } from '@/context/AgencyContext';
 import { agencyRoleBadgeClass, agencyRoleLabel, formatAgencyDate } from '@/lib/agency';
@@ -71,6 +80,7 @@ const AgencyClients: React.FC = () => {
   const [form, setForm] = useState<ClientForm>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
   const listRequestRef = useRef(0);
 
   const loadClients = useCallback(
@@ -132,6 +142,16 @@ const AgencyClients: React.FC = () => {
     });
     setDialogOpen(true);
   };
+
+  // The ⌘K palette lands here with ?new=1; consume it once and open the form.
+  useEffect(() => {
+    if (searchParams.get('new') !== '1') return;
+    setSearchParams({}, { replace: true });
+    if (!canPlan) return;
+    setEditing(null);
+    setForm(emptyForm);
+    setDialogOpen(true);
+  }, [canPlan, searchParams, setSearchParams]);
 
   const saveClient = async () => {
     if (!activeAgencyId) return;
@@ -203,90 +223,196 @@ const AgencyClients: React.FC = () => {
 
   if (!activeAgencyId) {
     return (
-      <Card className="rounded-3xl border-border/70">
-        <CardContent className="p-10 text-center text-sm text-muted-foreground">
-          Create or join an agency to keep a client directory.
-        </CardContent>
-      </Card>
+      <div className="rounded-xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
+        Create or join an agency to keep a client directory.
+      </div>
     );
   }
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight">Clients</h1>
-            <Badge
-              variant="outline"
-              className={cn('text-[10px]', agencyRoleBadgeClass(role || 'viewer'))}
-            >
-              {agencyRoleLabel(role || 'viewer')}
-            </Badge>
-          </div>
-          <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
-            A private address book for the people you quote and plan for. Adding
-            a client never grants workspace access; trip sharing stays
-            trip-scoped.
-          </p>
-        </div>
-        {canPlan ? (
-          <Button onClick={openCreate}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add client
-          </Button>
-        ) : null}
-      </div>
-
-      <Card>
-        <CardContent className="space-y-4 p-4 sm:p-5">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative min-w-0 flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <Input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search by name, company or email"
-                className="pl-9"
-                maxLength={120}
-              />
-            </div>
-            <Badge variant="outline" className="text-[10px] text-slate-500">
-              {clients.length} {clients.length === 1 ? 'client' : 'clients'}
-            </Badge>
-            <Button asChild variant="outline" size="sm">
-              <Link to="/agency/trips">
-                <Map className="mr-1.5 h-3.5 w-3.5" />
-                Agency trips
-              </Link>
+      <AgencyPageHeader
+        title="Clients"
+        meta={
+          <Badge
+            variant="outline"
+            className={cn('text-[10px]', agencyRoleBadgeClass(role || 'viewer'))}
+          >
+            {agencyRoleLabel(role || 'viewer')}
+          </Badge>
+        }
+        description="A private address book for the people you quote and plan for. Adding a client never grants workspace access; trip sharing stays trip-scoped."
+        actions={
+          canPlan ? (
+            <Button onClick={openCreate}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add client
             </Button>
-          </div>
+          ) : null
+        }
+      />
 
-          {loading ? (
-            <div className="flex items-center justify-center gap-2 py-16 text-sm text-slate-500">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading clients...
-            </div>
-          ) : clients.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-200 px-6 py-14 text-center dark:border-slate-800">
-              <BriefcaseBusiness className="mx-auto h-8 w-8 text-slate-300 dark:text-slate-700" />
-              <h3 className="mt-3 text-sm font-semibold">
-                {search.trim() ? 'No matching clients' : 'No clients yet'}
-              </h3>
-              <p className="mx-auto mt-1 max-w-md text-xs text-slate-500 dark:text-slate-400">
-                {search.trim()
+      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 p-3 dark:border-slate-800">
+          <div className="relative min-w-0 flex-1 sm:max-w-sm">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search by name, company or email"
+              className="h-9 pl-9"
+              maxLength={120}
+            />
+          </div>
+          <Badge variant="outline" className="text-[10px] text-slate-500">
+            {clients.length} {clients.length === 1 ? 'client' : 'clients'}
+          </Badge>
+          <Button asChild variant="ghost" size="sm" className="ml-auto text-xs">
+            <Link to="/agency/trips">
+              <Map className="mr-1.5 h-3.5 w-3.5" />
+              Agency trips
+            </Link>
+          </Button>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center gap-2 py-16 text-sm text-slate-500">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading clients...
+          </div>
+        ) : clients.length === 0 ? (
+          <div className="p-4">
+            <AgencyEmptyState
+              icon={BriefcaseBusiness}
+              title={search.trim() ? 'No matching clients' : 'No clients yet'}
+              body={
+                search.trim()
                   ? 'Try a different name, company or email.'
-                  : 'Add the people you plan for, then select them while preparing a trip quote.'}
-              </p>
-              {canPlan && !search.trim() ? (
-                <Button className="mt-4" size="sm" onClick={openCreate}>
-                  <Plus className="mr-1.5 h-3.5 w-3.5" />
-                  Add your first client
-                </Button>
-              ) : null}
+                  : 'Add the people you plan for, then select them while preparing a trip quote.'
+              }
+              action={
+                canPlan && !search.trim() ? (
+                  <Button size="sm" onClick={openCreate}>
+                    <Plus className="mr-1.5 h-3.5 w-3.5" />
+                    Add your first client
+                  </Button>
+                ) : null
+              }
+            />
+          </div>
+        ) : (
+          <>
+            <div className="hidden md:block">
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="h-10 text-xs">Client</TableHead>
+                    <TableHead className="h-10 text-xs">Contact</TableHead>
+                    <TableHead className="h-10 text-xs">Company</TableHead>
+                    <TableHead className="h-10 text-xs">Added</TableHead>
+                    <TableHead className="h-10 text-right text-xs">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {clients.map((client) => (
+                    <TableRow
+                      key={client._id}
+                      className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40"
+                    >
+                      <TableCell className="py-3">
+                        <div className="flex items-center gap-3">
+                          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-teal-50 text-xs font-bold text-teal-700 dark:bg-teal-950/50 dark:text-teal-300">
+                            {client.name.trim().slice(0, 1).toUpperCase() || 'C'}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">
+                              {client.name}
+                            </p>
+                            {client.sourceEnquiryId ? (
+                              <Link
+                                to={`/agency/enquiries?enquiry=${client.sourceEnquiryId}`}
+                                className="inline-flex items-center gap-1 text-[11px] font-medium text-teal-700 hover:underline dark:text-teal-300"
+                              >
+                                <Inbox className="h-3 w-3" />
+                                Came in through an enquiry
+                              </Link>
+                            ) : client.notes ? (
+                              <p
+                                className="truncate text-[11px] text-slate-500 dark:text-slate-400"
+                                title={client.notes}
+                              >
+                                {client.notes}
+                              </p>
+                            ) : null}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-3">
+                        <div className="space-y-0.5 text-xs text-slate-600 dark:text-slate-300">
+                          {client.email ? (
+                            <a
+                              href={`mailto:${client.email}`}
+                              className="flex items-center gap-1.5 hover:text-teal-700 dark:hover:text-teal-300"
+                            >
+                              <Mail className="h-3 w-3 text-slate-400" />
+                              {client.email}
+                            </a>
+                          ) : null}
+                          {client.phone ? (
+                            <a
+                              href={`tel:${client.phone}`}
+                              className="flex items-center gap-1.5 hover:text-teal-700 dark:hover:text-teal-300"
+                            >
+                              <Phone className="h-3 w-3 text-slate-400" />
+                              {client.phone}
+                            </a>
+                          ) : null}
+                          {!client.email && !client.phone ? (
+                            <span className="text-slate-400">—</span>
+                          ) : null}
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-3 text-xs text-slate-600 dark:text-slate-300">
+                        {client.company || '—'}
+                      </TableCell>
+                      <TableCell className="py-3 text-xs text-slate-500 dark:text-slate-400">
+                        {formatAgencyDate(client.createdAt)}
+                      </TableCell>
+                      <TableCell className="py-3">
+                        {canPlan ? (
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openEdit(client)}
+                              disabled={busyId === client._id}
+                              aria-label={`Edit ${client.name}`}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => void removeClient(client)}
+                              disabled={busyId === client._id}
+                              aria-label={`Remove ${client.name}`}
+                            >
+                              {busyId === client._id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                              )}
+                            </Button>
+                          </div>
+                        ) : null}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
-          ) : (
-            <div className="divide-y divide-slate-200 rounded-2xl border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
+
+            <div className="divide-y divide-slate-200 md:hidden dark:divide-slate-800">
               {clients.map((client) => (
                 <div
                   key={client._id}
@@ -365,9 +491,9 @@ const AgencyClients: React.FC = () => {
                 </div>
               ))}
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </>
+        )}
+      </section>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="rounded-3xl sm:max-w-lg">

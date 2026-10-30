@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import {
   Building2,
+  Globe2,
   Image as ImageIcon,
   ImagePlus,
   Loader2,
@@ -22,6 +23,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { AgencySectionTabs } from '@/components/agency/AgencySectionTabs';
+import { AgencyPageHeader } from '@/components/agency/AgencyPageHeader';
 import { api } from '@/services/api';
 import { useAgency } from '@/context/AgencyContext';
 import { useAgencyAuth } from '@/context/AgencyAuthContext';
@@ -107,6 +110,9 @@ const AgencySettings: React.FC = () => {
   const [defaultExclusions, setDefaultExclusions] = useState('');
   const [defaultTerms, setDefaultTerms] = useState('');
   const [saving, setSaving] = useState(false);
+  const [section, setSection] = useState<'brand' | 'public' | 'quotes' | 'account'>(
+    'brand'
+  );
 
   const [assets, setAssets] = useState<AgencyAsset[]>([]);
   const [assetsLoading, setAssetsLoading] = useState(false);
@@ -436,38 +442,33 @@ const AgencySettings: React.FC = () => {
         }}
       />
 
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight">Agency settings</h1>
-            <Badge
-              variant="outline"
-              className={cn('text-[10px]', agencyRoleBadgeClass(activeAgency.role))}
-            >
-              {agencyRoleLabel(activeAgency.role)}
-            </Badge>
-          </div>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Your brand identity for client pages, quotes and exports, plus your
-            personal agency account. Files stay private to this agency; only
-            the logo and details you choose in the public profile reach
-            travellers.
-          </p>
-        </div>
-        {canManage ? (
-          <Button
-            onClick={() => void save()}
-            disabled={saving || name.trim().length < 2}
+      <AgencyPageHeader
+        title="Settings"
+        meta={
+          <Badge
+            variant="outline"
+            className={cn('text-[10px]', agencyRoleBadgeClass(activeAgency.role))}
           >
-            {saving ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="mr-2 h-4 w-4" />
-            )}
-            Save changes
-          </Button>
-        ) : null}
-      </div>
+            {agencyRoleLabel(activeAgency.role)}
+          </Badge>
+        }
+        description="Your brand identity for client pages, quotes and exports, plus your personal agency account. Files stay private to this agency; only the logo and details you choose in the public profile reach travellers."
+        actions={
+          canManage ? (
+            <Button
+              onClick={() => void save()}
+              disabled={saving || name.trim().length < 2}
+            >
+              {saving ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="mr-2 h-4 w-4" />
+              )}
+              Save changes
+            </Button>
+          ) : null
+        }
+      />
 
       {!canManage ? (
         <div className="flex items-start gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
@@ -477,7 +478,26 @@ const AgencySettings: React.FC = () => {
         </div>
       ) : null}
 
-      <DirectoryProfileEditor />
+      <AgencySectionTabs
+        ariaLabel="Settings sections"
+        panelId="settings-panels"
+        value={section}
+        onChange={(value) => setSection(value)}
+        options={[
+          { value: 'brand', label: 'Brand', icon: Building2 },
+          { value: 'public', label: 'Public profile', icon: Globe2 },
+          { value: 'quotes', label: 'Quote defaults', icon: Receipt },
+          { value: 'account', label: 'Account', icon: UserRound },
+        ]}
+      />
+
+      <div id="settings-panels" role="tabpanel" aria-label={section}>
+        <div className={section === 'public' ? undefined : 'hidden'}>
+          <DirectoryProfileEditor />
+        </div>
+
+        <div className={section === 'brand' ? undefined : 'hidden'}>
+
 
       <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
         <div className="space-y-5">
@@ -868,60 +888,6 @@ const AgencySettings: React.FC = () => {
         </div>
 
         <div className="space-y-5">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <UserRound className="h-4 w-4 text-teal-600" />
-                Your account
-              </CardTitle>
-              <CardDescription>
-                The name your teammates see inside the agency workspace. This
-                account opens {sessionAgency?.name ?? 'this workspace'} only.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form className="space-y-4" onSubmit={saveAccountName}>
-                <div className="space-y-2">
-                  <Label>Workspace</Label>
-                  <Input value={sessionAgency?.name ?? ''} readOnly disabled />
-                </div>
-                <div className="space-y-2">
-                  <Label>Email</Label>
-                  <Input value={user?.email ?? ''} readOnly disabled />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="account-name">Display name</Label>
-                  <Input
-                    id="account-name"
-                    value={accountName}
-                    onChange={(event) => setAccountName(event.target.value)}
-                    maxLength={40}
-                    placeholder="Your name"
-                  />
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button type="submit" disabled={savingAccount}>
-                    {savingAccount ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Save className="mr-2 h-4 w-4" />
-                    )}
-                    Save profile
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => void signOut()}
-                  >
-                    <LogOut className="mr-2 h-4 w-4" />
-                    Sign out of agency
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-
-          <AgencyPasswordChange />
 
           <Card>
             <CardHeader>
@@ -1012,57 +978,6 @@ const AgencySettings: React.FC = () => {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Receipt className="h-4 w-4" />
-                Quote defaults
-              </CardTitle>
-              <CardDescription>
-                Prefilled into every new trip quote. A quote can override each
-                list without changing these defaults.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="settings-inclusions">Inclusions</Label>
-                <Textarea
-                  id="settings-inclusions"
-                  rows={3}
-                  value={defaultInclusions}
-                  onChange={(event) => setDefaultInclusions(event.target.value)}
-                  placeholder={'Return airport transfers\nBreakfast daily'}
-                  disabled={!canManage}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="settings-exclusions">Exclusions</Label>
-                <Textarea
-                  id="settings-exclusions"
-                  rows={3}
-                  value={defaultExclusions}
-                  onChange={(event) => setDefaultExclusions(event.target.value)}
-                  placeholder={'International flights\nTravel insurance'}
-                  disabled={!canManage}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="settings-quote-terms">Terms</Label>
-                <Textarea
-                  id="settings-quote-terms"
-                  rows={3}
-                  value={defaultTerms}
-                  onChange={(event) => setDefaultTerms(event.target.value)}
-                  placeholder={'50% deposit to confirm\nBalance due 21 days before travel'}
-                  disabled={!canManage}
-                />
-              </div>
-              <p className="text-[11px] text-slate-500">
-                One entry per line. Up to 30 lines per list, 300 characters each.
-                Save changes above to apply them.
-              </p>
-            </CardContent>
-          </Card>
 
           <Card>
             <CardHeader>
@@ -1152,6 +1067,119 @@ const AgencySettings: React.FC = () => {
               </div>
             </CardContent>
           </Card>
+        </div>
+      </div>
+        </div>
+
+        <div className={cn('space-y-5', section === 'quotes' ? undefined : 'hidden')}>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Receipt className="h-4 w-4" />
+                Quote defaults
+              </CardTitle>
+              <CardDescription>
+                Prefilled into every new trip quote. A quote can override each
+                list without changing these defaults.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="settings-inclusions">Inclusions</Label>
+                <Textarea
+                  id="settings-inclusions"
+                  rows={3}
+                  value={defaultInclusions}
+                  onChange={(event) => setDefaultInclusions(event.target.value)}
+                  placeholder={'Return airport transfers\nBreakfast daily'}
+                  disabled={!canManage}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="settings-exclusions">Exclusions</Label>
+                <Textarea
+                  id="settings-exclusions"
+                  rows={3}
+                  value={defaultExclusions}
+                  onChange={(event) => setDefaultExclusions(event.target.value)}
+                  placeholder={'International flights\nTravel insurance'}
+                  disabled={!canManage}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="settings-quote-terms">Terms</Label>
+                <Textarea
+                  id="settings-quote-terms"
+                  rows={3}
+                  value={defaultTerms}
+                  onChange={(event) => setDefaultTerms(event.target.value)}
+                  placeholder={'50% deposit to confirm\nBalance due 21 days before travel'}
+                  disabled={!canManage}
+                />
+              </div>
+              <p className="text-[11px] text-slate-500">
+                One entry per line. Up to 30 lines per list, 300 characters each.
+                Save changes above to apply them.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className={cn('space-y-5', section === 'account' ? undefined : 'hidden')}>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <UserRound className="h-4 w-4 text-teal-600" />
+                Your account
+              </CardTitle>
+              <CardDescription>
+                The name your teammates see inside the agency workspace. This
+                account opens {sessionAgency?.name ?? 'this workspace'} only.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form className="space-y-4" onSubmit={saveAccountName}>
+                <div className="space-y-2">
+                  <Label>Workspace</Label>
+                  <Input value={sessionAgency?.name ?? ''} readOnly disabled />
+                </div>
+                <div className="space-y-2">
+                  <Label>Email</Label>
+                  <Input value={user?.email ?? ''} readOnly disabled />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="account-name">Display name</Label>
+                  <Input
+                    id="account-name"
+                    value={accountName}
+                    onChange={(event) => setAccountName(event.target.value)}
+                    maxLength={40}
+                    placeholder="Your name"
+                  />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="submit" disabled={savingAccount}>
+                    {savingAccount ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="mr-2 h-4 w-4" />
+                    )}
+                    Save profile
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void signOut()}
+                  >
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Sign out of agency
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+
+          <AgencyPasswordChange />
         </div>
       </div>
     </div>

@@ -10,6 +10,9 @@ import {
   ShieldCheck,
   Users,
 } from 'lucide-react';
+import { AgencyPageHeader } from '@/components/agency/AgencyPageHeader';
+import { AgencySectionTabs } from '@/components/agency/AgencySectionTabs';
+import { AgencySegmented } from '@/components/agency/AgencySegmented';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -138,6 +141,7 @@ const AgencyOperations: React.FC = () => {
   const [total, setTotal] = useState(0);
   const [auditLoading, setAuditLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [section, setSection] = useState<'usage' | 'audit'>('usage');
   const [actionFilter, setActionFilter] = useState('');
 
   const loadUsage = useCallback(async () => {
@@ -242,25 +246,39 @@ const AgencyOperations: React.FC = () => {
   const storageCapMb = usage?.plan.storageMb ?? 0;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-primary">
-              Operations
-            </span>
-            <Badge variant="outline" className="text-[10px]">
-              <ShieldCheck className="mr-1 h-3 w-3" />
-              Owner / admin
-            </Badge>
-          </div>
-          <h2 className="text-2xl font-black text-foreground">
-            {activeAgency?.name ?? 'Agency'} usage and audit
-          </h2>
-        </div>
-      </div>
+    <div className="space-y-5">
+      <AgencyPageHeader
+        title="Operations"
+        meta={
+          <Badge variant="outline" className="text-[10px]">
+            <ShieldCheck className="mr-1 h-3 w-3" />
+            Owner / admin
+          </Badge>
+        }
+        description={`Plan usage and the audit trail for ${
+          activeAgency?.name ?? 'this agency'
+        }. Counters reset monthly for exports; storage is the live total of assets, templates and export PDFs.`}
+      />
 
-      <Card className="rounded-3xl border-border/70">
+      <AgencySectionTabs
+        ariaLabel="Operations sections"
+        panelId="operations-panels"
+        value={section}
+        onChange={(value) => setSection(value)}
+        options={[
+          { value: 'usage', label: 'Usage', icon: Gauge },
+          { value: 'audit', label: 'Audit log', icon: ScrollText },
+        ]}
+      />
+
+      <div
+        id="operations-panels"
+        role="tabpanel"
+        aria-label={section === 'usage' ? 'Usage' : 'Audit log'}
+        className="space-y-5"
+      >
+        <div className={cn(section === 'usage' ? undefined : 'hidden')}>
+          <Card className="rounded-xl border-slate-200 dark:border-slate-800">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-sm">
             <Gauge className="h-4 w-4" />
@@ -272,8 +290,7 @@ const AgencyOperations: React.FC = () => {
             ) : null}
           </CardTitle>
           <CardDescription className="text-xs">
-            Counters reset monthly for exports; storage is the live total of
-            assets, templates and export PDFs.
+            Usage is counted by the workspace, not by device.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -319,8 +336,10 @@ const AgencyOperations: React.FC = () => {
           )}
         </CardContent>
       </Card>
+        </div>
 
-      <Card className="rounded-3xl border-border/70">
+        <div className={cn(section === 'audit' ? undefined : 'hidden')}>
+          <Card className="rounded-xl border-slate-200 dark:border-slate-800">
         <CardHeader className="flex-row flex-wrap items-center justify-between gap-3 pb-3">
           <div className="space-y-1">
             <CardTitle className="flex items-center gap-2 text-sm">
@@ -335,18 +354,15 @@ const AgencyOperations: React.FC = () => {
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {AUDIT_FILTERS.map((filter) => (
-              <Button
-                key={filter.value}
-                type="button"
-                size="sm"
-                variant={actionFilter === filter.value ? 'hero' : 'ghost'}
-                onClick={() => handleFilterChange(filter.value)}
-                className="h-7 rounded-lg px-2.5 text-[11px] font-bold"
-              >
-                {filter.label}
-              </Button>
-            ))}
+            <AgencySegmented
+              ariaLabel="Audit action filter"
+              value={actionFilter}
+              onChange={handleFilterChange}
+              options={AUDIT_FILTERS.map((filter) => ({
+                value: filter.value,
+                label: filter.label,
+              }))}
+            />
           </div>
         </CardHeader>
         <CardContent className="space-y-3 p-4 pt-0">
@@ -361,23 +377,23 @@ const AgencyOperations: React.FC = () => {
               activity will appear here.
             </p>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="max-h-[32rem] overflow-auto rounded-lg border border-slate-200 dark:border-slate-800">
               <table className="w-full min-w-[640px] text-left text-xs">
-                <thead>
-                  <tr className="border-b border-border/70 text-[10px] uppercase tracking-wider text-muted-foreground">
-                    <th className="py-2 pr-3 font-bold">Time</th>
-                    <th className="py-2 pr-3 font-bold">Actor</th>
-                    <th className="py-2 pr-3 font-bold">Action</th>
-                    <th className="py-2 font-bold">Details</th>
+                <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-900">
+                  <tr className="border-b border-slate-200 text-[11px] font-medium text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                    <th className="py-2.5 pl-3 pr-3 font-medium">Time</th>
+                    <th className="py-2.5 pr-3 font-medium">Actor</th>
+                    <th className="py-2.5 pr-3 font-medium">Action</th>
+                    <th className="py-2.5 pr-3 font-medium">Details</th>
                   </tr>
                 </thead>
                 <tbody>
                   {entries.map((entry) => (
                     <tr
                       key={entry._id}
-                      className="border-b border-border/40 align-top last:border-0"
+                      className="border-b border-slate-100 align-top last:border-0 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/50"
                     >
-                      <td className="whitespace-nowrap py-2.5 pr-3 text-muted-foreground">
+                      <td className="whitespace-nowrap py-2.5 pl-3 pr-3 text-slate-500 dark:text-slate-400">
                         <span className="flex items-center gap-1">
                           <Clock3 className="h-3 w-3 shrink-0" />
                           {formatDateTime(entry.createdAt)}
@@ -419,6 +435,8 @@ const AgencyOperations: React.FC = () => {
           ) : null}
         </CardContent>
       </Card>
+        </div>
+      </div>
     </div>
   );
 };

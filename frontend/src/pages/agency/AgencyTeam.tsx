@@ -14,9 +14,18 @@ import {
   UserPlus,
   Users,
 } from 'lucide-react';
+import { AgencyPageHeader } from '@/components/agency/AgencyPageHeader';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -221,37 +230,42 @@ const AgencyTeam: React.FC = () => {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight">Team</h1>
-            <Badge variant="outline" className="text-[10px]">
-              {members.length} {members.length === 1 ? 'member' : 'members'}
-            </Badge>
-          </div>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Agency roles are separate from the roles people have on individual trips.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={refreshing}>
-            <RefreshCw className={cn('mr-1.5 h-4 w-4', refreshing && 'animate-spin')} />
-            Refresh
-          </Button>
-          {canManage ? (
+      <AgencyPageHeader
+        title="Team"
+        meta={
+          <Badge variant="outline" className="text-[10px]">
+            {members.length} {members.length === 1 ? 'member' : 'members'}
+          </Badge>
+        }
+        description="Agency roles are separate from the roles people have on individual trips."
+        actions={
+          <>
             <Button
+              variant="outline"
               size="sm"
-              onClick={() => {
-                setGeneratedLink('');
-                setInviteOpen(true);
-              }}
+              onClick={() => void refresh()}
+              disabled={refreshing}
             >
-              <UserPlus className="mr-1.5 h-4 w-4" />
-              Invite teammate
+              <RefreshCw
+                className={cn('mr-1.5 h-4 w-4', refreshing && 'animate-spin')}
+              />
+              Refresh
             </Button>
-          ) : null}
-        </div>
-      </div>
+            {canManage ? (
+              <Button
+                size="sm"
+                onClick={() => {
+                  setGeneratedLink('');
+                  setInviteOpen(true);
+                }}
+              >
+                <UserPlus className="mr-1.5 h-4 w-4" />
+                Invite teammate
+              </Button>
+            ) : null}
+          </>
+        }
+      />
 
       {!canManage ? (
         <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
@@ -272,7 +286,123 @@ const AgencyTeam: React.FC = () => {
               : 'Admins manage planners and viewers. Only an owner can change another owner.'}
           </CardDescription>
         </CardHeader>
-        <CardContent className="divide-y divide-slate-100 p-0 dark:divide-slate-800">
+        <CardContent className="p-0">
+          <div className="hidden md:block">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="h-10 text-xs">Member</TableHead>
+                  <TableHead className="h-10 text-xs">Contact</TableHead>
+                  <TableHead className="h-10 text-xs">Role</TableHead>
+                  <TableHead className="h-10 text-xs">Joined</TableHead>
+                  <TableHead className="h-10 text-right text-xs">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {members.map((member) => {
+                  const soleOwner = member.role === 'owner' && ownerCount <= 1;
+                  const ownerTarget = member.role === 'owner';
+                  const canEditRole =
+                    canManage && !soleOwner && (!ownerTarget || isOwner);
+                  const canRemove =
+                    canManage && !soleOwner && (!ownerTarget || isOwner);
+                  const busy = busyUserId === member.userId;
+
+                  return (
+                    <TableRow
+                      key={member.userId}
+                      className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40"
+                    >
+                      <TableCell className="py-3">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-9 w-9">
+                            <AvatarImage src={avatarSrc(member.avatarUrl)} alt="" />
+                            <AvatarFallback className="bg-slate-100 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                              {initialsFor(member.label)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                            <span className="truncate text-sm font-medium">
+                              {member.label}
+                            </span>
+                            {member.isYou ? (
+                              <Badge variant="outline" className="text-[9px]">
+                                You
+                              </Badge>
+                            ) : null}
+                            {soleOwner ? (
+                              <Badge
+                                variant="outline"
+                                className="border-amber-200 bg-amber-50 text-[9px] text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300"
+                              >
+                                Last owner
+                              </Badge>
+                            ) : null}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-3 text-xs text-slate-600 dark:text-slate-300">
+                        {member.email || '—'}
+                      </TableCell>
+                      <TableCell className="py-3">
+                        {canEditRole ? (
+                          <Select
+                            value={member.role}
+                            onValueChange={(value) =>
+                              void changeRole(member, value as AgencyRole)
+                            }
+                            disabled={busy}
+                          >
+                            <SelectTrigger className="h-8 w-32">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {isOwner ? <SelectItem value="owner">Owner</SelectItem> : null}
+                              <SelectItem value="admin">Admin</SelectItem>
+                              <SelectItem value="planner">Planner</SelectItem>
+                              <SelectItem value="viewer">Viewer</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Badge
+                            variant="outline"
+                            className={cn('text-[10px]', agencyRoleBadgeClass(member.role))}
+                          >
+                            {agencyRoleLabel(member.role)}
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="py-3 text-xs text-slate-500 dark:text-slate-400">
+                        {formatAgencyDate(member.joinedAt)}
+                      </TableCell>
+                      <TableCell className="py-3">
+                        {canRemove && member.userId !== myId ? (
+                          <div className="flex justify-end">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-slate-400 hover:text-rose-600"
+                              onClick={() => setRemoveTarget(member)}
+                              disabled={busy}
+                              title={`Remove ${member.label}`}
+                            >
+                              {busy ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <UserMinus className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </div>
+                        ) : null}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+
+          <div className="divide-y divide-slate-100 md:hidden dark:divide-slate-800">
           {members.map((member) => {
             const soleOwner = member.role === 'owner' && ownerCount <= 1;
             const ownerTarget = member.role === 'owner';
@@ -367,6 +497,7 @@ const AgencyTeam: React.FC = () => {
               </div>
             );
           })}
+          </div>
         </CardContent>
       </Card>
 

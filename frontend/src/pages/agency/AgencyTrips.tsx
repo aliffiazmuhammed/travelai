@@ -45,7 +45,9 @@ import {
 import ItineraryDisplay from '@/components/ItineraryDisplay';
 import AgencyExportPanel from '@/components/agency/AgencyExportPanel';
 import AgencyPackagePanel from '@/components/agency/AgencyPackagePanel';
+import { AgencyPageHeader } from '@/components/agency/AgencyPageHeader';
 import AgencyQuotePanel from '@/components/agency/AgencyQuotePanel';
+import { AgencySectionTabs } from '@/components/agency/AgencySectionTabs';
 import { MyTripsView } from '@/components/dashboard/MyTripsView';
 import { useAgency } from '@/context/AgencyContext';
 import { useAgencyAuth } from '@/context/AgencyAuthContext';
@@ -519,62 +521,25 @@ const AgencyTrips: React.FC = () => {
             </div>
           ) : null}
 
-          <div className="inline-flex items-center gap-1 rounded-2xl border border-slate-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900">
-            <button
-              type="button"
-              onClick={() => switchTab('itinerary')}
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition',
-                activeTab === 'itinerary'
-                  ? 'bg-teal-600 text-white'
-                  : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
-              )}
-            >
-              <MapIcon className="h-3.5 w-3.5" />
-              Itinerary
-            </button>
-            <button
-              type="button"
-              onClick={() => switchTab('quote')}
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition',
-                activeTab === 'quote'
-                  ? 'bg-teal-600 text-white'
-                  : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
-              )}
-            >
-              <Receipt className="h-3.5 w-3.5" />
-              Quote
-            </button>
-            <button
-              type="button"
-              onClick={() => switchTab('export')}
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition',
-                activeTab === 'export'
-                  ? 'bg-teal-600 text-white'
-                  : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
-              )}
-            >
-              <FileText className="h-3.5 w-3.5" />
-              Export
-            </button>
-            <button
-              type="button"
-              onClick={() => switchTab('package')}
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition',
-                activeTab === 'package'
-                  ? 'bg-teal-600 text-white'
-                  : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
-              )}
-            >
-              <PackageIcon className="h-3.5 w-3.5" />
-              Package
-            </button>
-          </div>
+          <AgencySectionTabs
+            ariaLabel="Trip sections"
+            panelId="agency-trip-panels"
+            value={activeTab}
+            onChange={switchTab}
+            options={[
+              { value: 'itinerary', label: 'Itinerary', icon: MapIcon },
+              { value: 'quote', label: 'Quote', icon: Receipt },
+              { value: 'export', label: 'Export', icon: FileText },
+              { value: 'package', label: 'Package', icon: PackageIcon },
+            ]}
+          />
 
           {/* Both panels stay mounted so switching tabs never loses edits. */}
+          <div
+            id="agency-trip-panels"
+            role="tabpanel"
+            aria-label={`Trip ${activeTab}`}
+          >
           <div className={activeTab === 'itinerary' ? undefined : 'hidden'}>
             <ItineraryDisplay
               data={selectedTrip.tripDetails}
@@ -658,6 +623,7 @@ const AgencyTrips: React.FC = () => {
               />
             </div>
           ) : null}
+          </div>
         </div>
         )
       ) : loading ? (
@@ -667,40 +633,28 @@ const AgencyTrips: React.FC = () => {
         </div>
       ) : (
         <>
-          <div className="flex flex-col gap-3 rounded-3xl border border-teal-200/70 bg-gradient-to-r from-teal-50 via-white to-sky-50 p-5 dark:border-teal-900/60 dark:from-teal-950/40 dark:via-slate-950 dark:to-sky-950/30 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-3">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-teal-600 text-white">
-                <Sparkles className="h-5 w-5" />
-              </span>
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-lg font-black text-slate-900 dark:text-slate-100">
-                    Plan with AI, refine as an agency
-                  </h2>
-                  <Badge className={cn('text-[10px]', agencyRoleBadgeClass(role || 'viewer'))}>
-                    {agencyRoleLabel(role || 'viewer')}
-                  </Badge>
-                </div>
-                <p className="text-xs text-slate-600 dark:text-slate-400">
-                  Generate a draft, assign a planner, then invite the client from
-                  the People tab. Client access stays trip-scoped.
-                </p>
-              </div>
-            </div>
-            {canPlan && (
-              <Button
-                type="button"
-                variant="hero"
-                onClick={openNewTripDialog}
-                className="rounded-2xl text-xs font-bold gap-2"
+          <AgencyPageHeader
+            title="Trips"
+            meta={
+              <Badge
+                className={cn('text-[10px]', agencyRoleBadgeClass(role || 'viewer'))}
               >
-                <PlusCircle className="h-4 w-4" />
-                New trip
-              </Button>
-            )}
-          </div>
+                {agencyRoleLabel(role || 'viewer')}
+              </Badge>
+            }
+            description="Every client trip lives here. Generate a draft with AI, assign a planner, then invite the client from the trip's People tab — client access stays trip-scoped."
+            actions={
+              canPlan ? (
+                <Button type="button" onClick={openNewTripDialog}>
+                  <PlusCircle className="mr-1.5 h-4 w-4" />
+                  New trip
+                </Button>
+              ) : null
+            }
+          />
 
           <MyTripsView
+            hideHeader
             variant="agency"
             trips={trips}
             onSelectTrip={handleSelectTrip}
