@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs';
 import User from '../models/User.js';
 import { AppError } from '../utils/AppError.js';
 import { mergePubKeyList } from './collab/chatKeys.js';
-import { publicUser } from './user/profile.js';
+import { assertNameAllowed, normalizeName, publicUser } from './user/profile.js';
 import { signSessionForAccount } from './auth/realm.js';
 
 /**
@@ -16,7 +16,7 @@ import { signSessionForAccount } from './auth/realm.js';
 
 const PERSONAL = 'personal' as const;
 
-export const signup = async (email: string, password: string) => {
+export const signup = async (email: string, password: string, name?: string) => {
   const normalizedEmail = email.trim().toLowerCase();
   const existingUser = await User.findOne({
     email: normalizedEmail,
@@ -26,11 +26,15 @@ export const signup = async (email: string, password: string) => {
     throw new AppError('An account with this email already exists. Please sign in instead.', 400);
   }
 
+  const displayName = normalizeName(name);
+  assertNameAllowed(displayName);
+
   const hashedPassword = await bcrypt.hash(password, 12);
   const user = new User({
     email: normalizedEmail,
     password: hashedPassword,
     accountType: PERSONAL,
+    ...(displayName ? { name: displayName } : {}),
   });
   await user.save();
 

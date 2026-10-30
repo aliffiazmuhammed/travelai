@@ -9,6 +9,7 @@ import { useAuth } from "@/context/UserContext";
 import { cn } from "@/lib/utils";
 
 type FieldErrors = {
+  name?: string;
   email?: string;
   password?: string;
   confirmPassword?: string;
@@ -16,6 +17,7 @@ type FieldErrors = {
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -57,7 +59,12 @@ const Auth = () => {
     clearError();
 
     const trimmedEmail = email.trim();
+    const trimmedName = name.trim();
     const next: FieldErrors = {};
+
+    if (!isLogin && !trimmedName) {
+      next.name = "Enter your name — agencies use it when they reply.";
+    }
 
     if (!trimmedEmail) {
       next.email = "Enter your email address.";
@@ -88,7 +95,7 @@ const Auth = () => {
       if (isLogin) {
         await signin(trimmedEmail, password);
       } else {
-        await signup(trimmedEmail, password);
+        await signup(trimmedEmail, password, trimmedName);
       }
     } catch {
       // Error is set in context
@@ -140,6 +147,31 @@ const Auth = () => {
                       </button>
                     )}
                   </div>
+                </div>
+              )}
+
+              {!isLogin && (
+                <div className="space-y-2">
+                  <Label htmlFor="name">Your name</Label>
+                  <Input
+                    id="name"
+                    autoComplete="name"
+                    placeholder="Asha Rao"
+                    className={cn("h-11", fieldErrors.name && "border-destructive focus-visible:ring-destructive")}
+                    value={name}
+                    onChange={handleInputChange("name", setName)}
+                    aria-invalid={Boolean(fieldErrors.name)}
+                    aria-describedby={fieldErrors.name ? "name-error" : undefined}
+                  />
+                  {fieldErrors.name ? (
+                    <p id="name-error" className="text-xs font-medium text-destructive">
+                      {fieldErrors.name}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      This is the name agencies see when you get in touch.
+                    </p>
+                  )}
                 </div>
               )}
 

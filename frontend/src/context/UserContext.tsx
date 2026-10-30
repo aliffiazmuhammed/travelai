@@ -97,14 +97,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     await api.changePassword(currentPassword, newPassword);
   };
 
-  const signup = async (email: string, password: string) => {
+  const signup = async (email: string, password: string, name?: string) => {
     setLoading(true);
     setError(null);
     try {
       const response = await fetch(`${API_BASE_URL}/api/auth/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          password,
+          ...(name?.trim() ? { name: name.trim() } : {}),
+        }),
         credentials: 'include',
       });
 

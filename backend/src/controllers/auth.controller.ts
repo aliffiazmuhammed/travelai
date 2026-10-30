@@ -13,8 +13,8 @@ export { getCsrfToken } from '../middleware/csrf.middleware.js';
 export { getCookieOptions, SESSION_DURATION_MS };
 
 export const signup = catchAsync(async (req: AuthenticatedRequest, res: Response) => {
-  const { email, password } = req.body;
-  const { user, token } = await authService.signup(email, password);
+  const { email, password, name } = req.body;
+  const { user, token } = await authService.signup(email, password, name);
   setRealmCookie(res, 'personal', token);
   res.status(201).json({ success: true, user });
 });
