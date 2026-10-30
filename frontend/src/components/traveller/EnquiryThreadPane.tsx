@@ -56,6 +56,10 @@ export const EnquiryThreadPane: React.FC<EnquiryThreadPaneProps> = ({
   const [previewOpen, setPreviewOpen] = useState(false);
   const requestSeq = useRef(0);
   const announcedRead = useRef<string | null>(null);
+  // The parent refreshes its list after a read; keeping the callback in a ref
+  // means a parent render cannot recreate `load` and re-trigger the fetch.
+  const onReadRef = useRef(onRead);
+  onReadRef.current = onRead;
 
   const load = useCallback(
     async (quiet = false) => {
@@ -80,7 +84,7 @@ export const EnquiryThreadPane: React.FC<EnquiryThreadPaneProps> = ({
         if (unread > 0 || announcedRead.current !== enquiryId) {
           notifyEnquiryBadgeChanged();
           announcedRead.current = enquiryId;
-          onRead?.();
+          onReadRef.current?.();
         }
       } catch (err) {
         if (seq !== requestSeq.current || quiet) return;
@@ -94,7 +98,7 @@ export const EnquiryThreadPane: React.FC<EnquiryThreadPaneProps> = ({
         if (!quiet) setLoading(false);
       }
     },
-    [enquiryId, onRead]
+    [enquiryId]
   );
 
   useEffect(() => {

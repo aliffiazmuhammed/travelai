@@ -133,6 +133,11 @@ const Enquiries: React.FC = () => {
     }
   };
 
+  // Stable identity: the open thread calls this after clearing its unread count.
+  const refreshAfterRead = useCallback(() => {
+    void loadFirstPage(true);
+  }, [loadFirstPage]);
+
   const openEnquiry = (id: string) => {
     const next = new URLSearchParams(searchParams);
     next.set('open', id);
@@ -446,7 +451,7 @@ const Enquiries: React.FC = () => {
                 key={openId}
                 enquiryId={openId}
                 onClose={closeEnquiry}
-                onRead={() => void loadFirstPage(true)}
+                onRead={refreshAfterRead}
               />
             </section>
           ) : null}
