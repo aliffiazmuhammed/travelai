@@ -6,6 +6,7 @@ import itineraryRouter from './itinerary.routes.js';
 import geoRouter from './geo.routes.js';
 import travelersRouter from './travelers.routes.js';
 import exploreRouter from './explore.routes.js';
+import eventsRouter from './events.routes.js';
 import blocksRouter from './blocks.routes.js';
 import reportsRouter from './reports.routes.js';
 import enquiriesRouter from './enquiries.routes.js';
@@ -140,6 +141,20 @@ test('gallery explore routes are anonymous and classified', () => {
     layers.filter((layer) => guardKind(layer) !== undefined).map(pathOf),
     [],
     'Gallery browse must never inherit a session or platform guard'
+  );
+});
+
+test('public event routes are anonymous and classified', () => {
+  const layers = routeLayers(eventsRouter);
+  assert.deepEqual(
+    layers.map(pathOf).sort(),
+    ['/', '/:eventId', '/:eventId/cover', '/:eventId/interest'],
+    'The event surface is the listing, one event page, its cover and the interest write'
+  );
+  assert.deepEqual(
+    layers.filter((layer) => guardKind(layer) !== undefined).map(pathOf),
+    [],
+    'Event browse must never inherit a session or platform guard'
   );
 });
 
