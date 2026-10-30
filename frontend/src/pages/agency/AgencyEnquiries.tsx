@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowUpRight,
   BriefcaseBusiness,
@@ -152,7 +152,8 @@ const StatCard: React.FC<{
 
 const AgencyEnquiries: React.FC = () => {
   const navigate = useNavigate();
-  const { activeAgency, activeAgencyId } = useAgency();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { activeAgency, activeAgencyId, refreshEnquiryBadge } = useAgency();
   const { user } = useAgencyAuth();
   const role = activeAgency?.role;
   const canPlan = role === 'owner' || role === 'admin' || role === 'planner';
@@ -193,19 +194,23 @@ const AgencyEnquiries: React.FC = () => {
 
   /**
    * `quiet` is the live/poll path: it refreshes the counters in place without
-   * the spinner and keeps the last known numbers when the read fails.
+   * the spinner and keeps the last known numbers when the read fails. The read
+   * also feeds the nav badge, which shares this count with the context.
    */
-  const loadSummary = useCallback(async (quiet = false) => {
-    if (!quiet) setSummaryLoading(true);
-    try {
-      const result = await api.getAgencyEnquirySummary();
-      setSummary(result.summary);
-    } catch {
-      // Counters are secondary: a failed summary must not hide the inbox.
-    } finally {
-      if (!quiet) setSummaryLoading(false);
-    }
-  }, []);
+  const loadSummary = useCallback(
+    async (quiet = false) => {
+      if (!quiet) setSummaryLoading(true);
+      try {
+        const next = await refreshEnquiryBadge();
+        if (next) setSummary(next);
+      } catch {
+        // Counters are secondary: a failed summary must not hide the inbox.
+      } finally {
+        if (!quiet) setSummaryLoading(false);
+      }
+    },
+    [refreshEnquiryBadge]
+  );
 
   useEffect(() => {
     void loadSummary();
@@ -265,6 +270,36 @@ const AgencyEnquiries: React.FC = () => {
     };
   }, [activeAgencyId, canAssign]);
 
+  // A client row links back to the lead it came from: `/agency/enquiries?enquiry=<id>`
+  // opens that thread straight away, then drops the parameter so a reload lands
+  // on a plain inbox.
+  const deepLinkEnquiryId = searchParams.get('enquiry');
+  useEffect(() => {
+    if (!deepLinkEnquiryId || !activeAgencyId) return;
+    let cancelled = false;
+    void api
+      .getAgencyEnquiry(deepLinkEnquiryId)
+      .then((result) => {
+        if (cancelled) return;
+        setSelected(result.enquiry);
+        setSheetOpen(true);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          toast.error('That enquiry is no longer in this inbox.');
+        }
+      })
+      .finally(() => {
+        if (cancelled) return;
+        const next = new URLSearchParams(searchParams);
+        next.delete('enquiry');
+        setSearchParams(next, { replace: true });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [deepLinkEnquiryId, activeAgencyId, searchParams, setSearchParams]);
+
   // Reading a lead's thread is reading it (D8): the detail GET returns the
   // messages and stamps the agency's read receipts, so the badge clears as the
   // sheet opens — and again when a live frame says the traveller replied while
@@ -296,13 +331,17 @@ const AgencyEnquiries: React.FC = () => {
         )
       );
       if (quiet) setDetailError(null);
+      // Reading the thread clears its unread reply, which is part of what the
+      // badge counts. Quiet refreshes are followed by `refreshLive`'s own
+      // summary read, so only the open itself needs to ask again.
+      if (!quiet) void loadSummary(true);
     } catch (err) {
       if (seq !== detailSeq.current || quiet) return;
       setDetailError(errorMessage(err, 'Could not open this conversation.'));
     } finally {
       if (!quiet) setDetailLoading(false);
     }
-  }, []);
+  }, [loadSummary]);
 
   useEffect(() => {
     if (!sheetOpen || !selected?.id) return;
@@ -359,7 +398,11 @@ const AgencyEnquiries: React.FC = () => {
       try {
         const result = await api.updateAgencyEnquiry(enquiry.id, payload);
         const updated = result.enquiry;
-        setSelected((prev) => (prev && prev.id === updated.id ? updated : prev));
+        // A claim or conversion answers with the lead, not always with its
+        // thread: merge so the open sheet keeps what it is already showing.
+        setSelected((prev) =>
+          prev && prev.id === updated.id ? { ...prev, ...updated } : updated
+        );
         setEnquiries((prev) => {
           const next = prev.map((row) => (row.id === updated.id ? updated : row));
           if (filter !== 'all' && updated.status !== filter) {
@@ -387,7 +430,9 @@ const AgencyEnquiries: React.FC = () => {
       try {
         const result = await api.convertAgencyEnquiry(enquiry.id);
         const updated = result.enquiry;
-        setSelected(updated);
+        setSelected((prev) =>
+          prev && prev.id === updated.id ? { ...prev, ...updated } : updated
+        );
         setEnquiries((prev) => {
           const next = prev.map((row) => (row.id === updated.id ? updated : row));
           if (filter !== 'all' && updated.status !== filter) {

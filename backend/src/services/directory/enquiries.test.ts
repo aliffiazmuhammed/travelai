@@ -164,6 +164,12 @@ function matchesFilter(row: any, filter: any): boolean {
         const allowed = (cond.$in ?? []).map((entry: any) => String(entry));
         if (!allowed.includes(String(value ?? ''))) return false;
       }
+      if ('$elemMatch' in cond) {
+        const entries = Array.isArray(value) ? value : [];
+        if (!entries.some((entry: any) => matchesFilter(entry, cond.$elemMatch))) {
+          return false;
+        }
+      }
       if ('$exists' in cond) {
         const exists = value !== undefined && value !== null;
         if (cond.$exists !== exists) return false;
@@ -604,8 +610,12 @@ test('own history filters by the verified user and names each agency', async () 
   assert.deepEqual(lastEnquiryCount, { userId: USER_ID });
 });
 
-test('own history counts only the live proposals answering each enquiry', async () => {
+test('own history counts only the live proposals still waiting on an answer', async () => {
   reset();
+  const OPEN_QUOTE = '64c000000000000000000b01';
+  const DECLINED_QUOTE = '64c000000000000000000b02';
+  const SENT_UNTIL = new Date('2027-01-01T00:00:00.000Z');
+
   enquiryRows = [
     enquiryRow({ userId: USER_ID, status: 'replied' }),
     enquiryRow({ _id: OTHER_ENQUIRY_ID, userId: USER_ID, agencyId: OTHER_AGENCY_ID, clientId: CLIENT_ID }),
@@ -616,22 +626,70 @@ test('own history counts only the live proposals answering each enquiry', async 
       { _id: OTHER_AGENCY_ID, name: 'Coast & Co', slug: 'coast-and-co' },
     ],
   ];
-  quoteRows = [{ _id: QUOTE_ID, clientId: CLIENT_ID }];
-  const expiresAt = new Date('2027-01-01T00:00:00.000Z');
+  quoteRows = [
+    {
+      _id: OPEN_QUOTE,
+      clientId: CLIENT_ID,
+      status: 'sent',
+      tripId: null,
+      validUntil: SENT_UNTIL,
+    },
+    {
+      _id: DECLINED_QUOTE,
+      clientId: CLIENT_ID,
+      status: 'sent',
+      tripId: null,
+      validUntil: SENT_UNTIL,
+    },
+  ];
   proposalLinkRows = [
-    { _id: 'link-1', enquiryId: ENQUIRY_ID, quoteId: null, expiresAt, createdAt: new Date('2026-10-28T10:00:00.000Z') },
-    { _id: 'link-2', enquiryId: ENQUIRY_ID, quoteId: null, expiresAt, createdAt: new Date('2026-10-28T12:00:00.000Z') },
+    {
+      _id: 'link-open',
+      enquiryId: ENQUIRY_ID,
+      quoteId: OPEN_QUOTE,
+      expiresAt: SENT_UNTIL,
+      createdAt: new Date('2026-10-28T10:00:00.000Z'),
+    },
+    // Live in the thread, but the traveller already said no: the row must not
+    // keep reading "Proposal ready" just because the link has not expired.
+    {
+      _id: 'link-declined',
+      enquiryId: ENQUIRY_ID,
+      quoteId: DECLINED_QUOTE,
+      expiresAt: SENT_UNTIL,
+      createdAt: new Date('2026-10-28T12:00:00.000Z'),
+      declinedAt: new Date('2026-10-28T12:30:00.000Z'),
+    },
     // Minted before the enquiry id was stamped: reachable through the quote's client.
-    { _id: 'link-3', enquiryId: null, quoteId: QUOTE_ID, expiresAt, createdAt: new Date('2026-10-27T08:00:00.000Z') },
-    { _id: 'revoked', enquiryId: ENQUIRY_ID, quoteId: null, expiresAt, revokedAt: new Date('2026-10-28T13:00:00.000Z'), createdAt: new Date('2026-10-28T13:00:00.000Z') },
-    { _id: 'expired', enquiryId: ENQUIRY_ID, quoteId: null, expiresAt: new Date('2026-10-01T00:00:00.000Z'), createdAt: new Date('2026-09-01T00:00:00.000Z') },
+    {
+      _id: 'link-3',
+      enquiryId: null,
+      quoteId: OPEN_QUOTE,
+      expiresAt: SENT_UNTIL,
+      createdAt: new Date('2026-10-27T08:00:00.000Z'),
+    },
+    {
+      _id: 'revoked',
+      enquiryId: ENQUIRY_ID,
+      quoteId: OPEN_QUOTE,
+      expiresAt: SENT_UNTIL,
+      revokedAt: new Date('2026-10-28T13:00:00.000Z'),
+      createdAt: new Date('2026-10-28T13:00:00.000Z'),
+    },
+    {
+      _id: 'expired',
+      enquiryId: ENQUIRY_ID,
+      quoteId: OPEN_QUOTE,
+      expiresAt: new Date('2026-10-01T00:00:00.000Z'),
+      createdAt: new Date('2026-09-01T00:00:00.000Z'),
+    },
   ];
 
   const page = await listOwnEnquiries({ userId: USER_ID });
 
   assert.deepEqual(page.enquiries[0].proposals, {
-    count: 2,
-    lastAt: '2026-10-28T12:00:00.000Z',
+    count: 1,
+    lastAt: '2026-10-28T10:00:00.000Z',
     lastDeclinedAt: null,
   });
   assert.deepEqual(page.enquiries[1].proposals, {
@@ -815,6 +873,48 @@ test('a claim is atomic, and a second planner loses it with a 409', async () => 
         assigneeId: null,
       }),
     (error: any) => error.statusCode === 403
+  );
+});
+
+test('a claim or conversion answers with the thread the panel is showing', async () => {
+  reset();
+  enquiryRows = [
+    enquiryRow({
+      messages: [
+        {
+          _id: '64c0000000000000000006f1',
+          author: 'traveller',
+          authorName: 'Asha Rao',
+          body: 'Hello there',
+          createdAt: new Date('2026-10-28T09:00:00.000Z'),
+          readByAgencyAt: null,
+          readByTravellerAt: null,
+        },
+      ],
+    }),
+  ];
+
+  const claimed = await updateAgencyEnquiry({
+    agencyId: AGENCY_ID,
+    enquiryId: ENQUIRY_ID,
+    actorId: ACTOR_ID,
+    actorRole: 'planner',
+    assigneeId: ACTOR_ID,
+  });
+  assert.deepEqual(
+    claimed.enquiry.messages?.map((message) => message.body),
+    ['Hello there'],
+    'claiming must not blank the conversation the inbox is rendering'
+  );
+
+  const converted = await convertAgencyEnquiry({
+    agencyId: AGENCY_ID,
+    enquiryId: ENQUIRY_ID,
+    actorId: ACTOR_ID,
+  });
+  assert.deepEqual(
+    converted.enquiry.messages?.map((message) => message.body),
+    ['Hello there']
   );
 });
 
@@ -1207,6 +1307,18 @@ test('the summary counts a rolling week and rounds the conversion rate', async (
       status: 'replied',
       createdAt: new Date('2026-10-26T09:00:00.000Z'),
       repliedAt: new Date('2026-10-26T10:00:00.000Z'),
+      // The traveller wrote back after the reply: the lead needs a person again.
+      messages: [
+        {
+          _id: '64c0000000000000000006f2',
+          author: 'traveller',
+          authorName: 'Asha Rao',
+          body: 'Could we shift a day later?',
+          createdAt: new Date('2026-10-28T11:00:00.000Z'),
+          readByAgencyAt: null,
+          readByTravellerAt: new Date('2026-10-28T09:00:00.000Z'),
+        },
+      ],
     }),
     enquiryRow({
       _id: '64c00000000000000000060e',
@@ -1243,6 +1355,11 @@ test('the summary counts a rolling week and rounds the conversion rate', async (
   assert.equal(summary.repliedThisWeek, 2);
   assert.equal(summary.convertedThisWeek, 1);
   assert.equal(summary.conversionRate, 0.2);
+  assert.equal(
+    summary.needsAttention,
+    2,
+    'a fresh lead plus a traveller reply nobody has opened'
+  );
   assert.equal(summary.weekStart, '2026-10-21T12:00:00.000Z');
 });
 

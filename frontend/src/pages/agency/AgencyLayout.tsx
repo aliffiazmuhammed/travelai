@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   BriefcaseBusiness,
@@ -31,7 +31,6 @@ import { avatarSrc, initialsFor } from '@/lib/avatar';
 import { agencyRoleBadgeClass, agencyRoleLabel } from '@/lib/agency';
 import { cn } from '@/lib/utils';
 import { useEnquiryLiveRefresh } from '@/hooks/useEnquiryEvents';
-import { api } from '@/services/api';
 
 const navItems = [
   { to: '/agency', label: 'Overview', icon: LayoutDashboard, end: true },
@@ -61,28 +60,30 @@ const AgencyLayout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, agency: sessionAgency, logout } = useAgencyAuth();
-  const { activeAgency, activeAgencyId, loading, error, canManage } = useAgency();
-  const [newLeads, setNewLeads] = useState(0);
+  const {
+    activeAgency,
+    activeAgencyId,
+    loading,
+    error,
+    canManage,
+    enquiryNeedsAttention,
+    refreshEnquiryBadge,
+  } = useAgency();
 
   // D6: the cheapest possible nudge. It refetches on route changes and stays
-  // silent when the summary fails (the inbox still works).
-  const refreshBadge = useCallback(async () => {
-    if (!activeAgencyId) return;
-    try {
-      const result = await api.getAgencyEnquirySummary();
-      setNewLeads(result.summary.byStatus.new);
-    } catch {
+  // silent when the summary fails (the inbox still works). It counts replies
+  // as well as fresh leads: an answer buried in an existing thread needs the
+  // team just as much as a first contact. The count itself lives in the agency
+  // context so the inbox can lower it the moment a thread is read.
+  const refreshBadge = useCallback(() => {
+    void refreshEnquiryBadge().catch(() => {
       /* badge only */
-    }
-  }, [activeAgencyId]);
+    });
+  }, [refreshEnquiryBadge]);
 
   useEffect(() => {
-    if (!activeAgencyId) {
-      setNewLeads(0);
-      return;
-    }
-    void refreshBadge();
-  }, [activeAgencyId, location.pathname, refreshBadge]);
+    refreshBadge();
+  }, [location.pathname, refreshBadge]);
 
   // R6: outside the inbox the badge listens to the workspace stream, so a lead
   // that arrives while the team is on Trips still shows. The inbox page runs
@@ -230,9 +231,9 @@ const AgencyLayout: React.FC = () => {
             >
               <item.icon className="h-4 w-4" />
               {item.label}
-              {item.to === '/agency/enquiries' && newLeads > 0 ? (
+              {item.to === '/agency/enquiries' && enquiryNeedsAttention > 0 ? (
                 <span className="ml-0.5 rounded-full bg-teal-600 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
-                  {newLeads > 99 ? '99+' : newLeads}
+                  {enquiryNeedsAttention > 99 ? '99+' : enquiryNeedsAttention}
                 </span>
               ) : null}
             </NavLink>

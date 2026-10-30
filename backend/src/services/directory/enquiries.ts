@@ -912,7 +912,11 @@ export async function listOwnEnquiries(input: {
     ])
   );
 
-  const proposals = await liveProposalsByEnquiry(pageRows);
+  // The consumer list only counts proposals still waiting on an answer: a
+  // declined or accepted version must not keep the row reading "Proposal ready".
+  const proposals = await liveProposalsByEnquiry(pageRows, {
+    unansweredOnly: true,
+  });
   const last = pageRows[pageRows.length - 1];
   return {
     enquiries: pageRows.map((row) =>
@@ -1250,7 +1254,11 @@ export async function updateAgencyEnquiry(
   ]);
 
   return {
-    enquiry: viewAgencyEnquiry(updated, packages, undefined, relations),
+    // Claim / assign / status changes answer with the whole lead so the panel
+    // can replace its copy without dropping the thread it is showing.
+    enquiry: viewAgencyEnquiry(updated, packages, undefined, relations, {
+      includeMessages: true,
+    }),
     claimed,
   };
 }
@@ -1302,7 +1310,9 @@ async function finishConversion(
     loadEnquiryRelations(agencyId, [row]),
   ]);
   return {
-    enquiry: viewAgencyEnquiry(row, packages, undefined, relations),
+    enquiry: viewAgencyEnquiry(row, packages, undefined, relations, {
+      includeMessages: true,
+    }),
     client: projectAgencyClient(client),
     reused,
     created,
@@ -1613,6 +1623,11 @@ export interface AgencyEnquirySummaryView {
   convertedThisWeek: number;
   /** Won ÷ total, rounded to three decimals; 0 when there are no leads. */
   conversionRate: number;
+  /**
+   * Leads asking for a person right now: brand-new ones, plus any lead whose
+   * thread holds a traveller message the agency has not opened.
+   */
+  needsAttention: number;
   weekStart: string;
 }
 
@@ -1627,7 +1642,7 @@ export async function getAgencyEnquirySummary(
 ): Promise<AgencyEnquirySummaryView> {
   const weekStart = new Date(now.getTime() - 7 * DAY_MS);
 
-  const [counts, receivedThisWeek, repliedThisWeek, convertedThisWeek] =
+  const [counts, receivedThisWeek, repliedThisWeek, convertedThisWeek, needsAttention] =
     await Promise.all([
       Promise.all(
         SUMMARY_STATUSES.map((status) =>
@@ -1637,6 +1652,17 @@ export async function getAgencyEnquirySummary(
       AgencyEnquiry.countDocuments({ agencyId, createdAt: { $gte: weekStart } }),
       AgencyEnquiry.countDocuments({ agencyId, repliedAt: { $gte: weekStart } }),
       AgencyEnquiry.countDocuments({ agencyId, convertedAt: { $gte: weekStart } }),
+      AgencyEnquiry.countDocuments({
+        agencyId,
+        $or: [
+          { status: 'new' },
+          {
+            messages: {
+              $elemMatch: { author: 'traveller', readByAgencyAt: null },
+            },
+          },
+        ],
+      }),
     ]);
 
   const byStatus = {
@@ -1662,6 +1688,7 @@ export async function getAgencyEnquirySummary(
     conversionRate: total
       ? Math.round((byStatus.won / total) * 1000) / 1000
       : 0,
+    needsAttention,
     weekStart: weekStart.toISOString(),
   };
 }

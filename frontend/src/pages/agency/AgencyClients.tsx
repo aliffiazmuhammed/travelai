@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   BriefcaseBusiness,
+  Inbox,
   Loader2,
   Mail,
   Map,
@@ -320,6 +321,15 @@ const AgencyClients: React.FC = () => {
                       ) : null}
                       <span>Added {formatAgencyDate(client.createdAt)}</span>
                     </div>
+                    {client.sourceEnquiryId ? (
+                      <Link
+                        to={`/agency/enquiries?enquiry=${client.sourceEnquiryId}`}
+                        className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-teal-700 hover:underline dark:text-teal-300"
+                      >
+                        <Inbox className="h-3 w-3" />
+                        Came in through an enquiry
+                      </Link>
+                    ) : null}
                     {client.notes ? (
                       <p className="mt-1 line-clamp-2 text-xs text-slate-500 dark:text-slate-400">
                         {client.notes}

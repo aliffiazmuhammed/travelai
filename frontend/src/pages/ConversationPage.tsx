@@ -152,6 +152,20 @@ const ConversationPage: React.FC = () => {
     [load]
   );
 
+  // B3: "Proposal ready" is a promise, so it counts what the traveller can
+  // still answer. A declined or already-settled version is history, not an
+  // invitation, and counting it left the badge lying after a decline.
+  const hasLiveProposal = useMemo(
+    () =>
+      proposals.some(
+        (proposal) =>
+          !proposal.acceptedAt &&
+          !proposal.declinedAt &&
+          !proposal.settledByAcceptedTrip
+      ),
+    [proposals]
+  );
+
   const datesLabel = useMemo(() => {
     const dates = conversation?.enquiry.dates;
     if (!dates) return '';
@@ -226,13 +240,13 @@ const ConversationPage: React.FC = () => {
                       'text-[10px]',
                       travellerEnquiryStatusBadgeClass(
                         conversation.status,
-                        proposals.length > 0
+                        hasLiveProposal
                       )
                     )}
                   >
                     {travellerEnquiryStatusLabel(
                       conversation.status,
-                      proposals.length > 0
+                      hasLiveProposal
                     )}
                   </Badge>
                   {liveMode === 'live' ? (

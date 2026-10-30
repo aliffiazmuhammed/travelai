@@ -391,6 +391,11 @@ export interface AgencyEnquirySummaryView {
   convertedThisWeek: number;
   /** Won ÷ total, rounded to three decimals. */
   conversionRate: number;
+  /**
+   * Leads asking for a person right now: new ones, plus any whose thread holds
+   * a traveller message the team has not opened.
+   */
+  needsAttention: number;
   weekStart: string;
 }
 
@@ -569,6 +574,8 @@ export interface AgencyClient {
   phone?: string;
   company?: string;
   notes?: string;
+  /** The inbox lead this person came from, when there is one. */
+  sourceEnquiryId?: string | null;
   createdAt: string;
   updatedAt: string;
 }

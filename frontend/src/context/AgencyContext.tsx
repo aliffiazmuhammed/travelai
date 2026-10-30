@@ -9,6 +9,7 @@ import React, {
 import { api } from '@/services/api';
 import { useAgencyAuth } from '@/context/AgencyAuthContext';
 import type { Agency } from '@/types';
+import type { AgencyEnquirySummaryView } from '@/types/agency';
 
 /**
  * Tenant context for the `/agency` shell (PA0).
@@ -29,6 +30,9 @@ interface AgencyContextValue {
   loading: boolean;
   error: string | null;
   canManage: boolean;
+  /** Leads that still need a person: the badge on the inbox nav item. */
+  enquiryNeedsAttention: number;
+  refreshEnquiryBadge: () => Promise<AgencyEnquirySummaryView | null>;
   refreshAgencies: () => Promise<Agency[]>;
   replaceAgency: (agency: Agency) => void;
 }
@@ -50,6 +54,22 @@ export const AgencyProvider: React.FC<{ children: React.ReactNode }> = ({
   const [agency, setAgency] = useState<Agency | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [enquiryNeedsAttention, setEnquiryNeedsAttention] = useState(0);
+
+  /**
+   * The inbox badge lives here, not in the layout, because reading a thread
+   * clears an unread reply and the inbox is where that happens. One shared
+   * count keeps the nav item and the inbox telling the same story.
+   */
+  const refreshEnquiryBadge = useCallback(async (): Promise<AgencyEnquirySummaryView | null> => {
+    if (!isAuthenticated || !sessionAgencyId || mustChangePassword) {
+      setEnquiryNeedsAttention(0);
+      return null;
+    }
+    const result = await api.getAgencyEnquirySummary();
+    setEnquiryNeedsAttention(result.summary.needsAttention);
+    return result.summary;
+  }, [isAuthenticated, mustChangePassword, sessionAgencyId]);
 
   const refreshAgencies = useCallback(async (): Promise<Agency[]> => {
     if (!sessionAgencyId) {
@@ -87,6 +107,7 @@ export const AgencyProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!isAuthenticated || !sessionAgencyId || mustChangePassword) {
       setAgency(null);
       setError(null);
+      setEnquiryNeedsAttention(0);
       setLoading(false);
       return;
     }
@@ -108,10 +129,21 @@ export const AgencyProvider: React.FC<{ children: React.ReactNode }> = ({
       loading,
       error,
       canManage,
+      enquiryNeedsAttention,
+      refreshEnquiryBadge,
       refreshAgencies,
       replaceAgency,
     }),
-    [agency, loading, error, canManage, refreshAgencies, replaceAgency]
+    [
+      agency,
+      loading,
+      error,
+      canManage,
+      enquiryNeedsAttention,
+      refreshEnquiryBadge,
+      refreshAgencies,
+      replaceAgency,
+    ]
   );
 
   return <AgencyContext.Provider value={value}>{children}</AgencyContext.Provider>;
