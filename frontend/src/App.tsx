@@ -22,6 +22,7 @@ const Explore = lazy(() => import("./pages/Explore"));
 const GalleryTrip = lazy(() => import("./pages/GalleryTrip"));
 const EventDetail = lazy(() => import("./pages/EventDetail"));
 const Agencies = lazy(() => import("./pages/Agencies"));
+const AgencyApply = lazy(() => import("./pages/AgencyApply"));
 const AgencyProfile = lazy(() => import("./pages/AgencyProfile"));
 const ProposalShare = lazy(() => import("./pages/ProposalShare"));
 const ConversationPage = lazy(() => import("./pages/ConversationPage"));
@@ -50,6 +51,7 @@ const AdminAccount = lazy(() => import("./pages/admin/AdminAccount"));
 const AdminAccounts = lazy(() => import("./pages/admin/AdminAccounts"));
 const AdminAgencies = lazy(() => import("./pages/admin/AdminAgencies"));
 const AdminAgencyRecord = lazy(() => import("./pages/admin/AdminAgencyRecord"));
+const AdminApplications = lazy(() => import("./pages/admin/AdminApplications"));
 const AdminReports = lazy(() => import("./pages/admin/AdminReports"));
 const AdminPlatformAdmins = lazy(() => import("./pages/admin/AdminPlatformAdmins"));
 const AdminAudit = lazy(() => import("./pages/admin/AdminAudit"));
@@ -99,6 +101,9 @@ const App = () => (
                 {/* Milestone 9 D3: anonymous agency directory. The nav entry
                     waits for five published profiles; these routes do not. */}
                 <Route path="/agencies" element={<Agencies />} />
+                {/* PA6: public "join as an agency" form. Reviewed by a platform
+                    admin; approval provisions the tenant, not this page. */}
+                <Route path="/agencies/apply" element={<AgencyApply />} />
                 <Route path="/agencies/:slug" element={<AgencyProfile />} />
                 <Route path="/proposal/:token" element={<ProposalShare />} />
                 {/* M9 D8: the guest's private thread. */}
@@ -213,6 +218,7 @@ const App = () => (
                     path="agencies/:agencyId"
                     element={<AdminAgencyRecord />}
                   />
+                  <Route path="applications" element={<AdminApplications />} />
                   <Route path="reports" element={<AdminReports />} />
                   <Route
                     path="audit"

@@ -13,6 +13,7 @@ import enquiriesRouter from './enquiries.routes.js';
 import proposalsRouter from './proposals.routes.js';
 import conversationsRouter from './conversations.routes.js';
 import agenciesRouter from './agencies.routes.js';
+import agencyApplicationsRouter from './agencyApplications.routes.js';
 import { AUTH_GUARD_TAG } from '../middleware/auth.middleware.js';
 
 /**
@@ -176,6 +177,20 @@ test('public agency directory pages are anonymous; the enquiry write is personal
     layers.filter((layer) => guarded(layer)).map((layer) => `${pathOf(layer)} ${guardKind(layer)}`),
     ['/:slug/enquiries personal'],
     'Browsing stays anonymous, but an enquiry must belong to a personal account so the thread and its replies have somewhere to live'
+  );
+});
+
+test('public agency applications are one anonymous write, never a queue', () => {
+  const layers = routeLayers(agencyApplicationsRouter);
+  assert.deepEqual(
+    layers.map((layer) => `${pathOf(layer)} ${Object.keys(layer.route?.methods ?? {})}`),
+    ['/ post'],
+    'Applying is a single anonymous POST; the review queue lives in the platform realm'
+  );
+  assert.deepEqual(
+    layers.filter((layer) => guarded(layer)).map(pathOf),
+    [],
+    'An applicant has no account yet, so the write must not require a session'
   );
 });
 

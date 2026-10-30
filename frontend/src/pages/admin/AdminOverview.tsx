@@ -4,6 +4,7 @@ import {
   Building2,
   ClipboardList,
   Flag,
+  Inbox,
   Newspaper,
   RefreshCw,
   ShieldCheck,
@@ -221,6 +222,12 @@ const AdminOverview: React.FC = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
+            <Shortcut
+              to="/admin/applications"
+              icon={Inbox}
+              title="Agency applications"
+              description="Review agencies that asked to join, then provision or decline."
+            />
             <Shortcut
               to="/admin/accounts"
               icon={Users}

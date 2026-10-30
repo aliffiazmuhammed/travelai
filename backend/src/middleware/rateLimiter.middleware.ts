@@ -623,6 +623,62 @@ export const enquiryAgencyLimiter = rateLimit({
 });
 
 /* -------------------------------------------------------------------------- */
+/*  Public agency applications (PA6)                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The "join as an agency" form is an anonymous write, but a rarer one than an
+ * enquiry: a real agency applies once, then waits. Two buckets are enough.
+ *
+ * - **IP** — a shared office or school network cannot queue up dozens of
+ *   applications.
+ * - **Email** — one address cannot keep the queue busy from rotating IPs; the
+ *   key falls back to the network when the address is missing or malformed.
+ *
+ * The unique pending row in the model is the real duplicate guard; these
+ * buckets stop repeated attempts from reaching it.
+ */
+export const AGENCY_APPLICATION_IP_DAILY_LIMIT = 5;
+export const AGENCY_APPLICATION_EMAIL_DAILY_LIMIT = 2;
+
+const agencyApplicationEmailKey = (req: any): string => {
+  const raw = req?.body?.email;
+  const email = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+  return email ? `email:${email}` : `ip:${req?.ip ?? 'anonymous'}`;
+};
+
+const AGENCY_APPLICATION_LIMIT_COPY =
+  'You have reached the daily limit for agency applications from this network. Please try again in 24 hours.';
+const AGENCY_APPLICATION_EMAIL_LIMIT_COPY =
+  'You have reached the daily limit for agency applications from this email address. Please try again in 24 hours.';
+
+export const agencyApplicationIpLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000,
+  max: AGENCY_APPLICATION_IP_DAILY_LIMIT,
+  message: {
+    success: false,
+    error: AGENCY_APPLICATION_LIMIT_COPY,
+    message: AGENCY_APPLICATION_LIMIT_COPY,
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+export const agencyApplicationEmailLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000,
+  max: AGENCY_APPLICATION_EMAIL_DAILY_LIMIT,
+  keyGenerator: agencyApplicationEmailKey,
+  validate: false,
+  message: {
+    success: false,
+    error: AGENCY_APPLICATION_EMAIL_LIMIT_COPY,
+    message: AGENCY_APPLICATION_EMAIL_LIMIT_COPY,
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/* -------------------------------------------------------------------------- */
 /*  Public event interest (M10 E2)                                            */
 /* -------------------------------------------------------------------------- */
 

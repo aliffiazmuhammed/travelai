@@ -696,6 +696,7 @@ const Landing = () => {
               </p>
               {[
                 { label: "Agency sign in", to: "/agency/login" },
+                { label: "Apply to join", to: "/agencies/apply" },
                 { label: "Directory profiles", to: "/agencies" },
               ].map((link) => (
                 <Link

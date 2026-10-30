@@ -6,6 +6,7 @@ import {
   ClipboardList,
   ExternalLink,
   Flag,
+  Inbox,
   KeyRound,
   LayoutDashboard,
   LogOut,
@@ -43,6 +44,7 @@ import {
   SidebarHeader,
   SidebarInset,
   SidebarMenu,
+  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
@@ -52,6 +54,7 @@ import {
 } from '@/components/ui/sidebar';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { usePlatformAuth } from '@/context/PlatformAuthContext';
+import { api } from '@/services/api';
 import { avatarSrc, initialsFor } from '@/lib/avatar';
 import { cn } from '@/lib/utils';
 
@@ -80,6 +83,7 @@ const navGroups: Array<{ label: string; items: NavItem[] }> = [
     items: [
       { to: '/admin/accounts', label: 'Accounts', icon: Users },
       { to: '/admin/agencies', label: 'Agencies', icon: Building2 },
+      { to: '/admin/applications', label: 'Applications', icon: Inbox },
     ],
   },
   {
@@ -163,6 +167,30 @@ const AdminLayout: React.FC = () => {
   const { user, logout } = usePlatformAuth();
   const [commandOpen, setCommandOpen] = React.useState(false);
 
+  // Applications are the one queue a visitor can add to without a session, so
+  // the shell keeps a quiet count and updates it when the queue page decides.
+  const [pendingApplications, setPendingApplications] = React.useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = () => {
+      api
+        .listAgencyApplications({ status: 'pending', limit: 1 })
+        .then((result) => {
+          if (!cancelled) setPendingApplications(result.counts.pending);
+        })
+        .catch(() => {
+          if (!cancelled) setPendingApplications(null);
+        });
+    };
+    load();
+    window.addEventListener('travelai:applications-changed', load);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('travelai:applications-changed', load);
+    };
+  }, []);
+
   const displayName =
     user?.name?.trim() || user?.label || user?.email?.split('@')[0] || 'Administrator';
 
@@ -232,6 +260,13 @@ const AdminLayout: React.FC = () => {
                               </span>
                             </NavLink>
                           </SidebarMenuButton>
+                          {item.to === '/admin/applications' &&
+                          pendingApplications !== null &&
+                          pendingApplications > 0 ? (
+                            <SidebarMenuBadge className="bg-indigo-500/15 text-indigo-300">
+                              {pendingApplications > 99 ? '99+' : pendingApplications}
+                            </SidebarMenuBadge>
+                          ) : null}
                         </SidebarMenuItem>
                       ))}
                     </SidebarMenu>

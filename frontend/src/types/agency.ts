@@ -351,6 +351,19 @@ export interface AgencyEnquiryAcknowledgement {
   createdAt: string | null;
 }
 
+/**
+ * PA6: the public "join as an agency" form. No account is created — a platform
+ * admin reviews the request and provisioning happens on approval.
+ */
+export interface AgencyApplicationInput {
+  name: string;
+  phone: string;
+  email: string;
+  note?: string;
+  /** Honeypot: a person never sees it, so a value means a bot. */
+  website?: string;
+}
+
 export interface AgencyEnquiryFilters {
   status?: AgencyEnquiryStatus;
   cursor?: string;

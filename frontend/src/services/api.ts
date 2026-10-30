@@ -63,6 +63,7 @@ import type {
   AgencyDirectoryPublicProfileResponse,
   AgencyEnquiry,
   AgencyEnquiryAcknowledgement,
+  AgencyApplicationInput,
   AgencyConversation,
   AgencyProposalSummary,
   AgencyEnquiryConversion,
@@ -123,6 +124,10 @@ import type {
   PlatformAdminList,
   PlatformOverview,
   PlatformAgencyDetail,
+  PlatformAgencyApplicationApproval,
+  PlatformAgencyApplicationList,
+  PlatformAgencyApplicationQuery,
+  PlatformAgencyApplicationRow,
   PlatformAgencyDirectoryMutation,
   PlatformAgencyInput,
   PlatformAgencyInviteResult,
@@ -891,6 +896,39 @@ class ApiClient {
     return this.request(
       `/api/admin/reports/${encodeURIComponent(targetType)}/${encodeURIComponent(targetId)}/dismiss`,
       { method: 'POST' }
+    );
+  }
+
+  // PA6 public agency applications. Approval provisions a real tenant, so the
+  // one-time password comes back in the response and is never stored.
+  async listAgencyApplications(
+    params: PlatformAgencyApplicationQuery = {}
+  ): Promise<PlatformAgencyApplicationList> {
+    const query = new URLSearchParams();
+    if (params.status && params.status !== 'pending') query.append('status', params.status);
+    if (params.q?.trim()) query.append('q', params.q.trim());
+    if (params.page) query.append('page', String(params.page));
+    if (params.limit) query.append('limit', String(params.limit));
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    return this.request(`/api/admin/applications${suffix}`);
+  }
+
+  async approveAgencyApplication(
+    id: string
+  ): Promise<PlatformAgencyApplicationApproval> {
+    return this.request(
+      `/api/admin/applications/${encodeURIComponent(id)}/approve`,
+      { method: 'POST' }
+    );
+  }
+
+  async rejectAgencyApplication(
+    id: string,
+    note?: string
+  ): Promise<{ success: boolean; application: PlatformAgencyApplicationRow }> {
+    return this.request(
+      `/api/admin/applications/${encodeURIComponent(id)}/reject`,
+      { method: 'POST', body: JSON.stringify(note?.trim() ? { note: note.trim() } : {}) }
     );
   }
 
@@ -2299,6 +2337,26 @@ class ApiClient {
     return this.request(`/api/events/${encodeURIComponent(eventId)}/interest`, {
       method: 'POST',
       body: JSON.stringify(payload),
+    });
+  }
+
+  /**
+   * PA6: the public "join as an agency" form. No account is created — a platform
+   * admin reviews the request and provisioning happens on approval. The honeypot
+   * field rides along so the server can drop bot submissions silently.
+   */
+  async submitAgencyApplication(
+    payload: AgencyApplicationInput
+  ): Promise<{ success: boolean; message: string; submitted: boolean }> {
+    return this.request('/api/agency-applications', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: payload.name.trim(),
+        phone: payload.phone.trim(),
+        email: payload.email.trim(),
+        ...(payload.note?.trim() ? { note: payload.note.trim() } : {}),
+        ...(payload.website ? { website: payload.website } : {}),
+      }),
     });
   }
 

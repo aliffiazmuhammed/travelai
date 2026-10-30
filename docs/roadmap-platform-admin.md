@@ -70,7 +70,7 @@ never merge them.
 | Agency login | Workspace slug + email + password | The slug disambiguates the tenant and prevents cross-tenant login |
 | Agency switcher | Removed | An agency account is scoped to one tenant; multiple tenants require separate logins |
 | Sessions | Separate cookies and JWTs per realm | Logging into agency must not replace or authorize a personal session, and vice versa |
-| Agency creation | Platform admin only | TravelAI onboards paying agencies; no public self-service tenant creation |
+| Agency creation | Platform admin only | TravelAI onboards paying agencies; no public self-service tenant creation. PA6 adds an application form — applicants ask, a platform admin approves, and approval runs the same provisioning primitive |
 | Owner provisioning | Temporary password + forced password change | Matches the requested first-login flow; the personal password is never touched |
 | Agency invites | Create or use an agency account for that tenant | Invites never attach a personal account |
 | Platform roles | `super_admin` only in v1 | Keep the first release small; add read-only/support roles later |
@@ -167,7 +167,8 @@ trip-guard assertion), and every admin route uses `protectPlatform`.
 
 - Personal signup creates only `accountType: 'personal'`.
 - Agency accounts are created by platform-admin provisioning or by accepting an
-  agency invite for that tenant. There is no public agency signup.
+  agency invite for that tenant. There is no public agency signup; PA6 adds an
+  admin-reviewed application intake whose approval calls provisioning.
 - Platform accounts are created by the bootstrap CLI or by an existing super
   admin. There is no public platform signup.
 - Each realm has its own `me`, `logout`, and `password` endpoint.
@@ -1388,3 +1389,35 @@ left untouched (see the note above), and the run warns when one exists.
   platform-admin onboarding decision.
 - `docs/agency-a9-test-plan.md` - superseded for account/onboarding by this
   plan; A1-A9 feature coverage still applies.
+
+---
+
+## 17. PA6 — public agency applications (2026-10-30)
+
+**Status:** shipped. Intake is a public form; the tenant is still created only by
+platform provisioning.
+
+The directory pages asked "who are these agencies?" but gave an agency no way to
+say "we want in" without a personal introduction. PA6 adds a reviewed intake:
+
+- **Public page** `/agencies/apply` — agency name, phone, email and an optional
+  note about the trips they run. No account is created, no password is chosen,
+  and the response is a bare receipt.
+- **One anonymous write** `POST /api/agency-applications`, IP- and email-bucketed
+  (5 / 2 per rolling 24 h) with a honeypot. Intake answers `503` while
+  `PLATFORM_ADMIN_ENABLED` is off, because an application has no reviewer then.
+- **One live application per email** through a unique partial index on
+  `status: 'pending'`. Rejection and approval both leave the index, so a rejected
+  agency may apply again.
+- **Review queue** `/admin/applications` (sidebar badge for pending rows). Approve
+  runs `provisionAgency` — the same primitive as hand onboarding — and returns
+  its one-time password for the admin to hand over; reject stores the row and an
+  optional internal note rather than deleting it.
+- **Audit** `agency.application_approved` / `agency.application_rejected` on
+  `targetType: 'agency_application'`, alongside the `agency.created` and
+  `agency.owner_assigned` rows provisioning already writes.
+
+**Deliberately not included:** any email to the applicant. There is no mail
+provider in the stack, so the admin contacts the agency at the phone or email on
+the application. Adding a mailer later should turn approval into a delivery step
+rather than a console hand-off.

@@ -31,6 +31,11 @@ import {
   verifyAgencyProfile,
 } from '../controllers/adminAgencies.controller.js';
 import {
+  approveApplication,
+  listApplications,
+  rejectApplication,
+} from '../controllers/adminAgencyApplications.controller.js';
+import {
   dismissReportedContent,
   hideReportedContent,
   listReports,
@@ -83,6 +88,21 @@ router.post(
   '/reports/:targetType/:targetId/dismiss',
   platformWriteLimiter,
   dismissReportedContent
+);
+
+// PA6 public agency applications. Approval runs the same provisioning
+// primitive as a hand-onboarded agency and returns its one-time password;
+// rejection keeps the row plus an internal note.
+router.get('/applications', listApplications);
+router.post(
+  '/applications/:id/approve',
+  platformWriteLimiter,
+  approveApplication
+);
+router.post(
+  '/applications/:id/reject',
+  platformWriteLimiter,
+  rejectApplication
 );
 
 // PA3 agency provisioning plus PA4 lifecycle/access operations. Static agency

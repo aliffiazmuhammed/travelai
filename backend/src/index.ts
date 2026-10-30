@@ -16,6 +16,7 @@ import travelersRoutes from './routes/travelers.routes.js';
 import exploreRoutes from './routes/explore.routes.js';
 import eventsRoutes from './routes/events.routes.js';
 import agenciesRoutes from './routes/agencies.routes.js';
+import agencyApplicationsRoutes from './routes/agencyApplications.routes.js';
 import blocksRoutes from './routes/blocks.routes.js';
 import reportsRoutes from './routes/reports.routes.js';
 import enquiriesRoutes from './routes/enquiries.routes.js';
@@ -181,7 +182,7 @@ app.get('/api/health', (_req, res) => {
     // SPA renders `/admin` as unavailable instead of offering a login form.
     platform: {
       enabled: env.PLATFORM_ADMIN_ENABLED,
-      milestone: 'PA5',
+      milestone: 'PA6',
     },
     staticServing: {
       enabled: Boolean(shouldServeStatic && frontendDist),
@@ -241,6 +242,10 @@ app.use('/api/events', eventsRoutes);
 // Public agency directory profiles (M9 D1): anonymous, projection-only, and
 // 404 for drafts, suspended agencies and ops-hidden profiles.
 app.use('/api/agencies', agenciesRoutes);
+// Public agency applications (PA6): one anonymous write, no listing. Intake is
+// gated on the platform console being enabled, because an application only has
+// a destination if a platform admin can review it.
+app.use('/api/agency-applications', agencyApplicationsRoutes);
 // Personal block list (G5): account-scoped, one-way, never carries a trip id.
 // Agency and platform sessions are refused by `protectPersonal`.
 app.use('/api/blocks', blocksRoutes);

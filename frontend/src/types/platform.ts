@@ -387,6 +387,57 @@ export interface PlatformAuditQuery {
 }
 
 /* -------------------------------------------------------------------------- */
+/*  Public agency applications (PA6)                                           */
+/* -------------------------------------------------------------------------- */
+
+export type PlatformAgencyApplicationStatus = 'pending' | 'approved' | 'rejected';
+export type PlatformAgencyApplicationFilter = PlatformAgencyApplicationStatus | 'all';
+
+export interface PlatformAgencyApplicationRow {
+  _id: string;
+  name: string;
+  phone: string;
+  email: string;
+  note?: string;
+  status: PlatformAgencyApplicationStatus;
+  submittedAt: string;
+  decidedAt?: string;
+  decisionNote?: string;
+  agencyId?: string;
+  agencySlug?: string;
+}
+
+export interface PlatformAgencyApplicationCounts {
+  all: number;
+  pending: number;
+  approved: number;
+  rejected: number;
+}
+
+export interface PlatformAgencyApplicationList {
+  applications: PlatformAgencyApplicationRow[];
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  counts: PlatformAgencyApplicationCounts;
+}
+
+export interface PlatformAgencyApplicationQuery {
+  status?: PlatformAgencyApplicationFilter;
+  q?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface PlatformAgencyApplicationApproval {
+  success: boolean;
+  message: string;
+  application: PlatformAgencyApplicationRow;
+  provision: Omit<PlatformProvisionResult, 'success' | 'message'>;
+}
+
+/* -------------------------------------------------------------------------- */
 /*  Reported content / moderation (Milestone 8 G6)                              */
 /* -------------------------------------------------------------------------- */
 

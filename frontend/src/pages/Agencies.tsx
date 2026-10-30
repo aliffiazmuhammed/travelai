@@ -351,6 +351,19 @@ const Agencies = () => {
           title="Find an agency that plans your kind of trip"
           description="People who plan trips for a living, with the places they cover and the services they offer. Have a look around until one feels like a good fit."
           crumbs={[{ label: "Agencies" }]}
+          actions={
+            <Button
+              asChild
+              variant="outline"
+              size="sm"
+              className="h-9 rounded-xl text-xs font-bold gap-1.5"
+            >
+              <Link to="/agencies/apply">
+                <Building2 className="h-3.5 w-3.5" />
+                List your agency
+              </Link>
+            </Button>
+          }
         >
           <div className="flex flex-col gap-4">
             <div className="relative">
