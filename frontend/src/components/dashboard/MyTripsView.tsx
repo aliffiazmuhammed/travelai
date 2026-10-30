@@ -40,6 +40,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDate } from "@/lib/date";
+import { TravellerPageHeader } from "@/components/traveller/TravellerPageHeader";
+import { TravellerSegmented } from "@/components/traveller/TravellerSegmented";
 import type { Trip } from "@/types/trip";
 import type { AgencyMember } from "@/types";
 import {
@@ -206,17 +208,36 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
     return DEFAULT_THUMB;
   };
 
-  const filteredTrips = useMemo(() => {
+  const searchedTrips = useMemo(() => {
     return trips.filter((trip) => {
       const title = trip.title || trip.tripDetails?.trip_title || "";
-      const matchesSearch =
-        !search.trim() || title.toLowerCase().includes(search.toLowerCase());
-      const tripStatus = trip.status || "planned";
-      const matchesStatus =
-        statusFilter === "all" || tripStatus === statusFilter;
-      return matchesSearch && matchesStatus;
+      return (
+        !search.trim() || title.toLowerCase().includes(search.toLowerCase())
+      );
     });
-  }, [trips, search, statusFilter]);
+  }, [trips, search]);
+
+  const filteredTrips = useMemo(() => {
+    return searchedTrips.filter((trip) => {
+      const tripStatus = trip.status || "planned";
+      return statusFilter === "all" || tripStatus === statusFilter;
+    });
+  }, [searchedTrips, statusFilter]);
+
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = {
+      all: searchedTrips.length,
+      planned: 0,
+      ongoing: 0,
+      completed: 0,
+      draft: 0,
+    };
+    for (const trip of searchedTrips) {
+      const status = trip.status || "planned";
+      counts[status] = (counts[status] ?? 0) + 1;
+    }
+    return counts;
+  }, [searchedTrips]);
 
   // Milestone 6 (F9): trips the user owns vs trips shared with them. The role
   // annotation comes with every trip row; a missing role reads as owned
@@ -320,19 +341,19 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
   return (
     <div className={`space-y-6 animate-fade-in${hideHeader ? "" : " max-w-6xl mx-auto"}`}>
       {/* Top Controls Header */}
-      {hideHeader ? null : (
+      {hideHeader ? null : isAgency ? (
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-3xl bg-card border border-border/70 shadow-xs">
         <div>
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold uppercase tracking-wider text-primary">
-              {eyebrow ?? (isAgency ? "Agency Trip Library" : "Trip Library")}
+              {eyebrow ?? "Agency Trip Library"}
             </span>
             <Badge variant="outline" className="text-[10px]">
-              {trips.length} {isAgency ? "Agency" : "Total"} Trips
+              {trips.length} Agency Trips
             </Badge>
           </div>
           <h2 className="text-2xl font-black text-foreground">
-            {heading ?? (isAgency ? "Agency trips" : "My Adventures")}
+            {heading ?? "Agency trips"}
           </h2>
         </div>
 
@@ -360,6 +381,39 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
           </Button>
         </div>
       </div>
+      ) : (
+        <TravellerPageHeader
+          eyebrow={eyebrow ?? "Trip library"}
+          icon={Compass}
+          title={heading ?? "Your trips"}
+          description="Everything you have planned, plus trips friends share with you. Open one to edit the plan, split costs, or invite the group."
+          crumbs={[{ label: "My Trips" }]}
+          actions={
+            <>
+              {travelPageHandle && (
+                <Button
+                  asChild
+                  variant="outline"
+                  className="h-10 rounded-xl px-3.5 text-xs font-semibold gap-1.5"
+                >
+                  <Link to={`/travelers/${encodeURIComponent(travelPageHandle)}`}>
+                    <Globe2 className="h-4 w-4" />
+                    Your travel page
+                  </Link>
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="hero"
+                onClick={onNewPlan}
+                className="h-10 rounded-xl px-4 text-xs font-semibold gap-1.5 shadow-sm"
+              >
+                <PlusCircle className="w-4 h-4" />
+                <span>{planLabel}</span>
+              </Button>
+            </>
+          }
+        />
       )}
 
       {/* Filter & Search Bar */}
@@ -415,20 +469,35 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
             </div>
           ) : null}
 
-          <div className="inline-flex p-1 bg-muted/60 rounded-2xl border border-border/60">
-            {["all", "planned", "ongoing", "completed", "draft"].map((status) => (
-              <Button
-                key={status}
-                type="button"
-                size="sm"
-                variant={statusFilter === status ? "hero" : "ghost"}
-                onClick={() => setStatusFilter(status)}
-                className="rounded-xl text-xs font-bold h-8 px-3 capitalize"
-              >
-                {status}
-              </Button>
-            ))}
-          </div>
+          {isAgency ? (
+            <div className="inline-flex p-1 bg-muted/60 rounded-2xl border border-border/60">
+              {["all", "planned", "ongoing", "completed", "draft"].map((status) => (
+                <Button
+                  key={status}
+                  type="button"
+                  size="sm"
+                  variant={statusFilter === status ? "hero" : "ghost"}
+                  onClick={() => setStatusFilter(status)}
+                  className="rounded-xl text-xs font-bold h-8 px-3 capitalize"
+                >
+                  {status}
+                </Button>
+              ))}
+            </div>
+          ) : (
+            <TravellerSegmented
+              ariaLabel="Filter trips by status"
+              value={statusFilter}
+              onChange={(value) => setStatusFilter(value)}
+              options={[
+                { value: "all", label: "All", count: statusCounts.all },
+                { value: "planned", label: "Planned", count: statusCounts.planned },
+                { value: "ongoing", label: "Ongoing", count: statusCounts.ongoing },
+                { value: "completed", label: "Completed", count: statusCounts.completed },
+                { value: "draft", label: "Drafts", count: statusCounts.draft },
+              ]}
+            />
+          )}
 
           <div className="inline-flex p-1 bg-muted/60 rounded-2xl border border-border/60">
             <Button

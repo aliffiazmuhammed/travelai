@@ -158,7 +158,7 @@ const InviteAccept: React.FC = () => {
                 <AlertTriangle className="w-7 h-7" />
               </div>
               <div className="space-y-1">
-                <h2 className="text-lg font-black text-foreground">Invitation unavailable</h2>
+                <h2 className="text-lg font-semibold tracking-tight text-foreground">Invitation unavailable</h2>
                 <p className="text-xs text-muted-foreground leading-relaxed">{error}</p>
               </div>
               <Button type="button" variant="hero" className="rounded-2xl h-11 px-6 text-xs font-bold" onClick={() => navigate("/dashboard")}>
@@ -181,7 +181,7 @@ const InviteAccept: React.FC = () => {
 
             <CardContent className="p-6 space-y-5">
               <div className="space-y-1.5 text-center">
-                <h2 className="text-xl font-black text-foreground line-clamp-2">
+                <h2 className="text-xl font-semibold tracking-tight text-foreground line-clamp-2">
                   {preview.trip.title}
                 </h2>
                 {preview.trip.destination && (

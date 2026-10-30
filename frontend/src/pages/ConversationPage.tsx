@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { AlertCircle, ArrowLeft, ArrowUpRight, CalendarDays, Loader2, MessageSquare, ShieldCheck, Users, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
 import Navbar from '@/components/Navbar';
+import { TravellerBreadcrumbs } from '@/components/traveller/TravellerBreadcrumbs';
 import ConversationThread from '@/components/directory/ConversationThread';
 import ProposalComparison from '@/components/directory/ProposalComparison';
 import ProposalPreviewDialog from '@/components/directory/ProposalPreviewDialog';
@@ -177,7 +178,7 @@ const ConversationPage: React.FC = () => {
   }, [conversation]);
 
   return (
-    <div className="min-h-screen bg-gradient-hero">
+    <div className="min-h-screen bg-background">
       <Navbar />
       <main className="container mx-auto max-w-6xl px-4 pb-20 pt-24">
         {loading ? (
@@ -186,12 +187,12 @@ const ConversationPage: React.FC = () => {
             <p className="mt-2 text-xs">Opening the conversation…</p>
           </div>
         ) : error || !conversation ? (
-          <div className="mx-auto max-w-lg space-y-4 rounded-3xl border border-border/80 bg-card/80 p-8 text-center shadow-card">
+          <div className="mx-auto max-w-lg space-y-4 rounded-2xl border border-border/80 bg-card p-8 text-center">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
               <AlertCircle className="h-7 w-7" />
             </div>
             <div className="space-y-1">
-              <h1 className="text-lg font-black text-foreground">Conversation not available</h1>
+              <h1 className="text-lg font-semibold text-foreground">Conversation not available</h1>
               <p className="text-xs text-muted-foreground">
                 {error ??
                   (guest
@@ -209,6 +210,16 @@ const ConversationPage: React.FC = () => {
           </div>
         ) : (
           <div className="space-y-5">
+            <TravellerBreadcrumbs
+              items={
+                guest
+                  ? [{ label: 'Private conversation' }]
+                  : [
+                      { label: 'Enquiries', to: '/enquiries' },
+                      { label: conversation.agency.name },
+                    ]
+              }
+            />
             {!guest ? (
               <Link
                 to="/enquiries"
@@ -218,12 +229,12 @@ const ConversationPage: React.FC = () => {
                 All enquiries
               </Link>
             ) : null}
-            <div className="flex flex-col gap-3 rounded-3xl border border-border/80 bg-card/80 p-5 shadow-card sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex flex-col gap-3 rounded-2xl border border-border/80 bg-card p-5 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0 space-y-1">
-                <p className="text-[11px] font-bold uppercase tracking-wider text-primary">
+                <p className="text-[11px] font-semibold tracking-wide text-primary">
                   {guest ? 'Private conversation' : 'Your conversation'}
                 </p>
-                <h1 className="flex flex-wrap items-center gap-2 text-2xl font-black text-foreground">
+                <h1 className="flex flex-wrap items-center gap-2 text-2xl font-semibold tracking-tight text-foreground">
                   {conversation.agency.slug ? (
                     <Link
                       to={`/agencies/${encodeURIComponent(conversation.agency.slug)}`}
@@ -284,7 +295,7 @@ const ConversationPage: React.FC = () => {
             </div>
 
             <div className="grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
-              <Card className="rounded-3xl border-border/70">
+              <Card className="rounded-2xl border-border/70">
                 <CardHeader className="pb-3">
                   <CardTitle className="flex items-center gap-2 text-base">
                     <MessageSquare className="h-4 w-4 text-primary" />
@@ -335,7 +346,7 @@ const ConversationPage: React.FC = () => {
                 </CardContent>
               </Card>
 
-              <Card className="rounded-3xl border-border/70">
+              <Card className="rounded-2xl border-border/70">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base">Proposals to compare</CardTitle>
                   <p className="text-[11px] text-muted-foreground">

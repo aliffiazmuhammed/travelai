@@ -6,12 +6,12 @@ import AgencyPackageCard from "@/components/directory/AgencyPackageCard";
 import DirectoryProfilePreview from "@/components/directory/DirectoryProfilePreview";
 import { PublicEventCard } from "@/components/events/PublicEventCard";
 import { ReportDialog } from "@/components/gallery/ReportDialog";
+import { TravellerBreadcrumbs } from "@/components/traveller/TravellerBreadcrumbs";
 import { Button } from "@/components/ui/button";
 import { api, ApiError } from "@/services/api";
 import { applyPageMeta } from "@/lib/meta";
 import {
   AlertCircle,
-  ArrowLeft,
   ArrowRight,
   Building2,
   Flag,
@@ -159,18 +159,13 @@ const AgencyProfile = () => {
     <div className="min-h-screen bg-gradient-hero flex flex-col">
       <Navbar />
 
-      <main className="flex-1 container mx-auto px-4 pt-24 pb-20 max-w-3xl space-y-6">
-        <Button
-          asChild
-          variant="ghost"
-          size="sm"
-          className="rounded-xl text-xs font-bold gap-1.5 -ml-2 text-muted-foreground hover:text-foreground"
-        >
-          <Link to="/agencies">
-            <ArrowLeft className="h-3.5 w-3.5" />
-            All agencies
-          </Link>
-        </Button>
+      <main className="flex-1 container mx-auto px-4 pt-24 pb-20 max-w-3xl space-y-5">
+        <TravellerBreadcrumbs
+          items={[
+            { label: "Agencies", to: "/agencies" },
+            ...(profile ? [{ label: profile.name }] : []),
+          ]}
+        />
 
         {loading ? (
           <div className="flex flex-col items-center justify-center min-h-[320px] space-y-4">

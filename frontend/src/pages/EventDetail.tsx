@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Navbar from '@/components/Navbar';
 import { AgencyLogoTile } from '@/components/directory/AgencyLogoTile';
+import { TravellerBreadcrumbs } from '@/components/traveller/TravellerBreadcrumbs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,7 +13,6 @@ import { api, ApiError } from '@/services/api';
 import { cn } from '@/lib/utils';
 import {
   AlertCircle,
-  ArrowLeft,
   ArrowRight,
   BadgeCheck,
   CalendarDays,
@@ -242,14 +242,10 @@ const EventDetail = () => {
     <div className="min-h-screen bg-gradient-hero flex flex-col">
       <Navbar />
 
-      <main className="flex-1 container mx-auto max-w-5xl space-y-8 px-4 pt-24 pb-20">
-        <Link
-          to="/explore"
-          className="inline-flex items-center gap-1.5 text-xs font-bold text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Back to Explore
-        </Link>
+      <main className="flex-1 container mx-auto max-w-5xl space-y-6 px-4 pt-24 pb-20">
+        <TravellerBreadcrumbs
+          items={[{ label: 'Explore', to: '/explore' }, { label: event.title }]}
+        />
 
         <article className="overflow-hidden rounded-3xl border border-border/80 bg-card/80 shadow-card backdrop-blur-md">
           {showCover && (
@@ -283,7 +279,7 @@ const EventDetail = () => {
             </div>
 
             <div className="max-w-3xl space-y-3">
-              <h1 className="text-2xl font-black tracking-tight text-foreground sm:text-4xl">
+              <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-4xl">
                 {event.title}
               </h1>
               {event.summary && (

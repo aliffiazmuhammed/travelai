@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Plane, AlertCircle } from "lucide-react";
+import { TravellerSegmented } from "@/components/traveller/TravellerSegmented";
 import { useAuth } from "@/context/UserContext";
 import { cn } from "@/lib/utils";
 
@@ -103,8 +104,13 @@ const Auth = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-hero px-4">
-      <div className="w-full max-w-md">
+    <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-background px-4 py-16">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_hsl(var(--primary)/0.14),_transparent_60%)]"
+      />
+
+      <div className="relative w-full max-w-md">
         <Link to="/" className="flex items-center justify-center gap-2.5 mb-8 group">
           <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center group-hover:scale-105 transition-all">
             <Plane className="h-5 w-5" />
@@ -114,17 +120,31 @@ const Auth = () => {
           </span>
         </Link>
 
-        <Card className="shadow-card border-border/50">
-          <CardHeader className="space-y-2">
-            <CardTitle className="text-2xl">
-              {isLogin ? "Welcome Back" : "Get Started"}
-            </CardTitle>
-            <CardDescription>
-              {isLogin
-                ? "Sign in to access your trips and continue planning"
-                : "Create an account to turn your travel ideas into a day-by-day plan"
-              }
-            </CardDescription>
+        <Card className="rounded-3xl border-border/70 bg-card/80 shadow-card backdrop-blur-md">
+          <CardHeader className="space-y-4">
+            <TravellerSegmented
+              ariaLabel="Sign in or create an account"
+              value={isLogin ? "signin" : "signup"}
+              onChange={(value) => {
+                const nextIsLogin = value === "signin";
+                if (nextIsLogin !== isLogin) handleToggleMode();
+              }}
+              options={[
+                { value: "signin", label: "Sign in" },
+                { value: "signup", label: "Create account" },
+              ]}
+              className="self-start"
+            />
+            <div className="space-y-1.5">
+              <CardTitle className="text-2xl font-semibold tracking-tight">
+                {isLogin ? "Welcome back" : "Create your account"}
+              </CardTitle>
+              <CardDescription>
+                {isLogin
+                  ? "Pick up your trips, chats and enquiries where you left them."
+                  : "One account for your trips, travel chats and enquiries."}
+              </CardDescription>
+            </div>
           </CardHeader>
           <CardContent>
             <form className="space-y-4" onSubmit={handleSubmit}>
@@ -237,17 +257,6 @@ const Auth = () => {
               <Button variant="hero" size="lg" className="w-full font-bold" disabled={loading}>
                 {loading ? (isLogin ? 'Signing you in…' : 'Creating your account…') : (isLogin ? "Sign In" : "Create Account")}
               </Button>
-
-              <div className="text-center text-sm text-muted-foreground">
-                {isLogin ? "Don't have an account? " : "Already have an account? "}
-                <button
-                  type="button"
-                  onClick={handleToggleMode}
-                  className="text-primary hover:underline font-semibold"
-                >
-                  {isLogin ? "Sign up" : "Sign in"}
-                </button>
-              </div>
             </form>
           </CardContent>
         </Card>

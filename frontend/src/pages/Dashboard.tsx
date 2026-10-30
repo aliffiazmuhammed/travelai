@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Copy } from "lucide-react";
 import Navbar from "@/components/Navbar";
+import { TravellerBreadcrumbs } from "@/components/traveller/TravellerBreadcrumbs";
 import { api } from "@/services/api";
 import { toast } from "sonner";
 import ItineraryDisplay from "@/components/ItineraryDisplay";
@@ -370,7 +371,7 @@ const Dashboard: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-hero flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col">
       <Navbar />
 
       <main className="flex-1 container mx-auto px-4 pt-24 pb-16">
@@ -395,6 +396,17 @@ const Dashboard: React.FC = () => {
         ) : selectedTrip ? (
           /* SINGLE TRIP DETAIL VIEW */
           <div className="space-y-6">
+            <TravellerBreadcrumbs
+              items={[
+                { label: "My Trips", to: "/dashboard" },
+                {
+                  label:
+                    selectedTrip.title ||
+                    selectedTrip.tripDetails?.trip_title ||
+                    "Trip",
+                },
+              ]}
+            />
             {selectedTrip.clonedFrom && (
               <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 text-xs text-foreground/80">
                 <Copy className="h-4 w-4 shrink-0 text-primary" />

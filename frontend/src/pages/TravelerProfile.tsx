@@ -4,6 +4,7 @@ import Navbar from "@/components/Navbar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ReportDialog } from "@/components/gallery/ReportDialog";
+import { TravellerBreadcrumbs } from "@/components/traveller/TravellerBreadcrumbs";
 import { api } from "@/services/api";
 import { useAuth } from "@/context/UserContext";
 import { avatarSrc, initialsFor } from "@/lib/avatar";
@@ -139,7 +140,10 @@ const TravelerProfile = () => {
     <div className="min-h-screen bg-gradient-hero flex flex-col">
       <Navbar />
 
-      <main className="flex-1 container mx-auto px-4 pt-24 pb-20 max-w-5xl">
+      <main className="flex-1 container mx-auto px-4 pt-24 pb-20 max-w-5xl space-y-5">
+        <TravellerBreadcrumbs
+          items={[{ label: handle ? `@${handle}` : "Traveler" }]}
+        />
         {loading ? (
           <div className="flex flex-col items-center justify-center min-h-[420px] space-y-4">
             <Loader2 className="w-10 h-10 text-primary animate-spin" />
@@ -190,7 +194,7 @@ const TravelerProfile = () => {
                     <Globe className="w-3 h-3" />
                     Traveler profile
                   </div>
-                  <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground truncate">
+                  <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground truncate">
                     {traveler.name}
                   </h1>
                   <p className="text-sm font-semibold text-muted-foreground">

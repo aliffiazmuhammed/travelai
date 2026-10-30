@@ -26,13 +26,13 @@ const NotFound: React.FC = () => {
             <div className="w-20 h-20 rounded-3xl bg-primary/10 text-primary flex items-center justify-center shadow-inner">
               <Compass className="w-10 h-10 animate-spin [animation-duration:12s]" />
             </div>
-            <span className="absolute -top-1 -right-1 px-2.5 py-0.5 rounded-full bg-primary text-primary-foreground font-black text-xs shadow-md">
+            <span className="absolute -top-1 -right-1 px-2.5 py-0.5 rounded-full bg-primary text-primary-foreground font-bold text-xs shadow-md">
               404
             </span>
           </div>
 
           <div className="space-y-2">
-            <h1 className="text-2xl sm:text-3xl font-black text-foreground tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">
               Lost in the Clouds
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed max-w-md mx-auto">

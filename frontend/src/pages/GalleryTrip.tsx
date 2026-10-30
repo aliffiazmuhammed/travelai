@@ -8,6 +8,7 @@ import { TravelGuideSafety } from "@/components/dashboard/TravelGuideSafety";
 import { api, ApiError } from "@/services/api";
 import { JoinRequestDialog } from "@/components/gallery/JoinRequestDialog";
 import { ReportDialog } from "@/components/gallery/ReportDialog";
+import { TravellerBreadcrumbs } from "@/components/traveller/TravellerBreadcrumbs";
 import { avatarSrc, initialsFor } from "@/lib/avatar";
 import { DURATION_LABELS, formatGalleryDates } from "@/lib/galleryFormat";
 import { withItineraryDefaults } from "@/lib/itineraryDefaults";
@@ -16,7 +17,6 @@ import { toast } from "sonner";
 import { useAuth } from "@/context/UserContext";
 import {
   AlertCircle,
-  ArrowLeft,
   ArrowRight,
   CalendarDays,
   CheckCircle2,
@@ -381,14 +381,13 @@ const GalleryTrip = () => {
     <div className="min-h-screen bg-gradient-hero flex flex-col">
       <Navbar />
 
-      <main className="flex-1 container mx-auto px-4 pt-24 pb-20 max-w-6xl space-y-8">
-        <Link
-          to="/explore"
-          className="inline-flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          Back to shared trips
-        </Link>
+      <main className="flex-1 container mx-auto px-4 pt-24 pb-20 max-w-6xl space-y-6">
+        <TravellerBreadcrumbs
+          items={[
+            { label: "Explore", to: "/explore" },
+            { label: trip.title },
+          ]}
+        />
 
         {/* Trip header */}
         <header className="rounded-3xl bg-card/80 backdrop-blur-md border border-border/80 shadow-card p-6 sm:p-8 space-y-5">
@@ -404,7 +403,7 @@ const GalleryTrip = () => {
           </div>
 
           <div className="space-y-3 max-w-3xl">
-            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-foreground">
+            <h1 className="text-2xl sm:text-4xl font-semibold tracking-tight text-foreground">
               {trip.title}
             </h1>
             {trip.summary && (

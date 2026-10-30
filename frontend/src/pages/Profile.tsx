@@ -23,6 +23,8 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import Navbar from "@/components/Navbar";
+import { TravellerPageHeader } from "@/components/traveller/TravellerPageHeader";
+import { TravellerSectionTabs } from "@/components/traveller/TravellerSectionTabs";
 import { useAuth } from "@/context/UserContext";
 import { api } from "@/services/api";
 import { avatarSrc, initialsFor } from "@/lib/avatar";
@@ -100,6 +102,9 @@ const Profile = () => {
   // Block list (Milestone 8 G5) — who cannot request to join my trips.
   const [blocks, setBlocks] = useState<BlockedAccount[]>([]);
   const [blocksBusy, setBlocksBusy] = useState<string | null>(null);
+  const [section, setSection] = useState<"account" | "public" | "activity">(
+    "account"
+  );
 
   // Sent enquiries (Milestone 9). Anonymous submissions cannot be listed, so
   // this card only ever shows rows the signed-in session was attributed to. It
@@ -381,15 +386,33 @@ const Profile = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
       <main className="container mx-auto max-w-3xl px-4 pt-24 pb-16 space-y-6">
-        <div className="space-y-1">
-          <h1 className="text-2xl md:text-3xl font-black tracking-tight text-foreground">
-            Your profile
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            This is how you appear to everyone on your trips.
-          </p>
-        </div>
+        <TravellerPageHeader
+          eyebrow="Your account"
+          icon={UserCircle2}
+          title="Your profile"
+          description="This is how you appear to everyone on your trips. The account tab is just for you; the public page is what other travellers see."
+          crumbs={[{ label: "Profile" }]}
+        />
 
+        <TravellerSectionTabs
+          ariaLabel="Profile sections"
+          panelId="profile-panels"
+          value={section}
+          onChange={(value) => setSection(value)}
+          options={[
+            { value: "account", label: "Account", icon: UserCircle2 },
+            { value: "public", label: "Public page", icon: Globe },
+            { value: "activity", label: "Activity", icon: Inbox },
+          ]}
+        />
+
+        <div id="profile-panels" className="space-y-6">
+          <div
+            role="tabpanel"
+            aria-label="Account details"
+            hidden={section !== "account"}
+            className="space-y-6"
+          >
         {/* Photo + name ------------------------------------------------------ */}
         <Card className="rounded-3xl border-border/70">
           <CardHeader className="pb-4">
@@ -506,6 +529,96 @@ const Profile = () => {
           </CardContent>
         </Card>
 
+        {/* Password ---------------------------------------------------------- */}
+        <Card className="rounded-3xl border-border/70">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <ShieldCheck className="h-4 w-4 text-primary" />
+              Password
+            </CardTitle>
+            <CardDescription>
+              Enter your current password, then choose a new one (at least 6 characters).
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleChangePassword} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="current-password" className="text-xs font-bold">
+                  Current password
+                </Label>
+                <Input
+                  id="current-password"
+                  type="password"
+                  value={currentPassword}
+                  onChange={(event) => setCurrentPassword(event.target.value)}
+                  autoComplete="current-password"
+                  className="rounded-xl"
+                  required
+                />
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="new-password" className="text-xs font-bold">
+                    New password
+                  </Label>
+                  <Input
+                    id="new-password"
+                    type="password"
+                    value={newPassword}
+                    onChange={(event) => setNewPassword(event.target.value)}
+                    autoComplete="new-password"
+                    minLength={6}
+                    className="rounded-xl"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="confirm-password" className="text-xs font-bold">
+                    Confirm new password
+                  </Label>
+                  <Input
+                    id="confirm-password"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    autoComplete="new-password"
+                    minLength={6}
+                    className="rounded-xl"
+                    required
+                  />
+                </div>
+              </div>
+
+              {passwordError && (
+                <p className="text-[11px] font-semibold text-destructive">{passwordError}</p>
+              )}
+
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={passwordBusy}
+                  className="rounded-xl text-xs font-bold h-10 px-4"
+                >
+                  {passwordBusy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  Update password
+                </Button>
+                <p className="text-[11px] text-muted-foreground">
+                  You stay signed in here. Other devices that are already signed in keep
+                  working until their session expires.
+                </p>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+          </div>
+
+          <div
+            role="tabpanel"
+            aria-label="Public page"
+            hidden={section !== "public"}
+          >
         {/* Public traveler profile ------------------------------------------- */}
         <Card className="rounded-3xl border-border/70">
           <CardHeader className="pb-4">
@@ -607,6 +720,14 @@ const Profile = () => {
           </CardContent>
         </Card>
 
+          </div>
+
+          <div
+            role="tabpanel"
+            aria-label="Activity"
+            hidden={section !== "activity"}
+            className="space-y-6"
+          >
         {/* Blocked travellers (Milestone 8 G5) ------------------------------- */}
         {blocks.length > 0 && (
           <Card className="rounded-3xl border-border/70">
@@ -801,89 +922,32 @@ const Profile = () => {
           </Card>
         )}
 
-        {/* Password ---------------------------------------------------------- */}
-        <Card className="rounded-3xl border-border/70">
-          <CardHeader className="pb-4">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <ShieldCheck className="h-4 w-4 text-primary" />
-              Password
-            </CardTitle>
-            <CardDescription>
-              Enter your current password, then choose a new one (at least 6 characters).
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleChangePassword} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="current-password" className="text-xs font-bold">
-                  Current password
-                </Label>
-                <Input
-                  id="current-password"
-                  type="password"
-                  value={currentPassword}
-                  onChange={(event) => setCurrentPassword(event.target.value)}
-                  autoComplete="current-password"
-                  className="rounded-xl"
-                  required
-                />
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="new-password" className="text-xs font-bold">
-                    New password
-                  </Label>
-                  <Input
-                    id="new-password"
-                    type="password"
-                    value={newPassword}
-                    onChange={(event) => setNewPassword(event.target.value)}
-                    autoComplete="new-password"
-                    minLength={6}
-                    className="rounded-xl"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="confirm-password" className="text-xs font-bold">
-                    Confirm new password
-                  </Label>
-                  <Input
-                    id="confirm-password"
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(event) => setConfirmPassword(event.target.value)}
-                    autoComplete="new-password"
-                    minLength={6}
-                    className="rounded-xl"
-                    required
-                  />
-                </div>
-              </div>
-
-              {passwordError && (
-                <p className="text-[11px] font-semibold text-destructive">{passwordError}</p>
-              )}
-
-              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                <Button
-                  type="submit"
-                  size="sm"
-                  disabled={passwordBusy}
-                  className="rounded-xl text-xs font-bold h-10 px-4"
-                >
-                  {passwordBusy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  Update password
-                </Button>
-                <p className="text-[11px] text-muted-foreground">
-                  You stay signed in here. Other devices that are already signed in keep
-                  working until their session expires.
-                </p>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
+        {blocks.length === 0 && myEnquiries.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border/80 bg-card p-8 text-center">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+              <Inbox className="h-6 w-6" />
+            </div>
+            <p className="mt-3 text-sm font-semibold text-foreground">
+              Nothing here yet
+            </p>
+            <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-muted-foreground">
+              Enquiries you send and travellers you block will show up here.
+            </p>
+            <Button
+              asChild
+              variant="outline"
+              size="sm"
+              className="mt-4 rounded-xl text-xs font-semibold gap-1.5"
+            >
+              <Link to="/agencies">
+                Browse agencies
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          </div>
+        ) : null}
+          </div>
+        </div>
       </main>
     </div>
   );

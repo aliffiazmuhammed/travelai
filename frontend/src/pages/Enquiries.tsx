@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   ArrowUpRight,
   CalendarDays,
@@ -11,8 +11,10 @@ import {
   Users,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
+import { TravellerPageHeader } from '@/components/traveller/TravellerPageHeader';
+import { TravellerSegmented } from '@/components/traveller/TravellerSegmented';
+import EnquiryThreadPane from '@/components/traveller/EnquiryThreadPane';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { api } from '@/services/api';
 import {
   travellerEnquiryStatusLabel,
@@ -24,6 +26,13 @@ import { useEnquiryLiveRefresh } from '@/hooks/useEnquiryEvents';
 import type { AgencyEnquiry } from '@/types/agency';
 
 const PAGE_SIZE = 20;
+
+const FILTERS = ['all', 'unread', 'proposals', 'closed'] as const;
+type EnquiryFilter = (typeof FILTERS)[number];
+
+function isFilter(value: string | null): value is EnquiryFilter {
+  return value !== null && (FILTERS as readonly string[]).includes(value);
+}
 
 function datesSummary(enquiry: AgencyEnquiry): string {
   if (enquiry.dates.flexible && !enquiry.dates.start) return 'Flexible dates';
@@ -44,14 +53,19 @@ function partySummary(enquiry: AgencyEnquiry): string {
 }
 
 /**
- * `/enquiries` (Milestone 9).
+ * `/enquiries` (Milestone 9, rebuilt as an inbox).
  *
- * The traveller's own list of everything they asked an agency about, in one
- * place: which agency, which package, the dates and party, whether a reply or a
- * proposal is waiting, and the way into the conversation. Anonymous submissions
- * are never attributed to a session, so only rows sent while signed in appear.
+ * The traveller's own list of everything they asked an agency about, beside
+ * the thread they pick. On a wide screen the list and the conversation share
+ * the page; on a phone the thread takes over and a back button returns. The
+ * open row and the filter live in the URL, so a refresh keeps your place.
  */
 const Enquiries: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const openId = searchParams.get('open');
+  const filterParam = searchParams.get('filter');
+  const filter: EnquiryFilter = isFilter(filterParam) ? filterParam : 'all';
+
   const [enquiries, setEnquiries] = useState<AgencyEnquiry[]>([]);
   const [total, setTotal] = useState(0);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -88,7 +102,6 @@ const Enquiries: React.FC = () => {
           : 'Your enquiries could not be loaded right now.'
       );
     } finally {
-      // Clear the spinner even when a fresher quiet read already won the race.
       if (!quiet) setLoading(false);
     }
   }, []);
@@ -120,261 +133,334 @@ const Enquiries: React.FC = () => {
     }
   };
 
-  const unreadThreads = enquiries.filter(
-    (enquiry) => enquiry.unread.traveller > 0
-  ).length;
-  const proposalTotal = enquiries.reduce(
-    (sum, enquiry) => sum + (enquiry.proposals?.count ?? 0),
-    0
+  const openEnquiry = (id: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('open', id);
+    setSearchParams(next, { replace: true });
+  };
+
+  const closeEnquiry = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('open');
+    setSearchParams(next, { replace: true });
+  };
+
+  const setFilter = (value: EnquiryFilter) => {
+    const next = new URLSearchParams(searchParams);
+    if (value === 'all') next.delete('filter');
+    else next.set('filter', value);
+    setSearchParams(next, { replace: true });
+  };
+
+  const unreadThreads = useMemo(
+    () => enquiries.filter((enquiry) => enquiry.unread.traveller > 0).length,
+    [enquiries]
+  );
+  const proposalTotal = useMemo(
+    () =>
+      enquiries.reduce(
+        (sum, enquiry) => sum + (enquiry.proposals?.count ?? 0),
+        0
+      ),
+    [enquiries]
+  );
+  const closedThreads = useMemo(
+    () =>
+      enquiries.filter(
+        (enquiry) => enquiry.status === 'won' || enquiry.status === 'lost'
+      ).length,
+    [enquiries]
+  );
+
+  const visibleEnquiries = useMemo(
+    () =>
+      enquiries.filter((enquiry) => {
+        if (filter === 'unread') return enquiry.unread.traveller > 0;
+        if (filter === 'proposals') return (enquiry.proposals?.count ?? 0) > 0;
+        if (filter === 'closed') {
+          return enquiry.status === 'won' || enquiry.status === 'lost';
+        }
+        return true;
+      }),
+    [enquiries, filter]
   );
 
   return (
-    <div className="min-h-screen bg-gradient-hero">
+    <div className="min-h-screen bg-background">
       <Navbar />
-      <main className="container mx-auto max-w-5xl px-4 pb-20 pt-24">
-        <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-wider text-primary">
-              Your conversations
-            </p>
-            <h1 className="mt-1 flex items-center gap-2 text-2xl font-black tracking-tight text-foreground">
-              <Inbox className="h-5 w-5 text-primary" />
-              Enquiries
-            </h1>
-            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-              Every trip you asked an agency about. Replies and proposals arrive
-              in the conversation, so this is where you pick one back up.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {liveMode === 'live' ? (
+      <main className="container mx-auto max-w-6xl px-4 pb-20 pt-24">
+        <TravellerPageHeader
+          eyebrow="Your conversations"
+          icon={Inbox}
+          title="Enquiries"
+          description="Every trip you asked an agency about. Replies and proposals arrive in the conversation, so this is where you pick one back up."
+          crumbs={[{ label: 'Enquiries' }]}
+          meta={
+            liveMode === 'live' ? (
               <span
-                className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-2.5 py-1 text-[10px] font-bold text-primary"
+                className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary"
                 title="Replies appear here as they arrive"
               >
-                <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
                 Live
               </span>
-            ) : null}
-            <Button
-              asChild
-              variant="outline"
-              size="sm"
-              className="rounded-xl text-xs font-bold gap-1.5"
-            >
-              <Link to="/proposals">
-                <FileText className="h-3.5 w-3.5" />
-                Compare proposals
-              </Link>
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="rounded-xl text-xs font-bold gap-1.5"
-              onClick={() => setReloadKey((key) => key + 1)}
-              disabled={loading}
-            >
-              {loading ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <RefreshCw className="h-3.5 w-3.5" />
-              )}
-              Refresh
-            </Button>
-          </div>
-        </div>
-
-        {!loading && enquiries.length > 0 ? (
-          <div className="mb-5 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-            <span className="rounded-full border border-border/70 bg-card px-2.5 py-1 font-bold text-foreground">
-              {total} {total === 1 ? 'enquiry' : 'enquiries'}
-            </span>
-            {unreadThreads > 0 ? (
-              <span className="rounded-full border border-primary/40 bg-primary/10 px-2.5 py-1 font-bold text-primary">
-                {unreadThreads} with a new reply
-              </span>
-            ) : null}
-            {proposalTotal > 0 ? (
-              <span className="rounded-full border border-border/70 bg-card px-2.5 py-1 font-bold text-foreground">
-                {proposalTotal} {proposalTotal === 1 ? 'proposal' : 'proposals'}
-              </span>
-            ) : null}
-          </div>
-        ) : null}
-
-        {error ? (
-          <Card className="mb-4 rounded-3xl border-destructive/30">
-            <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
-              <p className="text-xs font-semibold text-destructive">{error}</p>
+            ) : null
+          }
+          actions={
+            <>
+              <Button
+                asChild
+                variant="outline"
+                size="sm"
+                className="rounded-xl text-xs font-semibold gap-1.5"
+              >
+                <Link to="/proposals">
+                  <FileText className="h-3.5 w-3.5" />
+                  Compare proposals
+                </Link>
+              </Button>
               <Button
                 type="button"
-                size="sm"
                 variant="outline"
-                className="rounded-xl text-xs font-bold"
+                size="sm"
+                className="rounded-xl text-xs font-semibold gap-1.5"
                 onClick={() => setReloadKey((key) => key + 1)}
+                disabled={loading}
               >
-                Try again
+                {loading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5" />
+                )}
+                Refresh
               </Button>
-            </CardContent>
-          </Card>
+            </>
+          }
+          className="mb-5"
+        />
+
+        {error ? (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-destructive/30 bg-destructive/5 p-4">
+            <p className="text-xs font-semibold text-destructive">{error}</p>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="rounded-xl text-xs font-semibold"
+              onClick={() => setReloadKey((key) => key + 1)}
+            >
+              Try again
+            </Button>
+          </div>
         ) : null}
 
-        {loading ? (
-          <div className="flex items-center justify-center gap-2 py-24 text-xs text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Gathering your enquiries…
-          </div>
-        ) : enquiries.length === 0 ? (
-          <Card className="rounded-3xl border-dashed border-border/80">
-            <CardContent className="flex flex-col items-center gap-3 p-10 text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                <Inbox className="h-6 w-6" />
+        <div
+          className={cn(
+            'grid gap-4',
+            openId && 'lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)]'
+          )}
+        >
+          <section
+            aria-label="Enquiry list"
+            className={cn('min-w-0 space-y-3', openId && 'hidden lg:block')}
+          >
+            {!loading && enquiries.length > 0 ? (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <TravellerSegmented<EnquiryFilter>
+                  ariaLabel="Filter enquiries"
+                  value={filter}
+                  onChange={setFilter}
+                  options={[
+                    { value: 'all', label: 'All', count: total },
+                    { value: 'unread', label: 'New replies', count: unreadThreads },
+                    { value: 'proposals', label: 'Proposals', count: proposalTotal },
+                    { value: 'closed', label: 'Closed', count: closedThreads },
+                  ]}
+                />
+                <span className="text-[11px] font-semibold text-muted-foreground">
+                  {filteredCountLabel(filter, visibleEnquiries.length)}
+                </span>
               </div>
-              <div className="space-y-1">
-                <p className="text-sm font-bold text-foreground">No enquiries yet</p>
-                <p className="mx-auto max-w-md text-xs text-muted-foreground">
+            ) : null}
+
+            {loading ? (
+              <div className="flex flex-col gap-2">
+                {[0, 1, 2].map((row) => (
+                  <div
+                    key={row}
+                    className="h-28 animate-pulse rounded-2xl border border-border/60 bg-card"
+                  />
+                ))}
+              </div>
+            ) : enquiries.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-border/80 bg-card p-8 text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                  <Inbox className="h-6 w-6" />
+                </div>
+                <p className="mt-3 text-sm font-semibold text-foreground">No enquiries yet</p>
+                <p className="mx-auto mt-1 max-w-sm text-xs leading-5 text-muted-foreground">
                   Find an agency you like and ask about a trip. The conversation
                   and every reply will show up here.
                 </p>
+                <Button asChild size="sm" className="mt-4 rounded-xl text-xs font-semibold gap-1.5">
+                  <Link to="/agencies">
+                    Browse agencies
+                    <ArrowUpRight className="h-3.5 w-3.5" />
+                  </Link>
+                </Button>
               </div>
-              <Button asChild size="sm" className="rounded-xl text-xs font-bold gap-1.5">
-                <Link to="/agencies">
-                  Browse agencies
-                  <ArrowUpRight className="h-3.5 w-3.5" />
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-3">
-            {enquiries.map((enquiry) => {
-              const proposals = enquiry.proposals?.count ?? 0;
-              return (
-                <Card
-                  key={enquiry.id}
-                  className="rounded-3xl border-border/70 transition-colors hover:border-primary/40"
+            ) : visibleEnquiries.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-border/80 bg-card p-8 text-center">
+                <p className="text-sm font-semibold text-foreground">
+                  Nothing in this view
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Try another filter, or clear it to see every enquiry.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mt-4 rounded-xl text-xs font-semibold"
+                  onClick={() => setFilter('all')}
                 >
-                  <CardContent className="space-y-3 p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div className="min-w-0 space-y-1">
-                        {enquiry.agency ? (
-                          <Link
-                            to={`/agencies/${encodeURIComponent(enquiry.agency.slug)}`}
-                            className="truncate text-base font-bold text-foreground hover:text-primary hover:underline"
-                          >
-                            {enquiry.agency.name}
-                          </Link>
-                        ) : (
-                          <span className="text-base font-bold text-foreground">
-                            An agency
-                          </span>
-                        )}
-                        <p className="text-xs font-semibold text-foreground/80">
-                          {enquiry.package ? enquiry.package.title : 'General enquiry'}
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-1.5">
+                  Show all enquiries
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {visibleEnquiries.map((enquiry) => {
+                  const proposals = enquiry.proposals?.count ?? 0;
+                  const selected = openId === enquiry.id;
+                  return (
+                    <article
+                      key={enquiry.id}
+                      role="button"
+                      tabIndex={0}
+                      aria-current={selected ? 'true' : undefined}
+                      onClick={() => openEnquiry(enquiry.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          openEnquiry(enquiry.id);
+                        }
+                      }}
+                      className={cn(
+                        'cursor-pointer rounded-2xl border bg-card p-3.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60',
+                        selected
+                          ? 'border-primary/60 ring-1 ring-primary/20'
+                          : 'border-border/70 hover:border-primary/40'
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 space-y-0.5">
+                          {enquiry.agency ? (
+                            <Link
+                              to={`/agencies/${encodeURIComponent(enquiry.agency.slug)}`}
+                              onClick={(event) => event.stopPropagation()}
+                              className="block truncate text-sm font-semibold text-foreground hover:text-primary hover:underline"
+                            >
+                              {enquiry.agency.name}
+                            </Link>
+                          ) : (
+                            <span className="block truncate text-sm font-semibold text-foreground">
+                              An agency
+                            </span>
+                          )}
+                          <p className="truncate text-[11px] font-medium text-foreground/75">
+                            {enquiry.package ? enquiry.package.title : 'General enquiry'}
+                          </p>
+                        </div>
                         <span
                           className={cn(
-                            'rounded-full border px-2 py-0.5 text-[10px] font-bold',
+                            'shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold',
                             travellerEnquiryStatusBadgeClass(enquiry.status, proposals > 0)
                           )}
                         >
                           {travellerEnquiryStatusLabel(enquiry.status, proposals > 0)}
                         </span>
-                        {enquiry.unread.traveller > 0 ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground">
-                            <MessageSquare className="h-2.5 w-2.5" />
-                            {enquiry.unread.traveller} new
-                          </span>
-                        ) : null}
                       </div>
-                    </div>
 
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
-                      <span className="inline-flex items-center gap-1.5">
-                        <CalendarDays className="h-3 w-3" />
-                        {datesSummary(enquiry)}
-                      </span>
-                      <span className="inline-flex items-center gap-1.5">
-                        <Users className="h-3 w-3" />
-                        {partySummary(enquiry)}
-                      </span>
-                      <span>
-                        Sent{' '}
-                        {enquiry.createdAt ? formatAgencyDate(enquiry.createdAt) : 'recently'}
-                      </span>
-                    </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
+                        <span className="inline-flex items-center gap-1">
+                          <CalendarDays className="h-3 w-3" />
+                          {datesSummary(enquiry)}
+                        </span>
+                        <span className="inline-flex items-center gap-1">
+                          <Users className="h-3 w-3" />
+                          {partySummary(enquiry)}
+                        </span>
+                      </div>
 
-                    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-2.5">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-[11px] text-muted-foreground">
-                          {enquiry.lastMessageAt
-                            ? `Last message ${
-                                enquiry.lastMessageBy === 'agency'
-                                  ? 'from the agency'
-                                  : 'from you'
-                              } · ${formatAgencyDate(enquiry.lastMessageAt)}`
-                            : 'No reply yet'}
+                      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-2">
+                        <span className="inline-flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                          {enquiry.unread.traveller > 0 ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 font-semibold text-primary-foreground">
+                              <MessageSquare className="h-2.5 w-2.5" />
+                              {enquiry.unread.traveller} new
+                            </span>
+                          ) : enquiry.lastMessageAt ? (
+                            <span>
+                              Last message{' '}
+                              {enquiry.lastMessageBy === 'agency' ? 'from them' : 'from you'}
+                            </span>
+                          ) : (
+                            <span>No reply yet</span>
+                          )}
                         </span>
                         {proposals > 0 ? (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-indigo-300 bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-800 dark:border-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
+                          <span className="inline-flex items-center gap-1 rounded-full border border-indigo-300 bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-800 dark:border-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
                             <FileText className="h-2.5 w-2.5" />
-                            {proposals} {proposals === 1 ? 'proposal' : 'proposals'}
+                            {proposals}
                           </span>
                         ) : null}
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        {proposals > 0 ? (
-                          <Button
-                            asChild
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 rounded-xl text-[11px] font-bold gap-1 px-2.5"
-                          >
-                            <Link to="/proposals">View proposals</Link>
-                          </Button>
-                        ) : null}
-                        <Button
-                          asChild
-                          size="sm"
-                          className="h-8 rounded-xl text-[11px] font-bold gap-1.5 px-3"
-                        >
-                          <Link to={`/enquiry/${enquiry.id}`}>
-                            <MessageSquare className="h-3 w-3" />
-                            Open conversation
-                          </Link>
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
+                    </article>
+                  );
+                })}
 
-            {nextCursor ? (
-              <div className="flex justify-center pt-1">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="rounded-xl text-xs font-bold gap-1.5"
-                  onClick={() => void loadMore()}
-                  disabled={loadingMore}
-                >
-                  {loadingMore ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : null}
-                  Load older enquiries
-                </Button>
+                {nextCursor ? (
+                  <div className="flex justify-center pt-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="rounded-xl text-xs font-semibold gap-1.5"
+                      onClick={() => void loadMore()}
+                      disabled={loadingMore}
+                    >
+                      {loadingMore ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : null}
+                      Load older enquiries
+                    </Button>
+                  </div>
+                ) : null}
               </div>
-            ) : null}
-          </div>
-        )}
+            )}
+          </section>
+
+          {openId ? (
+            <section aria-label="Conversation" className="min-w-0">
+              <EnquiryThreadPane
+                key={openId}
+                enquiryId={openId}
+                onClose={closeEnquiry}
+                onRead={() => void loadFirstPage(true)}
+              />
+            </section>
+          ) : null}
+        </div>
       </main>
     </div>
   );
 };
+
+function filteredCountLabel(filter: EnquiryFilter, visible: number): string {
+  if (filter === 'all') return `${visible} ${visible === 1 ? 'thread' : 'threads'}`;
+  if (filter === 'unread') return `${visible} with a new reply`;
+  if (filter === 'proposals') return `${visible} with proposals`;
+  return `${visible} closed`;
+}
 
 export default Enquiries;

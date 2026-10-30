@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import Navbar from "@/components/Navbar";
+import { TravellerPageHeader } from "@/components/traveller/TravellerPageHeader";
+import { TravellerSegmented } from "@/components/traveller/TravellerSegmented";
 import { PublicEventCard } from "@/components/events/PublicEventCard";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -9,7 +11,6 @@ import { api, ApiError } from "@/services/api";
 import { avatarSrc, initialsFor } from "@/lib/avatar";
 import { DURATION_LABELS, formatGalleryDates } from "@/lib/galleryFormat";
 import { applyPageMeta } from "@/lib/meta";
-import { cn } from "@/lib/utils";
 import {
   AlertCircle,
   ArrowRight,
@@ -141,6 +142,7 @@ const ExploreCard = ({ trip, onTagClick }: ExploreCardProps) => (
 
 const Explore = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
 
   const q = searchParams.get("q") ?? "";
   const duration = isDuration(searchParams.get("duration"))
@@ -217,6 +219,15 @@ const Explore = () => {
       cancelled = true;
     };
   }, []);
+
+  // The homepage links straight to the events strip (`/explore#events`), and
+  // SPA navigation does not scroll to a hash on its own.
+  useEffect(() => {
+    if (location.hash !== "#events" || events.length === 0) return;
+    document
+      .getElementById("events")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [location.hash, events.length]);
 
   useEffect(() => {
     let cancelled = false;
@@ -315,23 +326,15 @@ const Explore = () => {
       <Navbar />
 
       <main className="flex-1 container mx-auto px-4 pt-24 pb-20 max-w-6xl space-y-8">
-        <header className="rounded-3xl bg-card/80 backdrop-blur-md border border-border/80 shadow-card p-6 sm:p-8 space-y-4">
-          <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 border border-primary/20 px-3 py-1 text-[11px] font-bold text-primary">
-            <Globe className="w-3 h-3" />
-            Trips people shared
-          </div>
-          <div className="space-y-2 max-w-2xl">
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
-              Find a trip you'd like to join
-            </h1>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              Real trips, shared by the people who planned them. Scroll until
-              one catches your eye — then ask the owner to come along, or take
-              a copy that's yours to change.
-            </p>
-          </div>
-
-          <div className="flex flex-col gap-3 pt-1">
+        <TravellerPageHeader
+          tone="hero"
+          eyebrow="Trips people shared"
+          icon={Globe}
+          title="Find a trip you'd like to join"
+          description="Real trips, shared by the people who planned them. Scroll until one catches your eye — then ask the owner to come along, or take a copy that's yours to change."
+          crumbs={[{ label: "Explore" }]}
+        >
+          <div className="flex flex-col gap-3">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -356,36 +359,17 @@ const Explore = () => {
               )}
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant={duration ? "outline" : "default"}
-                onClick={() => applyFilters({ duration: null })}
-                className="rounded-xl text-[11px] font-bold h-8 px-3"
-              >
-                Any length
-              </Button>
-              {DURATION_OPTIONS.map((option) => (
-                <Button
-                  key={option.value}
-                  type="button"
-                  size="sm"
-                  variant={duration === option.value ? "default" : "outline"}
-                  onClick={() =>
-                    applyFilters({
-                      duration: duration === option.value ? null : option.value,
-                    })
-                  }
-                  className={cn(
-                    "rounded-xl text-[11px] font-bold h-8 px-3",
-                    duration !== option.value && "bg-background/60"
-                  )}
-                >
-                  {option.label}
-                </Button>
-              ))}
-            </div>
+            <TravellerSegmented
+              ariaLabel="Filter by trip length"
+              value={duration ?? "any"}
+              onChange={(value) =>
+                applyFilters({ duration: value === "any" ? null : value })
+              }
+              options={[
+                { value: "any", label: "Any length" },
+                ...DURATION_OPTIONS,
+              ]}
+            />
 
             {activeFilters.length > 0 && (
               <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -413,10 +397,14 @@ const Explore = () => {
               </div>
             )}
           </div>
-        </header>
+        </TravellerPageHeader>
 
         {!hasFilters && events.length > 0 && (
-          <section aria-labelledby="explore-events-heading" className="space-y-4">
+          <section
+            id="events"
+            aria-labelledby="explore-events-heading"
+            className="scroll-mt-24 space-y-4"
+          >
             <div className="flex flex-wrap items-end justify-between gap-2">
               <div className="space-y-0.5">
                 <h2

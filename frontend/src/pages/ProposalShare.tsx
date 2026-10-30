@@ -4,6 +4,7 @@ import Navbar from "@/components/Navbar";
 import PdfDocumentViewer from "@/components/agency/PdfDocumentViewer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { TravellerBreadcrumbs } from "@/components/traveller/TravellerBreadcrumbs";
 import { api } from "@/services/api";
 import { formatMoney } from "@/lib/currency";
 import { formatDate, formatDateOnly } from "@/lib/date";
@@ -184,7 +185,7 @@ const ProposalShare: React.FC = () => {
               <AlertCircle className="w-8 h-8" />
             </div>
             <div className="space-y-2">
-              <h2 className="text-xl font-black text-foreground">
+              <h2 className="text-xl font-semibold tracking-tight text-foreground">
                 Proposal Not Available
               </h2>
               <p className="text-xs text-muted-foreground leading-relaxed">
@@ -195,6 +196,8 @@ const ProposalShare: React.FC = () => {
           </div>
         ) : (
           <div className="space-y-6">
+            <TravellerBreadcrumbs items={[{ label: "Your proposal" }]} />
+
             {/* Header: agency, trip and quote identity */}
             <div className="p-5 rounded-3xl bg-card/80 backdrop-blur-md border border-border/80 shadow-card space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
@@ -202,7 +205,7 @@ const ProposalShare: React.FC = () => {
                   <p className="text-[11px] font-bold uppercase tracking-wider text-primary">
                     {proposal.agency.name || "Your travel agency"}
                   </p>
-                  <h1 className="text-2xl font-black text-foreground">
+                  <h1 className="text-2xl font-semibold tracking-tight text-foreground">
                     {proposal.trip.title}
                   </h1>
                   {quote ? (
@@ -299,7 +302,7 @@ const ProposalShare: React.FC = () => {
               <div className="p-5 rounded-3xl bg-card/80 backdrop-blur-md border border-border/80 shadow-card space-y-4">
                 <div className="flex items-center gap-2">
                   <FileText className="w-4 h-4 text-primary" />
-                  <h2 className="text-sm font-bold text-foreground">
+                  <h2 className="text-sm font-semibold text-foreground">
                     Quote summary
                   </h2>
                 </div>
@@ -369,7 +372,7 @@ const ProposalShare: React.FC = () => {
                         </span>
                       </div>
                     ) : null}
-                    <div className="flex justify-between border-t border-border pt-2 text-sm font-black text-foreground">
+                    <div className="flex justify-between border-t border-border pt-2 text-sm font-semibold text-foreground">
                       <span>Total</span>
                       <span>{formatMoney(quote.total, quote.currency)}</span>
                     </div>
@@ -447,7 +450,7 @@ const ProposalShare: React.FC = () => {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <FileText className="w-4 h-4 text-primary" />
-                  <h2 className="text-sm font-bold text-foreground">
+                  <h2 className="text-sm font-semibold text-foreground">
                     Your proposal document
                   </h2>
                   {proposal.pdf ? (

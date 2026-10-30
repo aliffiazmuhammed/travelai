@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
+import { TravellerBreadcrumbs } from "@/components/traveller/TravellerBreadcrumbs";
 import { applyPageMeta } from "@/lib/meta";
 import { useEffect } from "react";
 import {
@@ -52,13 +53,15 @@ const Guidelines = () => {
     <div className="min-h-screen bg-gradient-hero flex flex-col">
       <Navbar />
 
-      <main className="flex-1 container mx-auto px-4 pt-24 pb-20 max-w-4xl space-y-8">
+      <main className="flex-1 container mx-auto px-4 pt-24 pb-20 max-w-4xl space-y-6">
+        <TravellerBreadcrumbs items={[{ label: "Guidelines" }]} />
+
         <header className="rounded-3xl bg-card/80 backdrop-blur-md border border-border/80 shadow-card p-6 sm:p-10 space-y-4">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 border border-primary/20 px-3 py-1 text-[11px] font-bold text-primary">
             <ShieldCheck className="w-3 h-3" />
             Public gallery
           </span>
-          <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-foreground">
+          <h1 className="text-2xl sm:text-4xl font-semibold tracking-tight text-foreground">
             Community guidelines
           </h1>
           <p className="text-sm text-foreground/80 leading-relaxed max-w-2xl">
@@ -69,7 +72,7 @@ const Guidelines = () => {
         </header>
 
         <section className="rounded-3xl border border-border/70 bg-card p-6 sm:p-8 space-y-4">
-          <h2 className="flex items-center gap-2 text-lg font-black text-foreground">
+          <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-foreground">
             <CheckCircle2 className="w-5 h-5 text-emerald-600" />
             What belongs here
           </h2>
@@ -87,7 +90,7 @@ const Guidelines = () => {
         </section>
 
         <section className="rounded-3xl border border-destructive/25 bg-destructive/5 p-6 sm:p-8 space-y-4">
-          <h2 className="flex items-center gap-2 text-lg font-black text-foreground">
+          <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-foreground">
             <Ban className="w-5 h-5 text-destructive" />
             What we remove
           </h2>
@@ -107,7 +110,7 @@ const Guidelines = () => {
         <div className="grid gap-4 sm:grid-cols-3">
           <section className="rounded-3xl border border-border/70 bg-card p-5 space-y-2">
             <CalendarDays className="w-5 h-5 text-primary" />
-            <h3 className="text-sm font-black text-foreground">Protect your dates</h3>
+            <h3 className="text-sm font-semibold text-foreground">Protect your dates</h3>
             <p className="text-[11px] leading-relaxed text-muted-foreground">
               Publishing a trip can expose when you will be away. Use “Hide exact
               dates” to show only a month and duration.
@@ -115,7 +118,7 @@ const Guidelines = () => {
           </section>
           <section className="rounded-3xl border border-border/70 bg-card p-5 space-y-2">
             <Wallet className="w-5 h-5 text-primary" />
-            <h3 className="text-sm font-black text-foreground">Never send money</h3>
+            <h3 className="text-sm font-semibold text-foreground">Never send money</h3>
             <p className="text-[11px] leading-relaxed text-muted-foreground">
               A join request is not a booking. No owner should ask you for a
               deposit, and TravelAI never handles payments between travellers.
@@ -123,7 +126,7 @@ const Guidelines = () => {
           </section>
           <section className="rounded-3xl border border-border/70 bg-card p-5 space-y-2">
             <ShieldCheck className="w-5 h-5 text-primary" />
-            <h3 className="text-sm font-black text-foreground">Keep control</h3>
+            <h3 className="text-sm font-semibold text-foreground">Keep control</h3>
             <p className="text-[11px] leading-relaxed text-muted-foreground">
               Owners approve every join request. Approval grants a commenter seat
               only — never edit access. Use the block list if someone makes you
@@ -133,7 +136,7 @@ const Guidelines = () => {
         </div>
 
         <section className="rounded-3xl border border-amber-500/25 bg-amber-500/5 p-6 sm:p-8 space-y-4">
-          <h2 className="flex items-center gap-2 text-lg font-black text-foreground">
+          <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-foreground">
             <Flag className="w-5 h-5 text-amber-600" />
             Reporting and review
           </h2>
@@ -159,7 +162,7 @@ const Guidelines = () => {
         </section>
 
         <section className="rounded-3xl border border-border/70 bg-card p-6 sm:p-8 space-y-3">
-          <h2 className="flex items-center gap-2 text-lg font-black text-foreground">
+          <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-foreground">
             <AlertTriangle className="w-5 h-5 text-primary" />
             When we may act on an account
           </h2>

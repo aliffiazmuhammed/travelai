@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/services/api";
 import ItineraryDisplay from "@/components/ItineraryDisplay";
+import { TravellerBreadcrumbs } from "@/components/traveller/TravellerBreadcrumbs";
 import {
   Sparkles,
   Compass,
@@ -74,7 +75,7 @@ const SharedTrip: React.FC = () => {
               <AlertCircle className="w-8 h-8" />
             </div>
             <div className="space-y-2">
-              <h2 className="text-xl font-black text-foreground">
+              <h2 className="text-xl font-semibold tracking-tight text-foreground">
                 Itinerary Not Found
               </h2>
               <p className="text-xs text-muted-foreground leading-relaxed">
@@ -93,6 +94,8 @@ const SharedTrip: React.FC = () => {
           </div>
         ) : (
           <div className="space-y-6">
+            <TravellerBreadcrumbs items={[{ label: trip.title }]} />
+
             {/* Public Viewer Notice Banner */}
             <div className="p-4 rounded-3xl bg-primary/10 border border-primary/20 backdrop-blur-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
               <div className="flex items-center gap-3">
