@@ -1,22 +1,28 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  AlertTriangle,
+  ArrowUpRight,
   Building2,
   CheckCircle2,
   ExternalLink,
-  Eye,
   KeyRound,
   Loader2,
   Plus,
   RefreshCw,
   Search,
   ShieldCheck,
-  UserRound,
 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { AdminEmptyState, AdminLoadingPanel } from '@/components/admin/AdminEmptyState';
+import { AdminNotice } from '@/components/admin/AdminNotice';
+import { AdminPageHeader } from '@/components/admin/AdminPageHeader';
+import { AdminPagination } from '@/components/admin/AdminPagination';
+import { AdminSegmented } from '@/components/admin/AdminSegmented';
+import {
+  AdminTableFrame,
+  adminTableHeadClass,
+  adminTableRowClass,
+} from '@/components/admin/AdminTableFrame';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -45,18 +51,21 @@ import type {
   PlatformProvisionResult,
 } from '@/types';
 import { toast } from 'sonner';
-import AdminAgencyDetail from './AdminAgencyDetail';
 import AdminTemporaryPassword from './AdminTemporaryPassword';
-import { formatAdminDate } from './accountMeta';
+import {
+  AgencyStatusBadge,
+  formatAdminDate,
+  TierBadge,
+} from './accountMeta';
 
 /**
  * `/admin/agencies` (PA3/PA4).
  *
  * Provisioning a tenant creates three separate rows: the Agency, the owner's
  * agency-realm account, and the owner membership. The directory below lists
- * identity/plan metadata only and opens the PA4 drawer for lifecycle, plan,
- * member and audit operations. Nothing here converts a personal or platform
- * account, and no tenant content is read.
+ * identity/plan metadata only and links into the record page for lifecycle,
+ * plan, member and audit operations. Nothing here converts a personal or
+ * platform account, and no tenant content is read.
  */
 
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -105,6 +114,9 @@ function isEmail(value: string): boolean {
 }
 
 const AdminAgencies: React.FC = () => {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const [plans, setPlans] = useState<PlatformPlanTier[]>([]);
   const [plansError, setPlansError] = useState<string | null>(null);
 
@@ -114,14 +126,10 @@ const AdminAgencies: React.FC = () => {
   const [listReloadKey, setListReloadKey] = useState(0);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [statusFilter, setStatusFilter] =
-    useState<PlatformAgencyStatusFilter>('all');
-  const [profileFilter, setProfileFilter] =
-    useState<PlatformAgencyProfileFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<PlatformAgencyStatusFilter>('all');
+  const [profileFilter, setProfileFilter] = useState<PlatformAgencyProfileFilter>('all');
   const [planFilter, setPlanFilter] = useState('all');
   const [page, setPage] = useState(1);
-  const [detailId, setDetailId] = useState<string | null>(null);
-  const [searchParams, setSearchParams] = useSearchParams();
 
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<WizardStep>(1);
@@ -129,12 +137,6 @@ const AdminAgencies: React.FC = () => {
   const [slugEdited, setSlugEdited] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-
-  // Deep link from the platform audit console (`?agency=<id>`).
-  useEffect(() => {
-    const requested = searchParams.get('agency');
-    if (requested) setDetailId(requested);
-  }, [searchParams]);
 
   const [preview, setPreview] = useState<PlatformOwnerPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -146,6 +148,14 @@ const AdminAgencies: React.FC = () => {
     password: string;
     workspace: string;
   } | null>(null);
+
+  // Old audit links pointed at `?agency=<id>`; the record is a page now.
+  useEffect(() => {
+    const legacy = searchParams.get('agency');
+    if (legacy) {
+      navigate(`/admin/agencies/${encodeURIComponent(legacy)}`, { replace: true });
+    }
+  }, [searchParams, navigate]);
 
   useEffect(() => {
     let cancelled = false;
@@ -274,6 +284,23 @@ const AdminAgencies: React.FC = () => {
     setOpen(true);
   };
 
+  // `?provision=1` from the console jump menu opens the wizard directly.
+  const requestedProvision = searchParams.get('provision');
+  useEffect(() => {
+    if (requestedProvision !== '1') return;
+    openWizard();
+    setSearchParams(
+      (params) => {
+        const copy = new URLSearchParams(params);
+        copy.delete('provision');
+        return copy;
+      },
+      { replace: true }
+    );
+    // Opening the wizard is a one-shot read of the URL, not a dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestedProvision]);
+
   const update = (patch: Partial<ProvisionForm>) => {
     setForm((current) => ({ ...current, ...patch }));
     if (formError) setFormError(null);
@@ -377,346 +404,300 @@ const AdminAgencies: React.FC = () => {
     }
   };
 
+  const counts = list?.counts;
+
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-            <Building2 className="h-5 w-5 text-indigo-400" />
-            Agencies
-          </h1>
-          <p className="mt-1 text-sm text-slate-400">
-            Provision a paying tenant and hand its owner a separate agency login. No
-            personal account is converted or attached.
-          </p>
-        </div>
-        <Button
-          type="button"
-          className="bg-indigo-500 text-white hover:bg-indigo-400"
-          onClick={openWizard}
-          disabled={plans.length === 0}
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Provision agency
-        </Button>
-      </div>
+      <AdminPageHeader
+        title="Agencies"
+        description="Provision a paying tenant and hand its owner a separate agency login. No personal account is converted or attached."
+        actions={
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-9 gap-1.5 rounded-full px-3 text-xs"
+              onClick={() => setListReloadKey((key) => key + 1)}
+              disabled={listLoading}
+            >
+              <RefreshCw
+                className={`h-3.5 w-3.5 ${listLoading ? 'animate-spin' : ''}`}
+                aria-hidden
+              />
+              Refresh
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              className="h-9 gap-1.5 rounded-full bg-indigo-500 px-3 text-xs text-white hover:bg-indigo-400"
+              onClick={openWizard}
+              disabled={plans.length === 0}
+            >
+              <Plus className="h-3.5 w-3.5" aria-hidden />
+              Provision agency
+            </Button>
+          </>
+        }
+      />
 
       {plansError ? (
-        <div className="flex items-start gap-2.5 rounded-xl border border-rose-900 bg-rose-950/40 p-3.5 text-sm text-rose-200">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <p>{plansError}</p>
-        </div>
+        <AdminNotice tone="error" title="Plan tiers did not load">
+          Provisioning is disabled until tiers are available. {plansError}
+        </AdminNotice>
       ) : null}
 
       {provisioned ? (
-        <Card className="border-emerald-900/70 bg-emerald-950/20">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base text-emerald-200">
-              <CheckCircle2 className="h-4 w-4" />
-              {provisioned.agency.name} is live
-            </CardTitle>
-            <CardDescription className="text-emerald-200/70">
-              {provisioned.owner.created
-                ? 'The owner account was created in the agency realm with a one-time password.'
-                : 'An existing workspace account for this tenant was attached as owner.'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <Summary label="Workspace" value={provisioned.agency.slug} mono />
-              <Summary label="Owner" value={provisioned.owner.email} />
-              <Summary label="Plan" value={provisioned.agency.plan.tierId} />
-              <Summary label="Provisioned" value={formatAdminDate(provisioned.agency.provisionedAt)} />
-            </div>
-
-            {provisioned.warnings.length > 0 ? (
-              <ul className="space-y-1.5 rounded-xl border border-amber-900/60 bg-amber-950/20 px-3.5 py-3 text-xs text-amber-200/90">
-                {provisioned.warnings.map((warning) => (
-                  <li key={warning} className="flex items-start gap-2">
-                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                    {warning}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-
+        <AdminNotice
+          tone="success"
+          title={`${provisioned.agency.name} is live`}
+          action={
             <div className="flex flex-wrap items-center gap-2">
-              <Button asChild className="bg-indigo-500 text-white hover:bg-indigo-400">
+              <Button
+                asChild
+                size="sm"
+                className="h-8 gap-1.5 rounded-full bg-indigo-500 px-3 text-xs text-white hover:bg-indigo-400"
+              >
                 <Link
                   to={`/agency/login?workspace=${encodeURIComponent(provisioned.agency.slug)}`}
                   target="_blank"
                   rel="noreferrer"
                 >
-                  <ExternalLink className="mr-2 h-4 w-4" />
-                  Open workspace login
+                  <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                  Workspace login
                 </Link>
               </Button>
               <Button
-                type="button"
+                asChild
+                size="sm"
                 variant="outline"
-                className="border-slate-700 bg-slate-900 text-slate-300 hover:text-white"
+                className="h-8 gap-1.5 rounded-full px-3 text-xs"
+              >
+                <Link to={`/admin/agencies/${provisioned.agency._id}`}>Open record</Link>
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-8 rounded-full px-3 text-xs"
                 onClick={() => setProvisioned(null)}
               >
                 Dismiss
               </Button>
             </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card className="border-slate-800 bg-slate-900/60">
-          <CardContent className="grid gap-4 p-5 md:grid-cols-3">
-            <Point
-              icon={<UserRound className="h-4 w-4 text-indigo-400" />}
-              title="A separate agency account"
-              body="The owner signs in with the workspace slug and their agency email. A personal account with the same email stays exactly as it is."
-            />
-            <Point
-              icon={<KeyRound className="h-4 w-4 text-amber-400" />}
-              title="One-time password"
-              body="New owner accounts are created with a temporary password and must replace it at first sign-in before the workspace opens."
-            />
-            <Point
-              icon={<ShieldCheck className="h-4 w-4 text-emerald-400" />}
-              title="One workspace per account"
-              body="An agency account belongs to exactly one tenant. An email already used in another workspace is rejected; use a different owner email."
-            />
-          </CardContent>
-        </Card>
-      )}
-
-      <Card className="border-slate-800 bg-slate-900/60">
-        <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3 space-y-0 pb-3">
-          <div>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Building2 className="h-4 w-4 text-indigo-400" />
-              All agencies
-            </CardTitle>
-            <CardDescription>
-              {list
-                ? `${list.counts.all} tenant${list.counts.all === 1 ? '' : 's'} · ${list.counts.active} active · ${list.counts.suspended} suspended`
-                : 'Fetching tenants…'}
-            </CardDescription>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-              <Input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search name, slug or billing"
-                aria-label="Search agencies"
-                className="h-9 w-56 border-slate-700 bg-slate-950 pl-9 text-sm text-slate-100 placeholder:text-slate-500"
-              />
-            </div>
-            <Select
-              value={statusFilter}
-              onValueChange={(value) => {
-                setStatusFilter(value as PlatformAgencyStatusFilter);
-                setPage(1);
-              }}
-            >
-              <SelectTrigger
-                aria-label="Filter by status"
-                className="h-9 w-32 border-slate-700 bg-slate-950 text-slate-200"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All statuses</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="suspended">Suspended</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select
-              value={profileFilter}
-              onValueChange={(value) => {
-                setProfileFilter(value as PlatformAgencyProfileFilter);
-                setPage(1);
-              }}
-            >
-              <SelectTrigger
-                aria-label="Filter by directory state"
-                className="h-9 w-36 border-slate-700 bg-slate-950 text-slate-200"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All directory</SelectItem>
-                <SelectItem value="published">Listed</SelectItem>
-                <SelectItem value="hidden">Hidden by ops</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select
-              value={planFilter}
-              onValueChange={(value) => {
-                setPlanFilter(value);
-                setPage(1);
-              }}
-            >
-              <SelectTrigger
-                aria-label="Filter by plan"
-                className="h-9 w-32 border-slate-700 bg-slate-950 text-slate-200"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All plans</SelectItem>
-                {plans.map((plan) => (
-                  <SelectItem key={plan.tierId} value={plan.tierId}>
-                    {plan.tierId}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button
-              type="button"
-              variant="outline"
-              className="border-slate-700 bg-slate-900 text-slate-300 hover:text-white"
-              onClick={() => setListReloadKey((key) => key + 1)}
-              disabled={listLoading}
-            >
-              <RefreshCw className={`mr-2 h-4 w-4 ${listLoading ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {listError ? (
-            <div className="flex items-start gap-2.5 rounded-xl border border-rose-900 bg-rose-950/40 p-3.5 text-sm text-rose-200">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              <p>{listError}</p>
-            </div>
-          ) : null}
-
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[860px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-slate-800 text-[10px] uppercase tracking-wider text-slate-500">
-                  <th className="px-3 py-2 font-semibold">Agency</th>
-                  <th className="px-3 py-2 font-semibold">Status</th>
-                  <th className="px-3 py-2 font-semibold">Owner</th>
-                  <th className="px-3 py-2 font-semibold">Plan</th>
-                  <th className="px-3 py-2 font-semibold">Members</th>
-                  <th className="px-3 py-2 font-semibold">Renewal</th>
-                  <th className="px-3 py-2 font-semibold">Last activity</th>
-                  <th className="px-3 py-2 text-right font-semibold">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {listLoading && (list?.agencies.length ?? 0) === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="px-3 py-12 text-center text-sm text-slate-400">
-                      <span className="inline-flex items-center gap-2">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Loading agencies…
-                      </span>
-                    </td>
-                  </tr>
-                ) : (list?.agencies.length ?? 0) === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="px-3 py-12 text-center text-sm text-slate-400">
-                      {search || statusFilter !== 'all' || planFilter !== 'all'
-                        ? 'No agencies match these filters.'
-                        : 'No agencies yet. Provision the first tenant to get started.'}
-                    </td>
-                  </tr>
-                ) : (
-                  list!.agencies.map((agency) => (
-                    <tr
-                      key={agency._id}
-                      className="border-b border-slate-800/70 align-top last:border-0 hover:bg-slate-900/70"
-                    >
-                      <td className="px-3 py-3">
-                        <p className="font-medium text-slate-200">{agency.name}</p>
-                        <p className="font-mono text-[11px] text-slate-500">{agency.slug}</p>
-                      </td>
-                      <td className="px-3 py-3">
-                        <AgencyStatusPill status={agency.status} />
-                      </td>
-                      <td className="px-3 py-3">
-                        <p className="break-all text-xs text-slate-300">
-                          {agency.owner?.email ?? 'No owner'}
-                        </p>
-                        {agency.ownerCount > 1 ? (
-                          <p className="text-[11px] text-slate-500">
-                            +{agency.ownerCount - 1} more owner
-                            {agency.ownerCount - 1 === 1 ? '' : 's'}
-                          </p>
-                        ) : null}
-                      </td>
-                      <td className="px-3 py-3">
-                        <Badge
-                          variant="outline"
-                          className="border-slate-700 text-[10px] uppercase tracking-wide text-slate-300"
-                        >
-                          {agency.plan.tierId}
-                        </Badge>
-                        <p className="mt-0.5 text-[11px] text-slate-500">
-                          {agency.plan.seats} seats · {agency.plan.monthlyExports} exports
-                        </p>
-                      </td>
-                      <td className="px-3 py-3 text-xs text-slate-300">
-                        {agency.memberCount} / {agency.plan.seats}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-3 text-xs text-slate-400">
-                        {formatAdminDate(agency.billing?.renewalDate)}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-3 text-xs text-slate-400">
-                        {formatAdminDate(agency.lastActivityAt)}
-                        <p className="mt-0.5 text-[11px] text-slate-500">
-                          Created {formatAdminDate(agency.createdAt)}
-                        </p>
-                      </td>
-                      <td className="px-3 py-3 text-right">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="border-slate-700 bg-slate-900 text-slate-300 hover:text-white"
-                          onClick={() => setDetailId(agency._id)}
-                        >
-                          <Eye className="mr-1.5 h-3.5 w-3.5" />
-                          Manage
-                        </Button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-800 pt-3">
-            <p className="text-xs text-slate-500">
-              {list
-                ? `${list.total} tenant${list.total === 1 ? '' : 's'} · page ${list.page} of ${list.totalPages}`
-                : 'Loading tenants…'}
+          }
+        >
+          <div className="space-y-1.5">
+            <p>
+              {provisioned.owner.created
+                ? 'The owner account was created in the agency realm with a one-time password.'
+                : 'An existing workspace account for this tenant was attached as owner.'}
             </p>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="border-slate-700 bg-slate-900 text-slate-300 hover:text-white"
-                onClick={() => setPage((value) => Math.max(1, value - 1))}
-                disabled={!list || list.page <= 1 || listLoading}
-              >
-                Previous
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="border-slate-700 bg-slate-900 text-slate-300 hover:text-white"
-                onClick={() => setPage((value) => value + 1)}
-                disabled={!list || list.page >= list.totalPages || listLoading}
-              >
-                Next
-              </Button>
-            </div>
+            <p className="font-mono text-[11px]">
+              {provisioned.agency.slug} · {provisioned.owner.email} ·{' '}
+              {provisioned.agency.plan.tierId}
+            </p>
+            {provisioned.warnings.length > 0 ? (
+              <ul className="list-disc space-y-1 pl-4">
+                {provisioned.warnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
+            ) : null}
           </div>
-        </CardContent>
-      </Card>
+        </AdminNotice>
+      ) : null}
+
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+        <AdminSegmented
+          ariaLabel="Filter agencies by status"
+          value={statusFilter}
+          options={[
+            { value: 'all', label: 'All', count: counts?.all },
+            { value: 'active', label: 'Active', count: counts?.active },
+            { value: 'suspended', label: 'Suspended', count: counts?.suspended },
+          ]}
+          onChange={(value) => {
+            setStatusFilter(value);
+            setPage(1);
+          }}
+        />
+
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden
+            />
+            <Input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search name, slug or billing"
+              aria-label="Search agencies"
+              className="h-9 w-full rounded-full pl-9 text-sm sm:w-60"
+            />
+          </div>
+          <Select
+            value={profileFilter}
+            onValueChange={(value) => {
+              setProfileFilter(value as PlatformAgencyProfileFilter);
+              setPage(1);
+            }}
+          >
+            <SelectTrigger className="h-9 w-36 rounded-full" aria-label="Filter by directory state">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All directory</SelectItem>
+              <SelectItem value="published">Listed</SelectItem>
+              <SelectItem value="hidden">Hidden by ops</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select
+            value={planFilter}
+            onValueChange={(value) => {
+              setPlanFilter(value);
+              setPage(1);
+            }}
+          >
+            <SelectTrigger className="h-9 w-32 rounded-full" aria-label="Filter by plan">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All plans</SelectItem>
+              {plans.map((plan) => (
+                <SelectItem key={plan.tierId} value={plan.tierId}>
+                  {plan.tierId}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {listError ? (
+        <AdminNotice tone="error" title="The agency directory did not load">
+          {listError}
+        </AdminNotice>
+      ) : null}
+
+      <AdminTableFrame
+        title="All agencies"
+        description="Open a tenant for plan, members, public-directory state and audit."
+        minWidth="940px"
+        footer={
+          <AdminPagination
+            page={list?.page ?? page}
+            totalPages={list?.totalPages ?? 1}
+            total={list?.total}
+            noun="tenant"
+            loading={listLoading}
+            onChange={setPage}
+          />
+        }
+      >
+        <thead>
+          <tr>
+            <th className={adminTableHeadClass}>Agency</th>
+            <th className={adminTableHeadClass}>Status</th>
+            <th className={adminTableHeadClass}>Owner</th>
+            <th className={adminTableHeadClass}>Plan</th>
+            <th className={adminTableHeadClass}>Members</th>
+            <th className={adminTableHeadClass}>Renewal</th>
+            <th className={adminTableHeadClass}>Last activity</th>
+            <th className={`${adminTableHeadClass} text-right`}>Open</th>
+          </tr>
+        </thead>
+        <tbody>
+          {listLoading && (list?.agencies.length ?? 0) === 0 ? (
+            <tr>
+              <td colSpan={8}>
+                <AdminLoadingPanel label="Loading agencies…" />
+              </td>
+            </tr>
+          ) : (list?.agencies.length ?? 0) === 0 ? (
+            <tr>
+              <td colSpan={8}>
+                <AdminEmptyState
+                  icon={Building2}
+                  title={
+                    search || statusFilter !== 'all' || planFilter !== 'all'
+                      ? 'No agencies match these filters'
+                      : 'No agencies yet'
+                  }
+                  description={
+                    search || statusFilter !== 'all' || planFilter !== 'all'
+                      ? 'Try a different status, plan or search term.'
+                      : 'Provision the first tenant to get started.'
+                  }
+                />
+              </td>
+            </tr>
+          ) : (
+            list!.agencies.map((agency) => (
+              <tr key={agency._id} className={adminTableRowClass}>
+                <td className="px-4 py-3">
+                  <Link
+                    to={`/admin/agencies/${agency._id}`}
+                    className="group block rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                  >
+                    <span className="block font-medium group-hover:text-indigo-300 group-hover:underline group-hover:underline-offset-2">
+                      {agency.name}
+                    </span>
+                    <span className="block font-mono text-[11px] text-muted-foreground">
+                      {agency.slug}
+                    </span>
+                  </Link>
+                </td>
+                <td className="px-4 py-3">
+                  <AgencyStatusBadge status={agency.status} />
+                </td>
+                <td className="px-4 py-3">
+                  <p className="break-all text-xs">{agency.owner?.email ?? 'No owner'}</p>
+                  {agency.ownerCount > 1 ? (
+                    <p className="text-[11px] text-muted-foreground">
+                      +{agency.ownerCount - 1} more owner{agency.ownerCount - 1 === 1 ? '' : 's'}
+                    </p>
+                  ) : null}
+                </td>
+                <td className="px-4 py-3">
+                  <TierBadge tier={agency.plan.tierId} />
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    {agency.plan.seats} seats · {agency.plan.monthlyExports} exports
+                  </p>
+                </td>
+                <td className="px-4 py-3 text-xs tabular-nums">
+                  {agency.memberCount} / {agency.plan.seats}
+                </td>
+                <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
+                  {formatAdminDate(agency.billing?.renewalDate)}
+                </td>
+                <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
+                  {formatAdminDate(agency.lastActivityAt)}
+                  <p className="mt-0.5 text-[11px]">
+                    Created {formatAdminDate(agency.createdAt)}
+                  </p>
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex justify-end">
+                    <Button
+                      asChild
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 gap-1.5 rounded-full px-3 text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      <Link to={`/admin/agencies/${agency._id}`}>
+                        Manage
+                        <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />
+                      </Link>
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </AdminTableFrame>
 
       <Dialog
         open={open}
@@ -724,41 +705,37 @@ const AdminAgencies: React.FC = () => {
           if (!submitting) setOpen(next);
         }}
       >
-        <DialogContent className="max-h-[88vh] overflow-y-auto border-slate-800 bg-slate-900 text-slate-100 sm:max-w-2xl">
+        <DialogContent className="dark max-h-[88vh] overflow-y-auto rounded-2xl border-border bg-card text-card-foreground sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Building2 className="h-4 w-4 text-indigo-400" />
+              <span className="grid h-7 w-7 place-items-center rounded-lg bg-indigo-500/15 text-indigo-300">
+                <Building2 className="h-4 w-4" aria-hidden />
+              </span>
               Provision agency
             </DialogTitle>
-            <DialogDescription className="text-slate-400">
+            <DialogDescription>
               Step {step} of 3 —{' '}
               {step === 1 ? 'tenant details' : step === 2 ? 'owner access' : 'review and create'}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2" aria-hidden>
             {[1, 2, 3].map((value) => (
               <div
                 key={value}
                 className={`h-1.5 flex-1 rounded-full ${
-                  value <= step ? 'bg-indigo-500' : 'bg-slate-800'
+                  value <= step ? 'bg-indigo-500' : 'bg-muted'
                 }`}
               />
             ))}
           </div>
 
-          {formError ? (
-            <div className="rounded-xl border border-rose-900 bg-rose-950/40 px-3.5 py-3 text-sm text-rose-200">
-              {formError}
-            </div>
-          ) : null}
+          {formError ? <AdminNotice tone="error">{formError}</AdminNotice> : null}
 
           {step === 1 ? (
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="agency-name" className="text-slate-300">
-                  Agency name
-                </Label>
+                <Label htmlFor="agency-name">Agency name</Label>
                 <Input
                   id="agency-name"
                   value={form.name}
@@ -771,14 +748,12 @@ const AdminAgencies: React.FC = () => {
                     });
                   }}
                   placeholder="Northwind Travel"
-                  className="border-slate-700 bg-slate-950 text-slate-100 placeholder:text-slate-500"
+                  className="h-10"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="agency-slug" className="text-slate-300">
-                  Workspace slug
-                </Label>
+                <Label htmlFor="agency-slug">Workspace slug</Label>
                 <Input
                   id="agency-slug"
                   value={form.slug}
@@ -788,42 +763,39 @@ const AdminAgencies: React.FC = () => {
                     update({ slug: event.target.value.toLowerCase() });
                   }}
                   placeholder="auto from the name"
-                  className="border-slate-700 bg-slate-950 font-mono text-sm text-slate-100 placeholder:text-slate-500"
+                  className="h-10 font-mono text-sm"
                 />
-                <p className="text-xs text-slate-500">
-                  Permanent login handle: {form.slug || 'generated on create'} ·
-                  /agency/login?workspace={form.slug || '…'}
+                <p className="text-xs leading-5 text-muted-foreground">
+                  Permanent login handle: {form.slug || 'generated on create'} ·{' '}
+                  <code className="rounded bg-muted px-1 py-0.5">
+                    /agency/login?workspace={form.slug || '…'}
+                  </code>
                 </p>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="agency-plan" className="text-slate-300">
-                  Plan
-                </Label>
+                <Label htmlFor="agency-plan">Plan</Label>
                 <Select
                   value={form.planTierId}
                   onValueChange={(value) => update({ planTierId: value })}
                 >
-                  <SelectTrigger
-                    id="agency-plan"
-                    className="border-slate-700 bg-slate-950 text-slate-200"
-                  >
+                  <SelectTrigger id="agency-plan" className="h-10">
                     <SelectValue placeholder="Choose a plan" />
                   </SelectTrigger>
                   <SelectContent>
                     {plans.map((plan) => (
                       <SelectItem key={plan.tierId} value={plan.tierId}>
-                        {plan.tierId} — {plan.seats} seats · {plan.monthlyExports}{' '}
-                        exports/mo · {plan.storageMb} MB
+                        {plan.tierId} — {plan.seats} seats · {plan.monthlyExports} exports/mo ·{' '}
+                        {plan.storageMb} MB
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 {selectedPlan ? (
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs leading-5 text-muted-foreground">
                     {selectedPlan.seats} seats, {selectedPlan.monthlyExports} exports per
-                    month, {selectedPlan.storageMb} MB storage. Limits can be overridden
-                    from the agency drawer after creation.
+                    month, {selectedPlan.storageMb} MB storage. Limits can be overridden from
+                    the record page after creation.
                   </p>
                 ) : null}
               </div>
@@ -831,24 +803,22 @@ const AdminAgencies: React.FC = () => {
           ) : null}
 
           {step === 2 ? (
-            <div className="space-y-5">
-              <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="owner-email" className="text-slate-300">
-                    Owner email
-                  </Label>
+                  <Label htmlFor="owner-email">Owner email</Label>
                   <Input
                     id="owner-email"
                     type="email"
                     value={form.ownerEmail}
                     onChange={(event) => update({ ownerEmail: event.target.value })}
                     placeholder="owner@example.com"
-                    className="border-slate-700 bg-slate-950 text-slate-100 placeholder:text-slate-500"
+                    className="h-10"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="owner-name" className="text-slate-300">
-                    Owner name <span className="text-slate-500">(optional)</span>
+                  <Label htmlFor="owner-name">
+                    Owner name <span className="text-muted-foreground">(optional)</span>
                   </Label>
                   <Input
                     id="owner-name"
@@ -856,59 +826,42 @@ const AdminAgencies: React.FC = () => {
                     maxLength={40}
                     onChange={(event) => update({ ownerName: event.target.value })}
                     placeholder="Priya Nair"
-                    className="border-slate-700 bg-slate-950 text-slate-100 placeholder:text-slate-500"
+                    className="h-10"
                   />
                 </div>
               </div>
 
-              <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
+              <div className="rounded-xl border border-border bg-muted/30 p-3">
                 {!isEmail(form.ownerEmail) ? (
-                  <p className="text-xs text-slate-500">
-                    Enter the owner email to check the three realms before creating
-                    anything.
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    Enter the owner email to check the three realms before creating anything.
                   </p>
                 ) : previewLoading ? (
-                  <p className="flex items-center gap-2 text-xs text-slate-400">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
                     Checking personal, agency and platform accounts…
                   </p>
                 ) : previewError ? (
-                  <p className="text-xs text-rose-300">{previewError}</p>
+                  <AdminNotice tone="error">{previewError}</AdminNotice>
                 ) : preview ? (
                   <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <Badge
-                        variant="outline"
-                        className={
-                          preview.personalAccount
-                            ? 'border-sky-800 bg-sky-950/40 text-[10px] text-sky-300'
-                            : 'border-slate-800 text-[10px] text-slate-600'
-                        }
-                      >
-                        Personal {preview.personalAccount ? 'exists' : 'none'}
-                      </Badge>
-                      <Badge
-                        variant="outline"
-                        className={
-                          preview.platformAccount
-                            ? 'border-indigo-800 bg-indigo-950/40 text-[10px] text-indigo-300'
-                            : 'border-slate-800 text-[10px] text-slate-600'
-                        }
-                      >
-                        Platform {preview.platformAccount ? 'exists' : 'none'}
-                      </Badge>
-                      <Badge
-                        variant="outline"
-                        className={
+                      <RealmChip
+                        label={`Personal ${preview.personalAccount ? 'exists' : 'none'}`}
+                        tone={preview.personalAccount ? 'sky' : 'muted'}
+                      />
+                      <RealmChip
+                        label={`Platform ${preview.platformAccount ? 'exists' : 'none'}`}
+                        tone={preview.platformAccount ? 'indigo' : 'muted'}
+                      />
+                      <RealmChip
+                        label={
                           preview.otherAgency
-                            ? 'border-rose-900 bg-rose-950/40 text-[10px] text-rose-300'
-                            : 'border-slate-800 text-[10px] text-slate-600'
+                            ? `Agency: ${preview.otherAgency.workspace}`
+                            : 'Agency: none'
                         }
-                      >
-                        {preview.otherAgency
-                          ? `Agency: ${preview.otherAgency.workspace}`
-                          : 'Agency: none'}
-                      </Badge>
+                        tone={preview.otherAgency ? 'rose' : 'muted'}
+                      />
                     </div>
 
                     {preview.blocked ? (
@@ -916,15 +869,14 @@ const AdminAgencies: React.FC = () => {
                     ) : null}
 
                     {preview.warnings.map((warning) => (
-                      <p key={warning} className="flex items-start gap-1.5 text-xs text-amber-200/90">
-                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <p key={warning} className="text-xs leading-5 text-amber-200/90">
                         {warning}
                       </p>
                     ))}
 
                     {!preview.blocked && preview.warnings.length === 0 ? (
                       <p className="flex items-center gap-1.5 text-xs text-emerald-300">
-                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
                         This email has no personal, agency or platform account yet.
                       </p>
                     ) : null}
@@ -932,8 +884,9 @@ const AdminAgencies: React.FC = () => {
                 ) : null}
               </div>
 
-              <div className="space-y-3 rounded-xl border border-slate-800 p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <div className="space-y-3 rounded-xl border border-border p-3">
+                <p className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+                  <KeyRound className="h-3.5 w-3.5" aria-hidden />
                   Billing contact (optional)
                 </p>
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -943,7 +896,7 @@ const AdminAgencies: React.FC = () => {
                     onChange={(event) => update({ contactName: event.target.value })}
                     placeholder="Billing contact name"
                     aria-label="Billing contact name"
-                    className="border-slate-700 bg-slate-950 text-slate-100 placeholder:text-slate-500"
+                    className="h-9"
                   />
                   <Input
                     type="email"
@@ -952,14 +905,14 @@ const AdminAgencies: React.FC = () => {
                     onChange={(event) => update({ contactEmail: event.target.value })}
                     placeholder="billing@example.com"
                     aria-label="Billing email"
-                    className="border-slate-700 bg-slate-950 text-slate-100 placeholder:text-slate-500"
+                    className="h-9"
                   />
                   <Input
                     type="date"
                     value={form.renewalDate}
                     onChange={(event) => update({ renewalDate: event.target.value })}
                     aria-label="Renewal date"
-                    className="border-slate-700 bg-slate-950 text-slate-100"
+                    className="h-9"
                   />
                   <Input
                     value={form.notes}
@@ -967,7 +920,7 @@ const AdminAgencies: React.FC = () => {
                     onChange={(event) => update({ notes: event.target.value })}
                     placeholder="Notes (renewal terms, PO number…)"
                     aria-label="Billing notes"
-                    className="border-slate-700 bg-slate-950 text-slate-100 placeholder:text-slate-500"
+                    className="h-9"
                   />
                 </div>
               </div>
@@ -976,7 +929,7 @@ const AdminAgencies: React.FC = () => {
 
           {step === 3 ? (
             <div className="space-y-4">
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-2.5 sm:grid-cols-2">
                 <Summary label="Agency" value={form.name} />
                 <Summary label="Workspace" value={form.slug || 'auto'} mono />
                 <Summary
@@ -987,38 +940,40 @@ const AdminAgencies: React.FC = () => {
                       : form.planTierId
                   }
                 />
-                <Summary label="Owner" value={`${form.ownerEmail}${form.ownerName ? ` (${form.ownerName})` : ''}`} />
+                <Summary
+                  label="Owner"
+                  value={`${form.ownerEmail}${form.ownerName ? ` (${form.ownerName})` : ''}`}
+                />
               </div>
 
               {form.contactName || form.contactEmail || form.renewalDate || form.notes ? (
-                <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-xs text-slate-400">
-                  <p className="font-semibold uppercase tracking-wide text-slate-500">
-                    Billing
-                  </p>
+                <div className="rounded-xl border border-border bg-muted/30 p-3 text-xs leading-5">
+                  <p className="font-semibold text-muted-foreground">Billing</p>
                   <p className="mt-1">
                     {[form.contactName, form.contactEmail].filter(Boolean).join(' · ') || '—'}
                   </p>
                   {form.renewalDate ? <p>Renews {form.renewalDate}</p> : null}
-                  {form.notes ? <p className="mt-1 text-slate-500">{form.notes}</p> : null}
+                  {form.notes ? (
+                    <p className="mt-1 text-muted-foreground">{form.notes}</p>
+                  ) : null}
                 </div>
               ) : null}
 
               {preview?.warnings.length ? (
-                <ul className="space-y-1.5 rounded-xl border border-amber-900/60 bg-amber-950/20 px-3.5 py-3 text-xs text-amber-200/90">
-                  {preview.warnings.map((warning) => (
-                    <li key={warning} className="flex items-start gap-2">
-                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                      {warning}
-                    </li>
-                  ))}
-                </ul>
+                <AdminNotice tone="warning" title="Before you create this tenant">
+                  <ul className="list-disc space-y-1 pl-4">
+                    {preview.warnings.map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
+                  </ul>
+                </AdminNotice>
               ) : null}
 
-              <p className="text-xs text-slate-500">
-                Creating will make a new tenant, a new agency-realm owner account (when
-                this email has no account in this workspace yet) and an owner
-                membership. If any step fails, the rows created by this request are
-                removed.
+              <p className="flex items-start gap-2 text-xs leading-5 text-muted-foreground">
+                <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+                Creating makes a tenant, a new agency-realm owner account (when this email
+                has no account in this workspace yet) and an owner membership. If any step
+                fails, the rows created by this request are removed.
               </p>
             </div>
           ) : null}
@@ -1028,7 +983,6 @@ const AdminAgencies: React.FC = () => {
               <Button
                 type="button"
                 variant="outline"
-                className="border-slate-700 bg-slate-900 text-slate-300 hover:text-white"
                 onClick={goBack}
                 disabled={submitting}
               >
@@ -1050,30 +1004,15 @@ const AdminAgencies: React.FC = () => {
                 onClick={() => void submit()}
                 disabled={submitting || preview?.blocked === true}
               >
-                {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {submitting ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                ) : null}
                 Provision agency
               </Button>
             )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <AdminAgencyDetail
-        open={detailId !== null}
-        onOpenChange={(next) => {
-          if (!next) {
-            setDetailId(null);
-            if (searchParams.has('agency')) {
-              const nextParams = new URLSearchParams(searchParams);
-              nextParams.delete('agency');
-              setSearchParams(nextParams, { replace: true });
-            }
-          }
-        }}
-        agencyId={detailId}
-        plans={plans}
-        onChanged={() => setListReloadKey((key) => key + 1)}
-      />
 
       <AdminTemporaryPassword
         open={credential !== null}
@@ -1089,49 +1028,39 @@ const AdminAgencies: React.FC = () => {
   );
 };
 
-const AgencyStatusPill: React.FC<{ status: 'active' | 'suspended' }> = ({ status }) => (
-  <Badge
-    variant="outline"
-    className={
-      status === 'active'
-        ? 'border-emerald-800 bg-emerald-950/40 text-[10px] uppercase tracking-wide text-emerald-300'
-        : 'border-rose-900 bg-rose-950/40 text-[10px] uppercase tracking-wide text-rose-300'
-    }
-  >
-    {status}
-  </Badge>
-);
+const RealmChip: React.FC<{
+  label: string;
+  tone: 'sky' | 'indigo' | 'rose' | 'muted';
+}> = ({ label, tone }) => {
+  const tones: Record<'sky' | 'indigo' | 'rose' | 'muted', string> = {
+    sky: 'border-sky-500/40 bg-sky-500/10 text-sky-300',
+    indigo: 'border-indigo-500/40 bg-indigo-500/10 text-indigo-300',
+    rose: 'border-rose-500/40 bg-rose-500/10 text-rose-300',
+    muted: 'border-border text-muted-foreground',
+  };
+  return (
+    <span
+      className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${tones[tone]}`}
+    >
+      {label}
+    </span>
+  );
+};
 
 const Summary: React.FC<{ label: string; value: string; mono?: boolean }> = ({
   label,
   value,
   mono,
 }) => (
-  <div className="rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-2">
-    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+  <div className="rounded-xl border border-border bg-muted/30 px-3 py-2">
+    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
       {label}
     </p>
     <p
-      className={`mt-0.5 break-all text-sm text-slate-200 ${
-        mono ? 'font-mono text-xs' : ''
-      }`}
+      className={`mt-0.5 break-all text-sm text-foreground/90 ${mono ? 'font-mono text-xs' : ''}`}
     >
       {value}
     </p>
-  </div>
-);
-
-const Point: React.FC<{ icon: React.ReactNode; title: string; body: string }> = ({
-  icon,
-  title,
-  body,
-}) => (
-  <div className="space-y-1.5">
-    <p className="flex items-center gap-2 text-sm font-medium text-slate-200">
-      {icon}
-      {title}
-    </p>
-    <p className="text-xs leading-5 text-slate-500">{body}</p>
   </div>
 );
 

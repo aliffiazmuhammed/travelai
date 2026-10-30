@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  AlertTriangle,
   CheckCircle2,
   ExternalLink,
   Flag,
@@ -20,9 +19,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { AdminEmptyState, AdminLoadingPanel } from '@/components/admin/AdminEmptyState';
+import { AdminNotice } from '@/components/admin/AdminNotice';
+import { AdminPageHeader } from '@/components/admin/AdminPageHeader';
+import {
+  AdminSegmented,
+  type AdminSegmentedOption,
+} from '@/components/admin/AdminSegmented';
 import { api } from '@/services/api';
 import { cn } from '@/lib/utils';
 import type {
@@ -63,6 +67,22 @@ const REASON_LABELS: Record<string, string> = {
 
 const reasonLabel = (reason: string): string => REASON_LABELS[reason] ?? reason;
 
+const targetTypeChip = (group: PlatformModerationGroup): string => {
+  if (group.targetType === 'agency_profile') {
+    return 'border-amber-500/40 bg-amber-500/10 text-amber-200';
+  }
+  if (group.targetType === 'profile') {
+    return 'border-sky-500/40 bg-sky-500/10 text-sky-200';
+  }
+  return 'border-indigo-500/40 bg-indigo-500/10 text-indigo-200';
+};
+
+const targetTypeLabel = (group: PlatformModerationGroup): string => {
+  if (group.targetType === 'agency_profile') return 'Agency';
+  if (group.targetType === 'profile') return 'Profile';
+  return 'Trip';
+};
+
 function targetHeading(group: PlatformModerationGroup): string {
   if (group.targetType === 'trip') {
     return group.trip?.title ?? 'Deleted trip';
@@ -90,6 +110,20 @@ function targetSubheading(group: PlatformModerationGroup): string {
   const profile = group.profile;
   if (!profile) return 'The profile no longer exists.';
   return [profile.name, profile.email, profile.status].filter(Boolean).join(' · ');
+}
+
+/** Public destination for a queued target, when it still exists. */
+function publicHref(group: PlatformModerationGroup): string | null {
+  if (group.targetType === 'trip' && group.trip) {
+    return `/explore/${encodeURIComponent(group.targetId)}`;
+  }
+  if (group.targetType === 'profile' && group.profile?.handle) {
+    return `/travelers/${encodeURIComponent(group.profile.handle)}`;
+  }
+  if (group.targetType === 'agency_profile' && group.agency?.slug) {
+    return `/agencies/${encodeURIComponent(group.agency.slug)}`;
+  }
+  return null;
 }
 
 const AdminReports: React.FC = () => {
@@ -168,289 +202,226 @@ const AdminReports: React.FC = () => {
     }
   };
 
+  const segmented: Array<AdminSegmentedOption<PlatformModerationStatus>> = TABS.map((tab) => ({
+    ...tab,
+    count: totals[tab.value],
+  }));
+
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-            <Flag className="h-5 w-5 text-indigo-400" />
-            Reported content
-          </h1>
-          <p className="mt-1 text-sm text-slate-400">
-            Only content a traveller has reported appears here. Three distinct open
-            reports hide a trip automatically while it waits for review; profiles and
-            agency pages are always reviewed manually.
-          </p>
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          className="border-slate-700 bg-slate-900 text-slate-300 hover:text-white"
-          onClick={reload}
-          disabled={loading}
-        >
-          <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
-      </div>
-
-      <div className="inline-flex flex-wrap gap-1 rounded-xl border border-slate-800 bg-slate-900/60 p-1">
-        {TABS.map((tab) => {
-          const count =
-            tab.value === 'open'
-              ? totals.open
-              : tab.value === 'hidden'
-                ? totals.hidden
-                : totals.dismissed;
-          return (
-            <button
-              key={tab.value}
-              type="button"
-              onClick={() => setStatus(tab.value)}
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition',
-                status === tab.value
-                  ? 'bg-indigo-500/20 text-indigo-200'
-                  : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200'
-              )}
+      <AdminPageHeader
+        title={
+          <>
+            <span
+              aria-hidden
+              className="grid h-8 w-8 place-items-center rounded-xl border border-border bg-card text-indigo-300"
             >
-              {tab.label}
-              <span className="rounded-full bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-300">
-                {count}
-              </span>
-            </button>
-          );
-        })}
+              <Flag className="h-4 w-4" />
+            </span>
+            Reported content
+          </>
+        }
+        description="Only content a traveller has reported appears here. Three distinct open reports hide a trip automatically while it waits for review; profiles and agency pages are always reviewed manually."
+        actions={
+          <Button
+            type="button"
+            variant="outline"
+            className="rounded-full"
+            onClick={reload}
+            disabled={loading}
+          >
+            <RefreshCw className={cn('mr-2 h-4 w-4', loading && 'animate-spin')} />
+            Refresh
+          </Button>
+        }
+      />
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <AdminSegmented
+          ariaLabel="Report status"
+          value={status}
+          options={segmented}
+          onChange={(value) => setStatus(value)}
+        />
+        <p className="text-xs text-muted-foreground">
+          {groups.length === 0
+            ? 'Nothing in this tab'
+            : `${groups.length} target${groups.length === 1 ? '' : 's'} in this tab`}
+        </p>
       </div>
 
       {error ? (
-        <div className="flex items-start gap-2.5 rounded-xl border border-rose-900 bg-rose-950/40 p-3.5 text-sm text-rose-200">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <p>{error}</p>
-        </div>
+        <AdminNotice tone="error" title="Could not load the report queue">
+          {error}
+        </AdminNotice>
       ) : null}
 
       {loading && groups.length === 0 ? (
-        <Card className="border-slate-800 bg-slate-900/60">
-          <CardContent className="flex items-center justify-center gap-2 py-14 text-sm text-slate-400">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading reports…
-          </CardContent>
-        </Card>
+        <div className="rounded-2xl border border-border bg-card">
+          <AdminLoadingPanel label="Loading reports…" />
+        </div>
       ) : groups.length === 0 ? (
-        <Card className="border-slate-800 bg-slate-900/60">
-          <CardContent className="flex flex-col items-center gap-1.5 py-14 text-center text-sm text-slate-400">
-            <CheckCircle2 className="h-5 w-5 text-emerald-400" />
-            <p className="font-medium text-slate-300">
-              {status === 'open' ? 'Nothing is waiting for review.' : 'Nothing in this tab.'}
-            </p>
-            <p className="text-xs text-slate-500">
-              Reported trips, profiles and agency pages appear here as soon as a
-              traveller flags them.
-            </p>
-          </CardContent>
-        </Card>
+        <div className="rounded-2xl border border-border bg-card">
+          <AdminEmptyState
+            icon={CheckCircle2}
+            title={status === 'open' ? 'Nothing is waiting for review.' : 'Nothing in this tab.'}
+            description="Reported trips, profiles and agency pages appear here as soon as a traveller flags them."
+          />
+        </div>
       ) : (
         <div className="space-y-3">
           {groups.map((group) => {
             const key = `${group.targetType}:${group.targetId}`;
-            const isProfile = group.targetType === 'profile';
-            const isAgency = group.targetType === 'agency_profile';
             const canHide = group.targetType === 'trip' && !group.hidden;
+            const href = publicHref(group);
 
             return (
-              <Card key={key} className="border-slate-800 bg-slate-900/60">
-                <CardContent className="space-y-3 p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0 space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            'px-1.5 py-0 text-[10px] font-semibold uppercase tracking-wide',
-                            isAgency
-                              ? 'border-amber-800 bg-amber-950/40 text-amber-300'
-                              : isProfile
-                                ? 'border-sky-800 bg-sky-950/40 text-sky-300'
-                                : 'border-indigo-800 bg-indigo-950/40 text-indigo-300'
-                          )}
-                        >
-                          {isAgency ? 'Agency' : isProfile ? 'Profile' : 'Trip'}
-                        </Badge>
-                        <span className="text-sm font-semibold text-slate-100">
-                          {targetHeading(group)}
-                        </span>
-                        {group.hidden ? (
-                          <Badge
-                            variant="outline"
-                            className="border-rose-900 bg-rose-950/40 px-1.5 py-0 text-[10px] font-semibold uppercase tracking-wide text-rose-300"
-                          >
-                            <ShieldOff className="mr-1 h-3 w-3" />
-                            {isAgency
-                              ? 'Hidden'
-                              : group.trip?.hiddenSource === 'admin'
-                                ? 'De-listed'
-                                : 'Auto-hidden'}
-                          </Badge>
-                        ) : null}
-                      </div>
-                      <p className="truncate text-xs text-slate-400">{targetSubheading(group)}</p>
-                      <p className="font-mono text-[10px] text-slate-600">{group.targetId}</p>
-                    </div>
-
+              <article key={key} className="overflow-hidden rounded-2xl border border-border bg-card">
+                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border/70 p-4 sm:p-5">
+                  <div className="min-w-0 space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      {!isProfile && group.trip ? (
-                        <Button
-                          asChild
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="border-slate-700 bg-slate-900 text-slate-300 hover:text-white"
-                        >
-                          <a
-                            href={`/explore/${encodeURIComponent(group.targetId)}`}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
-                            Public page
-                          </a>
-                        </Button>
-                      ) : null}
-                      {isProfile && group.profile?.handle ? (
-                        <Button
-                          asChild
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="border-slate-700 bg-slate-900 text-slate-300 hover:text-white"
-                        >
-                          <a
-                            href={`/travelers/${encodeURIComponent(group.profile.handle)}`}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
-                            Public page
-                          </a>
-                        </Button>
-                      ) : null}
-                      {isAgency && group.agency?.slug ? (
-                        <Button
-                          asChild
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="border-slate-700 bg-slate-900 text-slate-300 hover:text-white"
-                        >
-                          <a
-                            href={`/agencies/${encodeURIComponent(group.agency.slug)}`}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
-                            Public page
-                          </a>
-                        </Button>
-                      ) : null}
-
-                      {status === 'open' && canHide ? (
-                        <Button
-                          type="button"
-                          size="sm"
-                          className="bg-rose-600 text-white hover:bg-rose-500"
-                          onClick={() => openAction(group, 'hide')}
-                        >
-                          <ShieldOff className="mr-1.5 h-3.5 w-3.5" />
-                          De-list
-                        </Button>
-                      ) : null}
-
-                      {status === 'open' ? (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="border-slate-700 bg-slate-900 text-slate-300 hover:text-white"
-                          onClick={() => openAction(group, 'dismiss')}
-                        >
-                          <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
-                          Dismiss
-                        </Button>
-                      ) : null}
-
-                      {status === 'hidden' && group.targetType === 'trip' && group.hidden ? (
-                        <Button
-                          type="button"
-                          size="sm"
-                          className="bg-emerald-600 text-white hover:bg-emerald-500"
-                          onClick={() => openAction(group, 'restore')}
-                        >
-                          <Undo2 className="mr-1.5 h-3.5 w-3.5" />
-                          Restore
-                        </Button>
+                      <span
+                        className={cn(
+                          'inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
+                          targetTypeChip(group)
+                        )}
+                      >
+                        {targetTypeLabel(group)}
+                      </span>
+                      <h2 className="truncate text-sm font-semibold text-foreground">
+                        {targetHeading(group)}
+                      </h2>
+                      {group.hidden ? (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-rose-500/40 bg-rose-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-200">
+                          <ShieldOff className="h-3 w-3" aria-hidden />
+                          {group.targetType === 'agency_profile'
+                            ? 'Hidden'
+                            : group.trip?.hiddenSource === 'admin'
+                              ? 'De-listed'
+                              : 'Auto-hidden'}
+                        </span>
                       ) : null}
                     </div>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {targetSubheading(group)}
+                    </p>
+                    <p className="truncate font-mono text-[10px] text-muted-foreground/70">
+                      {group.targetId}
+                    </p>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
-                    {group.reasons.map((entry) => (
-                      <span
-                        key={entry.reason}
-                        className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-950 px-2 py-0.5 text-[10px] font-semibold text-slate-300"
+                    {href ? (
+                      <Button
+                        asChild
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="rounded-full"
                       >
-                        {reasonLabel(entry.reason)}
-                        <span className="text-slate-500">×{entry.count}</span>
-                      </span>
-                    ))}
-                    <span className="text-[11px] text-slate-500">
-                      {group.reportCount} report{group.reportCount === 1 ? '' : 's'} · last{' '}
-                      {formatAdminDate(group.lastReportedAt)}
-                    </span>
-                  </div>
+                        <a href={href} target="_blank" rel="noreferrer">
+                          <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                          Public page
+                        </a>
+                      </Button>
+                    ) : null}
 
-                  <div className="space-y-1.5 rounded-xl border border-slate-800 bg-slate-950/60 p-2.5">
-                    {group.reports.length === 0 ? (
-                      <p className="text-xs text-slate-500">
-                        Reports were closed before this view was built.
-                      </p>
-                    ) : (
-                      group.reports.map((report) => (
-                        <div
-                          key={report._id}
-                          className="flex flex-wrap items-start justify-between gap-2 border-b border-slate-800/70 pb-1.5 last:border-0 last:pb-0"
-                        >
-                          <div className="min-w-0 space-y-0.5">
-                            <p className="text-xs text-slate-300">
-                              <span className="font-semibold text-slate-200">
-                                {reasonLabel(report.reason)}
-                              </span>
-                              <span className="text-slate-500"> · </span>
-                              <span className="inline-flex items-center gap-1 text-slate-400">
-                                <UserRound className="h-3 w-3" />
-                                {report.reporter?.label ?? 'Unknown reporter'}
-                                {report.reporter?.handle ? (
-                                  <span className="text-slate-500">
-                                    @{report.reporter.handle}
-                                  </span>
-                                ) : null}
-                              </span>
-                            </p>
-                            {report.note ? (
-                              <p className="max-w-[640px] text-[11px] leading-relaxed text-slate-400">
-                                “{report.note}”
-                              </p>
-                            ) : null}
-                          </div>
-                          <span className="shrink-0 text-[10px] text-slate-500">
-                            {formatAdminDate(report.createdAt)}
-                          </span>
-                        </div>
-                      ))
-                    )}
+                    {status === 'open' && canHide ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="rounded-full bg-rose-600 text-white hover:bg-rose-500"
+                        onClick={() => openAction(group, 'hide')}
+                      >
+                        <ShieldOff className="mr-1.5 h-3.5 w-3.5" />
+                        De-list
+                      </Button>
+                    ) : null}
+
+                    {status === 'open' ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="rounded-full"
+                        onClick={() => openAction(group, 'dismiss')}
+                      >
+                        <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+                        Dismiss
+                      </Button>
+                    ) : null}
+
+                    {status === 'hidden' && group.targetType === 'trip' && group.hidden ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="rounded-full bg-emerald-600 text-white hover:bg-emerald-500"
+                        onClick={() => openAction(group, 'restore')}
+                      >
+                        <Undo2 className="mr-1.5 h-3.5 w-3.5" />
+                        Restore
+                      </Button>
+                    ) : null}
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 sm:px-5">
+                  {group.reasons.map((entry) => (
+                    <span
+                      key={entry.reason}
+                      className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/60 px-2 py-0.5 text-[10px] font-semibold text-foreground"
+                    >
+                      {reasonLabel(entry.reason)}
+                      <span className="text-muted-foreground">×{entry.count}</span>
+                    </span>
+                  ))}
+                  <span className="text-[11px] text-muted-foreground">
+                    {group.reportCount} report{group.reportCount === 1 ? '' : 's'} · last{' '}
+                    {formatAdminDate(group.lastReportedAt)}
+                  </span>
+                </div>
+
+                <div className="space-y-1.5 border-t border-border/70 bg-muted/20 p-3 sm:p-4">
+                  {group.reports.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      Reports were closed before this view was built.
+                    </p>
+                  ) : (
+                    group.reports.map((report) => (
+                      <div
+                        key={report._id}
+                        className="flex flex-wrap items-start justify-between gap-2 border-b border-border/60 pb-1.5 text-xs last:border-0 last:pb-0"
+                      >
+                        <div className="min-w-0 space-y-0.5">
+                          <p className="text-muted-foreground">
+                            <span className="font-semibold text-foreground">
+                              {reasonLabel(report.reason)}
+                            </span>
+                            <span className="px-1 text-muted-foreground/60">·</span>
+                            <span className="inline-flex items-center gap-1">
+                              <UserRound className="h-3 w-3" aria-hidden />
+                              {report.reporter?.label ?? 'Unknown reporter'}
+                              {report.reporter?.handle ? (
+                                <span className="text-muted-foreground/70">
+                                  @{report.reporter.handle}
+                                </span>
+                              ) : null}
+                            </span>
+                          </p>
+                          {report.note ? (
+                            <p className="max-w-[640px] text-[11px] leading-relaxed text-muted-foreground">
+                              “{report.note}”
+                            </p>
+                          ) : null}
+                        </div>
+                        <span className="shrink-0 text-[10px] text-muted-foreground/80">
+                          {formatAdminDate(report.createdAt)}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </article>
             );
           })}
         </div>
@@ -465,7 +436,8 @@ const AdminReports: React.FC = () => {
           }
         }}
       >
-        <AlertDialogContent className="border-slate-800 bg-slate-900 text-slate-100">
+        {/* Portalled content leaves the console tree, so it carries the dark scope. */}
+        <AlertDialogContent className="dark rounded-2xl border-border bg-card text-card-foreground">
           <AlertDialogHeader>
             <AlertDialogTitle>
               {actionTarget?.action === 'hide'
@@ -474,7 +446,7 @@ const AdminReports: React.FC = () => {
                   ? 'Restore this listing?'
                   : 'Dismiss these reports?'}
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-slate-400">
+            <AlertDialogDescription className="text-muted-foreground">
               {actionTarget?.action === 'hide' ? (
                 <>
                   The trip leaves the gallery, the traveler page, cloning and join
@@ -511,23 +483,18 @@ const AdminReports: React.FC = () => {
           </AlertDialogHeader>
 
           {actionTarget ? (
-            <p className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-slate-300">
+            <p className="rounded-xl border border-border bg-muted/40 px-3 py-2 text-xs text-foreground">
               {targetHeading(actionTarget.group)}
-              <span className="block font-mono text-[10px] text-slate-600">
+              <span className="block truncate font-mono text-[10px] text-muted-foreground">
                 {actionTarget.group.targetType} · {actionTarget.group.targetId}
               </span>
             </p>
           ) : null}
 
-          {actionError ? (
-            <p className="text-xs text-rose-300">{actionError}</p>
-          ) : null}
+          {actionError ? <p className="text-xs text-rose-300">{actionError}</p> : null}
 
           <AlertDialogFooter>
-            <AlertDialogCancel
-              disabled={actionBusy}
-              className="border-slate-700 bg-slate-900 text-slate-300 hover:text-white"
-            >
+            <AlertDialogCancel disabled={actionBusy} className="rounded-full">
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
@@ -539,11 +506,12 @@ const AdminReports: React.FC = () => {
                 void runAction();
               }}
               className={cn(
+                'rounded-full',
                 actionTarget?.action === 'hide'
                   ? 'bg-rose-600 text-white hover:bg-rose-500'
                   : actionTarget?.action === 'restore'
                     ? 'bg-emerald-600 text-white hover:bg-emerald-500'
-                    : 'bg-indigo-600 text-white hover:bg-indigo-500'
+                    : 'bg-indigo-500 text-white hover:bg-indigo-400'
               )}
             >
               {actionBusy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}

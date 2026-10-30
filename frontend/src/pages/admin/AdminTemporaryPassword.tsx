@@ -49,61 +49,71 @@ const AdminTemporaryPassword: React.FC<AdminTemporaryPasswordProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="border-slate-800 bg-slate-900 text-slate-100 sm:max-w-md">
+      <DialogContent className="dark max-w-md rounded-2xl border-border bg-card text-card-foreground">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <KeyRound className="h-4 w-4 text-amber-400" />
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <span className="grid h-7 w-7 place-items-center rounded-lg bg-amber-500/15 text-amber-300">
+              <KeyRound className="h-4 w-4" aria-hidden />
+            </span>
             Temporary password
           </DialogTitle>
-          <DialogDescription className="text-slate-400">
+          <DialogDescription className="leading-6">
             {description ??
               'Share this credential securely. It is shown once and must be changed at first sign-in.'}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-              Account
-            </p>
-            <p className="mt-0.5 break-all text-sm text-slate-200">{email}</p>
-          </div>
-
-          {workspace ? (
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                Workspace
-              </p>
-              <p className="mt-0.5 text-sm text-slate-200">{workspace}</p>
-              <p className="mt-1 text-xs text-slate-500">
-                Sign in at <code className="rounded bg-slate-950 px-1 py-0.5">/agency/login</code>{' '}
-                with this workspace slug.
-              </p>
+          <dl className="grid gap-3 rounded-xl border border-border bg-muted/40 p-3 sm:grid-cols-2">
+            <div className="min-w-0">
+              <dt className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Account
+              </dt>
+              <dd className="mt-0.5 break-all text-sm">{email}</dd>
             </div>
-          ) : null}
+            {workspace ? (
+              <div className="min-w-0">
+                <dt className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Workspace
+                </dt>
+                <dd className="mt-0.5 truncate text-sm">{workspace}</dd>
+              </div>
+            ) : null}
+          </dl>
 
-          <div className="rounded-xl border border-amber-900/60 bg-amber-950/20 p-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-300/80">
+          <div className="rounded-xl border border-amber-500/35 bg-amber-500/10 p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-300">
               One-time password
             </p>
             <div className="mt-1.5 flex items-center gap-2">
-              <code className="min-w-0 flex-1 break-all rounded-lg bg-slate-950 px-2.5 py-2 font-mono text-sm text-amber-200">
+              <code className="min-w-0 flex-1 break-all rounded-lg border border-amber-500/20 bg-background px-2.5 py-2 font-mono text-sm text-amber-200">
                 {temporaryPassword}
               </code>
               <Button
                 type="button"
                 size="icon"
                 variant="outline"
-                className="h-9 w-9 shrink-0 border-slate-700 bg-slate-950 text-slate-300 hover:text-white"
+                className="h-9 w-9 shrink-0 border-amber-500/30 bg-background text-amber-200 hover:bg-amber-500/10 hover:text-amber-100"
                 onClick={() => void copy()}
                 aria-label="Copy temporary password"
               >
-                {copied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+                {copied ? (
+                  <Check className="h-4 w-4 text-emerald-400" aria-hidden />
+                ) : (
+                  <Copy className="h-4 w-4" aria-hidden />
+                )}
               </Button>
             </div>
+            {workspace ? (
+              <p className="mt-2 text-xs text-amber-200/70">
+                Sign in at{' '}
+                <code className="rounded bg-background/60 px-1 py-0.5">/agency/login</code> with
+                this workspace slug.
+              </p>
+            ) : null}
           </div>
 
-          <p className="text-xs text-slate-500">
+          <p className="text-xs leading-5 text-muted-foreground">
             This value is not stored and cannot be shown again. A first sign-in is
             forced through a password change before the account can do anything else.
           </p>
@@ -112,7 +122,7 @@ const AdminTemporaryPassword: React.FC<AdminTemporaryPasswordProps> = ({
         <DialogFooter>
           <Button
             type="button"
-            className="bg-indigo-500 text-white hover:bg-indigo-400"
+            className="bg-indigo-500 text-white hover:bg-indigo-400 focus-visible:ring-indigo-400"
             onClick={() => onOpenChange(false)}
           >
             Done

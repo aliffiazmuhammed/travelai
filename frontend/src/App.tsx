@@ -49,6 +49,7 @@ const AdminOverview = lazy(() => import("./pages/admin/AdminOverview"));
 const AdminAccount = lazy(() => import("./pages/admin/AdminAccount"));
 const AdminAccounts = lazy(() => import("./pages/admin/AdminAccounts"));
 const AdminAgencies = lazy(() => import("./pages/admin/AdminAgencies"));
+const AdminAgencyRecord = lazy(() => import("./pages/admin/AdminAgencyRecord"));
 const AdminReports = lazy(() => import("./pages/admin/AdminReports"));
 const AdminPlatformAdmins = lazy(() => import("./pages/admin/AdminPlatformAdmins"));
 const AdminAudit = lazy(() => import("./pages/admin/AdminAudit"));
@@ -207,6 +208,10 @@ const App = () => (
                   <Route
                     path="agencies"
                     element={<AdminAgencies />}
+                  />
+                  <Route
+                    path="agencies/:agencyId"
+                    element={<AdminAgencyRecord />}
                   />
                   <Route path="reports" element={<AdminReports />} />
                   <Route

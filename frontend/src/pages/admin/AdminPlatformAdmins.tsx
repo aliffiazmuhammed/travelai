@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
-  AlertTriangle,
   KeyRound,
   Loader2,
   Plus,
@@ -22,7 +22,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Card, CardContent } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -33,13 +32,16 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { AdminEmptyState } from '@/components/admin/AdminEmptyState';
+import { AdminNotice } from '@/components/admin/AdminNotice';
+import { AdminPageHeader } from '@/components/admin/AdminPageHeader';
+import { AdminPagination } from '@/components/admin/AdminPagination';
+import { AdminSegmented } from '@/components/admin/AdminSegmented';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  AdminTableFrame,
+  adminTableHeadClass,
+  adminTableRowClass,
+} from '@/components/admin/AdminTableFrame';
 import { usePlatformAuth } from '@/context/PlatformAuthContext';
 import { api } from '@/services/api';
 import type {
@@ -64,8 +66,16 @@ import {
  * the server and mirrored here: you cannot disable yourself, and the last
  * active super-admin cannot be disabled.
  */
+
+const STATUS_OPTIONS: Array<{ value: PlatformStatusFilter; label: string }> = [
+  { value: 'all', label: 'All' },
+  { value: 'active', label: 'Active' },
+  { value: 'disabled', label: 'Disabled' },
+];
+
 const AdminPlatformAdmins: React.FC = () => {
   const { user } = usePlatformAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -95,6 +105,22 @@ const AdminPlatformAdmins: React.FC = () => {
   const [statusBusy, setStatusBusy] = useState(false);
 
   const reload = () => setReloadKey((key) => key + 1);
+
+  // The ⌘K palette opens this dialog with `?new=1`; the param is consumed so a
+  // refresh or back-navigation does not reopen it.
+  useEffect(() => {
+    if (searchParams.get('new') !== '1') return;
+    setCreateError(null);
+    setCreateOpen(true);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('new');
+        return next;
+      },
+      { replace: true }
+    );
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -176,248 +202,223 @@ const AdminPlatformAdmins: React.FC = () => {
 
   const admins = data?.accounts ?? [];
   const activeTotal = data?.activeTotal ?? 0;
+  const lastAdmin = activeTotal <= 1;
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-            <UserRoundCog className="h-5 w-5 text-indigo-400" />
+      <AdminPageHeader
+        title={
+          <>
+            <span
+              aria-hidden
+              className="grid h-8 w-8 place-items-center rounded-xl border border-border bg-card text-indigo-300"
+            >
+              <UserRoundCog className="h-4 w-4" />
+            </span>
             Platform admins
-          </h1>
-          <p className="mt-1 text-sm text-slate-400">
-            The internal super-admin accounts that can open this console. They are
-            separate from every personal and agency account.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            className="border-slate-700 bg-slate-900 text-slate-300 hover:text-white"
-            onClick={reload}
-            disabled={loading}
-          >
-            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
-          <Button
-            type="button"
-            className="bg-indigo-500 text-white hover:bg-indigo-400"
-            onClick={() => {
-              setCreateError(null);
-              setCreateOpen(true);
-            }}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Add platform admin
-          </Button>
-        </div>
-      </div>
+          </>
+        }
+        description="The internal super-admin accounts that can open this console. They are separate from every personal and agency account."
+        actions={
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-full"
+              onClick={reload}
+              disabled={loading}
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+            <Button
+              type="button"
+              className="rounded-full bg-indigo-500 text-white hover:bg-indigo-400"
+              onClick={() => {
+                setCreateError(null);
+                setCreateOpen(true);
+              }}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Add platform admin
+            </Button>
+          </>
+        }
+      />
+
+      {lastAdmin ? (
+        <AdminNotice tone="warning" title="This is the last active super-admin.">
+          Keep at least one more active admin before disabling this one, or the
+          console becomes unreachable until the bootstrap CLI is used.
+        </AdminNotice>
+      ) : (
+        <p className="flex items-center gap-2 text-xs text-muted-foreground">
+          <ShieldCheck className="h-4 w-4 text-emerald-400" aria-hidden />
+          {activeTotal} active super-admin{activeTotal === 1 ? '' : 's'}
+        </p>
+      )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-xs text-slate-500">
-          <ShieldCheck className="h-4 w-4 text-emerald-400" />
-          {activeTotal} active super-admin{activeTotal === 1 ? '' : 's'}
-          {activeTotal === 1 ? (
-            <span className="text-amber-400">
-              · the last active admin cannot be disabled
-            </span>
-          ) : null}
-        </div>
+        <AdminSegmented
+          ariaLabel="Admin status"
+          value={status}
+          options={STATUS_OPTIONS}
+          onChange={(value) => {
+            setStatus(value);
+            setPage(1);
+          }}
+        />
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-            <Input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search email or name"
-              className="h-9 w-64 border-slate-700 bg-slate-950 pl-9 text-sm text-slate-100 placeholder:text-slate-500"
-              aria-label="Search platform admins"
-            />
-          </div>
-
-          <Select
-            value={status}
-            onValueChange={(value) => {
-              setStatus(value as PlatformStatusFilter);
-              setPage(1);
-            }}
-          >
-            <SelectTrigger className="h-9 w-36 border-slate-700 bg-slate-950 text-slate-200">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="disabled">Disabled</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="relative w-full sm:w-72">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search email or name"
+            className="h-9 rounded-full pl-9"
+            aria-label="Search platform admins"
+          />
         </div>
       </div>
 
       {error ? (
-        <div className="flex items-start gap-2.5 rounded-xl border border-rose-900 bg-rose-950/40 p-3.5 text-sm text-rose-200">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <p>{error}</p>
-        </div>
+        <AdminNotice tone="error" title="Could not load platform admins">
+          {error}
+        </AdminNotice>
       ) : null}
 
-      <Card className="border-slate-800 bg-slate-900/60">
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[820px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-slate-800 text-[10px] uppercase tracking-wider text-slate-500">
-                  <th className="px-4 py-3 font-semibold">Administrator</th>
-                  <th className="px-4 py-3 font-semibold">Status</th>
-                  <th className="px-4 py-3 font-semibold">First login</th>
-                  <th className="px-4 py-3 font-semibold">Created</th>
-                  <th className="px-4 py-3 font-semibold">Last sign-in</th>
-                  <th className="px-4 py-3 text-right font-semibold">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading && admins.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-4 py-14 text-center text-sm text-slate-400">
-                      <span className="inline-flex items-center gap-2">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Loading platform admins…
-                      </span>
-                    </td>
-                  </tr>
-                ) : admins.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-4 py-14 text-center text-sm text-slate-400">
-                      No platform admins match this search.
-                    </td>
-                  </tr>
-                ) : (
-                  admins.map((account) => {
-                    const isSelf = account._id === user?._id;
-                    const disableBlocked =
-                      account.status === 'active' && (isSelf || activeTotal <= 1);
+      <AdminTableFrame
+        minWidth="860px"
+        footer={
+          <AdminPagination
+            page={data?.page ?? page}
+            totalPages={data?.totalPages ?? 1}
+            total={data?.total}
+            noun="platform admin"
+            loading={loading}
+            onChange={setPage}
+          />
+        }
+      >
+        <thead>
+          <tr>
+            <th className={adminTableHeadClass}>Administrator</th>
+            <th className={adminTableHeadClass}>Status</th>
+            <th className={adminTableHeadClass}>First login</th>
+            <th className={adminTableHeadClass}>Created</th>
+            <th className={adminTableHeadClass}>Last sign-in</th>
+            <th className={`${adminTableHeadClass} text-right`}>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {loading && admins.length === 0 ? (
+            <tr>
+              <td colSpan={6} className="px-4 py-14 text-center text-sm text-muted-foreground">
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading platform admins…
+                </span>
+              </td>
+            </tr>
+          ) : admins.length === 0 ? (
+            <tr>
+              <td colSpan={6}>
+                <AdminEmptyState
+                  icon={UserRoundCog}
+                  title="No platform admins match this search."
+                  description="Add another super-admin to give a teammate console access."
+                />
+              </td>
+            </tr>
+          ) : (
+            admins.map((account) => {
+              const isSelf = account._id === user?._id;
+              const disableBlocked =
+                account.status === 'active' && (isSelf || activeTotal <= 1);
 
-                    return (
-                      <tr
-                        key={account._id}
-                        className="border-b border-slate-800/70 last:border-0 hover:bg-slate-900/70"
+              return (
+                <tr key={account._id} className={adminTableRowClass}>
+                  <td className="px-4 py-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="truncate font-medium text-foreground">
+                          {accountDisplayName(account)}
+                        </p>
+                        {isSelf ? (
+                          <Badge
+                            variant="outline"
+                            className="border-indigo-500/40 bg-indigo-500/10 text-[10px] text-indigo-300"
+                          >
+                            You
+                          </Badge>
+                        ) : null}
+                      </div>
+                      <p className="truncate text-xs text-muted-foreground">{account.email}</p>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <StatusBadge status={account.status} />
+                  </td>
+                  <td className="px-4 py-3 text-xs">
+                    {account.mustChangePassword ? (
+                      <span className="text-amber-300">Password change required</span>
+                    ) : (
+                      <span className="text-muted-foreground">Completed</span>
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
+                    {formatAdminDate(account.createdAt)}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
+                    {formatAdminDate(account.lastLoginAt)}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-end gap-1">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 rounded-full"
+                        disabled={disableBlocked}
+                        title={
+                          isSelf
+                            ? 'You cannot disable your own account'
+                            : account.status === 'active' && activeTotal <= 1
+                              ? 'The last active super-admin cannot be disabled'
+                              : undefined
+                        }
+                        onClick={() =>
+                          setStatusTarget({
+                            account,
+                            next: account.status === 'active' ? 'disabled' : 'active',
+                          })
+                        }
                       >
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <div className="min-w-0">
-                              <p className="flex items-center gap-2 truncate font-medium text-slate-100">
-                                {accountDisplayName(account)}
-                                {isSelf ? (
-                                  <Badge
-                                    variant="outline"
-                                    className="border-indigo-800 bg-indigo-950/40 text-[10px] text-indigo-300"
-                                  >
-                                    You
-                                  </Badge>
-                                ) : null}
-                              </p>
-                              <p className="truncate text-xs text-slate-500">{account.email}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <StatusBadge status={account.status} />
-                        </td>
-                        <td className="px-4 py-3 text-xs text-slate-400">
-                          {account.mustChangePassword ? (
-                            <span className="text-amber-300">Password change required</span>
-                          ) : (
-                            'Completed'
-                          )}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-400">
-                          {formatAdminDate(account.createdAt)}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-400">
-                          {formatAdminDate(account.lastLoginAt)}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center justify-end gap-1">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="ghost"
-                              className="h-8 text-slate-400 hover:bg-slate-800 hover:text-white"
-                              disabled={disableBlocked}
-                              title={
-                                isSelf
-                                  ? 'You cannot disable your own account'
-                                  : account.status === 'active' && activeTotal <= 1
-                                    ? 'The last active super-admin cannot be disabled'
-                                    : undefined
-                              }
-                              onClick={() =>
-                                setStatusTarget({
-                                  account,
-                                  next: account.status === 'active' ? 'disabled' : 'active',
-                                })
-                              }
-                            >
-                              {account.status === 'active' ? (
-                                <ShieldOff className="mr-1.5 h-4 w-4" />
-                              ) : (
-                                <ShieldCheck className="mr-1.5 h-4 w-4" />
-                              )}
-                              {account.status === 'active' ? 'Disable' : 'Enable'}
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-800 px-4 py-3">
-            <p className="text-xs text-slate-500">
-              {data
-                ? `${data.total} platform admin${data.total === 1 ? '' : 's'} · page ${data.page} of ${data.totalPages}`
-                : 'Loading admins…'}
-            </p>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="border-slate-700 bg-slate-900 text-slate-300 hover:text-white"
-                onClick={() => setPage((value) => Math.max(1, value - 1))}
-                disabled={!data || data.page <= 1 || loading}
-              >
-                Previous
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="border-slate-700 bg-slate-900 text-slate-300 hover:text-white"
-                onClick={() => setPage((value) => value + 1)}
-                disabled={!data || data.page >= data.totalPages || loading}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+                        {account.status === 'active' ? (
+                          <ShieldOff className="mr-1.5 h-4 w-4" />
+                        ) : (
+                          <ShieldCheck className="mr-1.5 h-4 w-4" />
+                        )}
+                        {account.status === 'active' ? 'Disable' : 'Enable'}
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })
+          )}
+        </tbody>
+      </AdminTableFrame>
 
       <Dialog open={createOpen} onOpenChange={(open) => !createBusy && setCreateOpen(open)}>
-        <DialogContent className="border-slate-800 bg-slate-900 text-slate-100 sm:max-w-md">
+        {/* Portalled content leaves the console tree, so it carries the dark scope. */}
+        <DialogContent className="dark rounded-2xl border-border bg-card text-card-foreground sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <KeyRound className="h-4 w-4 text-indigo-400" />
               Add platform admin
             </DialogTitle>
-            <DialogDescription className="text-slate-400">
+            <DialogDescription className="text-muted-foreground">
               Creates a third-realm super-admin with a one-time password. No personal
               or agency account is created or attached, even if the email already
               exists in those realms.
@@ -426,15 +427,11 @@ const AdminPlatformAdmins: React.FC = () => {
 
           <form className="space-y-4" onSubmit={submitCreate}>
             {createError ? (
-              <div className="rounded-xl border border-rose-900 bg-rose-950/40 px-3.5 py-3 text-sm text-rose-200">
-                {createError}
-              </div>
+              <AdminNotice tone="error">{createError}</AdminNotice>
             ) : null}
 
             <div className="space-y-2">
-              <Label htmlFor="platform-admin-email" className="text-slate-300">
-                Email
-              </Label>
+              <Label htmlFor="platform-admin-email">Email</Label>
               <Input
                 id="platform-admin-email"
                 type="email"
@@ -445,13 +442,12 @@ const AdminPlatformAdmins: React.FC = () => {
                   if (createError) setCreateError(null);
                 }}
                 placeholder="ops@example.com"
-                className="border-slate-700 bg-slate-950 text-slate-100 placeholder:text-slate-500"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="platform-admin-name" className="text-slate-300">
-                Display name <span className="text-slate-500">(optional)</span>
+              <Label htmlFor="platform-admin-name">
+                Display name <span className="text-muted-foreground">(optional)</span>
               </Label>
               <Input
                 id="platform-admin-name"
@@ -459,7 +455,6 @@ const AdminPlatformAdmins: React.FC = () => {
                 maxLength={40}
                 onChange={(event) => setName(event.target.value)}
                 placeholder="Operations"
-                className="border-slate-700 bg-slate-950 text-slate-100 placeholder:text-slate-500"
               />
             </div>
 
@@ -467,7 +462,7 @@ const AdminPlatformAdmins: React.FC = () => {
               <Button
                 type="button"
                 variant="outline"
-                className="border-slate-700 bg-slate-900 text-slate-300 hover:text-white"
+                className="rounded-full"
                 onClick={() => setCreateOpen(false)}
                 disabled={createBusy}
               >
@@ -475,7 +470,7 @@ const AdminPlatformAdmins: React.FC = () => {
               </Button>
               <Button
                 type="submit"
-                className="bg-indigo-500 text-white hover:bg-indigo-400"
+                className="rounded-full bg-indigo-500 text-white hover:bg-indigo-400"
                 disabled={createBusy}
               >
                 {createBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -492,27 +487,27 @@ const AdminPlatformAdmins: React.FC = () => {
           if (!open && !statusBusy) setStatusTarget(null);
         }}
       >
-        <AlertDialogContent className="border-slate-800 bg-slate-900 text-slate-100">
+        {/* Portalled content leaves the console tree, so it carries the dark scope. */}
+        <AlertDialogContent className="dark rounded-2xl border-border bg-card text-card-foreground">
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {statusTarget?.next === 'disabled' ? 'Disable platform admin?' : 'Enable platform admin?'}
+              {statusTarget?.next === 'disabled'
+                ? 'Disable platform admin?'
+                : 'Enable platform admin?'}
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-slate-400">
+            <AlertDialogDescription className="text-muted-foreground">
               {statusTarget?.next === 'disabled'
                 ? 'This immediately blocks the account from the console. Platform audit records are kept.'
                 : 'This restores access to the console for this administrator.'}
               {statusTarget ? (
-                <span className="mt-2 block break-all text-slate-300">
+                <span className="mt-2 block break-all text-foreground">
                   {statusTarget.account.email}
                 </span>
               ) : null}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel
-              disabled={statusBusy}
-              className="border-slate-700 bg-slate-900 text-slate-300 hover:text-white"
-            >
+            <AlertDialogCancel disabled={statusBusy} className="rounded-full">
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
@@ -523,8 +518,8 @@ const AdminPlatformAdmins: React.FC = () => {
               }}
               className={
                 statusTarget?.next === 'disabled'
-                  ? 'bg-rose-600 text-white hover:bg-rose-500'
-                  : 'bg-indigo-500 text-white hover:bg-indigo-400'
+                  ? 'rounded-full bg-rose-600 text-white hover:bg-rose-500'
+                  : 'rounded-full bg-indigo-500 text-white hover:bg-indigo-400'
               }
             >
               {statusBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
