@@ -502,7 +502,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
               (trip.status as keyof typeof STATUS_CONFIG) || "planned";
             const statusInfo = STATUS_CONFIG[statusKey] || STATUS_CONFIG.planned;
             const days = trip.tripDetails?.duration_days || 5;
-            const budget = trip.tripDetails?.budget_per_person || 15000;
+            const budget = trip.tripDetails?.budget_per_person ?? 0;
             const isActing = actionLoadingId === trip._id;
 
             return (
@@ -538,10 +538,14 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
                     <div className="absolute bottom-3 left-3 text-white text-xs font-bold flex items-center gap-1.5">
                       <Calendar className="w-3.5 h-3.5 text-primary" />
                       <span>{days} Days</span>
-                      <span>•</span>
-                      <span className="text-white/80">
-                        ₹{budget.toLocaleString("en-IN")}/person
-                      </span>
+                      {budget > 0 && (
+                        <>
+                          <span>•</span>
+                          <span className="text-white/80">
+                            ₹{budget.toLocaleString("en-IN")}/person
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -709,8 +713,12 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
                     </h4>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
                       <span>{days} Days</span>
-                      <span>•</span>
-                      <span>₹{budget.toLocaleString("en-IN")}/person</span>
+                      {budget > 0 && (
+                        <>
+                          <span>•</span>
+                          <span>₹{budget.toLocaleString("en-IN")}/person</span>
+                        </>
+                      )}
                       <span>•</span>
                       <span>{trip.tripDetails?.group_type || "Couple"}</span>
                     </div>
@@ -826,7 +834,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
               trip.title || trip.tripDetails?.trip_title || "Shared trip";
             const cover = getTripCover(title);
             const days = trip.tripDetails?.duration_days || 5;
-            const budget = trip.tripDetails?.budget_per_person || 15000;
+            const budget = trip.tripDetails?.budget_per_person ?? 0;
             const isActing = actionLoadingId === trip._id;
             const roleStyle =
               trip.role === "editor"
@@ -866,8 +874,12 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
                     </h4>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
                       <span>{days} Days</span>
-                      <span>•</span>
-                      <span>₹{budget.toLocaleString("en-IN")}/person</span>
+                      {budget > 0 && (
+                        <>
+                          <span>•</span>
+                          <span>₹{budget.toLocaleString("en-IN")}/person</span>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
