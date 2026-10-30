@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import Navbar from "@/components/Navbar";
+import { PublicEventCard } from "@/components/events/PublicEventCard";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,14 +26,17 @@ import type {
   GalleryDuration,
   GalleryTripSummary,
 } from "@/types/gallery";
+import type { PublicEventSummary } from "@/types/events";
 
 /**
- * Public gallery index (Milestone 8 G3).
+ * Public gallery index (Milestone 8 G3) and the events strip (M10 E1).
  *
- * Anonymous: no session is read and the payload is the card projection, so this
- * page can be linked from anywhere. Filters live in the URL (`?q=&duration=&
- * tag=`) so a filtered view is shareable; the cursor stays in memory because a
- * shared link should always start at the newest page.
+ * Anonymous: no session is read and both payloads are public projections, so
+ * this page can be linked from anywhere. Trip filters live in the URL (`?q=&
+ * duration=&tag=`) so a filtered view is shareable; the cursor stays in memory
+ * because a shared link should always start at the newest page. Upcoming events
+ * are a browse affordance rather than search results, so they appear only when
+ * no trip filter is active.
  */
 
 const PAGE_SIZE = 12;
@@ -147,6 +151,7 @@ const Explore = () => {
 
   const [searchInput, setSearchInput] = useState(q);
   const [trips, setTrips] = useState<GalleryTripSummary[]>([]);
+  const [events, setEvents] = useState<PublicEventSummary[]>([]);
   const [total, setTotal] = useState(0);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -160,7 +165,7 @@ const Explore = () => {
     return applyPageMeta({
       title: "Explore trips to join · TravelAI",
       description:
-        "Real trips people have planned and shared on TravelAI. Find one you fancy, ask the owner to join, or take a copy and make it your own.",
+        "Real trips people have planned and shared on TravelAI, plus camps and retreats agencies are running. Find one you fancy, ask to join, or take a copy and make it your own.",
       ogType: "website",
     });
   }, []);
@@ -192,6 +197,26 @@ const Explore = () => {
 
     return () => window.clearTimeout(timer);
   }, [searchInput, q, applyFilters]);
+
+  // Upcoming events load once and never touch the trip filters: they are a
+  // browse affordance, and a failed call simply leaves the strip out.
+  useEffect(() => {
+    let cancelled = false;
+
+    api
+      .getPublicEvents({ limit: 6 })
+      .then((page) => {
+        if (!cancelled) setEvents(page.events);
+      })
+      .catch((err) => {
+        console.error("Failed to load upcoming events:", err);
+        if (!cancelled) setEvents([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -390,6 +415,37 @@ const Explore = () => {
           </div>
         </header>
 
+        {!hasFilters && events.length > 0 && (
+          <section aria-labelledby="explore-events-heading" className="space-y-4">
+            <div className="flex flex-wrap items-end justify-between gap-2">
+              <div className="space-y-0.5">
+                <h2
+                  id="explore-events-heading"
+                  className="text-lg font-black text-foreground"
+                >
+                  Happening soon
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  Camps, retreats and group trips agencies are running. Ask
+                  them about a spot.
+                </p>
+              </div>
+              <Link
+                to="/agencies"
+                className="inline-flex items-center gap-1 text-[11px] font-bold text-primary hover:gap-1.5 transition-all"
+              >
+                Browse agencies
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {events.map((event) => (
+                <PublicEventCard key={event._id} event={event} showAgency />
+              ))}
+            </div>
+          </section>
+        )}
+
         {loading ? (
           <div className="flex flex-col items-center justify-center min-h-[320px] space-y-4">
             <Loader2 className="w-9 h-9 text-primary animate-spin" />
@@ -459,11 +515,14 @@ const Explore = () => {
           </div>
         ) : (
           <section className="space-y-5">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-xs font-semibold text-muted-foreground">
-                Showing {trips.length} of {total} shared{" "}
-                {total === 1 ? "trip" : "trips"}
-              </p>
+            <div className="flex items-end justify-between gap-3">
+              <div className="space-y-0.5">
+                <h2 className="text-lg font-black text-foreground">Shared trips</h2>
+                <p className="text-xs font-semibold text-muted-foreground">
+                  Showing {trips.length} of {total} shared{" "}
+                  {total === 1 ? "trip" : "trips"}
+                </p>
+              </div>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

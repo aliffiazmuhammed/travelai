@@ -441,6 +441,23 @@ export const publicGalleryLimiter = rateLimit({
 });
 
 /**
+ * Public agency events (M10 E1). Listing, event page and covers share one IP
+ * bucket, for the same reason as the gallery: one Explore visit fires all
+ * three. 180 reads / 15 min matches the other public surfaces.
+ */
+export const publicEventsLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 180,
+  message: {
+    success: false,
+    error: 'Too many event requests. Please slow down and try again shortly.',
+    message: 'Too many event requests. Please slow down and try again shortly.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
  * Public agency directory (M9 D3). Listing, facets, profile and logo share one
  * IP bucket: a single directory page fires the listing, the facets and up to a
  * page of logos, so splitting them would only multiply the allowance. 180
@@ -600,6 +617,118 @@ export const enquiryAgencyLimiter = rateLimit({
       'This agency has received the maximum number of enquiries for today. Please try again tomorrow.',
     message:
       'This agency has received the maximum number of enquiries for today. Please try again tomorrow.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/* -------------------------------------------------------------------------- */
+/*  Public event interest (M10 E2)                                            */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The "I'm interested" form is anonymous, so it is guarded from several sides:
+ *
+ * - **Network** — a cheap outer ceiling across every event, sized for a shared
+ *   household, office, school or carrier-NAT address rather than one person.
+ * - **Network × event** — the bucket that actually stops one listing flooding,
+ *   without spending a traveller's room to ask about a different camp.
+ * - **Email** — one person cannot queue up on many events from rotating IPs;
+ *   the key falls back to the network when the address is missing or malformed.
+ * - **Event** — no single listing can be buried in interest at all.
+ *
+ * Every ceiling is env-tunable (M10-QA-13) so ops can widen it for an audience
+ * behind one address, and every refusal names the 24-hour reset: the window is
+ * rolling, not "until midnight", and visitors were reading it as the latter.
+ */
+export const EVENT_INTEREST_IP_DAILY_LIMIT = env.EVENT_INTEREST_IP_DAILY_LIMIT;
+export const EVENT_INTEREST_EVENT_IP_DAILY_LIMIT =
+  env.EVENT_INTEREST_EVENT_IP_DAILY_LIMIT;
+export const EVENT_INTEREST_EMAIL_DAILY_LIMIT = env.EVENT_INTEREST_EMAIL_DAILY_LIMIT;
+export const EVENT_INTEREST_EVENT_DAILY_LIMIT = env.EVENT_INTEREST_EVENT_DAILY_LIMIT;
+
+const EVENT_INTEREST_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+const eventInterestNetworkOf = (req: any): string => String(req?.ip ?? 'anonymous');
+
+const eventInterestEmailKey = (req: any): string => {
+  const raw = req?.body?.email;
+  const email = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+  return email ? `email:${email}` : `ip:${eventInterestNetworkOf(req)}`;
+};
+
+const eventInterestEventIpKey = (req: any): string => {
+  const eventId =
+    typeof req?.params?.eventId === 'string' ? req.params.eventId.trim() : '';
+  return eventId
+    ? `event-ip:${eventId}:${eventInterestNetworkOf(req)}`
+    : `ip:${eventInterestNetworkOf(req)}`;
+};
+
+const eventInterestEventKey = (req: any): string => {
+  const eventId =
+    typeof req?.params?.eventId === 'string' ? req.params.eventId.trim() : '';
+  return eventId ? `event:${eventId}` : `ip:${eventInterestNetworkOf(req)}`;
+};
+
+const EVENT_INTEREST_LIMIT_COPY =
+  'You have reached the daily limit for event requests from this network. Please try again in 24 hours.';
+const EVENT_INTEREST_EMAIL_LIMIT_COPY =
+  'You have reached the daily limit for event requests from this email address. Please try again in 24 hours.';
+const EVENT_INTEREST_EVENT_IP_LIMIT_COPY =
+  'You have reached the daily limit for requests about this event from your network. Please try again in 24 hours.';
+const EVENT_INTEREST_EVENT_LIMIT_COPY =
+  'This event has received the maximum number of requests for today. Please try again in 24 hours.';
+
+export const eventInterestIpLimiter = rateLimit({
+  windowMs: EVENT_INTEREST_WINDOW_MS,
+  max: EVENT_INTEREST_IP_DAILY_LIMIT,
+  message: {
+    success: false,
+    error: EVENT_INTEREST_LIMIT_COPY,
+    message: EVENT_INTEREST_LIMIT_COPY,
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+export const eventInterestEmailLimiter = rateLimit({
+  windowMs: EVENT_INTEREST_WINDOW_MS,
+  max: EVENT_INTEREST_EMAIL_DAILY_LIMIT,
+  keyGenerator: eventInterestEmailKey,
+  validate: false,
+  message: {
+    success: false,
+    error: EVENT_INTEREST_EMAIL_LIMIT_COPY,
+    message: EVENT_INTEREST_EMAIL_LIMIT_COPY,
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+export const eventInterestEventIpLimiter = rateLimit({
+  windowMs: EVENT_INTEREST_WINDOW_MS,
+  max: EVENT_INTEREST_EVENT_IP_DAILY_LIMIT,
+  keyGenerator: eventInterestEventIpKey,
+  validate: false,
+  message: {
+    success: false,
+    error: EVENT_INTEREST_EVENT_IP_LIMIT_COPY,
+    message: EVENT_INTEREST_EVENT_IP_LIMIT_COPY,
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+export const eventInterestEventLimiter = rateLimit({
+  windowMs: EVENT_INTEREST_WINDOW_MS,
+  max: EVENT_INTEREST_EVENT_DAILY_LIMIT,
+  keyGenerator: eventInterestEventKey,
+  validate: false,
+  message: {
+    success: false,
+    error: EVENT_INTEREST_EVENT_LIMIT_COPY,
+    message: EVENT_INTEREST_EVENT_LIMIT_COPY,
   },
   standardHeaders: true,
   legacyHeaders: false,

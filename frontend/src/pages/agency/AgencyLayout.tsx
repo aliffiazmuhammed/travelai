@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import {
   BriefcaseBusiness,
   Building2,
+  CalendarRange,
   FileText,
   Gauge,
   Home,
@@ -37,6 +38,8 @@ const navItems = [
   // M9 D5: leads from the public directory. Every member may read the inbox.
   { to: '/agency/enquiries', label: 'Enquiries', icon: Inbox, end: false },
   { to: '/agency/trips', label: 'Trips', icon: Map, end: false },
+  // M10 E2: dated camps and group trips with their own public page.
+  { to: '/agency/events', label: 'Events', icon: CalendarRange, end: false },
   {
     to: '/agency/clients',
     label: 'Clients',
@@ -49,6 +52,33 @@ const navItems = [
   { to: '/agency/operations', label: 'Operations', icon: Gauge, end: false, adminOnly: true },
   { to: '/agency/settings', label: 'Settings', icon: Settings, end: false },
 ];
+
+/** The quiet count chip: nothing at zero, capped so a big week stays a chip. */
+function navBadge(count: number, hint: string | null) {
+  if (count <= 0) return null;
+  return (
+    <span
+      title={hint ?? undefined}
+      className="ml-0.5 rounded-full bg-teal-600 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white"
+    >
+      {count > 99 ? '99+' : count}
+    </span>
+  );
+}
+
+/**
+ * What a nav count means. The chips are identical on purpose, so the label has
+ * to carry the difference: an enquiry wants a reply, an event count is
+ * travellers waiting on a spot decision — not the size of a roster (M10-QA-11).
+ */
+function badgeHint(path: string, count: number): string {
+  if (path === '/agency/enquiries') {
+    return count === 1 ? '1 enquiry needs an answer' : `${count} enquiries need an answer`;
+  }
+  return count === 1
+    ? '1 traveller is waiting for a spot'
+    : `${count} travellers are waiting for a spot`;
+}
 
 /**
  * The agency product shell (PA0). This layout is intentionally separate from
@@ -68,6 +98,8 @@ const AgencyLayout: React.FC = () => {
     canManage,
     enquiryNeedsAttention,
     refreshEnquiryBadge,
+    eventNeedsAttention,
+    refreshEventBadge,
   } = useAgency();
 
   // D6: the cheapest possible nudge. It refetches on route changes and stays
@@ -75,15 +107,29 @@ const AgencyLayout: React.FC = () => {
   // as well as fresh leads: an answer buried in an existing thread needs the
   // team just as much as a first contact. The count itself lives in the agency
   // context so the inbox can lower it the moment a thread is read.
+  //
+  // M10: the Events item answers the same question for travellers waiting on
+  // a spot, so both counters refresh together and both fail quietly.
+  //
+  // M10-QA-14, intentional: this is a route-change refresh, not a live tier.
+  // A new interest raised while the team sits still shows on the next agency
+  // navigation; there is no events stream, and none is promised yet.
   const refreshBadge = useCallback(() => {
     void refreshEnquiryBadge().catch(() => {
       /* badge only */
     });
   }, [refreshEnquiryBadge]);
 
-  useEffect(() => {
+  const refreshBadges = useCallback(() => {
     refreshBadge();
-  }, [location.pathname, refreshBadge]);
+    void refreshEventBadge().catch(() => {
+      /* badge only */
+    });
+  }, [refreshBadge, refreshEventBadge]);
+
+  useEffect(() => {
+    refreshBadges();
+  }, [location.pathname, refreshBadges]);
 
   // R6: outside the inbox the badge listens to the workspace stream, so a lead
   // that arrives while the team is on Trips still shows. The inbox page runs
@@ -99,6 +145,12 @@ const AgencyLayout: React.FC = () => {
   const visibleNavItems = navItems.filter(
     (item) => !('adminOnly' in item && item.adminOnly) || canManage
   );
+
+  // Anything waiting on a person, keyed by the nav item that owns it.
+  const navBadges: Record<string, number> = {
+    '/agency/enquiries': enquiryNeedsAttention,
+    '/agency/events': eventNeedsAttention,
+  };
 
   const displayName =
     user?.name?.trim() || user?.label || user?.email?.split('@')[0] || 'You';
@@ -215,29 +267,30 @@ const AgencyLayout: React.FC = () => {
         </div>
 
         <div className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-3 pb-2 sm:px-5">
-          {visibleNavItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.end}
-              className={({ isActive }) =>
-                cn(
-                  'inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition',
-                  isActive
-                    ? 'bg-teal-50 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-slate-100'
-                )
-              }
-            >
-              <item.icon className="h-4 w-4" />
-              {item.label}
-              {item.to === '/agency/enquiries' && enquiryNeedsAttention > 0 ? (
-                <span className="ml-0.5 rounded-full bg-teal-600 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
-                  {enquiryNeedsAttention > 99 ? '99+' : enquiryNeedsAttention}
-                </span>
-              ) : null}
-            </NavLink>
-          ))}
+          {visibleNavItems.map((item) => {
+            const count = navBadges[item.to] ?? 0;
+            const hint = count > 0 ? badgeHint(item.to, count) : null;
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.end}
+                aria-label={hint ? `${item.label}, ${hint}` : undefined}
+                className={({ isActive }) =>
+                  cn(
+                    'inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition',
+                    isActive
+                      ? 'bg-teal-50 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300'
+                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-slate-100'
+                  )
+                }
+              >
+                <item.icon className="h-4 w-4" />
+                {item.label}
+                {navBadge(count, hint)}
+              </NavLink>
+            );
+          })}
         </div>
       </header>
 

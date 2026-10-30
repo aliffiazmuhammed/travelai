@@ -4,6 +4,7 @@ import Navbar from "@/components/Navbar";
 import AgencyEnquiryDialog from "@/components/directory/AgencyEnquiryDialog";
 import AgencyPackageCard from "@/components/directory/AgencyPackageCard";
 import DirectoryProfilePreview from "@/components/directory/DirectoryProfilePreview";
+import { PublicEventCard } from "@/components/events/PublicEventCard";
 import { ReportDialog } from "@/components/gallery/ReportDialog";
 import { Button } from "@/components/ui/button";
 import { api, ApiError } from "@/services/api";
@@ -18,6 +19,7 @@ import {
   MessageCircle,
 } from "lucide-react";
 import type { AgencyDirectoryPackage, AgencyDirectoryPublicProfile } from "@/types/agency";
+import type { PublicEventSummary } from "@/types/events";
 
 /**
  * Public agency page (Milestone 9 D3).
@@ -30,12 +32,16 @@ import type { AgencyDirectoryPackage, AgencyDirectoryPublicProfile } from "@/typ
  * D5 adds the two traveller actions: the enquiry form (profile-level, or scoped
  * to one package card) and the report link that feeds the manual moderation
  * queue. Neither action hides the page: M9 never auto-hides an agency profile.
+ *
+ * M10 E1 adds the agency's upcoming events, read through the public events
+ * listing scoped by this slug, so a dated camp is one click from its own page.
  */
 const AgencyProfile = () => {
   const { slug } = useParams<{ slug: string }>();
   const location = useLocation();
   const navigate = useNavigate();
   const [profile, setProfile] = useState<AgencyDirectoryPublicProfile | null>(null);
+  const [events, setEvents] = useState<PublicEventSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
@@ -82,6 +88,30 @@ const AgencyProfile = () => {
       cancelled = true;
     };
   }, [slug, reloadKey]);
+
+  // M10 E1: this agency's upcoming events, through the public listing scoped by
+  // slug. A failed read hides the section instead of breaking the profile.
+  useEffect(() => {
+    if (!slug) {
+      setEvents([]);
+      return;
+    }
+
+    let cancelled = false;
+    api
+      .getPublicEvents({ agency: slug, limit: 6 })
+      .then((page) => {
+        if (!cancelled) setEvents(page.events);
+      })
+      .catch((err) => {
+        console.error("Failed to load this agency's events:", err);
+        if (!cancelled) setEvents([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [slug]);
 
   // Coming back from `/auth` after "Sign in to enquire": reopen the form, and
   // keep the package when the traveller started from a package card.
@@ -280,6 +310,31 @@ const AgencyProfile = () => {
                         setEnquiryOpen(true);
                       }}
                     />
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            {events.length > 0 ? (
+              <section
+                aria-labelledby="agency-events-heading"
+                className="space-y-3 pt-2"
+              >
+                <div className="space-y-1">
+                  <h2
+                    id="agency-events-heading"
+                    className="text-base font-bold text-foreground"
+                  >
+                    Coming up
+                  </h2>
+                  <p className="text-xs text-muted-foreground">
+                    Dated camps, retreats and group trips — open the one you
+                    like and ask about a spot.
+                  </p>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {events.map((event) => (
+                    <PublicEventCard key={event._id} event={event} />
                   ))}
                 </div>
               </section>

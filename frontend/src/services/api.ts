@@ -4,6 +4,11 @@ import type {
   ExplorePage,
   GalleryTravelerProfile,
   GalleryTrip,
+  PublicEventDetail,
+  PublicEventFilters,
+  PublicEventsPage,
+  EventInterestAcknowledgement,
+  EventInterestInput,
   ProfileUpdateInput,
   Trip,
   TripInput,
@@ -67,6 +72,13 @@ import type {
   AgencyEnquirySummary,
   AgencyEnquiryUpdateInput,
   AgencyEnquiryUpdateResult,
+  AgencyEventInput,
+  AgencyEventInterestListResponse,
+  AgencyEventInterestResponse,
+  AgencyEventInterestStatus,
+  AgencyEventListResponse,
+  AgencyEventResponse,
+  AgencyEventSummaryResponse,
   AgencyPackage,
   AgencyPackageCreateInput,
   AgencyPackageInput,
@@ -1018,6 +1030,114 @@ class ApiClient {
     return this.request(
       `/api/agency/${encodeURIComponent(id)}/packages/${encodeURIComponent(packageId)}`,
       { method: 'DELETE' }
+    );
+  }
+
+  /** M10 E2: the tenant's public event library and its interest rosters. */
+  async listAgencyEvents(id: string): Promise<AgencyEventListResponse> {
+    return this.request(`/api/agency/${encodeURIComponent(id)}/events`);
+  }
+
+  /** The Events nav badge: one tenant-wide pending-interest count. */
+  async getAgencyEventSummary(
+    id: string
+  ): Promise<AgencyEventSummaryResponse> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(id)}/events/summary`
+    );
+  }
+
+  async createAgencyEvent(
+    id: string,
+    payload: AgencyEventInput
+  ): Promise<AgencyEventResponse> {
+    return this.request(`/api/agency/${encodeURIComponent(id)}/events`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async updateAgencyEvent(
+    id: string,
+    eventId: string,
+    payload: AgencyEventInput
+  ): Promise<AgencyEventResponse> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(id)}/events/${encodeURIComponent(eventId)}`,
+      { method: 'PATCH', body: JSON.stringify(payload) }
+    );
+  }
+
+  async publishAgencyEvent(
+    id: string,
+    eventId: string
+  ): Promise<AgencyEventResponse> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(id)}/events/${encodeURIComponent(eventId)}/publish`,
+      { method: 'POST' }
+    );
+  }
+
+  async unpublishAgencyEvent(
+    id: string,
+    eventId: string
+  ): Promise<AgencyEventResponse> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(id)}/events/${encodeURIComponent(eventId)}/unpublish`,
+      { method: 'POST' }
+    );
+  }
+
+  async closeAgencyEvent(
+    id: string,
+    eventId: string
+  ): Promise<AgencyEventResponse> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(id)}/events/${encodeURIComponent(eventId)}/close`,
+      { method: 'POST' }
+    );
+  }
+
+  async reopenAgencyEvent(
+    id: string,
+    eventId: string
+  ): Promise<AgencyEventResponse> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(id)}/events/${encodeURIComponent(eventId)}/reopen`,
+      { method: 'POST' }
+    );
+  }
+
+  async deleteAgencyEvent(
+    id: string,
+    eventId: string
+  ): Promise<{ success: boolean; id: string; message: string }> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(id)}/events/${encodeURIComponent(eventId)}`,
+      { method: 'DELETE' }
+    );
+  }
+
+  async listAgencyEventInterests(
+    id: string,
+    eventId: string,
+    status?: AgencyEventInterestStatus
+  ): Promise<AgencyEventInterestListResponse> {
+    const suffix = status ? `?status=${encodeURIComponent(status)}` : '';
+    return this.request(
+      `/api/agency/${encodeURIComponent(id)}/events/${encodeURIComponent(eventId)}/interests${suffix}`
+    );
+  }
+
+  async decideAgencyEventInterest(
+    id: string,
+    eventId: string,
+    interestId: string,
+    status: 'confirmed' | 'declined'
+  ): Promise<AgencyEventInterestResponse> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(id)}/events/${encodeURIComponent(eventId)}/interests/${encodeURIComponent(interestId)}`,
+      { method: 'PATCH', body: JSON.stringify({ status }) }
     );
   }
 
@@ -2144,6 +2264,42 @@ class ApiClient {
     tripId: string
   ): Promise<{ success: boolean; trip: GalleryTrip }> {
     return this.request(`/api/explore/${encodeURIComponent(tripId)}`);
+  }
+
+  /**
+   * M10 E1 — anonymous event listing, soonest start first. `agency` narrows it
+   * to one agency page; an unpublished or unknown slug answers an empty page.
+   */
+  async getPublicEvents(
+    filters: PublicEventFilters = {}
+  ): Promise<{ success: boolean } & PublicEventsPage> {
+    const query = new URLSearchParams();
+    if (filters.agency?.trim()) query.append('agency', filters.agency.trim());
+    if (filters.cursor) query.append('cursor', filters.cursor);
+    if (filters.limit) query.append('limit', String(filters.limit));
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    return this.request(`/api/events${suffix}`);
+  }
+
+  /** M10 E1 — one public event page; closed and finished events stay readable. */
+  async getPublicEvent(
+    eventId: string
+  ): Promise<{ success: boolean; event: PublicEventDetail }> {
+    return this.request(`/api/events/${encodeURIComponent(eventId)}`);
+  }
+
+  /**
+   * M10 E2 — the guest's "I'm interested" write. No account is involved; a
+   * second live interest for the same event answers 409 with a friendly note.
+   */
+  async submitEventInterest(
+    eventId: string,
+    payload: EventInterestInput
+  ): Promise<{ success: boolean; interest: EventInterestAcknowledgement | null }> {
+    return this.request(`/api/events/${encodeURIComponent(eventId)}/interest`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   }
 
   /** M9 D3: anonymous agency directory listing. */

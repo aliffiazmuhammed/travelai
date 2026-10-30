@@ -20,6 +20,7 @@ const TravelerProfile = lazy(() => import("./pages/TravelerProfile"));
 const Guidelines = lazy(() => import("./pages/Guidelines"));
 const Explore = lazy(() => import("./pages/Explore"));
 const GalleryTrip = lazy(() => import("./pages/GalleryTrip"));
+const EventDetail = lazy(() => import("./pages/EventDetail"));
 const Agencies = lazy(() => import("./pages/Agencies"));
 const AgencyProfile = lazy(() => import("./pages/AgencyProfile"));
 const ProposalShare = lazy(() => import("./pages/ProposalShare"));
@@ -38,6 +39,7 @@ const AgencyClients = lazy(() => import("./pages/agency/AgencyClients"));
 const AgencyEnquiries = lazy(() => import("./pages/agency/AgencyEnquiries"));
 const AgencyTemplates = lazy(() => import("./pages/agency/AgencyTemplates"));
 const AgencyTrips = lazy(() => import("./pages/agency/AgencyTrips"));
+const AgencyEvents = lazy(() => import("./pages/agency/AgencyEvents"));
 const AgencyTripPlanner = lazy(() => import("./pages/agency/AgencyTripPlanner"));
 const AgencyOperations = lazy(() => import("./pages/agency/AgencyOperations"));
 const AgencyInviteAccept = lazy(() => import("./pages/agency/AgencyInviteAccept"));
@@ -89,6 +91,9 @@ const App = () => (
                 {/* Milestone 8 G3: anonymous gallery. The nav entry waits for a
                     content threshold; these routes stay reachable by URL. */}
                 <Route path="/explore" element={<Explore />} />
+                {/* M10 E1: an agency event, reachable from Explore and the
+                    agency page. Anonymous, with the interest form on the page. */}
+                <Route path="/explore/events/:eventId" element={<EventDetail />} />
                 <Route path="/explore/:tripId" element={<GalleryTrip />} />
                 {/* Milestone 9 D3: anonymous agency directory. The nav entry
                     waits for five published profiles; these routes do not. */}
@@ -170,6 +175,7 @@ const App = () => (
                   <Route path="trips" element={<AgencyTrips />} />
                   <Route path="trips/new" element={<AgencyTripPlanner />} />
                   <Route path="trips/:tripId" element={<AgencyTrips />} />
+                  <Route path="events" element={<AgencyEvents />} />
                   <Route path="clients" element={<AgencyClients />} />
                   <Route path="enquiries" element={<AgencyEnquiries />} />
                   <Route path="templates" element={<AgencyTemplates />} />

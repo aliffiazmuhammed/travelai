@@ -14,6 +14,7 @@ import invitesRoutes from './routes/invites.routes.js';
 import geoRoutes from './routes/geo.routes.js';
 import travelersRoutes from './routes/travelers.routes.js';
 import exploreRoutes from './routes/explore.routes.js';
+import eventsRoutes from './routes/events.routes.js';
 import agenciesRoutes from './routes/agencies.routes.js';
 import blocksRoutes from './routes/blocks.routes.js';
 import reportsRoutes from './routes/reports.routes.js';
@@ -234,6 +235,9 @@ app.use('/api/travelers', travelersRoutes);
 // Public gallery listing and trip pages (G3): same rule — anonymous, and every
 // row leaves through the gallery projection rather than a raw trip document.
 app.use('/api/explore', exploreRoutes);
+// Public agency events (M10 E1): dated camps and group trips listed in
+// Explore. Anonymous and projection-only; closed windows keep a readable page.
+app.use('/api/events', eventsRoutes);
 // Public agency directory profiles (M9 D1): anonymous, projection-only, and
 // 404 for drafts, suspended agencies and ops-hidden profiles.
 app.use('/api/agencies', agenciesRoutes);

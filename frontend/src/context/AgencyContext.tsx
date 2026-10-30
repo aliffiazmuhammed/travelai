@@ -9,7 +9,10 @@ import React, {
 import { api } from '@/services/api';
 import { useAgencyAuth } from '@/context/AgencyAuthContext';
 import type { Agency } from '@/types';
-import type { AgencyEnquirySummaryView } from '@/types/agency';
+import type {
+  AgencyEnquirySummaryView,
+  AgencyEventInterestSummary,
+} from '@/types/agency';
 
 /**
  * Tenant context for the `/agency` shell (PA0).
@@ -33,6 +36,9 @@ interface AgencyContextValue {
   /** Leads that still need a person: the badge on the inbox nav item. */
   enquiryNeedsAttention: number;
   refreshEnquiryBadge: () => Promise<AgencyEnquirySummaryView | null>;
+  /** Travellers waiting on a spot: the badge on the Events nav item. */
+  eventNeedsAttention: number;
+  refreshEventBadge: () => Promise<AgencyEventInterestSummary | null>;
   refreshAgencies: () => Promise<Agency[]>;
   replaceAgency: (agency: Agency) => void;
 }
@@ -55,6 +61,7 @@ export const AgencyProvider: React.FC<{ children: React.ReactNode }> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [enquiryNeedsAttention, setEnquiryNeedsAttention] = useState(0);
+  const [eventNeedsAttention, setEventNeedsAttention] = useState(0);
 
   /**
    * The inbox badge lives here, not in the layout, because reading a thread
@@ -68,6 +75,22 @@ export const AgencyProvider: React.FC<{ children: React.ReactNode }> = ({
     }
     const result = await api.getAgencyEnquirySummary();
     setEnquiryNeedsAttention(result.summary.needsAttention);
+    return result.summary;
+  }, [isAuthenticated, mustChangePassword, sessionAgencyId]);
+
+  /**
+   * Same idea for the Events item: a stranger asking for a spot is a person
+   * waiting on an answer, so the badge follows pending interests across every
+   * event rather than the one roster someone happens to open. Deciding a row
+   * refreshes it, so confirming from the desk clears the nudge immediately.
+   */
+  const refreshEventBadge = useCallback(async (): Promise<AgencyEventInterestSummary | null> => {
+    if (!isAuthenticated || !sessionAgencyId || mustChangePassword) {
+      setEventNeedsAttention(0);
+      return null;
+    }
+    const result = await api.getAgencyEventSummary(sessionAgencyId);
+    setEventNeedsAttention(result.summary.pending);
     return result.summary;
   }, [isAuthenticated, mustChangePassword, sessionAgencyId]);
 
@@ -108,6 +131,7 @@ export const AgencyProvider: React.FC<{ children: React.ReactNode }> = ({
       setAgency(null);
       setError(null);
       setEnquiryNeedsAttention(0);
+      setEventNeedsAttention(0);
       setLoading(false);
       return;
     }
@@ -131,6 +155,8 @@ export const AgencyProvider: React.FC<{ children: React.ReactNode }> = ({
       canManage,
       enquiryNeedsAttention,
       refreshEnquiryBadge,
+      eventNeedsAttention,
+      refreshEventBadge,
       refreshAgencies,
       replaceAgency,
     }),
@@ -141,6 +167,8 @@ export const AgencyProvider: React.FC<{ children: React.ReactNode }> = ({
       canManage,
       enquiryNeedsAttention,
       refreshEnquiryBadge,
+      eventNeedsAttention,
+      refreshEventBadge,
       refreshAgencies,
       replaceAgency,
     ]

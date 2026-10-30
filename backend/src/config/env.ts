@@ -134,6 +134,14 @@ const envSchema = z.object({
   // F12a @TravelAI assistant. Per-user-per-trip ask budget per calendar day —
   // the burst brake is the mention gate itself; this stops runaway spend.
   BOT_DAILY_LIMIT: z.coerce.number().int().positive().default(20),
+  // M10 QA-13: the anonymous "I'm interested" buckets. The plain IP ceiling is
+  // per network per day across every event, so it is sized for a shared home,
+  // office or carrier-NAT address rather than one person; the network-per-event
+  // bucket is what actually stops a single listing flooding.
+  EVENT_INTEREST_IP_DAILY_LIMIT: z.coerce.number().int().positive().default(12),
+  EVENT_INTEREST_EVENT_IP_DAILY_LIMIT: z.coerce.number().int().positive().default(4),
+  EVENT_INTEREST_EMAIL_DAILY_LIMIT: z.coerce.number().int().positive().default(3),
+  EVENT_INTEREST_EVENT_DAILY_LIMIT: z.coerce.number().int().positive().default(50),
   SERVE_STATIC: z.string().optional(),
   // AI generation cache (Milestone 2). Consumed directly by services/ai/cache.ts
   AI_CACHE_TTL_MS: z.coerce.number().positive().optional(),

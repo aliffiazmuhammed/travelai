@@ -77,6 +77,20 @@ import {
   updateAgencyPackageHandler,
 } from '../controllers/directory.controller.js';
 import {
+  closeAgencyEventHandler,
+  createAgencyEventHandler,
+  decideEventInterestHandler,
+  deleteAgencyEventHandler,
+  getAgencyEventHandler,
+  getAgencyEventSummaryHandler,
+  listAgencyEventsHandler,
+  listEventInterestsHandler,
+  publishAgencyEventHandler,
+  reopenAgencyEventHandler,
+  unpublishAgencyEventHandler,
+  updateAgencyEventHandler,
+} from '../controllers/agencyEvents.controller.js';
+import {
   convertAgencyEnquiryHandler,
   getAgencyEnquiryHandler,
   getAgencyEnquirySummaryHandler,
@@ -110,6 +124,11 @@ import {
   saveAgencyDirectoryProfileSchema,
   updateAgencyPackageSchema,
 } from '../schemas/directory.schema.js';
+import {
+  createAgencyEventSchema,
+  decideEventInterestSchema,
+  updateAgencyEventSchema,
+} from '../schemas/events.schema.js';
 import {
   addAgencyTemplateVersionSchema,
   activateAgencyInviteSchema,
@@ -355,6 +374,86 @@ router.delete(
   protectAgency,
   requireAgencyRole('admin'),
   deleteAgencyPackageHandler
+);
+
+// Public events (M10 E2). The library and the roster are member reads;
+// planners draft and work the roster; publishing, closing, reopening and
+// deleting change what a stranger sees, so they stay admin-only.
+router.get(
+  '/:agencyId/events',
+  protectAgency,
+  requireAgencyMember(),
+  listAgencyEventsHandler
+);
+router.post(
+  '/:agencyId/events',
+  protectAgency,
+  requireAgencyRole('planner'),
+  validate(createAgencyEventSchema),
+  createAgencyEventHandler
+);
+// The Events nav badge. Must precede `/:eventId`, or "summary" is read as an id.
+router.get(
+  '/:agencyId/events/summary',
+  protectAgency,
+  requireAgencyMember(),
+  getAgencyEventSummaryHandler
+);
+router.get(
+  '/:agencyId/events/:eventId',
+  protectAgency,
+  requireAgencyMember(),
+  getAgencyEventHandler
+);
+router.patch(
+  '/:agencyId/events/:eventId',
+  protectAgency,
+  requireAgencyRole('planner'),
+  validate(updateAgencyEventSchema),
+  updateAgencyEventHandler
+);
+router.delete(
+  '/:agencyId/events/:eventId',
+  protectAgency,
+  requireAgencyRole('admin'),
+  deleteAgencyEventHandler
+);
+router.post(
+  '/:agencyId/events/:eventId/publish',
+  protectAgency,
+  requireAgencyRole('admin'),
+  publishAgencyEventHandler
+);
+router.post(
+  '/:agencyId/events/:eventId/unpublish',
+  protectAgency,
+  requireAgencyRole('admin'),
+  unpublishAgencyEventHandler
+);
+router.post(
+  '/:agencyId/events/:eventId/close',
+  protectAgency,
+  requireAgencyRole('admin'),
+  closeAgencyEventHandler
+);
+router.post(
+  '/:agencyId/events/:eventId/reopen',
+  protectAgency,
+  requireAgencyRole('admin'),
+  reopenAgencyEventHandler
+);
+router.get(
+  '/:agencyId/events/:eventId/interests',
+  protectAgency,
+  requireAgencyMember(),
+  listEventInterestsHandler
+);
+router.patch(
+  '/:agencyId/events/:eventId/interests/:interestId',
+  protectAgency,
+  requireAgencyRole('planner'),
+  validate(decideEventInterestSchema),
+  decideEventInterestHandler
 );
 
 // Brand assets (A3). Members can view the library; only admins can add or

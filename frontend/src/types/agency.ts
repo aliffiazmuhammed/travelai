@@ -564,6 +564,113 @@ export interface AgencyPackageListResponse {
 }
 
 /* -------------------------------------------------------------------------- */
+/*  Public events and interest rosters (M10)                                  */
+/* -------------------------------------------------------------------------- */
+
+export type AgencyEventKind = 'camp' | 'group_trip' | 'retreat' | 'other';
+export type AgencyEventState = 'draft' | 'published';
+export type AgencyEventInterestStatus = 'pending' | 'confirmed' | 'declined';
+
+export interface AgencyEventReadiness {
+  ready: boolean;
+  missing: string[];
+}
+
+export interface AgencyEventInterestCounts {
+  pending: number;
+  confirmed: number;
+  declined: number;
+}
+
+/** The tenant's own event row, drafts and past windows included. */
+export interface AgencyEvent {
+  id: string;
+  title: string;
+  summary: string;
+  kind: AgencyEventKind;
+  destination: string;
+  venue: string;
+  /** `YYYY-MM-DD`, both inclusive. */
+  startDate: string;
+  endDate: string;
+  /** Ready-to-show window, e.g. "12–15 Jun 2027". */
+  dateLabel: string;
+  capacity: number | null;
+  pricePerPerson: number | null;
+  currency: string;
+  /** Authenticated asset URL for the tenant's own previews. */
+  coverUrl: string | null;
+  highlights: string[];
+  state: AgencyEventState;
+  publishedAt: string | null;
+  /** Closed windows keep a public page but take no new interest. */
+  closedAt: string | null;
+  /** Ops takedown; only support can clear it. */
+  hidden: boolean;
+  hiddenReason: string | null;
+  interests: AgencyEventInterestCounts;
+  readiness: AgencyEventReadiness;
+}
+
+export interface AgencyEventInput {
+  title?: string;
+  summary?: string;
+  kind?: AgencyEventKind;
+  destination?: string;
+  venue?: string;
+  startDate?: string;
+  endDate?: string;
+  capacity?: number | null;
+  pricePerPerson?: number | null;
+  highlights?: string[];
+  coverAssetId?: string | null;
+}
+
+export interface AgencyEventResponse {
+  success: boolean;
+  event: AgencyEvent;
+}
+
+export interface AgencyEventListResponse {
+  success: boolean;
+  events: AgencyEvent[];
+}
+
+/** Tenant-wide interest counts: what the Events nav badge reads. */
+export interface AgencyEventInterestSummary {
+  pending: number;
+  confirmed: number;
+  declined: number;
+}
+
+export interface AgencyEventSummaryResponse {
+  success: boolean;
+  summary: AgencyEventInterestSummary;
+}
+
+/** One person on an event roster. Contact details are tenant-only. */
+export interface AgencyEventInterest {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  note: string;
+  status: AgencyEventInterestStatus;
+  decidedAt: string | null;
+  createdAt: string;
+}
+
+export interface AgencyEventInterestListResponse {
+  success: boolean;
+  interests: AgencyEventInterest[];
+}
+
+export interface AgencyEventInterestResponse {
+  success: boolean;
+  interest: AgencyEventInterest;
+}
+
+/* -------------------------------------------------------------------------- */
 /*  Client directory and quotes (A4)                                          */
 /* -------------------------------------------------------------------------- */
 
