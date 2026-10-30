@@ -29,6 +29,7 @@ import {
 import { renderPinnedAgencyExport } from './exports/exports.js';
 import type { ExportDocument } from './exports/document.js';
 import { readAgencyExportFile } from './exports/storage.js';
+import { resolveEnquiryForTrip } from './liveProposal.js';
 import {
   effectiveQuoteStatus,
   projectQuoteForClient,
@@ -976,18 +977,14 @@ export async function createAgencyProposalLink(
   });
   if (!quote) throw new AppError('Quote not found', 404);
 
-  // Stamp the conversation this proposal answers. The quote's client is the
-  // bridge; an ad-hoc client with no enquiry simply leaves the field null.
-  let enquiryId: Types.ObjectId | null = null;
-  if (quote.clientId) {
-    const client = (await AgencyClient.findOne({
-      _id: quote.clientId,
-      agencyId: input.agencyId,
-    })
-      .select('sourceEnquiryId')
-      .lean()) as any;
-    if (client?.sourceEnquiryId) enquiryId = client.sourceEnquiryId;
-  }
+  // Stamp the conversation this proposal answers. The trip's own lead wins over
+  // the client's first enquiry, so a returning traveller's newer thread gets
+  // the document it was written for. An ad-hoc client leaves the field null.
+  const enquiryId = await resolveEnquiryForTrip({
+    agencyId: input.agencyId,
+    tripId: input.tripId,
+    clientId: quote.clientId ?? null,
+  });
 
   const rawToken = mintInviteToken();
   const link = await AgencyProposalLink.create({

@@ -63,6 +63,7 @@ const original = {
 function chain(value: any): any {
   const wrapped: any = {
     select: () => wrapped,
+    sort: () => wrapped,
     lean: async () => value,
   };
   return wrapped;
@@ -130,8 +131,15 @@ function quoteQuery(value: any): any {
   title: 'Spiti Loop',
 });
 (AgencyClient as any).findOne = () => chain(clientRow);
-(AgencyEnquiry as any).findOne = (filter: any) =>
-  chain(enquiryRow && String(enquiryRow._id) === String(filter._id) ? enquiryRow : null);
+/** Whether this fixture's trip carries its own directory lead (M9 R9). */
+let tripLinked = true;
+(AgencyEnquiry as any).findOne = (filter: any = {}) => {
+  // The trip→lead resolver reads by tripId; the funnel write-back reads by id.
+  if (filter?.tripId) return chain(tripLinked ? enquiryRow : null);
+  return chain(
+    enquiryRow && String(enquiryRow._id) === String(filter._id) ? enquiryRow : null
+  );
+};
 // R5: the share writes "quoted" before the proposal frame. Only the status CAS
 // matters here, and a second share of a closed lead must not match it.
 (AgencyEnquiry as any).findOneAndUpdate = (filter: any, update: any) => {
@@ -162,6 +170,7 @@ function quoteQuery(value: any): any {
 
 function reset() {
   resetBus();
+  tripLinked = true;
   clientRow = { _id: CLIENT_ID, sourceEnquiryId: ENQUIRY_ID };
   enquiryRow = {
     _id: ENQUIRY_ID,
@@ -283,6 +292,7 @@ test('a won lead keeps its status when another proposal goes out', async () => {
 
 test('an ad-hoc client with no enquiry behind it notifies nobody', async () => {
   reset();
+  tripLinked = false;
   clientRow = { _id: CLIENT_ID, sourceEnquiryId: null };
 
   assert.deepEqual(await mint(), []);
@@ -350,6 +360,7 @@ test('a quote accepted on the phone closes the lead its client came from', async
 
 test('a phone acceptance for an ad-hoc client leaves every lead alone', async () => {
   reset();
+  tripLinked = false;
   enquiryRow.status = 'quoted';
   clientRow = { _id: CLIENT_ID, sourceEnquiryId: null };
 

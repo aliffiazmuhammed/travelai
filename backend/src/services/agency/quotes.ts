@@ -5,7 +5,7 @@ import Trip from '../../models/Trip.js';
 import { AppError } from '../../utils/AppError.js';
 import { agencyCan, type AgencyRole } from './access.js';
 import { assertAgencyClient } from './clients.js';
-import { ensureLiveProposalForQuote } from './liveProposal.js';
+import { ensureLiveProposalForQuote, resolveEnquiryForTrip } from './liveProposal.js';
 import {
   markEnquiryQuotedByProposal,
   markEnquiryWonByAcceptance,
@@ -815,17 +815,15 @@ export async function sendQuote(input: {
 
   // Sending is the funnel's quote step, not a private status flip: a directory
   // lead moves to `quoted` here exactly as it does when the proposal document
-  // is shared. A won or lost lead keeps the status its agency chose.
-  if (sent.clientId) {
-    const client = (await AgencyClient.findOne({
-      _id: sent.clientId,
-      agencyId: input.agencyId,
-    })
-      .select('sourceEnquiryId')
-      .lean()) as any;
-    if (client?.sourceEnquiryId) {
-      await markEnquiryQuotedByProposal(String(client.sourceEnquiryId));
-    }
+  // is shared. A won or lost lead keeps the status its agency chose. The trip's
+  // own lead answers first, so a returning traveller's newer thread moves.
+  const enquiryId = await resolveEnquiryForTrip({
+    agencyId: input.agencyId,
+    tripId: input.tripId,
+    clientId: sent.clientId ?? null,
+  });
+  if (enquiryId) {
+    await markEnquiryQuotedByProposal(String(enquiryId));
   }
 
   // Sending is the share (M9 R9): the traveller's thread gets the quote plus
@@ -867,20 +865,15 @@ export async function acceptQuote(input: {
     throw new AppError('This quote changed before it could be accepted. Reload it.', 409);
   }
 
-  // A quote accepted by phone still closes the directory lead behind it.
-  const client = accepted.clientId
-    ? ((await AgencyClient.findOne({
-        _id: accepted.clientId,
-        agencyId: input.agencyId,
-      })
-        .select('sourceEnquiryId')
-        .lean()) as any)
-    : null;
-  if (client?.sourceEnquiryId) {
-    await markEnquiryWonByAcceptance(
-      input.agencyId,
-      String(client.sourceEnquiryId)
-    );
+  // A quote accepted by phone still closes the directory lead behind it — the
+  // trip's own lead when there is one, the client's first enquiry otherwise.
+  const enquiryId = await resolveEnquiryForTrip({
+    agencyId: input.agencyId,
+    tripId: input.tripId,
+    clientId: accepted.clientId ?? null,
+  });
+  if (enquiryId) {
+    await markEnquiryWonByAcceptance(input.agencyId, String(enquiryId));
   }
 
   return accepted;

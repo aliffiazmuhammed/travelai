@@ -22,6 +22,8 @@ const AGENCY_ID = '64d000000000000000000b01';
 const TRIP_ID = '64d000000000000000000b02';
 const CLIENT_ID = '64d000000000000000000b03';
 const ENQUIRY_ID = '64d000000000000000000b04';
+const TRIP_ENQUIRY_ID = '64d000000000000000000b06';
+const OLD_ENQUIRY_ID = '64d000000000000000000b07';
 
 function quoteRow(overrides: Record<string, unknown> = {}) {
   return {
@@ -49,6 +51,7 @@ function quoteRow(overrides: Record<string, unknown> = {}) {
 function chain(value: any): any {
   const wrapped: any = {
     select: () => wrapped,
+    sort: () => wrapped,
     lean: async () => value,
   };
   return wrapped;
@@ -56,9 +59,12 @@ function chain(value: any): any {
 
 let latest = quoteRow();
 let enquiryRow: any = { _id: ENQUIRY_ID, status: 'new', repliedAt: null };
+/** The lead the trip itself points at, when a returning traveller has one. */
+let tripLead: any = null;
 let clientDoc: any = { _id: CLIENT_ID, sourceEnquiryId: ENQUIRY_ID };
 let enquiryWrites = 0;
 let lastEnquirySet: any = null;
+let lastEnquiryFilter: any = null;
 let linkError: Error | null = null;
 
 const originals = {
@@ -76,9 +82,13 @@ const originals = {
   return { ...latest, status: 'sent', sentAt: new Date() };
 };
 (AgencyClient as any).findOne = () => chain(clientDoc);
-(AgencyEnquiry as any).findOne = () => chain(enquiryRow);
-(AgencyEnquiry as any).findOneAndUpdate = (_filter: any, update: any) => {
+// Two callers read this model: the funnel move looks the lead up by id, and the
+// trip→lead resolver looks it up by tripId. The stub has to tell them apart.
+(AgencyEnquiry as any).findOne = (filter: any = {}) =>
+  chain(filter?.tripId ? tripLead : enquiryRow);
+(AgencyEnquiry as any).findOneAndUpdate = (filter: any, update: any) => {
   enquiryWrites += 1;
+  lastEnquiryFilter = filter;
   lastEnquirySet = update.$set;
   return { lean: async () => ({ ...enquiryRow, ...update.$set }) };
 };
@@ -90,9 +100,11 @@ const originals = {
 function reset() {
   latest = quoteRow();
   enquiryRow = { _id: ENQUIRY_ID, status: 'new', repliedAt: null };
+  tripLead = null;
   clientDoc = { _id: CLIENT_ID, sourceEnquiryId: ENQUIRY_ID };
   enquiryWrites = 0;
   lastEnquirySet = null;
+  lastEnquiryFilter = null;
   linkError = null;
 }
 
@@ -106,9 +118,23 @@ test('sending a draft moves a fresh lead to quoted and stamps the reply time', a
 
   assert.equal(sent.status, 'sent');
   assert.equal(enquiryWrites, 1);
+  assert.equal(String(lastEnquiryFilter._id), ENQUIRY_ID);
   assert.equal(lastEnquirySet.status, 'quoted');
   assert.ok(lastEnquirySet.repliedAt instanceof Date);
   assert.deepEqual(proposal, { id: '64d000000000000000000b09', created: false });
+});
+
+test('a returning traveller’s newer trip moves its own lead, not the client’s first one', async () => {
+  reset();
+  // The shared client row still points at the first enquiry she sent.
+  clientDoc = { _id: CLIENT_ID, sourceEnquiryId: OLD_ENQUIRY_ID };
+  tripLead = { _id: TRIP_ENQUIRY_ID, status: 'replied', repliedAt: null };
+
+  await sendQuote({ agencyId: AGENCY_ID, tripId: TRIP_ID, role: 'planner' });
+
+  assert.equal(enquiryWrites, 1);
+  assert.equal(String(lastEnquiryFilter._id), TRIP_ENQUIRY_ID);
+  assert.equal(lastEnquirySet.status, 'quoted');
 });
 
 test('a won lead keeps the status its agency chose', async () => {

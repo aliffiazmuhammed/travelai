@@ -53,6 +53,40 @@ async function findViewableLiveLink(
 }
 
 /**
+ * The lead a trip is quoting for (M9 R9).
+ *
+ * The trip's own lead wins: a returning traveller who sends a second enquiry
+ * gets a second trip, and the client row they share with their first enquiry
+ * still points at that older lead. Resolving through `sourceEnquiryId` alone
+ * would send the new proposal, and the funnel move it causes, to the thread
+ * the traveller already settled. Trips made by hand have no lead, so they keep
+ * falling back to the client's first enquiry.
+ */
+export async function resolveEnquiryForTrip(input: {
+  agencyId: string;
+  tripId: string;
+  clientId?: Types.ObjectId | string | null;
+}): Promise<Types.ObjectId | null> {
+  const linked = (await AgencyEnquiry.findOne({
+    agencyId: input.agencyId,
+    tripId: input.tripId,
+  })
+    .select('_id')
+    .sort({ createdAt: -1 })
+    .lean()) as any;
+  if (linked?._id) return linked._id as Types.ObjectId;
+
+  if (!input.clientId) return null;
+  const client = (await AgencyClient.findOne({
+    _id: input.clientId,
+    agencyId: input.agencyId,
+  })
+    .select('sourceEnquiryId')
+    .lean()) as any;
+  return (client?.sourceEnquiryId as Types.ObjectId) ?? null;
+}
+
+/**
  * Creates the traveller's in-app proposal for one sent quote, or returns the
  * existing one. Returns null when the quote has no directory client or that
  * client never came from an enquiry — an ad-hoc client has no account to
@@ -73,7 +107,14 @@ export async function ensureLiveProposalForQuote(input: {
   })
     .select('sourceEnquiryId name email phone')
     .lean()) as any;
-  if (!client?.sourceEnquiryId) return null;
+  if (!client) return null;
+
+  const enquiryId = await resolveEnquiryForTrip({
+    agencyId: input.agencyId,
+    tripId: input.tripId,
+    clientId: quote.clientId,
+  });
+  if (!enquiryId) return null;
 
   const existing = await findViewableLiveLink(input.agencyId, quote._id);
   if (existing) return { link: existing, created: false };
@@ -95,7 +136,6 @@ export async function ensureLiveProposalForQuote(input: {
   // client-safe by construction: no markup, internal cost or chat ciphertext.
   const snapshot = buildExportDocument({ agency, trip, quote, client });
 
-  const enquiryId = client.sourceEnquiryId as Types.ObjectId;
   const rawToken = mintInviteToken();
   const link = await AgencyProposalLink.create({
     kind: 'live',

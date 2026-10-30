@@ -31,8 +31,11 @@ const USER_ID = '64d000000000000000000c07';
 function chain(value: any): any {
   const wrapped: any = {
     select: () => wrapped,
-    sort: async () => value,
+    sort: () => wrapped,
     lean: async () => value,
+    // Queries are awaited either bare or after `.lean()`, so the wrapper has to
+    // resolve to the row in both shapes.
+    then: (resolve: any, reject: any) => Promise.resolve(value).then(resolve, reject),
   };
   return wrapped;
 }
@@ -80,6 +83,8 @@ let tripRow: any = {
 };
 let latestQuote: any = quoteRow();
 let ledger: any = { _id: ENQUIRY_ID, userId: USER_ID };
+/** The lead the trip itself points at, when a returning traveller has one. */
+let tripLeadRow: any = null;
 let createdPayloads: any[] = [];
 let audits: any[] = [];
 
@@ -103,7 +108,9 @@ const originals = {
 (Agency as any).findById = async () => agencyRow;
 (Trip as any).findOne = async () => tripRow;
 (AgencyQuote as any).findOne = () => chain(latestQuote);
-(AgencyEnquiry as any).findOne = () => chain(ledger);
+// The resolver reads the lead by tripId; the realtime frame reads it by _id.
+(AgencyEnquiry as any).findOne = (filter: any = {}) =>
+  chain(filter?.tripId ? tripLeadRow : ledger);
 (AgencyAudit as any).create = async (payload: any) => {
   audits.push(payload);
   return payload;
@@ -125,6 +132,7 @@ function reset() {
   };
   latestQuote = quoteRow();
   ledger = { _id: ENQUIRY_ID, userId: USER_ID };
+  tripLeadRow = null;
   createdPayloads = [];
   audits = [];
 }
@@ -208,6 +216,22 @@ test('a first send mints a live link with the trip snapshot and no export', asyn
     quoteId: QUOTE_ID,
     via: 'send',
   });
+});
+
+test('a returning traveller’s proposal points at the lead behind the trip', async () => {
+  reset();
+  const TRIP_LEAD_ID = '64d000000000000000000c08';
+  // Her shared client row still points at the first enquiry she sent.
+  tripLeadRow = { _id: TRIP_LEAD_ID, userId: USER_ID };
+
+  await ensureLiveProposalForQuote({
+    agencyId: AGENCY_ID,
+    tripId: TRIP_ID,
+    quote: quoteRow(),
+  });
+
+  assert.equal(createdPayloads.length, 1);
+  assert.equal(String(createdPayloads[0].enquiryId), TRIP_LEAD_ID);
 });
 
 test('a suspended agency or missing trip refuses the mint', async () => {
