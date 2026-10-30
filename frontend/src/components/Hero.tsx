@@ -1,85 +1,194 @@
 import { Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { ArrowRight, Sparkles, MapPin } from "lucide-react";
-import heroImage from "@/assets/hero-travel.jpg";
-import { useAuth } from "@/context/UserContext";
+import {
+  ArrowRight,
+  CalendarRange,
+  Check,
+  Compass,
+  Sparkles,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
-const Hero = () => {
-  const { isAuthenticated } = useAuth();
+export interface HeroProps {
+  tripCount: number;
+  eventCount: number;
+  discovering: boolean;
+  /** Without a directory there is somewhere real to send the empty-event door. */
+  directoryEnabled: boolean;
+}
+
+interface Door {
+  to: string;
+  icon: LucideIcon;
+  kicker: string;
+  headline: string;
+  note: string;
+  cta: string;
+}
+
+/**
+ * The homepage's first screen. Three doors instead of one pitch: trips to join
+ * and events come first, and AI planning is the door you take when nothing
+ * fits. Counts are live, and each door degrades to an invitation when its
+ * shelf is empty.
+ */
+const Hero = ({
+  tripCount,
+  eventCount,
+  discovering,
+  directoryEnabled,
+}: HeroProps) => {
+  const tripsDoor: Door = discovering
+    ? {
+        to: "/explore",
+        icon: Compass,
+        kicker: "Find a trip",
+        headline: "Looking for what's on…",
+        note: "Checking the trips and events people shared.",
+        cta: "Browse anyway",
+      }
+    : tripCount === 0
+    ? {
+        to: "/plan",
+        icon: Compass,
+        kicker: "Find a trip",
+        headline: "Nobody has shared one yet",
+        note: "Plan something and publish it — yours could be the first trip someone else joins.",
+        cta: "Start the first trip",
+      }
+    : tripCount < 5
+    ? {
+        to: "/explore",
+        icon: Compass,
+        kicker: "Find a trip",
+        headline: `${tripCount} ${tripCount === 1 ? "trip" : "trips"} to look at`,
+        note: "The gallery is just warming up. Read one, ask the owner to come along, or take a copy.",
+        cta: "See the trips",
+      }
+    : {
+        to: "/explore",
+        icon: Compass,
+        kicker: "Find a trip",
+        headline: `${tripCount} trips to join`,
+        note: "Real trips, shared by the people who planned them. Ask the owner and join the plan.",
+        cta: "Browse the trips",
+      };
+
+  const eventsDoor: Door = discovering
+    ? {
+        to: "/explore",
+        icon: CalendarRange,
+        kicker: "Find an event",
+        headline: "Checking the calendar…",
+        note: "Looking for camps, retreats and group departures.",
+        cta: "Browse anyway",
+      }
+    : eventCount === 0
+    ? {
+        to: directoryEnabled ? "/agencies" : "/explore",
+        icon: CalendarRange,
+        kicker: "Find an event",
+        headline: "No events on the calendar",
+        note: directoryEnabled
+          ? "Agencies post camps and retreats here. Browse the directory in the meantime."
+          : "When an agency posts a camp or retreat, it shows up here. Trips are open in the meantime.",
+        cta: directoryEnabled ? "Meet the agencies" : "Browse trips instead",
+      }
+    : {
+        to: "/explore#events",
+        icon: CalendarRange,
+        kicker: "Find an event",
+        headline: `${eventCount} ${eventCount === 1 ? "event" : "events"} open`,
+        note: "Camps, retreats and group departures you can ask about — no plan of your own needed.",
+        cta: "See what's on",
+      };
+
+  const planDoor: Door = {
+    to: "/plan",
+    icon: Sparkles,
+    kicker: "Or start from scratch",
+    headline: "Plan it with AI",
+    note: "Tell us where and who. Get a day-by-day plan with a map and costs in one message.",
+    cta: "Plan a trip",
+  };
+
+  const doors = [tripsDoor, eventsDoor, planDoor];
 
   return (
-    <section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-20">
-      {/* Background Image with Overlay */}
-      <div className="absolute inset-0 z-0">
-        <img 
-          src={heroImage} 
-          alt="Beautiful travel destination" 
-          className="w-full h-full object-cover"
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-background/85 via-background/60 to-background/95 dark:from-background/95 dark:via-background/80 dark:to-background/95" />
-      </div>
-      
-          {/* Content */}
-      <div className="container mx-auto px-4 z-10">
-        <div className="max-w-4xl mx-auto text-center space-y-7 animate-fade-in">
-          <div className="inline-flex items-center gap-2 bg-primary/10 backdrop-blur-sm border border-primary/25 rounded-full px-4 sm:px-6 py-2 shadow-soft">
-            <Sparkles className="h-4 w-4 text-primary shrink-0" />
-            <span className="text-xs sm:text-sm font-semibold text-primary">
-              Now with an AI helper inside your trip chat
-            </span>
-          </div>
+    <section className="relative isolate overflow-hidden pt-28 pb-16 sm:pt-36 sm:pb-24">
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 -z-20 bg-background"
+      />
+      <div
+        aria-hidden="true"
+        className="absolute inset-x-0 top-0 -z-10 h-[620px] bg-[radial-gradient(ellipse_60%_60%_at_15%_0%,hsl(var(--primary)/0.20),transparent_70%),radial-gradient(ellipse_50%_50%_at_85%_5%,hsl(var(--accent)/0.16),transparent_70%)]"
+      />
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 -z-10 bg-[radial-gradient(hsl(var(--foreground)/0.07)_1px,transparent_1px)] bg-[size:22px_22px] [mask-image:linear-gradient(to_bottom,black,transparent_65%)]"
+      />
 
-          <h1 className="font-display text-3xl sm:text-5xl md:text-6xl font-semibold leading-tight tracking-tight text-foreground">
-            Say where you want to go.
-            <br />
-            <span className="bg-gradient-to-r from-primary via-sky-500 to-accent bg-clip-text text-transparent">
-              We'll plan the whole trip.
+      <div className="container mx-auto px-4">
+        <div className="mx-auto max-w-4xl text-center">
+          <span className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-background/70 px-4 py-2 text-[11px] font-semibold text-primary shadow-xs backdrop-blur">
+            <Compass className="h-3.5 w-3.5" aria-hidden="true" />
+            Trips, events and the people going
+          </span>
+
+          <h1 className="mt-7 font-display text-4xl font-semibold leading-[1.05] tracking-tight text-foreground sm:text-6xl md:text-7xl">
+            Find your people.
+            <span className="block bg-gradient-to-r from-primary via-sky-500 to-accent bg-clip-text text-transparent">
+              Then plan the trip.
             </span>
           </h1>
 
-          <p className="text-base sm:text-xl md:text-2xl text-foreground/80 dark:text-muted-foreground max-w-2xl mx-auto leading-relaxed px-2 font-medium">
-            One message is all it takes. TravelAI writes a day-by-day plan with places, budget and a map — then keeps
-            everyone in the group on the same page in chat.
+          <p className="mx-auto mt-6 max-w-2xl text-base font-medium leading-relaxed text-muted-foreground sm:text-lg">
+            Browse trips other travellers already shared, join a camp or retreat,
+            or hand a blank page to AI. Wherever you start, the plan, the map and
+            the group chat end up in one place.
           </p>
-          
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3.5 pt-4 w-full max-w-xs sm:max-w-none mx-auto">
-            <Link to="/plan" className="w-full sm:w-auto">
-              <Button variant="hero" size="xl" className="group shadow-md w-full sm:w-auto justify-center font-bold">
-                Plan Your Trip
-                <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform ml-1.5" />
-              </Button>
-            </Link>
-            {isAuthenticated ? (
-              <Link to="/dashboard" className="w-full sm:w-auto">
-                <Button variant="outline" size="xl" className="gap-2 shadow-xs w-full sm:w-auto justify-center font-semibold">
-                  <MapPin className="h-4 w-4 text-primary shrink-0" />
-                  <span>My Trips / Dashboard</span>
-                </Button>
-              </Link>
-            ) : (
-              <Link to="/auth" className="w-full sm:w-auto">
-                <Button variant="outline" size="xl" className="shadow-xs w-full sm:w-auto justify-center font-semibold">
-                  Sign Up Free
-                </Button>
-              </Link>
-            )}
-          </div>
-          
-          <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-8 pt-5 sm:pt-7 text-xs sm:text-sm text-foreground/75 dark:text-muted-foreground font-medium px-2">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-accent shrink-0" />
-              <span>No card needed</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-accent shrink-0" />
-              <span>Works on your phone</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-accent shrink-0" />
-              <span>Chats stay private</span>
-            </div>
-          </div>
         </div>
+
+        <div className="mx-auto mt-12 grid max-w-5xl gap-4 sm:mt-14 sm:grid-cols-3">
+          {doors.map((door) => (
+            <Link
+              key={door.kicker}
+              to={door.to}
+              className="group flex flex-col rounded-3xl border border-border/70 bg-card/85 p-6 text-left shadow-card backdrop-blur transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            >
+              <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary transition-colors group-hover:bg-primary/15">
+                <door.icon className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <p className="mt-5 text-[11px] font-semibold tracking-wide text-primary">
+                {door.kicker}
+              </p>
+              <h2 className="mt-1 font-display text-xl font-semibold tracking-tight text-foreground">
+                {door.headline}
+              </h2>
+              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                {door.note}
+              </p>
+              <span className="mt-5 inline-flex items-center gap-1.5 text-xs font-bold text-primary">
+                {door.cta}
+                <ArrowRight
+                  className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5"
+                  aria-hidden="true"
+                />
+              </span>
+            </Link>
+          ))}
+        </div>
+
+        <ul className="mx-auto mt-10 flex max-w-2xl flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[11px] font-medium text-muted-foreground">
+          {["Free to start", "No card needed", "You choose who comes"].map(
+            (item) => (
+              <li key={item} className="inline-flex items-center gap-1.5">
+                <Check className="h-3.5 w-3.5 text-accent" aria-hidden="true" />
+                {item}
+              </li>
+            )
+          )}
+        </ul>
       </div>
     </section>
   );
