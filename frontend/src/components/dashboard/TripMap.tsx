@@ -253,6 +253,11 @@ const MapViewUpdater: React.FC<{ center: [number, number]; zoom: number }> = ({
 }) => {
   const map = useMap();
   useEffect(() => {
+    // A map mounted inside a display:none container reports 0×0; flyTo then
+    // computes NaN bounds and throws, taking the whole page down with it.
+    const { x, y } = map.getSize();
+    if (!x || !y) return;
+    if (!Number.isFinite(center[0]) || !Number.isFinite(center[1])) return;
     map.flyTo(center, zoom, { duration: 1.2 });
   }, [center, zoom, map]);
   return null;
@@ -426,7 +431,9 @@ export const TripMap: React.FC<TripMapProps> = ({
         setBaseCoord(coords);
         setDetectedLocation(cleanQuery);
         return;
-      } catch (e) {}
+      } catch {
+        // Malformed cache entry: fall through to geocoding.
+      }
     }
 
     // Query OpenStreetMap Nominatim

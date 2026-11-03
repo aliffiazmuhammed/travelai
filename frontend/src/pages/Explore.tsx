@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import Navbar from "@/components/Navbar";
-import { TravellerPageHeader } from "@/components/traveller/TravellerPageHeader";
-import { TravellerSegmented } from "@/components/traveller/TravellerSegmented";
 import { PublicEventCard } from "@/components/events/PublicEventCard";
+import { TripCover } from "@/components/gallery/TripCover";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,12 +10,15 @@ import { api, ApiError } from "@/services/api";
 import { avatarSrc, initialsFor } from "@/lib/avatar";
 import { DURATION_LABELS, formatGalleryDates } from "@/lib/galleryFormat";
 import { applyPageMeta } from "@/lib/meta";
+import { cn } from "@/lib/utils";
 import {
   AlertCircle,
   ArrowRight,
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
   Compass,
-  Globe,
   Loader2,
   MapPin,
   Search,
@@ -34,10 +36,13 @@ import type { PublicEventSummary } from "@/types/events";
  *
  * Anonymous: no session is read and both payloads are public projections, so
  * this page can be linked from anywhere. Trip filters live in the URL (`?q=&
- * duration=&tag=`) so a filtered view is shareable; the cursor stays in memory
- * because a shared link should always start at the newest page. Upcoming events
- * are a browse affordance rather than search results, so they appear only when
- * no trip filter is active.
+ * duration=&groupType=&tag=`) so a filtered view is shareable; the cursor stays
+ * in memory because a shared link should always start at the newest page.
+ *
+ * Paging is Previous/Next over a cursor stack rather than an append-only
+ * "load more": the API has no offset, so remembering the cursors already used
+ * is what makes going back possible. Upcoming events are a browse affordance
+ * rather than search results, so they appear only when no trip filter is active.
  */
 
 const PAGE_SIZE = 12;
@@ -49,100 +54,136 @@ const DURATION_OPTIONS: { value: GalleryDuration; label: string }[] = [
   { value: "long", label: DURATION_LABELS.long },
 ];
 
+/** Values match the free-form `group_type` authors pick; the server ignores case. */
+const GROUP_OPTIONS = ["Solo", "Couple", "Friends", "Family"];
+
+/** Curated from the vocabulary the publish form and seeded trips use. */
+const TAG_OPTIONS = [
+  { value: "beaches", label: "Beaches" },
+  { value: "hiking", label: "Hiking" },
+  { value: "road-trip", label: "Road trips" },
+  { value: "food", label: "Food" },
+];
+
 function isDuration(value: string | null): value is GalleryDuration {
   return value === "short" || value === "week" || value === "fortnight" || value === "long";
 }
 
-interface ExploreCardProps {
-  trip: GalleryTripSummary;
-  onTagClick: (tag: string) => void;
-}
+const FilterChip = ({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    aria-pressed={active}
+    className={cn(
+      "inline-flex min-h-[32px] items-center rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-colors",
+      active
+        ? "border-primary/40 bg-primary/10 text-primary"
+        : "border-border/80 bg-card text-foreground/75 hover:border-primary/30 hover:text-foreground"
+    )}
+  >
+    {children}
+  </button>
+);
 
-const ExploreCard = ({ trip, onTagClick }: ExploreCardProps) => (
-  <article className="rounded-3xl border border-border/70 bg-card p-5 shadow-xs transition-shadow hover:shadow-md">
-    <Link to={`/explore/${trip._id}`} className="block space-y-3 group">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 space-y-1">
-          <p className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-primary truncate">
-            <MapPin className="w-3 h-3 shrink-0" />
-            {trip.destination || "Somewhere new"}
-          </p>
-          <h3 className="text-base font-black text-foreground leading-snug group-hover:text-primary transition-colors">
-            {trip.title}
-          </h3>
-        </div>
-        <span className="shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-bold text-primary">
+const FilterGroup = ({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) => (
+  <div className="flex flex-wrap items-center justify-center gap-2">
+    <span className="text-[11px] font-semibold text-muted-foreground">{label}</span>
+    {children}
+  </div>
+);
+
+const ExploreCard = ({ trip }: { trip: GalleryTripSummary }) => (
+  <article className="group overflow-hidden rounded-3xl border border-border/70 bg-card shadow-xs transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md">
+    <Link to={`/explore/${trip._id}`} className="block" aria-label={`Open ${trip.title}`}>
+      <TripCover destination={trip.destination} title={trip.title}>
+        <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-background/90 px-2.5 py-1 text-[10px] font-bold text-foreground shadow-xs backdrop-blur">
+          <Clock3 className="h-3 w-3" aria-hidden="true" />
           {trip.durationDays} {trip.durationDays === 1 ? "day" : "days"}
         </span>
-      </div>
+      </TripCover>
+    </Link>
+
+    <div className="space-y-2 p-4">
+      <p className="inline-flex max-w-full items-center gap-1 text-[11px] font-semibold text-primary">
+        <MapPin className="h-3 w-3 shrink-0" aria-hidden="true" />
+        <span className="truncate">{trip.destination || "Somewhere new"}</span>
+      </p>
+
+      <Link to={`/explore/${trip._id}`} className="block">
+        <h3 className="line-clamp-2 font-display text-lg font-semibold leading-snug tracking-tight text-foreground transition-colors group-hover:text-primary">
+          {trip.title}
+        </h3>
+      </Link>
 
       {trip.summary && (
-        <p className="text-xs text-foreground/80 leading-relaxed line-clamp-3">
+        <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
           {trip.summary}
         </p>
       )}
 
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-        <span className="inline-flex items-center gap-1 font-semibold">
-          <CalendarDays className="w-3.5 h-3.5" />
+      <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/60 pt-3">
+        <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
+          <CalendarDays className="h-3 w-3" aria-hidden="true" />
           {formatGalleryDates(trip.dates)}
         </span>
-        {trip.season && <span className="capitalize">{trip.season}</span>}
-        {trip.groupType && <span className="capitalize">{trip.groupType}</span>}
+
+        <Link
+          to={`/travelers/${encodeURIComponent(trip.publisher.handle)}`}
+          className="flex min-w-0 items-center gap-1.5 rounded-full px-1 py-0.5 transition-colors hover:bg-muted/70"
+          title={`View ${trip.publisher.name}'s profile`}
+        >
+          <Avatar className="h-6 w-6 shrink-0">
+            {trip.publisher.avatarUrl && (
+              <AvatarImage
+                src={avatarSrc(trip.publisher.avatarUrl)}
+                alt={trip.publisher.name}
+              />
+            )}
+            <AvatarFallback className="bg-primary/10 text-[9px] font-bold text-primary">
+              {initialsFor(trip.publisher.name || trip.publisher.handle)}
+            </AvatarFallback>
+          </Avatar>
+          <span className="truncate text-[11px] font-semibold text-muted-foreground">
+            {trip.publisher.name}
+          </span>
+        </Link>
       </div>
-    </Link>
-
-    {trip.tags.length > 0 && (
-      <div className="mt-3 flex flex-wrap gap-1">
-        {trip.tags.map((tag) => (
-          <button
-            key={tag}
-            type="button"
-            onClick={() => onTagClick(tag)}
-            className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors"
-          >
-            #{tag}
-          </button>
-        ))}
-      </div>
-    )}
-
-    <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/60 pt-3">
-      <Link
-        to={`/travelers/${encodeURIComponent(trip.publisher.handle)}`}
-        className="flex min-w-0 items-center gap-2 rounded-xl px-1 py-0.5 hover:bg-muted/60 transition-colors"
-        title={`View ${trip.publisher.name}'s profile`}
-      >
-        <Avatar className="h-6 w-6 shrink-0">
-          {trip.publisher.avatarUrl && (
-            <AvatarImage
-              src={avatarSrc(trip.publisher.avatarUrl)}
-              alt={trip.publisher.name}
-            />
-          )}
-          <AvatarFallback className="text-[9px] font-bold bg-primary/10 text-primary">
-            {initialsFor(trip.publisher.name || trip.publisher.handle)}
-          </AvatarFallback>
-        </Avatar>
-        <span className="truncate text-[11px] font-semibold text-muted-foreground">
-          {trip.publisher.name}
-        </span>
-      </Link>
-
-      <Link
-        to={`/explore/${trip._id}`}
-        className="inline-flex shrink-0 items-center gap-1 text-[11px] font-bold text-primary hover:gap-1.5 transition-all"
-      >
-        See the trip
-        <ArrowRight className="w-3.5 h-3.5" />
-      </Link>
     </div>
   </article>
 );
 
+interface PageResult {
+  key: string;
+  trips: GalleryTripSummary[];
+  total: number;
+  nextCursor: string | null;
+}
+
+interface PagePosition {
+  key: string;
+  /** `cursors[0]` is the first page; each entry starts one page. */
+  cursors: (string | undefined)[];
+  index: number;
+}
+
 const Explore = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
+  const resultsRef = useRef<HTMLDivElement>(null);
 
   const q = searchParams.get("q") ?? "";
   const duration = isDuration(searchParams.get("duration"))
@@ -152,14 +193,32 @@ const Explore = () => {
   const tag = searchParams.get("tag") ?? "";
 
   const [searchInput, setSearchInput] = useState(q);
-  const [trips, setTrips] = useState<GalleryTripSummary[]>([]);
   const [events, setEvents] = useState<PublicEventSummary[]>([]);
-  const [total, setTotal] = useState(0);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [result, setResult] = useState<PageResult | null>(null);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+
+  // A new filter set always starts at page one, even before state catches up.
+  const filterKey = [q, duration ?? "", groupType, tag].join("|");
+  const [position, setPosition] = useState<PagePosition>({
+    key: filterKey,
+    cursors: [undefined],
+    index: 0,
+  });
+  const positionForFilters =
+    position.key === filterKey
+      ? position
+      : { key: filterKey, cursors: [undefined], index: 0 };
+  const cursor = positionForFilters.cursors[positionForFilters.index];
+  const pageKey = `${filterKey}::${cursor ?? ""}`;
+
+  // Results are tagged with the page they belong to, so a filter change never
+  // shows the previous filter's trips while the new page loads.
+  const current = result?.key === pageKey ? result : null;
+  const trips = current?.trips ?? [];
+  const total = current?.total ?? 0;
+  const nextCursor = current?.nextCursor ?? null;
 
   const hasFilters = Boolean(q || duration || groupType || tag);
 
@@ -232,71 +291,63 @@ const Explore = () => {
   useEffect(() => {
     let cancelled = false;
 
-    const load = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const page = await api.getExplore({
-          q: q || undefined,
-          duration,
-          groupType: groupType || undefined,
-          tag: tag || undefined,
-          limit: PAGE_SIZE,
-        });
+    setLoading(true);
+    setError(null);
+
+    api
+      .getExplore({
+        q: q || undefined,
+        duration,
+        groupType: groupType || undefined,
+        tag: tag || undefined,
+        cursor,
+        limit: PAGE_SIZE,
+      })
+      .then((page) => {
         if (cancelled) return;
-        setTrips(page.trips);
-        setTotal(page.total);
-        setNextCursor(page.nextCursor);
-      } catch (err) {
+        setResult({
+          key: pageKey,
+          trips: page.trips,
+          total: page.total,
+          nextCursor: page.nextCursor,
+        });
+      })
+      .catch((err) => {
         if (cancelled) return;
         console.error("Failed to load the gallery:", err);
-        setTrips([]);
-        setTotal(0);
-        setNextCursor(null);
+        setResult(null);
         setError(
           err instanceof ApiError && err.message
             ? err.message
             : "We couldn't load the gallery right now."
         );
-      } finally {
+      })
+      .finally(() => {
         if (!cancelled) setLoading(false);
-      }
-    };
+      });
 
-    load();
     return () => {
       cancelled = true;
     };
-  }, [q, duration, groupType, tag, reloadKey]);
+  }, [q, duration, groupType, tag, cursor, pageKey, reloadKey]);
 
-  const loadMore = async () => {
-    if (!nextCursor || loadingMore) return;
-    setLoadingMore(true);
-    try {
-      const page = await api.getExplore({
-        q: q || undefined,
-        duration,
-        groupType: groupType || undefined,
-        tag: tag || undefined,
-        cursor: nextCursor,
-        limit: PAGE_SIZE,
-      });
-      setTrips((previous) => {
-        const seen = new Set(previous.map((trip) => trip._id));
-        return [...previous, ...page.trips.filter((trip) => !seen.has(trip._id))];
-      });
-      setNextCursor(page.nextCursor);
-      setTotal(page.total);
-    } catch (err) {
-      console.error("Failed to load more gallery trips:", err);
-      setError(
-        err instanceof ApiError && err.message
-          ? err.message
-          : "The next page could not be loaded."
-      );
-    } finally {
-      setLoadingMore(false);
-    }
+  const goToNext = () => {
+    if (!nextCursor) return;
+    setPosition({
+      key: filterKey,
+      cursors: [
+        ...positionForFilters.cursors.slice(0, positionForFilters.index + 1),
+        nextCursor,
+      ],
+      index: positionForFilters.index + 1,
+    });
+    resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const goToPrevious = () => {
+    if (positionForFilters.index === 0) return;
+    setPosition({ ...positionForFilters, index: positionForFilters.index - 1 });
+    resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const clearFilters = () => {
@@ -304,248 +355,275 @@ const Explore = () => {
     applyFilters({ q: null, duration: null, groupType: null, tag: null });
   };
 
-  const activeFilters = useMemo(() => {
-    const chips: { key: string; label: string; clear: Record<string, null> }[] = [];
-    if (q) chips.push({ key: "q", label: `“${q}”`, clear: { q: null } });
-    if (duration) {
-      chips.push({
-        key: "duration",
-        label: DURATION_LABELS[duration],
-        clear: { duration: null },
-      });
-    }
-    if (groupType) {
-      chips.push({ key: "groupType", label: groupType, clear: { groupType: null } });
-    }
-    if (tag) chips.push({ key: "tag", label: `#${tag}`, clear: { tag: null } });
-    return chips;
-  }, [q, duration, groupType, tag]);
+  const activeGroupType = useMemo(
+    () =>
+      GROUP_OPTIONS.find(
+        (option) => option.toLowerCase() === groupType.toLowerCase()
+      ) ?? groupType,
+    [groupType]
+  );
+
+  const startIndex = positionForFilters.index * PAGE_SIZE + 1;
+  const endIndex = startIndex + trips.length - 1;
 
   return (
-    <div className="min-h-screen bg-gradient-hero flex flex-col">
+    <div className="flex min-h-screen flex-col bg-gradient-hero">
       <Navbar />
 
-      <main className="flex-1 container mx-auto px-4 pt-24 pb-20 max-w-6xl space-y-8">
-        <TravellerPageHeader
-          tone="hero"
-          eyebrow="Trips people shared"
-          icon={Globe}
-          title="Find a trip you'd like to join"
-          description="Real trips, shared by the people who planned them. Scroll until one catches your eye — then ask the owner to come along, or take a copy that's yours to change."
-          crumbs={[{ label: "Explore" }]}
-        >
-          <div className="flex flex-col gap-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={searchInput}
-                onChange={(event) => setSearchInput(event.target.value)}
-                placeholder="Where are you headed?"
-                aria-label="Search shared trips"
-                className="h-11 rounded-2xl pl-9 pr-10 bg-background/80"
-              />
-              {searchInput && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSearchInput("");
-                    applyFilters({ q: null });
-                  }}
-                  aria-label="Clear search"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-muted-foreground hover:bg-muted"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
+      <main className="container mx-auto max-w-6xl flex-1 px-4 pb-20 pt-24">
+        <header className="mx-auto max-w-3xl text-center">
+          <h1 className="font-display text-3xl font-semibold leading-tight tracking-tight text-foreground sm:text-5xl">
+            Find a trip you'd like to join
+          </h1>
+          <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
+            Real trips, shared by the people who planned them. Scroll until one
+            catches your eye — then ask the owner to come along, or take a copy
+            that's yours to change.
+          </p>
+        </header>
 
-            <TravellerSegmented
-              ariaLabel="Filter by trip length"
-              value={duration ?? "any"}
-              onChange={(value) =>
-                applyFilters({ duration: value === "any" ? null : value })
-              }
-              options={[
-                { value: "any", label: "Any length" },
-                ...DURATION_OPTIONS,
-              ]}
+        <div className="mx-auto mt-8 max-w-2xl">
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+              placeholder="Where are you headed?"
+              aria-label="Search shared trips"
+              className="h-12 rounded-full border-border/80 bg-card pl-11 pr-11 text-sm shadow-xs"
             />
-
-            {activeFilters.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2 pt-1">
-                {activeFilters.map((chip) => (
-                  <button
-                    key={chip.key}
-                    type="button"
-                    onClick={() => {
-                      if (chip.key === "q") setSearchInput("");
-                      applyFilters(chip.clear);
-                    }}
-                    className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary hover:bg-primary/15"
-                  >
-                    {chip.label}
-                    <X className="h-3 w-3" />
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  onClick={clearFilters}
-                  className="text-[11px] font-bold text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
-                >
-                  Clear all
-                </button>
-              </div>
+            {searchInput && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchInput("");
+                  applyFilters({ q: null });
+                }}
+                aria-label="Clear search"
+                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-muted"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
             )}
           </div>
-        </TravellerPageHeader>
+        </div>
+
+        <div className="mt-7 flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
+          <FilterGroup label="Duration">
+            <FilterChip
+              active={!duration}
+              onClick={() => applyFilters({ duration: null })}
+            >
+              Any length
+            </FilterChip>
+            {DURATION_OPTIONS.map((option) => (
+              <FilterChip
+                key={option.value}
+                active={duration === option.value}
+                onClick={() =>
+                  applyFilters({
+                    duration: duration === option.value ? null : option.value,
+                  })
+                }
+              >
+                {option.label}
+              </FilterChip>
+            ))}
+          </FilterGroup>
+
+          <span className="hidden h-6 w-px bg-border/70 sm:block" aria-hidden="true" />
+
+          <FilterGroup label="Group">
+            {GROUP_OPTIONS.map((option) => (
+              <FilterChip
+                key={option}
+                active={activeGroupType === option}
+                onClick={() =>
+                  applyFilters({
+                    groupType: activeGroupType === option ? null : option,
+                  })
+                }
+              >
+                {option}
+              </FilterChip>
+            ))}
+          </FilterGroup>
+
+          <span className="hidden h-6 w-px bg-border/70 sm:block" aria-hidden="true" />
+
+          <FilterGroup label="Tags">
+            {TAG_OPTIONS.map((option) => (
+              <FilterChip
+                key={option.value}
+                active={tag === option.value}
+                onClick={() =>
+                  applyFilters({ tag: tag === option.value ? null : option.value })
+                }
+              >
+                {option.label}
+              </FilterChip>
+            ))}
+          </FilterGroup>
+
+          {hasFilters && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="text-[11px] font-bold text-muted-foreground underline-offset-2 transition-colors hover:text-foreground hover:underline"
+            >
+              Clear all
+            </button>
+          )}
+        </div>
+
+        <div ref={resultsRef} className="mt-10 scroll-mt-24 space-y-5">
+          <h2 className="sr-only">Shared trips</h2>
+
+          {loading ? (
+            <div className="flex min-h-[320px] flex-col items-center justify-center space-y-4">
+              <Loader2 className="h-9 w-9 animate-spin text-primary" />
+              <div className="space-y-1 text-center">
+                <h3 className="text-base font-bold text-foreground">
+                  Gathering trips people shared…
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Only the ones their owners were happy to share
+                </p>
+              </div>
+            </div>
+          ) : error ? (
+            <div className="space-y-4 rounded-3xl border border-destructive/30 bg-destructive/5 p-8 text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
+                <AlertCircle className="h-6 w-6" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-bold text-foreground">
+                  We couldn't load the gallery
+                </p>
+                <p className="text-xs text-muted-foreground">{error}</p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="rounded-xl text-xs font-bold"
+                onClick={() => setReloadKey((key) => key + 1)}
+              >
+                Try again
+              </Button>
+            </div>
+          ) : total === 0 ? (
+            <div className="space-y-3 rounded-3xl border border-dashed border-border/80 bg-card/60 p-10 text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                <Compass className="h-6 w-6" />
+              </div>
+              <p className="text-sm font-bold text-foreground">
+                {hasFilters
+                  ? "Nothing matches those filters yet"
+                  : "No trips have been shared yet"}
+              </p>
+              <p className="mx-auto max-w-md text-xs text-muted-foreground">
+                {hasFilters
+                  ? "Maybe try a wider search, a different trip length, or clear them?"
+                  : "Be the first — plan a trip, then share it once you're happy with it."}
+              </p>
+              {hasFilters ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="rounded-xl text-xs font-bold"
+                  onClick={clearFilters}
+                >
+                  Clear filters
+                </Button>
+              ) : (
+                <Button
+                  asChild
+                  variant="hero"
+                  size="sm"
+                  className="gap-1.5 rounded-xl text-xs font-bold"
+                >
+                  <Link to="/plan">
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Plan a trip
+                  </Link>
+                </Button>
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                {trips.map((trip) => (
+                  <ExploreCard key={trip._id} trip={trip} />
+                ))}
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                <p className="text-xs font-semibold text-muted-foreground">
+                  Showing {startIndex}–{endIndex} of {total}{" "}
+                  {total === 1 ? "trip" : "trips"}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={goToPrevious}
+                    disabled={positionForFilters.index === 0}
+                    className="h-10 gap-1.5 rounded-xl px-4 text-xs font-bold"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Previous
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={goToNext}
+                    disabled={!nextCursor}
+                    className="h-10 gap-1.5 rounded-xl border-primary/40 px-4 text-xs font-bold text-primary hover:bg-primary/5 disabled:border-border disabled:text-muted-foreground"
+                  >
+                    Next
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
 
         {!hasFilters && events.length > 0 && (
           <section
             id="events"
             aria-labelledby="explore-events-heading"
-            className="scroll-mt-24 space-y-4"
+            className="mt-12 scroll-mt-24 space-y-4 rounded-3xl border border-border/70 bg-muted/40 p-5 sm:p-6"
           >
             <div className="flex flex-wrap items-end justify-between gap-2">
               <div className="space-y-0.5">
                 <h2
                   id="explore-events-heading"
-                  className="text-lg font-black text-foreground"
+                  className="font-display text-lg font-semibold tracking-tight text-foreground"
                 >
-                  Happening soon
+                  On the calendar
                 </h2>
                 <p className="text-xs text-muted-foreground">
-                  Camps, retreats and group trips agencies are running. Ask
-                  them about a spot.
+                  Camps, retreats and group trips agencies are running. Ask them
+                  about a spot.
                 </p>
               </div>
               <Link
                 to="/agencies"
-                className="inline-flex items-center gap-1 text-[11px] font-bold text-primary hover:gap-1.5 transition-all"
+                className="inline-flex items-center gap-1 text-[11px] font-bold text-primary transition-all hover:gap-1.5"
               >
                 Browse agencies
-                <ArrowRight className="w-3.5 h-3.5" />
+                <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {events.map((event) => (
                 <PublicEventCard key={event._id} event={event} showAgency />
               ))}
-            </div>
-          </section>
-        )}
-
-        {loading ? (
-          <div className="flex flex-col items-center justify-center min-h-[320px] space-y-4">
-            <Loader2 className="w-9 h-9 text-primary animate-spin" />
-            <div className="text-center space-y-1">
-              <h3 className="text-base font-bold text-foreground">
-                Gathering trips people shared…
-              </h3>
-              <p className="text-xs text-muted-foreground">
-                Only the ones their owners were happy to share
-              </p>
-            </div>
-          </div>
-        ) : error ? (
-          <div className="rounded-3xl border border-destructive/30 bg-destructive/5 p-8 text-center space-y-4">
-            <div className="w-12 h-12 rounded-2xl bg-destructive/10 text-destructive flex items-center justify-center mx-auto">
-              <AlertCircle className="w-6 h-6" />
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm font-bold text-foreground">
-                We couldn't load the gallery
-              </p>
-              <p className="text-xs text-muted-foreground">{error}</p>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="rounded-xl text-xs font-bold"
-              onClick={() => setReloadKey((key) => key + 1)}
-            >
-              Try again
-            </Button>
-          </div>
-        ) : trips.length === 0 ? (
-          <div className="rounded-3xl border border-dashed border-border/80 bg-card/60 p-10 text-center space-y-3">
-            <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto">
-              <Compass className="w-6 h-6" />
-            </div>
-            <p className="text-sm font-bold text-foreground">
-              {hasFilters
-                ? "Nothing matches those filters yet"
-                : "No trips have been shared yet"}
-            </p>
-            <p className="text-xs text-muted-foreground max-w-md mx-auto">
-              {hasFilters
-                ? "Maybe try a wider search, a different trip length, or clear them?"
-                : "Be the first — plan a trip, then share it once you're happy with it."}
-            </p>
-            {hasFilters ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="rounded-xl text-xs font-bold"
-                onClick={clearFilters}
-              >
-                Clear filters
-              </Button>
-            ) : (
-              <Button asChild variant="hero" size="sm" className="rounded-xl text-xs font-bold gap-1.5">
-                <Link to="/plan">
-                  <Sparkles className="w-3.5 h-3.5" />
-                  Plan a trip
-                </Link>
-              </Button>
-            )}
-          </div>
-        ) : (
-          <section className="space-y-5">
-            <div className="flex items-end justify-between gap-3">
-              <div className="space-y-0.5">
-                <h2 className="text-lg font-black text-foreground">Shared trips</h2>
-                <p className="text-xs font-semibold text-muted-foreground">
-                  Showing {trips.length} of {total} shared{" "}
-                  {total === 1 ? "trip" : "trips"}
-                </p>
-              </div>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {trips.map((trip) => (
-                <ExploreCard
-                  key={trip._id}
-                  trip={trip}
-                  onTagClick={(nextTag) =>
-                    applyFilters({ tag: tag === nextTag ? null : nextTag })
-                  }
-                />
-              ))}
-            </div>
-
-            <div className="flex justify-center pt-2">
-              {nextCursor ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={loadMore}
-                  disabled={loadingMore}
-                  className="rounded-2xl h-11 px-6 text-xs font-bold gap-2"
-                >
-                  {loadingMore ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <ArrowRight className="w-4 h-4" />
-                  )}
-                  Load more trips
-                </Button>
-              ) : (
-                <p className="text-[11px] font-semibold text-muted-foreground">
-                  That's every shared trip for now.
-                </p>
-              )}
             </div>
           </section>
         )}

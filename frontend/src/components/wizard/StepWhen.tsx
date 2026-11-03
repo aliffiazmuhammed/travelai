@@ -3,12 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Badge } from "@/components/ui/badge";
 import {
   CalendarIcon,
-  CalendarDays,
-  Clock,
-  Sparkles,
   AlertCircle,
   Zap,
   Leaf,
@@ -64,185 +60,183 @@ export const StepWhen: React.FC<StepWhenProps> = ({
 
   return (
     <div className="space-y-6">
-      <div className="text-center space-y-2">
-        <h2 className="text-2xl font-bold tracking-tight text-foreground flex items-center justify-center gap-2">
-          <span>When are you planning to travel?</span>
-          <CalendarDays className="w-6 h-6 text-primary" aria-hidden="true" />
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
+        <h2 className="font-display text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+          When are you going?
         </h2>
-        <p className="text-sm text-muted-foreground max-w-lg mx-auto">
-          Choose your travel dates or pick a quick duration preset to plan your schedule.
+        <p className="text-xs text-muted-foreground sm:text-sm">
+          Pick exact dates, or start from a rough preset
         </p>
       </div>
 
       {/* Quick Presets */}
-      <div className="space-y-2.5">
-        <div className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-muted-foreground">
-          <Sparkles className="w-3.5 h-3.5 text-primary" />
-          <span>Quick duration presets</span>
-        </div>
+      <div className="space-y-3">
+        <p className="text-xs font-semibold text-muted-foreground">
+          Quick duration presets
+        </p>
         <div className="flex flex-wrap gap-2">
           {presets.map((preset) => {
             const isSelected = durationDays === preset.days;
             const PresetIcon = preset.icon;
             return (
-              <Button
+              <button
                 key={preset.days}
                 type="button"
-                variant={isSelected ? "default" : "outline"}
-                size="sm"
+                aria-pressed={isSelected}
                 onClick={() => applyPreset(preset.days)}
                 className={cn(
-                  "rounded-full text-xs font-medium h-9 px-4 transition-all",
+                  "inline-flex min-h-[40px] items-center gap-1.5 rounded-full border px-4 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   isSelected
-                    ? "shadow-sm scale-105"
-                    : "border-border/70 hover:border-primary/50 hover:bg-primary/5"
+                    ? "border-primary/50 bg-primary/10 text-primary"
+                    : "border-border/80 bg-card text-foreground/80 hover:border-primary/40 hover:text-foreground"
                 )}
               >
-                <PresetIcon className="mr-1.5 w-3.5 h-3.5" />
+                <PresetIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                 <span>{preset.label}</span>
-                <span className="ml-1.5 text-[11px] opacity-80 font-normal">
-                  ({preset.days}d)
-                </span>
-              </Button>
+                <span className="font-normal opacity-70">({preset.days}d)</span>
+              </button>
             );
           })}
         </div>
       </div>
 
-      {/* Date Pickers Card */}
-      <div className="p-6 rounded-2xl border border-border/80 bg-card/60 backdrop-blur-sm shadow-sm space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Start Date */}
-          <div className="space-y-2">
-            <Label className="text-xs font-semibold text-foreground tracking-wide">
-              Departure / Start Date
-            </Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "w-full h-13 justify-start text-left font-normal rounded-xl border-border/80 shadow-2xs text-sm",
-                    !startDate && "text-muted-foreground",
-                    startDate && "border-primary/50 bg-primary/5 font-medium text-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-3 h-5 w-5 text-primary shrink-0" />
-                  {startDate ? (
-                    <div>
-                      <div className="font-semibold text-foreground">
-                        {formatDateWithWeekday(startDate)}
-                      </div>
-                      <div className="text-[11px] text-muted-foreground">
-                        Trip begins
-                      </div>
-                    </div>
-                  ) : (
-                    <span>Select start date</span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0 rounded-2xl shadow-xl" align="start">
-                <Calendar
-                  mode="single"
-                  selected={startDate}
-                  onSelect={(date) => {
-                    onStartDateChange(date);
-                    if (date && endDate && isBefore(endDate, date)) {
-                      onEndDateChange(addDays(date, 3));
-                    }
-                  }}
-                  disabled={(date) => isBefore(date, today)}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
-
-          {/* End Date */}
-          <div className="space-y-2">
-            <Label className="text-xs font-semibold text-foreground tracking-wide">
-              Return / End Date
-            </Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "w-full h-13 justify-start text-left font-normal rounded-xl border-border/80 shadow-2xs text-sm",
-                    !endDate && "text-muted-foreground",
-                    endDate && "border-primary/50 bg-primary/5 font-medium text-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-3 h-5 w-5 text-primary shrink-0" />
-                  {endDate ? (
-                    <div>
-                      <div className="font-semibold text-foreground">
-                        {formatDateWithWeekday(endDate)}
-                      </div>
-                      <div className="text-[11px] text-muted-foreground">
-                        Trip concludes
-                      </div>
-                    </div>
-                  ) : (
-                    <span>Select return date</span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0 rounded-2xl shadow-xl" align="start">
-                <Calendar
-                  mode="single"
-                  selected={endDate}
-                  onSelect={onEndDateChange}
-                  disabled={(date) =>
-                    startDate ? isBefore(date, startDate) : isBefore(date, today)
+      {/* Date Pickers */}
+      <div className="grid grid-cols-1 gap-4 border-t border-border/60 pt-6 sm:grid-cols-2">
+        {/* Start Date */}
+        <div className="space-y-1.5">
+          <Label
+            htmlFor="start-date"
+            className="text-xs font-medium text-muted-foreground"
+          >
+            Departure / start date
+          </Label>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                id="start-date"
+                variant="outline"
+                className={cn(
+                  "h-14 w-full justify-start rounded-2xl border-border/80 bg-card px-4 text-left text-sm font-normal shadow-xs",
+                  !startDate && "text-muted-foreground",
+                  startDate && "border-primary/40 bg-primary/5"
+                )}
+              >
+                <CalendarIcon className="mr-3 h-5 w-5 shrink-0 text-primary" />
+                {startDate ? (
+                  <span>
+                    <span className="block font-semibold text-foreground">
+                      {formatDateWithWeekday(startDate)}
+                    </span>
+                    <span className="block text-[11px] text-muted-foreground">
+                      Trip begins
+                    </span>
+                  </span>
+                ) : (
+                  <span>Select start date</span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto rounded-2xl p-0 shadow-xl" align="start">
+              <Calendar
+                mode="single"
+                selected={startDate}
+                onSelect={(date) => {
+                  onStartDateChange(date);
+                  if (date && endDate && isBefore(endDate, date)) {
+                    onEndDateChange(addDays(date, 3));
                   }
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
+                }}
+                disabled={(date) => isBefore(date, today)}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
         </div>
 
-        {/* Validation Error or Duration Confirmation Strip */}
-        {isInvalidDateRange ? (
-          <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/20 text-destructive rounded-xl text-xs font-medium">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>End date must be on or after the start date.</span>
-          </div>
-        ) : durationDays > 0 ? (
-          <div className="flex flex-col sm:flex-row items-center justify-between p-4 bg-primary/5 border border-primary/20 rounded-xl gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">
-                <Clock className="w-5 h-5" />
-              </div>
-              <div>
-                <h4 className="text-sm font-bold text-foreground">
-                  {durationDays} Days / {durationDays > 1 ? durationDays - 1 : 1} Nights
-                </h4>
-                <p className="text-xs text-muted-foreground">
-                  {startDate && formatDateShort(startDate)} - {endDate && formatDate(endDate)}
-                </p>
-              </div>
-            </div>
-            <Badge variant="secondary" className="px-3 py-1 text-xs font-semibold gap-1.5">
-              {durationDays <= 3 ? (
-                <>
-                  <Zap className="w-3 h-3" /> Short break
-                </>
-              ) : durationDays <= 7 ? (
-                <>
-                  <Sun className="w-3 h-3" /> Ideal holiday
-                </>
-              ) : (
-                <>
-                  <Backpack className="w-3 h-3" /> Extended adventure
-                </>
-              )}
-            </Badge>
-          </div>
-        ) : null}
+        {/* End Date */}
+        <div className="space-y-1.5">
+          <Label
+            htmlFor="end-date"
+            className="text-xs font-medium text-muted-foreground"
+          >
+            Return / end date
+          </Label>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                id="end-date"
+                variant="outline"
+                className={cn(
+                  "h-14 w-full justify-start rounded-2xl border-border/80 bg-card px-4 text-left text-sm font-normal shadow-xs",
+                  !endDate && "text-muted-foreground",
+                  endDate && "border-primary/40 bg-primary/5"
+                )}
+              >
+                <CalendarIcon className="mr-3 h-5 w-5 shrink-0 text-primary" />
+                {endDate ? (
+                  <span>
+                    <span className="block font-semibold text-foreground">
+                      {formatDateWithWeekday(endDate)}
+                    </span>
+                    <span className="block text-[11px] text-muted-foreground">
+                      Trip concludes
+                    </span>
+                  </span>
+                ) : (
+                  <span>Select return date</span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto rounded-2xl p-0 shadow-xl" align="start">
+              <Calendar
+                mode="single"
+                selected={endDate}
+                onSelect={onEndDateChange}
+                disabled={(date) =>
+                  startDate ? isBefore(date, startDate) : isBefore(date, today)
+                }
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
       </div>
+
+      {/* Validation Error or Duration Confirmation */}
+      {isInvalidDateRange ? (
+        <div className="flex items-center gap-2 rounded-2xl border border-destructive/20 bg-destructive/10 p-3 text-xs font-medium text-destructive">
+          <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>End date must be on or after the start date.</span>
+        </div>
+      ) : durationDays > 0 ? (
+        <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-foreground">
+              {durationDays} {durationDays === 1 ? "day" : "days"} /{" "}
+              {durationDays > 1 ? durationDays - 1 : 1}{" "}
+              {durationDays > 1 ? "nights" : "night"}
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {startDate && formatDateShort(startDate)} – {endDate && formatDate(endDate)}
+            </p>
+          </div>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1 text-[11px] font-semibold text-muted-foreground">
+            {durationDays <= 3 ? (
+              <>
+                <Zap className="h-3 w-3" aria-hidden="true" /> Short break
+              </>
+            ) : durationDays <= 7 ? (
+              <>
+                <Sun className="h-3 w-3" aria-hidden="true" /> Ideal holiday
+              </>
+            ) : (
+              <>
+                <Backpack className="h-3 w-3" aria-hidden="true" /> Extended adventure
+              </>
+            )}
+          </span>
+        </div>
+      ) : null}
     </div>
   );
 };

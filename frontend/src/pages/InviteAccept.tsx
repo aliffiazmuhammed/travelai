@@ -1,14 +1,22 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from "@/context/UserContext";
 import { api } from "@/services/api";
 import { toast } from "sonner";
-import { Loader2, MapPin, CalendarClock, AlertTriangle, Sparkles, Users } from "lucide-react";
+import {
+  AlertTriangle,
+  CalendarDays,
+  CheckCircle2,
+  Loader2,
+  Lock,
+  Mail,
+  MapPin,
+} from "lucide-react";
 import { roleLabel } from "@/hooks/useTripAccess";
-import { formatDateTime } from "@/lib/date";
+import { formatDate } from "@/lib/date";
+import { initialsFor } from "@/lib/avatar";
 import type { InvitePreview } from "@/types/trip";
 import Navbar from "@/components/Navbar";
 
@@ -22,6 +30,43 @@ import Navbar from "@/components/Navbar";
  */
 
 const INVITE_TOKEN_KEY = "travelai.inviteToken";
+
+type InviteRole = InvitePreview["role"];
+
+/**
+ * What each seat can actually do (mirrors the capability matrix in
+ * `docs/roadmap-milestone-6-collaboration.md` §1.3). Only the roles an invite
+ * can grant are listed — the owner is never invited to their own trip.
+ */
+const ROLE_COPY: Record<InviteRole, { intro: string; bullets: string[] }> = {
+  viewer: {
+    intro:
+      "As a viewer you can follow the plan, see what it costs and take a copy with you. Editing stays with the owner.",
+    bullets: [
+      "Follow the full itinerary",
+      "See the shared expenses and who else is coming",
+      "Download or print a copy for the road",
+    ],
+  },
+  commenter: {
+    intro:
+      "As a commenter you can follow the plan, ask questions and join the trip chat. Editing stays with the owner.",
+    bullets: [
+      "Follow the full itinerary",
+      "Ask questions and get answers",
+      "Join the trip chat and vote in polls",
+    ],
+  },
+  editor: {
+    intro:
+      "As an editor you can shape the itinerary and expenses alongside the owner. Inviting people and sharing the trip stay with the owner.",
+    bullets: [
+      "Edit days, activities and the order of the plan",
+      "Update expenses, travellers and the currency",
+      "Comment, chat and vote in polls",
+    ],
+  },
+};
 
 const InviteAccept: React.FC = () => {
   const { token = "" } = useParams();
@@ -138,123 +183,178 @@ const InviteAccept: React.FC = () => {
     }
   };
 
+  /**
+   * Declining is deliberately quiet: the invite has no decline endpoint, so
+   * walking away is simply leaving the flow and forgetting the token.
+   */
+  const handleDecline = () => {
+    stripTokenFromUrl();
+    navigate("/dashboard", { replace: true });
+  };
+
   const loading = authLoading || loadingPreview;
   const emailMismatch =
     preview?.emailBoundTo && user?.email && preview.emailBoundTo !== user.email;
 
   return (
-    <div className="min-h-screen bg-gradient-hero flex flex-col">
+    <div className="relative flex min-h-screen flex-col overflow-hidden bg-gradient-hero">
+      {/* Soft blue floor: a low glow, then a dotted grid that fades out. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_0%,hsl(var(--primary)/0.10),transparent_60%)]"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 [background-image:radial-gradient(circle,hsl(var(--primary)/0.16)_1px,transparent_1px)] [background-size:18px_18px] [mask-image:radial-gradient(ellipse_at_50%_45%,black_15%,transparent_75%)]"
+      />
+
       <Navbar />
-      <main className="flex-1 flex items-center justify-center px-4 pt-24 pb-16">
+
+      <main className="relative z-10 flex flex-1 items-center justify-center px-4 pb-16 pt-24">
         {loading ? (
-          <div className="flex items-center justify-center gap-2 text-muted-foreground py-16">
-            <Loader2 className="w-5 h-5 animate-spin" />
-            <span className="text-sm font-medium">Checking your invitation…</span>
+          <div className="flex w-full max-w-[440px] flex-col items-center gap-3 rounded-3xl border border-border/70 bg-card px-6 py-16 text-center shadow-card">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" aria-hidden="true" />
+            <p className="text-sm font-medium text-muted-foreground">
+              Checking your invitation…
+            </p>
           </div>
         ) : error ? (
-          <Card className="rounded-3xl max-w-md w-full border border-border/70 bg-card/95 shadow-card overflow-hidden">
-            <CardContent className="p-8 text-center space-y-4">
-              <div className="w-14 h-14 rounded-3xl bg-destructive/10 text-destructive flex items-center justify-center mx-auto">
-                <AlertTriangle className="w-7 h-7" />
-              </div>
-              <div className="space-y-1">
-                <h2 className="text-lg font-semibold tracking-tight text-foreground">Invitation unavailable</h2>
-                <p className="text-xs text-muted-foreground leading-relaxed">{error}</p>
-              </div>
-              <Button type="button" variant="hero" className="rounded-2xl h-11 px-6 text-xs font-bold" onClick={() => navigate("/dashboard")}>
-                Go to dashboard
-              </Button>
-            </CardContent>
-          </Card>
+          <div className="w-full max-w-[440px] space-y-4 rounded-3xl border border-border/70 bg-card p-8 text-center shadow-card">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
+              <AlertTriangle className="h-7 w-7" aria-hidden="true" />
+            </div>
+            <div className="space-y-1">
+              <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
+                Invitation unavailable
+              </h1>
+              <p className="text-xs leading-relaxed text-muted-foreground">{error}</p>
+            </div>
+            <Button
+              type="button"
+              variant="hero"
+              className="h-11 w-full rounded-xl text-xs font-bold"
+              onClick={() => navigate("/dashboard")}
+            >
+              Go to dashboard
+            </Button>
+          </div>
         ) : preview ? (
-          <Card className="rounded-3xl max-w-md w-full border border-border/70 bg-card/95 shadow-card overflow-hidden">
-            {/* Cover strip */}
-            <div className="relative h-32 bg-gradient-to-br from-sky-500 to-primary">
-              <div className="absolute inset-0 bg-black/25" />
-              <div className="absolute inset-0 flex items-center justify-center gap-2 text-white">
-                <Sparkles className="w-5 h-5 text-yellow-300" />
-                <span className="text-sm font-bold tracking-wide">
-                  You are invited to collaborate
-                </span>
+          <div className="w-full max-w-[440px] rounded-3xl border border-border/70 bg-card p-6 shadow-card sm:p-8">
+            <div className="text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                <Mail className="h-6 w-6" aria-hidden="true" />
               </div>
+
+              <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+                You're invited
+              </p>
+
+              <h1 className="mt-2 break-words text-balance font-display text-3xl font-semibold leading-[1.1] tracking-tight text-foreground sm:text-4xl">
+                Join {preview.trip.title}
+              </h1>
+
+              <div className="mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
+                <span className="inline-flex min-w-0 items-center gap-1.5">
+                  <CalendarDays className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+                  <span className="min-w-0 break-words">
+                    Valid until {formatDate(preview.expiresAt)}
+                  </span>
+                </span>
+                {preview.trip.destination && (
+                  <>
+                    <span aria-hidden="true" className="hidden h-4 w-px bg-border sm:block" />
+                    <span className="inline-flex min-w-0 items-center gap-1.5">
+                      <MapPin className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+                      <span className="min-w-0 break-words">{preview.trip.destination}</span>
+                    </span>
+                  </>
+                )}
+              </div>
+
+              {preview.kind === "email" && preview.emailBoundTo && (
+                <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+                  Reserved for{" "}
+                  <span className="break-all font-semibold text-foreground">
+                    {preview.emailBoundTo}
+                  </span>
+                </p>
+              )}
+
+              {preview.invitedBy && (
+                <div className="mt-4 flex items-center justify-center gap-2.5">
+                  <Avatar className="h-9 w-9">
+                    <AvatarFallback className="bg-primary/10 text-[11px] font-bold text-primary">
+                      {initialsFor(preview.invitedBy)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <p className="min-w-0 text-xs text-muted-foreground">
+                    <span className="font-semibold text-foreground">{preview.invitedBy}</span>{" "}
+                    invited you
+                  </p>
+                </div>
+              )}
             </div>
 
-            <CardContent className="p-6 space-y-5">
-              <div className="space-y-1.5 text-center">
-                <h2 className="text-xl font-semibold tracking-tight text-foreground line-clamp-2">
-                  {preview.trip.title}
-                </h2>
-                {preview.trip.destination && (
-                  <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
-                    <MapPin className="w-3 h-3" />
-                    {preview.trip.destination}
-                  </p>
-                )}
-                <div className="flex items-center justify-center gap-2 pt-1">
-                  <Badge className="bg-primary/10 text-primary border-primary/20 px-2.5 py-0.5 text-[11px] font-bold">
-                    <Users className="w-3 h-3 mr-1" />
-                    as {roleLabel(preview.role)}
-                  </Badge>
-                  {preview.invitedBy && (
-                    <Badge variant="outline" className="text-[11px] px-2.5 py-0.5">
-                      by {preview.invitedBy}
-                    </Badge>
-                  )}
-                </div>
-              </div>
+            <div className="mt-5 rounded-2xl bg-muted/60 p-4 text-left sm:p-5">
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                {ROLE_COPY[preview.role].intro}
+              </p>
+              <ul className="mt-3 space-y-2">
+                {ROLE_COPY[preview.role].bullets.map((bullet) => (
+                  <li
+                    key={bullet}
+                    className="flex items-start gap-2 text-xs leading-relaxed text-foreground/85"
+                  >
+                    <CheckCircle2 className="mt-px h-4 w-4 shrink-0 text-accent" aria-hidden="true" />
+                    <span className="min-w-0">{bullet}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
 
-              <div className="p-3 rounded-2xl bg-muted/60 border border-border/60 space-y-2 text-xs text-muted-foreground">
-                <div className="flex items-start gap-2">
-                  <CalendarClock className="w-3.5 h-3.5 mt-0.5 shrink-0 text-primary" />
-                  <span>
-                    This invitation is valid until{" "}
-                    <strong className="text-foreground">
-                      {formatDateTime(preview.expiresAt)}
-                    </strong>
-                    {preview.kind === "email" ? " and is reserved for " : ""}
-                    {preview.kind === "email" && (
-                      <strong className="text-foreground">{preview.emailBoundTo}</strong>
-                    )}
-                    .
-                  </span>
-                </div>
-                <p className="leading-relaxed">
-                  You will be able to{" "}
-                  {preview.role === "viewer"
-                    ? "view the plan and print it — editing stays with the owner."
-                    : preview.role === "editor"
-                    ? "edit the itinerary, expenses map and days together with the owner."
-                    : "follow along and join the trip discussion."}
+            {emailMismatch ? (
+              <div className="mt-4 flex items-start gap-2 rounded-2xl border border-amber-500/25 bg-amber-500/10 p-3 text-left text-xs font-medium leading-relaxed text-amber-700 dark:text-amber-300">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                <p className="min-w-0">
+                  This invitation was sent to{" "}
+                  <strong className="break-all">{preview.emailBoundTo}</strong>, but you are
+                  signed in as <strong className="break-all">{user?.email}</strong>. Sign in
+                  with the invited email to accept it.
                 </p>
               </div>
+            ) : (
+              <Button
+                type="button"
+                variant="hero"
+                disabled={joining}
+                onClick={handleJoin}
+                className="mt-5 h-12 w-full rounded-xl text-sm font-bold"
+              >
+                {joining ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    <span>Joining…</span>
+                  </>
+                ) : (
+                  <span>Accept invitation</span>
+                )}
+              </Button>
+            )}
 
-              {emailMismatch ? (
-                <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-200 dark:border-amber-800 text-xs text-amber-700 dark:text-amber-400 font-medium leading-relaxed">
-                  This invitation was sent to{" "}
-                  <strong>{preview.emailBoundTo}</strong>, but you are signed in
-                  as <strong>{user?.email}</strong>. Sign in with the invited
-                  email to accept it.
-                </div>
-              ) : (
-                <Button
-                  type="button"
-                  variant="hero"
-                  disabled={joining}
-                  onClick={handleJoin}
-                  className="w-full rounded-2xl h-12 text-sm font-bold gap-2"
-                >
-                  {joining ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Joining…</span>
-                    </>
-                  ) : (
-                    <span>Join the trip</span>
-                  )}
-                </Button>
-              )}
-            </CardContent>
-          </Card>
+            <button
+              type="button"
+              onClick={handleDecline}
+              disabled={joining}
+              className="mt-1 w-full rounded-xl py-2.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+            >
+              No thanks
+            </button>
+
+            <p className="mt-4 flex items-center justify-center gap-1.5 border-t border-border/60 pt-4 text-[11px] text-muted-foreground">
+              <Lock className="h-3 w-3" aria-hidden="true" />
+              This invitation link is personal to you.
+            </p>
+          </div>
         ) : null}
       </main>
     </div>

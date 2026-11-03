@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { format, differenceInCalendarDays, isBefore, addDays } from "date-fns";
+import {
+  format,
+  differenceInCalendarDays,
+  isBefore,
+  addDays,
+  startOfToday,
+} from "date-fns";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -34,6 +40,16 @@ const WIZARD_STEPS: WizardStep[] = [
   { id: 4, title: "Budget", shortTitle: "Budget" },
   { id: 5, title: "Travel Style", shortTitle: "Style" },
   { id: 6, title: "Review", shortTitle: "Review" },
+];
+
+/** Page headline per step. The card carries the concrete question. */
+const STEP_HEADLINES: { personal: string; agency: string }[] = [
+  { personal: "Where are you headed?", agency: "Where are your clients headed?" },
+  { personal: "When are you going?", agency: "When is the trip?" },
+  { personal: "Who's coming along?", agency: "Who's traveling?" },
+  { personal: "What's the budget?", agency: "What's the client's budget?" },
+  { personal: "What kind of trip is it?", agency: "What kind of trip should it be?" },
+  { personal: "Ready to see your plan?", agency: "Ready to draft the itinerary?" },
 ];
 
 const LOCAL_STORAGE_KEY = "travelai_trip_wizard_draft_v1";
@@ -276,6 +292,20 @@ const TripPlanner: React.FC<TripPlannerProps> = ({
     handleSubmitItinerary();
   };
 
+  // A rough duration picked on the Where step writes the real dates here,
+  // using the same base-start rule as the quick presets on the When step.
+  const handleSelectDuration = (days: number) => {
+    const today = startOfToday();
+    const baseStart = startDate && !isBefore(startDate, today) ? startDate : today;
+    setStartDate(baseStart);
+    setEndDate(addDays(baseStart, days - 1));
+  };
+
+  const durationDays =
+    startDate && endDate && !isBefore(endDate, startDate)
+      ? differenceInCalendarDays(endDate, startDate) + 1
+      : 0;
+
   // Final Itinerary Generation Submission with Real-time AI Streaming
   const handleSubmitItinerary = async () => {
     if (!isStepValid(6)) {
@@ -359,6 +389,9 @@ const TripPlanner: React.FC<TripPlannerProps> = ({
     }
   };
 
+  const currentHeading = STEP_HEADLINES[currentStep - 1];
+  const currentStepMeta = WIZARD_STEPS[currentStep - 1];
+
   return (
     <div
       className={
@@ -372,43 +405,41 @@ const TripPlanner: React.FC<TripPlannerProps> = ({
       <main
         className={
           embedded
-            ? "flex-1 w-full max-w-4xl mx-auto px-0 pt-2 pb-10"
-            : "flex-1 container mx-auto px-4 pt-24 pb-20 max-w-4xl"
+            ? "mx-auto w-full max-w-3xl flex-1 px-0 pb-10 pt-2"
+            : "container mx-auto max-w-3xl flex-1 px-4 pb-16 pt-24"
         }
       >
-        {/* Header Title */}
-        <div className="text-center space-y-3 mb-6 sm:mb-8">
-          <div className="inline-flex items-center gap-2 bg-primary/10 backdrop-blur-sm border border-primary/20 rounded-full px-4 sm:px-5 py-1.5 shadow-2xs">
-            <Sparkles className="w-4 h-4 text-primary shrink-0" />
-            <span className="text-xs font-semibold text-primary tracking-wide">
-              {isAgencyMode ? "Agency trip planner" : "Smart trip planner"}
-            </span>
-          </div>
-          <h1 className="text-2xl sm:text-4xl md:text-5xl font-extrabold text-foreground tracking-tight px-1">
-            {isAgencyMode ? "Plan a client trip" : "Design Your Next Adventure"}
+        {/* Page Header */}
+        <header className="text-center">
+          <p className="text-xs font-semibold tracking-wide text-primary">
+            {isAgencyMode ? "Agency trip planner" : "Plan a trip"}
+          </p>
+          <h1 className="mt-2 font-display text-3xl font-semibold leading-tight tracking-tight text-foreground sm:text-5xl">
+            {isAgencyMode ? currentHeading.agency : currentHeading.personal}
           </h1>
-          <p className="text-xs sm:text-base text-muted-foreground max-w-xl mx-auto px-2">
+          <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground sm:text-base">
             {isAgencyMode
               ? `Generate a working draft for ${
                   agencyName || "your agency"
                 }, then refine it with your team and invite the client.`
-              : "Answer a few quick questions and get a day-by-day plan you can actually follow."}
+              : "One message is enough — you can change every detail later."}
           </p>
+        </header>
+
+        {/* Six-step rail */}
+        <div className="mt-8 sm:mt-10">
+          <WizardProgress
+            steps={WIZARD_STEPS}
+            currentStep={currentStep}
+            onStepClick={handleStepClick}
+            canNavigateToStep={canNavigateToStep}
+          />
         </div>
 
-        {/* Wizard Card Container */}
-        <Card className="border border-border/70 shadow-card bg-card/80 backdrop-blur-md rounded-3xl overflow-hidden">
-          <CardContent className="p-4 sm:p-8 md:p-10">
-            {/* Top Step Progress Bar */}
-            <WizardProgress
-              steps={WIZARD_STEPS}
-              currentStep={currentStep}
-              onStepClick={handleStepClick}
-              canNavigateToStep={canNavigateToStep}
-            />
-
-            {/* Step Body with Smooth CSS Transition */}
-            <div className="relative min-h-[380px] overflow-hidden py-2">
+        {/* The step card */}
+        <Card className="mt-6 rounded-3xl border border-border/70 bg-card shadow-card">
+          <CardContent className="p-5 sm:p-8">
+            <div className="relative min-h-[300px]">
               <div
                 key={currentStep}
                 className="animate-fade-in transition-all duration-300"
@@ -418,6 +449,8 @@ const TripPlanner: React.FC<TripPlannerProps> = ({
                     destination={destination}
                     onChange={setDestination}
                     onEnterNext={handleNext}
+                    durationDays={durationDays}
+                    onSelectDuration={handleSelectDuration}
                   />
                 )}
 
@@ -486,63 +519,72 @@ const TripPlanner: React.FC<TripPlannerProps> = ({
               </div>
             </div>
 
-            {/* Wizard Navigation Footer */}
-            <div className="flex items-center justify-between pt-8 mt-6 border-t border-border/60">
-              <div className="flex items-center gap-2">
-                {currentStep > 1 ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleBack}
-                    className="rounded-xl px-4 h-11 text-xs font-semibold gap-1.5"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    <span>Back</span>
-                  </Button>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => setResetOpen(true)}
-                    className="rounded-xl text-xs text-muted-foreground hover:text-foreground gap-1.5 h-11 px-3"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    <span>Reset</span>
-                  </Button>
-                )}
+            {/* AI promise, shown alongside every editable step */}
+            {currentStep < WIZARD_STEPS.length && (
+              <div className="mt-7 flex items-center gap-2 text-xs font-semibold text-accent">
+                <Sparkles className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span>AI will draft a day-by-day plan you can edit.</span>
               </div>
-
-              <div className="text-xs font-semibold text-muted-foreground">
-                Step {currentStep} of {WIZARD_STEPS.length}
-              </div>
-
-              <div>
-                {currentStep < WIZARD_STEPS.length ? (
-                  <Button
-                    type="button"
-                    variant="hero"
-                    disabled={!isStepValid(currentStep)}
-                    onClick={handleNext}
-                    className="rounded-xl px-5 h-11 text-xs font-bold gap-1.5 shadow-sm"
-                  >
-                    <span>Continue</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </Button>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => setResetOpen(true)}
-                    className="rounded-xl text-xs text-muted-foreground hover:text-foreground gap-1.5 h-11 px-3"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    <span>Start Over</span>
-                  </Button>
-                )}
-              </div>
-            </div>
+            )}
           </CardContent>
         </Card>
+
+        {/* Wizard Footer */}
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center justify-between gap-3 sm:justify-start">
+            <p className="text-xs font-medium text-muted-foreground">
+              Step {currentStep} of {WIZARD_STEPS.length}
+              <span aria-hidden="true"> · </span>
+              {currentStepMeta.shortTitle}
+            </p>
+            {currentStep === 1 && (
+              <button
+                type="button"
+                onClick={() => setResetOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <RotateCcw className="h-3 w-3" aria-hidden="true" />
+                Reset
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleBack}
+              disabled={currentStep === 1}
+              className="h-11 rounded-xl border-border/80 bg-card px-4 text-xs font-semibold gap-1.5"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span>Back</span>
+            </Button>
+
+            {currentStep < WIZARD_STEPS.length ? (
+              <Button
+                type="button"
+                variant="hero"
+                disabled={!isStepValid(currentStep)}
+                onClick={handleNext}
+                className="h-11 rounded-xl px-5 text-xs font-bold gap-1.5 shadow-soft"
+              >
+                <span>Continue</span>
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setResetOpen(true)}
+                className="h-11 rounded-xl px-4 text-xs font-semibold gap-1.5 text-muted-foreground hover:text-foreground"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                <span>Start over</span>
+              </Button>
+            )}
+          </div>
+        </div>
 
         {/* Live AI Generation Streaming Overlay */}
         <GenerationOverlay
@@ -564,7 +606,7 @@ const TripPlanner: React.FC<TripPlannerProps> = ({
         <AlertDialog open={resetOpen} onOpenChange={setResetOpen}>
           <AlertDialogContent className="rounded-3xl max-w-md w-[92vw] sm:w-full p-5 sm:p-6">
             <AlertDialogHeader>
-              <AlertDialogTitle className="text-lg font-bold">
+              <AlertDialogTitle className="font-display text-lg font-semibold">
                 Start over?
               </AlertDialogTitle>
               <AlertDialogDescription className="text-xs leading-relaxed">

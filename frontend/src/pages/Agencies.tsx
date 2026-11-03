@@ -1,10 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import Navbar from "@/components/Navbar";
-import { TravellerPageHeader } from "@/components/traveller/TravellerPageHeader";
 import { AgencyLogoTile } from "@/components/directory/AgencyLogoTile";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { api, ApiError } from "@/services/api";
 import { formatMoney } from "@/lib/currency";
 import { applyPageMeta } from "@/lib/meta";
@@ -12,14 +18,21 @@ import { cn } from "@/lib/utils";
 import {
   AlertCircle,
   ArrowRight,
+  BadgeCheck,
   Building2,
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Compass,
+  Languages,
   Loader2,
   MapPin,
   Search,
-  ShieldCheck,
   Sparkles,
   X,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import type {
   AgencyDirectoryCard,
   AgencyDirectoryFacet,
@@ -31,8 +44,11 @@ import type {
  *
  * Anonymous: no session is read and the payload is the card projection, so the
  * page can be linked from anywhere. Filters live in the URL (`?q=&destination=
- * &specialty=&city=&language=`) so a filtered view is shareable; the cursor
- * stays in memory because a shared link should always start at the newest page.
+ * &specialty=&city=&language=`) so a filtered view is shareable.
+ *
+ * Paging is Previous/Next over a cursor stack rather than "load more": the API
+ * has no offset, so remembering the cursors already used is what makes going
+ * back possible.
  */
 
 const PAGE_SIZE = 12;
@@ -43,114 +59,189 @@ type FilterKey = (typeof FILTER_KEYS)[number];
 interface FacetGroup {
   key: FilterKey;
   title: string;
+  icon: LucideIcon;
   facets: AgencyDirectoryFacet[];
 }
 
-const AgencyCard = ({ agency }: { agency: AgencyDirectoryCard }) => (
-  <article className="rounded-3xl border border-border/70 bg-card p-5 shadow-xs transition-shadow hover:shadow-md">
-    <Link
-      to={`/agencies/${encodeURIComponent(agency.slug)}`}
-      className="block space-y-3 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2"
-    >
-      <div className="flex items-start gap-3">
+interface PageResult {
+  key: string;
+  agencies: AgencyDirectoryCard[];
+  total: number;
+  nextCursor: string | null;
+}
+
+interface PagePosition {
+  key: string;
+  /** `cursors[0]` is the first page; each entry starts one page. */
+  cursors: (string | undefined)[];
+  index: number;
+}
+
+const AgencyCard = ({ agency }: { agency: AgencyDirectoryCard }) => {
+  const profileHref = `/agencies/${encodeURIComponent(agency.slug)}`;
+  const description = agency.services.map((service) => service.label).join(" · ");
+
+  return (
+    <article className="group flex h-full flex-col rounded-2xl border border-border/70 bg-card p-5 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md sm:p-6">
+      <div className="flex items-start gap-4">
         <AgencyLogoTile
           name={agency.name}
           logoUrl={agency.logoUrl}
-          className="h-12 w-12 text-base"
+          className="h-16 w-16 rounded-2xl text-xl"
+          imgClassName="p-2"
         />
-        <div className="min-w-0 flex-1 space-y-1">
-          <h3 className="flex items-center gap-1.5 text-base font-black leading-snug text-foreground">
-            <span className="truncate">{agency.name}</span>
+
+        <div className="min-w-0 flex-1">
+          <h3 className="flex min-w-0 items-center gap-1.5 font-display text-lg font-semibold leading-snug tracking-tight text-foreground">
+            <Link
+              to={profileHref}
+              className="truncate transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2"
+            >
+              {agency.name}
+            </Link>
             {agency.verified && (
-              <ShieldCheck
-                className="h-4 w-4 shrink-0 text-teal-600"
+              <BadgeCheck
+                className="h-4 w-4 shrink-0 text-primary"
                 aria-label="Verified agency"
               />
             )}
           </h3>
-          <p className="inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground">
-            <MapPin className="h-3 w-3 shrink-0" />
-            {agency.baseCity ? `Based in ${agency.baseCity}` : "Plans trips across India"}
+          <p className="mt-1 flex items-center gap-1 text-xs font-medium text-muted-foreground">
+            <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span className="truncate">
+              {agency.baseCity || "Plans trips across India"}
+            </span>
           </p>
         </div>
       </div>
 
-      {agency.services.length > 0 && (
-        <p className="text-[11px] font-bold text-primary">
-          {agency.services
-            .slice(0, 3)
-            .map((service) => service.label)
-            .join(" · ")}
+      {description && (
+        <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-foreground/80">
+          {description}
         </p>
       )}
 
       {agency.specialties.length > 0 && (
-        <p className="line-clamp-2 text-xs leading-relaxed text-foreground/80">
-          Known for {agency.specialties.join(" · ")}
-        </p>
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {agency.specialties.slice(0, 3).map((specialty) => (
+            <span
+              key={specialty}
+              className="rounded-full bg-muted/70 px-2.5 py-1 text-[11px] font-medium text-muted-foreground"
+            >
+              {specialty}
+            </span>
+          ))}
+        </div>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-3">
-        <span className="text-xs font-bold text-foreground">
-          {agency.fromPricePerPerson === null
-            ? "Prices on request"
-            : `From ${formatMoney(agency.fromPricePerPerson, agency.currency)} per person`}
-        </span>
-        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-primary">
-          See their profile
-          <ArrowRight className="h-3.5 w-3.5" />
-        </span>
+      <div className="mt-auto">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-3">
+          <span className="text-xs font-semibold text-foreground">
+            {agency.fromPricePerPerson === null
+              ? "Prices on request"
+              : `From ${formatMoney(
+                  agency.fromPricePerPerson,
+                  agency.currency
+                )} per person`}
+          </span>
+          <Link
+            to={profileHref}
+            className="inline-flex items-center gap-1 text-[11px] font-bold text-primary transition-all hover:gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2"
+          >
+            View profile
+            <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+          </Link>
+        </div>
       </div>
-    </Link>
-  </article>
-);
-const FilterChips = ({
+    </article>
+  );
+};
+
+const FilterDropdown = ({
   group,
   selected,
-  onToggle,
+  onSelect,
 }: {
   group: FacetGroup;
   selected: string;
-  onToggle: (key: FilterKey, value: string) => void;
-}) => (
-  <div className="space-y-1.5">
-    <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-      {group.title}
-    </p>
-    <div className="flex flex-wrap gap-1.5">
-      {group.facets.map((facet) => {
-        const active = selected === facet.value;
-        return (
-          <button
-            key={facet.value}
-            type="button"
-            aria-pressed={active}
-            onClick={() => onToggle(group.key, facet.value)}
-            className={cn(
-              "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors min-h-[28px]",
-              active
-                ? "border-primary bg-primary text-primary-foreground"
-                : "border-border/70 bg-background/60 text-foreground/80 hover:border-primary/40 hover:text-primary"
-            )}
-          >
-            {facet.label}
-            <span
-              className={cn(
-                "text-[10px]",
-                active ? "text-primary-foreground/80" : "text-muted-foreground"
-              )}
+  onSelect: (value: string) => void;
+}) => {
+  const Icon = group.icon;
+  const activeFacet = group.facets.find((facet) => facet.value === selected);
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            "inline-flex min-h-[40px] max-w-full items-center gap-2 rounded-full border px-4 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2",
+            activeFacet
+              ? "border-primary/50 bg-primary/10 text-primary"
+              : "border-border/80 bg-card text-foreground/80 hover:border-primary/30 hover:text-foreground"
+          )}
+        >
+          <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <span className="truncate">
+            {activeFacet ? activeFacet.label : group.title}
+          </span>
+          <ChevronDown
+            className="h-3.5 w-3.5 shrink-0 opacity-60"
+            aria-hidden="true"
+          />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        className="max-h-72 w-56 overflow-y-auto rounded-2xl"
+      >
+        {activeFacet && (
+          <>
+            <DropdownMenuItem
+              onSelect={() => onSelect(activeFacet.value)}
+              className="gap-2 text-xs font-semibold text-muted-foreground"
             >
-              {facet.count}
-            </span>
-          </button>
-        );
-      })}
-    </div>
-  </div>
-);
+              <X className="h-3.5 w-3.5" aria-hidden="true" />
+              Clear {group.title.toLowerCase()}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        )}
+        {group.facets.map((facet) => {
+          const active = selected === facet.value;
+          return (
+            <DropdownMenuItem
+              key={facet.value}
+              onSelect={() => onSelect(facet.value)}
+              className="gap-2 text-xs"
+            >
+              <span className="grid h-4 w-4 shrink-0 place-items-center">
+                {active ? (
+                  <Check className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+                ) : null}
+              </span>
+              <span
+                className={cn(
+                  "min-w-0 flex-1 truncate",
+                  active && "font-bold text-primary"
+                )}
+              >
+                {facet.label}
+              </span>
+              <span className="shrink-0 text-[10px] text-muted-foreground">
+                {facet.count}
+              </span>
+            </DropdownMenuItem>
+          );
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+};
 
 const Agencies = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const resultsRef = useRef<HTMLDivElement>(null);
 
   const filters = useMemo(
     () => ({
@@ -164,16 +255,34 @@ const Agencies = () => {
   );
 
   const [searchInput, setSearchInput] = useState(filters.q);
-  const [agencies, setAgencies] = useState<AgencyDirectoryCard[]>([]);
-  const [total, setTotal] = useState(0);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [facets, setFacets] = useState<AgencyDirectoryFacets | null>(null);
+  const [result, setResult] = useState<PageResult | null>(null);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
-  const [facets, setFacets] = useState<AgencyDirectoryFacets | null>(null);
 
   const hasFilters = FILTER_KEYS.some((key) => Boolean(filters[key]));
+
+  // A new filter set always starts at page one, even before state catches up.
+  const filterKey = FILTER_KEYS.map((key) => filters[key]).join("|");
+  const [position, setPosition] = useState<PagePosition>({
+    key: filterKey,
+    cursors: [undefined],
+    index: 0,
+  });
+  const positionForFilters =
+    position.key === filterKey
+      ? position
+      : { key: filterKey, cursors: [undefined], index: 0 };
+  const cursor = positionForFilters.cursors[positionForFilters.index];
+  const pageKey = `${filterKey}::${cursor ?? ""}`;
+
+  // Results are tagged with the page they belong to, so a filter change never
+  // shows the previous filter's agencies while the new page loads.
+  const current = result?.key === pageKey ? result : null;
+  const agencies = current?.agencies ?? [];
+  const total = current?.total ?? 0;
+  const nextCursor = current?.nextCursor ?? null;
 
   useEffect(() => {
     return applyPageMeta({
@@ -184,7 +293,7 @@ const Agencies = () => {
     });
   }, []);
 
-  // Chips are a convenience: if facets fail, search and the listing still work.
+  // Filter pills are a convenience: if facets fail, search and the listing work.
   useEffect(() => {
     let cancelled = false;
     api
@@ -241,18 +350,20 @@ const Agencies = () => {
           specialty: filters.specialty || undefined,
           city: filters.city || undefined,
           language: filters.language || undefined,
+          cursor,
           limit: PAGE_SIZE,
         });
         if (cancelled) return;
-        setAgencies(page.agencies);
-        setTotal(page.total);
-        setNextCursor(page.nextCursor);
+        setResult({
+          key: pageKey,
+          agencies: page.agencies,
+          total: page.total,
+          nextCursor: page.nextCursor,
+        });
       } catch (err) {
         if (cancelled) return;
         console.error("Failed to load the agency directory:", err);
-        setAgencies([]);
-        setTotal(0);
-        setNextCursor(null);
+        setResult(null);
         setError(
           err instanceof ApiError && err.message
             ? err.message
@@ -267,37 +378,25 @@ const Agencies = () => {
     return () => {
       cancelled = true;
     };
-  }, [filters, reloadKey]);
+  }, [filters, cursor, pageKey, reloadKey]);
 
-  const loadMore = async () => {
-    if (!nextCursor || loadingMore) return;
-    setLoadingMore(true);
-    try {
-      const page = await api.getAgencies({
-        q: filters.q || undefined,
-        destination: filters.destination || undefined,
-        specialty: filters.specialty || undefined,
-        city: filters.city || undefined,
-        language: filters.language || undefined,
-        cursor: nextCursor,
-        limit: PAGE_SIZE,
-      });
-      setAgencies((previous) => {
-        const seen = new Set(previous.map((agency) => agency.slug));
-        return [...previous, ...page.agencies.filter((agency) => !seen.has(agency.slug))];
-      });
-      setNextCursor(page.nextCursor);
-      setTotal(page.total);
-    } catch (err) {
-      console.error("Failed to load more agencies:", err);
-      setError(
-        err instanceof ApiError && err.message
-          ? err.message
-          : "The next page could not be loaded."
-      );
-    } finally {
-      setLoadingMore(false);
-    }
+  const goToNext = () => {
+    if (!nextCursor) return;
+    setPosition({
+      key: filterKey,
+      cursors: [
+        ...positionForFilters.cursors.slice(0, positionForFilters.index + 1),
+        nextCursor,
+      ],
+      index: positionForFilters.index + 1,
+    });
+    resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const goToPrevious = () => {
+    if (positionForFilters.index === 0) return;
+    setPosition({ ...positionForFilters, index: positionForFilters.index - 1 });
+    resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const clearFilters = () => {
@@ -316,64 +415,82 @@ const Agencies = () => {
     applyFilters({ [key]: filters[key] === value ? null : value });
   };
 
+  // Only the facets the directory actually exposes: there is no group-size or
+  // budget dimension in the public payload, so no pill pretends there is one.
   const facetGroups = useMemo<FacetGroup[]>(() => {
     if (!facets) return [];
     const groups: FacetGroup[] = [
-      { key: "destination", title: "Destinations", facets: facets.destinations.slice(0, 8) },
-      { key: "specialty", title: "Specialties", facets: facets.specialties.slice(0, 6) },
-      { key: "city", title: "Based in", facets: facets.cities.slice(0, 6) },
-      { key: "language", title: "Languages", facets: facets.languages },
+      {
+        key: "destination",
+        title: "Destination",
+        icon: MapPin,
+        facets: facets.destinations.slice(0, 10),
+      },
+      {
+        key: "specialty",
+        title: "Trip type",
+        icon: Compass,
+        facets: facets.specialties.slice(0, 10),
+      },
+      {
+        key: "city",
+        title: "Based in",
+        icon: Building2,
+        facets: facets.cities.slice(0, 10),
+      },
+      {
+        key: "language",
+        title: "Languages",
+        icon: Languages,
+        facets: facets.languages,
+      },
     ];
     return groups.filter((group) => group.facets.length > 0);
   }, [facets]);
 
-  const activeFilters = useMemo(() => {
-    const chips: { key: FilterKey; label: string }[] = [];
-    if (filters.q) chips.push({ key: "q", label: `“${filters.q}”` });
-    for (const group of facetGroups) {
-      const value = filters[group.key];
-      if (!value) continue;
-      const facet = group.facets.find((entry) => entry.value === value);
-      chips.push({ key: group.key, label: facet?.label ?? value });
-    }
-    return chips;
-  }, [filters, facetGroups]);
+  const startIndex = positionForFilters.index * PAGE_SIZE + 1;
+  const endIndex = startIndex + agencies.length - 1;
 
   return (
-    <div className="min-h-screen bg-gradient-hero flex flex-col">
+    <div className="flex min-h-screen flex-col bg-gradient-hero">
       <Navbar />
 
-      <main className="flex-1 container mx-auto px-4 pt-24 pb-20 max-w-6xl space-y-8">
-        <TravellerPageHeader
-          tone="hero"
-          eyebrow="Travel agencies"
-          icon={Building2}
-          title="Find an agency that plans your kind of trip"
-          description="People who plan trips for a living, with the places they cover and the services they offer. Have a look around until one feels like a good fit."
-          crumbs={[{ label: "Agencies" }]}
-          actions={
+      <main className="container mx-auto max-w-6xl flex-1 px-4 pb-20 pt-24">
+        <header className="space-y-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0 space-y-2">
+              <h1 className="font-display text-3xl font-semibold leading-[1.08] tracking-tight text-foreground sm:text-5xl">
+                Find an agency that plans your kind of trip
+              </h1>
+              <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
+                Local experts and small teams who plan trips for a living.
+              </p>
+            </div>
             <Button
               asChild
               variant="outline"
               size="sm"
-              className="h-9 rounded-xl text-xs font-bold gap-1.5"
+              className="h-10 shrink-0 gap-1.5 rounded-full text-xs font-bold"
             >
               <Link to="/agencies/apply">
-                <Building2 className="h-3.5 w-3.5" />
+                <Building2 className="h-3.5 w-3.5" aria-hidden="true" />
                 List your agency
               </Link>
             </Button>
-          }
-        >
-          <div className="flex flex-col gap-4">
+          </div>
+
+          <div className="max-w-2xl">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Search
+                className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true"
+              />
               <Input
                 value={searchInput}
                 onChange={(event) => setSearchInput(event.target.value)}
                 placeholder="Agency name, city or destination"
                 aria-label="Search agencies"
-                className="h-11 rounded-2xl pl-9 pr-10 bg-background/80"
+                className="h-12 rounded-2xl border-border/80 bg-card pl-11 pr-11 text-sm shadow-sm"
               />
               {searchInput && (
                 <button
@@ -383,158 +500,158 @@ const Agencies = () => {
                     applyFilters({ q: null });
                   }}
                   aria-label="Clear search"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-muted-foreground hover:bg-muted"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-muted"
                 >
-                  <X className="h-3.5 w-3.5" />
+                  <X className="h-3.5 w-3.5" aria-hidden="true" />
                 </button>
               )}
             </div>
+          </div>
 
-            {facetGroups.length > 0 && (
-              <div className="grid gap-4 sm:grid-cols-2">
-                {facetGroups.map((group) => (
-                  <FilterChips
-                    key={group.key}
-                    group={group}
-                    selected={filters[group.key]}
-                    onToggle={toggleFilter}
-                  />
-                ))}
-              </div>
-            )}
-
-            {activeFilters.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2">
-                {activeFilters.map((chip) => (
-                  <button
-                    key={chip.key}
-                    type="button"
-                    onClick={() => {
-                      if (chip.key === "q") setSearchInput("");
-                      applyFilters({ [chip.key]: null });
-                    }}
-                    className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary hover:bg-primary/15 min-h-[28px]"
-                  >
-                    {chip.label}
-                    <X className="h-3 w-3" />
-                  </button>
-                ))}
+          {facetGroups.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              {facetGroups.map((group) => (
+                <FilterDropdown
+                  key={group.key}
+                  group={group}
+                  selected={filters[group.key]}
+                  onSelect={(value) => toggleFilter(group.key, value)}
+                />
+              ))}
+              {hasFilters && (
                 <button
                   type="button"
                   onClick={clearFilters}
-                  className="text-[11px] font-bold text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+                  className="ml-1 min-h-[40px] rounded-full px-2 text-xs font-bold text-muted-foreground underline-offset-2 transition-colors hover:text-foreground hover:underline"
                 >
                   Clear all
                 </button>
-              </div>
-            )}
-          </div>
-        </TravellerPageHeader>
+              )}
+            </div>
+          )}
+        </header>
 
-        {loading ? (
-          <div className="flex flex-col items-center justify-center min-h-[320px] space-y-4">
-            <Loader2 className="w-9 h-9 text-primary animate-spin" />
-            <div className="text-center space-y-1">
-              <h2 className="text-base font-bold text-foreground">
-                Looking up agencies…
-              </h2>
-              <p className="text-xs text-muted-foreground">
-                Only the ones that have published a profile
-              </p>
+        <div ref={resultsRef} className="mt-8 scroll-mt-24">
+          <h2 className="sr-only">Agency directory results</h2>
+
+          {loading ? (
+            <div className="flex min-h-[320px] flex-col items-center justify-center space-y-4">
+              <Loader2 className="h-9 w-9 animate-spin text-primary" />
+              <div className="space-y-1 text-center">
+                <p className="text-base font-bold text-foreground">
+                  Looking up agencies…
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Only the ones that have published a profile
+                </p>
+              </div>
             </div>
-          </div>
-        ) : error ? (
-          <div className="rounded-3xl border border-destructive/30 bg-destructive/5 p-8 text-center space-y-4">
-            <div className="w-12 h-12 rounded-2xl bg-destructive/10 text-destructive flex items-center justify-center mx-auto">
-              <AlertCircle className="w-6 h-6" />
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm font-bold text-foreground">
-                We couldn't load the directory
-              </p>
-              <p className="text-xs text-muted-foreground">{error}</p>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="rounded-xl text-xs font-bold"
-              onClick={() => setReloadKey((key) => key + 1)}
-            >
-              Try again
-            </Button>
-          </div>
-        ) : agencies.length === 0 ? (
-          <div className="rounded-3xl border border-dashed border-border/80 bg-card/60 p-10 text-center space-y-3">
-            <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto">
-              <Building2 className="w-6 h-6" />
-            </div>
-            <p className="text-sm font-bold text-foreground">
-              {hasFilters
-                ? "No agencies match those filters yet"
-                : "No agencies are listed yet"}
-            </p>
-            <p className="text-xs text-muted-foreground max-w-md mx-auto">
-              {hasFilters
-                ? "Maybe widen the search, or clear a filter or two."
-                : "Agencies are still setting up their public profiles. In the meantime, see where other travellers are heading."}
-            </p>
-            {hasFilters ? (
+          ) : error ? (
+            <div className="space-y-4 rounded-3xl border border-destructive/30 bg-destructive/5 p-8 text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
+                <AlertCircle className="h-6 w-6" aria-hidden="true" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-bold text-foreground">
+                  We couldn't load the directory
+                </p>
+                <p className="text-xs text-muted-foreground">{error}</p>
+              </div>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 className="rounded-xl text-xs font-bold"
-                onClick={clearFilters}
+                onClick={() => setReloadKey((key) => key + 1)}
               >
-                Clear filters
+                Try again
               </Button>
-            ) : (
-              <Button asChild variant="hero" size="sm" className="rounded-xl text-xs font-bold gap-1.5">
-                <Link to="/explore">
-                  <Sparkles className="w-3.5 h-3.5" />
-                  Explore shared trips
-                </Link>
-              </Button>
-            )}
-          </div>
-        ) : (
-          <section className="space-y-5">
-            <p className="text-xs font-semibold text-muted-foreground">
-              Showing {agencies.length} of {total}{" "}
-              {total === 1 ? "agency" : "agencies"}
-            </p>
-
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {agencies.map((agency) => (
-                <AgencyCard key={agency.slug} agency={agency} />
-              ))}
             </div>
-
-            <div className="flex justify-center pt-2">
-              {nextCursor ? (
+          ) : agencies.length === 0 ? (
+            <div className="space-y-3 rounded-3xl border border-dashed border-border/80 bg-card/60 p-10 text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                <Building2 className="h-6 w-6" aria-hidden="true" />
+              </div>
+              <p className="text-sm font-bold text-foreground">
+                {hasFilters
+                  ? "No agencies match those filters yet"
+                  : "No agencies are listed yet"}
+              </p>
+              <p className="mx-auto max-w-md text-xs text-muted-foreground">
+                {hasFilters
+                  ? "Maybe widen the search, or clear a filter or two."
+                  : "Agencies are still setting up their public profiles. In the meantime, see where other travellers are heading."}
+              </p>
+              {hasFilters ? (
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={loadMore}
-                  disabled={loadingMore}
-                  className="rounded-2xl h-11 px-6 text-xs font-bold gap-2"
+                  size="sm"
+                  className="rounded-xl text-xs font-bold"
+                  onClick={clearFilters}
                 >
-                  {loadingMore ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <ArrowRight className="w-4 h-4" />
-                  )}
-                  Load more agencies
+                  Clear filters
                 </Button>
               ) : (
-                <p className="text-[11px] font-semibold text-muted-foreground">
-                  That's every agency for now.
-                </p>
+                <Button
+                  asChild
+                  variant="hero"
+                  size="sm"
+                  className="gap-1.5 rounded-xl text-xs font-bold"
+                >
+                  <Link to="/explore">
+                    <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+                    Explore shared trips
+                  </Link>
+                </Button>
               )}
             </div>
-          </section>
-        )}
+          ) : (
+            <>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {agencies.map((agency) => (
+                  <AgencyCard key={agency.slug} agency={agency} />
+                ))}
+              </div>
+
+              <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-5">
+                <p className="text-xs font-semibold text-muted-foreground">
+                  {total === 1
+                    ? "1 agency"
+                    : `${total} agencies${
+                        total > PAGE_SIZE
+                          ? ` · showing ${startIndex}–${endIndex}`
+                          : ""
+                      }`}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={goToPrevious}
+                    disabled={positionForFilters.index === 0}
+                    className="h-10 gap-1.5 rounded-full px-4 text-xs font-bold"
+                  >
+                    <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                    Previous
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={goToNext}
+                    disabled={!nextCursor}
+                    className="h-10 gap-1.5 rounded-full border-primary/40 px-4 text-xs font-bold text-primary hover:bg-primary/5 disabled:border-border disabled:text-muted-foreground"
+                  >
+                    Next
+                    <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       </main>
     </div>
   );

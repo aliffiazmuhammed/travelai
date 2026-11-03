@@ -1,14 +1,32 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { AlertCircle, ArrowLeft, ArrowUpRight, CalendarDays, Loader2, MessageSquare, ShieldCheck, Users, Wallet } from 'lucide-react';
+import {
+  AlertCircle,
+  ArrowLeft,
+  ArrowUpRight,
+  BadgeCheck,
+  Building2,
+  CalendarDays,
+  FileText,
+  Loader2,
+  Lock,
+  MessageSquare,
+  Users,
+  Wallet,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import Navbar from '@/components/Navbar';
 import { TravellerBreadcrumbs } from '@/components/traveller/TravellerBreadcrumbs';
-import ConversationThread from '@/components/directory/ConversationThread';
-import ProposalComparison from '@/components/directory/ProposalComparison';
+import {
+  EnquiryTimeline,
+  agencyReplyTimeLabel,
+  useEnquiryAgencyProfile,
+} from '@/components/traveller/EnquiryThreadPane';
+import { AgencyLogoTile } from '@/components/directory/AgencyLogoTile';
+import { TripCover } from '@/components/gallery/TripCover';
 import ProposalPreviewDialog from '@/components/directory/ProposalPreviewDialog';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import {
   AGENCY_ENQUIRY_BUDGET_LABELS,
   travellerEnquiryStatusLabel,
@@ -19,10 +37,7 @@ import { cn } from '@/lib/utils';
 import { notifyEnquiryBadgeChanged } from '@/lib/enquiryBadge';
 import { useEnquiryLiveRefresh } from '@/hooks/useEnquiryEvents';
 import { api } from '@/services/api';
-import type {
-  AgencyConversation,
-  AgencyProposalSummary,
-} from '@/types/agency';
+import type { AgencyConversation, AgencyProposalSummary } from '@/types/agency';
 
 /**
  * One enquiry conversation (Milestone 9 D8), reached two ways:
@@ -32,8 +47,9 @@ import type {
  * - `/enquiry/:enquiryId` — a signed-in traveller's own thread, linked from the
  *   enquiries list and the proposal comparison.
  *
- * Both modes share the comparison surface: proposals tied to this enquiry sit
- * beside the thread, and a question about one is sent into the same thread.
+ * The trip summary sits on the left, the conversation on the right, and the
+ * proposals that answer this enquiry sit in the thread itself, so a quote is
+ * read where it arrived.
  */
 const ConversationPage: React.FC = () => {
   const { token, enquiryId } = useParams<{ token?: string; enquiryId?: string }>();
@@ -177,22 +193,53 @@ const ConversationPage: React.FC = () => {
     return dates.start ? `From ${formatAgencyDate(dates.start)}` : 'No dates given';
   }, [conversation]);
 
+  const durationLabel = useMemo(() => {
+    const dates = conversation?.enquiry.dates;
+    if (!dates?.start || !dates.end) return '';
+    const start = new Date(dates.start).getTime();
+    const end = new Date(dates.end).getTime();
+    if (Number.isNaN(start) || Number.isNaN(end) || end <= start) return '';
+    const nights = Math.round((end - start) / 86400000);
+    return `${nights + 1} days`;
+  }, [conversation]);
+
+  const agencyProfile = useEnquiryAgencyProfile(conversation?.agency.slug);
+
+  // The newest share is what "Open trip" should show; older versions stay in
+  // the thread as history.
+  const newestProposal = useMemo(() => {
+    if (proposals.length === 0) return null;
+    return [...proposals].sort(
+      (a, b) =>
+        new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime()
+    )[0];
+  }, [proposals]);
+
+  const openPreview = (proposal: AgencyProposalSummary) => {
+    setPreview(proposal);
+    setPreviewOpen(true);
+  };
+
+  const replyTime = agencyReplyTimeLabel(agencyProfile?.replyTimeHours);
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <main className="container mx-auto max-w-6xl px-4 pb-20 pt-24">
+      <main className="container mx-auto max-w-6xl px-4 pb-16 pt-24">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
-            <Loader2 className="h-6 w-6 animate-spin" />
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
             <p className="mt-2 text-xs">Opening the conversation…</p>
           </div>
         ) : error || !conversation ? (
-          <div className="mx-auto max-w-lg space-y-4 rounded-2xl border border-border/80 bg-card p-8 text-center">
+          <div className="mx-auto max-w-lg space-y-4 rounded-2xl border border-border/80 bg-card p-8 text-center shadow-sm">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
               <AlertCircle className="h-7 w-7" />
             </div>
             <div className="space-y-1">
-              <h1 className="text-lg font-semibold text-foreground">Conversation not available</h1>
+              <h1 className="font-display text-xl font-semibold text-foreground">
+                Conversation not available
+              </h1>
               <p className="text-xs text-muted-foreground">
                 {error ??
                   (guest
@@ -209,169 +256,239 @@ const ConversationPage: React.FC = () => {
             </Link>
           </div>
         ) : (
-          <div className="space-y-5">
-            <TravellerBreadcrumbs
-              items={
-                guest
-                  ? [{ label: 'Private conversation' }]
-                  : [
-                      { label: 'Enquiries', to: '/enquiries' },
-                      { label: conversation.agency.name },
-                    ]
-              }
-            />
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <TravellerBreadcrumbs
+                items={
+                  guest
+                    ? [{ label: 'Private conversation' }]
+                    : [
+                        { label: 'Enquiries', to: '/enquiries' },
+                        { label: conversation.agency.name },
+                      ]
+                }
+              />
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
+                <Lock className="h-3.5 w-3.5" aria-hidden />
+                Secure conversation
+              </span>
+            </div>
+
             {!guest ? (
               <Link
                 to="/enquiries"
-                className="inline-flex items-center gap-1.5 text-xs font-bold text-muted-foreground transition-colors hover:text-primary"
+                className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground transition-colors hover:text-primary"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
                 All enquiries
               </Link>
             ) : null}
-            <div className="flex flex-col gap-3 rounded-2xl border border-border/80 bg-card p-5 sm:flex-row sm:items-start sm:justify-between">
-              <div className="min-w-0 space-y-1">
-                <p className="text-[11px] font-semibold tracking-wide text-primary">
-                  {guest ? 'Private conversation' : 'Your conversation'}
-                </p>
-                <h1 className="flex flex-wrap items-center gap-2 text-2xl font-semibold tracking-tight text-foreground">
-                  {conversation.agency.slug ? (
-                    <Link
-                      to={`/agencies/${encodeURIComponent(conversation.agency.slug)}`}
-                      className="hover:text-primary hover:underline"
-                    >
-                      {conversation.agency.name}
-                    </Link>
-                  ) : (
-                    conversation.agency.name
-                  )}
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      'text-[10px]',
-                      travellerEnquiryStatusBadgeClass(
-                        conversation.status,
-                        hasLiveProposal
-                      )
-                    )}
-                  >
-                    {travellerEnquiryStatusLabel(
-                      conversation.status,
-                      hasLiveProposal
-                    )}
-                  </Badge>
-                  {liveMode === 'live' ? (
-                    <span
-                      className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary"
-                      title="Replies appear here as they arrive"
-                    >
-                      <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
-                      Live
-                    </span>
-                  ) : null}
-                </h1>
-                <p className="text-xs text-muted-foreground">
-                  Enquiry sent{' '}
-                  {conversation.enquiry.createdAt
-                    ? formatAgencyDate(conversation.enquiry.createdAt)
-                    : 'recently'}{' '}
-                  · replies stay on this thread
-                </p>
-              </div>
-              {guest ? (
-                <div className="max-w-xs rounded-2xl border border-primary/20 bg-primary/5 p-3 text-[11px] text-muted-foreground">
-                  <p className="flex items-center gap-1.5 font-bold text-primary">
-                    <ShieldCheck className="h-3.5 w-3.5" />
-                    Keep this link private
-                  </p>
-                  <p className="mt-1">
-                    Anyone with it can read and reply to this conversation.
-                    {conversation.expiresAt
-                      ? ` It works until ${formatAgencyDate(conversation.expiresAt)}.`
-                      : ''}
-                  </p>
-                </div>
-              ) : null}
-            </div>
 
-            <div className="grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
-              <Card className="rounded-2xl border-border/70">
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <MessageSquare className="h-4 w-4 text-primary" />
-                    Messages
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3 pt-0">
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-muted-foreground">
-                    <span className="inline-flex items-center gap-1">
-                      <Users className="h-3 w-3" />
-                      {conversation.enquiry.party.adults}{' '}
-                      {conversation.enquiry.party.adults === 1 ? 'adult' : 'adults'}
-                      {conversation.enquiry.party.children > 0
-                        ? ` · ${conversation.enquiry.party.children} ${
-                            conversation.enquiry.party.children === 1 ? 'child' : 'children'
-                          }`
-                        : ''}
-                    </span>
-                    <span className="inline-flex items-center gap-1">
-                      <CalendarDays className="h-3 w-3" />
-                      {datesLabel}
-                    </span>
-                    {conversation.enquiry.budgetBand ? (
-                      <span className="inline-flex items-center gap-1">
-                        <Wallet className="h-3 w-3" />
-                        {AGENCY_ENQUIRY_BUDGET_LABELS[conversation.enquiry.budgetBand]}
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] lg:items-start">
+              <aside
+                aria-label="Trip summary"
+                className="min-w-0 overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm lg:sticky lg:top-24"
+              >
+                <TripCover
+                  title={conversation.enquiry.packageTitle ?? 'Your trip enquiry'}
+                  width={800}
+                />
+                <div className="space-y-3 p-4 sm:p-5">
+                  <div className="space-y-1">
+                    <h1 className="font-display text-2xl font-semibold leading-tight tracking-tight text-foreground">
+                      {conversation.enquiry.packageTitle ?? 'Your trip enquiry'}
+                    </h1>
+                    <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+                      <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                      <span>
+                        {datesLabel}
+                        {durationLabel ? ` (${durationLabel})` : ''}
                       </span>
+                    </p>
+                    <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Users className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                      <span>
+                        {conversation.enquiry.party.adults}{' '}
+                        {conversation.enquiry.party.adults === 1 ? 'adult' : 'adults'}
+                        {conversation.enquiry.party.children > 0
+                          ? ` · ${conversation.enquiry.party.children} ${
+                              conversation.enquiry.party.children === 1
+                                ? 'child'
+                                : 'children'
+                            }`
+                          : ''}
+                      </span>
+                    </p>
+                    {conversation.enquiry.budgetBand ? (
+                      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Wallet className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                        <span>
+                          {AGENCY_ENQUIRY_BUDGET_LABELS[conversation.enquiry.budgetBand]}
+                        </span>
+                      </p>
                     ) : null}
-                    {conversation.enquiry.packageTitle ? (
-                      <Badge variant="secondary" className="max-w-[220px] truncate text-[10px]">
-                        {conversation.enquiry.packageTitle}
-                      </Badge>
-                    ) : null}
+                    <p className="flex items-start gap-1.5 pt-0.5 text-xs text-muted-foreground">
+                      <Building2 className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+                      <span className="min-w-0">
+                        With{' '}
+                        {conversation.agency.slug ? (
+                          <Link
+                            to={`/agencies/${encodeURIComponent(conversation.agency.slug)}`}
+                            className="font-semibold text-foreground hover:text-primary hover:underline"
+                          >
+                            {conversation.agency.name}
+                          </Link>
+                        ) : (
+                          <span className="font-semibold text-foreground">
+                            {conversation.agency.name}
+                          </span>
+                        )}
+                        {agencyProfile?.verified ? (
+                          <span className="ml-1 inline-flex align-[-2px] text-primary">
+                            <BadgeCheck className="h-3.5 w-3.5" aria-hidden />
+                            <span className="sr-only">Verified agency</span>
+                          </span>
+                        ) : null}
+                      </span>
+                    </p>
                   </div>
 
-                  <ConversationThread
-                    messages={conversation.messages}
-                    viewer="traveller"
-                    opening={{
-                      authorName: conversation.traveller.name,
-                      body: conversation.enquiry.message,
-                      createdAt: conversation.enquiry.createdAt,
-                    }}
-                    canReply={conversation.canReply}
-                    onSend={send}
-                    placeholder={`Message ${conversation.agency.name}…`}
-                  />
-                </CardContent>
-              </Card>
+                  <div className="border-t border-border/70 pt-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Enquiry status
+                    </p>
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        'mt-2 h-7 gap-1.5 px-3 text-[11px]',
+                        travellerEnquiryStatusBadgeClass(
+                          conversation.status,
+                          hasLiveProposal
+                        )
+                      )}
+                    >
+                      <MessageSquare className="h-3 w-3" aria-hidden />
+                      {travellerEnquiryStatusLabel(
+                        conversation.status,
+                        hasLiveProposal
+                      )}
+                    </Badge>
+                  </div>
 
-              <Card className="rounded-2xl border-border/70">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Proposals to compare</CardTitle>
-                  <p className="text-[11px] text-muted-foreground">
-                    Nothing is merged automatically. Open a document, ask about
-                    the price or inclusions on the thread, then accept the one
-                    you want.
+                  <div className="border-t border-border/70 pt-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full rounded-xl border-primary/40 text-xs font-semibold text-primary hover:bg-primary/5 hover:text-primary"
+                      onClick={() => newestProposal && openPreview(newestProposal)}
+                      disabled={!newestProposal}
+                      title={
+                        newestProposal
+                          ? undefined
+                          : 'The agency has not shared a trip for this enquiry yet'
+                      }
+                    >
+                      <FileText className="mr-1.5 h-4 w-4" />
+                      Open trip
+                    </Button>
+                  </div>
+
+                  <p className="pt-1 text-center text-[10px] text-muted-foreground">
+                    One thread, from first idea to final plan.
                   </p>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <ProposalComparison
-                    proposals={proposals}
-                    className="xl:grid-cols-1"
-                    onPreview={(proposal) => {
-                      setPreview(proposal);
-                      setPreviewOpen(true);
-                    }}
-                    onMessage={async (_proposal, body) => {
-                      await send(body);
-                    }}
-                    onAccept={guest ? undefined : acceptProposal}
-                    onDecline={guest ? undefined : declineProposal}
-                    empty="No proposal has been sent for this enquiry yet. The agency will send one to this thread."
-                  />
-                </CardContent>
-              </Card>
+                </div>
+              </aside>
+
+              <section
+                aria-label="Conversation"
+                className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm lg:h-[calc(100dvh-13rem)] lg:max-h-[46rem]"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border/70 px-4 py-3.5 sm:px-5">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <AgencyLogoTile
+                      name={conversation.agency.name}
+                      logoUrl={agencyProfile?.logoUrl ?? null}
+                      className="h-10 w-10 rounded-xl text-sm"
+                    />
+                    <div className="min-w-0 space-y-0.5">
+                      <h2 className="flex flex-wrap items-center gap-2 font-display text-lg font-semibold leading-tight tracking-tight text-foreground">
+                        {conversation.agency.slug ? (
+                          <Link
+                            to={`/agencies/${encodeURIComponent(conversation.agency.slug)}`}
+                            className="min-w-0 truncate hover:text-primary hover:underline"
+                          >
+                            {conversation.agency.name}
+                          </Link>
+                        ) : (
+                          <span className="min-w-0 truncate">
+                            {conversation.agency.name}
+                          </span>
+                        )}
+                        {!guest && liveMode === 'live' ? (
+                          <span
+                            className="inline-flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-[10px] font-semibold text-accent"
+                            title="Replies appear here as they arrive"
+                          >
+                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
+                            Live
+                          </span>
+                        ) : null}
+                      </h2>
+                      {replyTime ? (
+                        <p className="text-[11px] text-muted-foreground">{replyTime}</p>
+                      ) : null}
+                      <p className="text-[11px] text-muted-foreground">
+                        Enquiry sent{' '}
+                        {conversation.enquiry.createdAt
+                          ? formatAgencyDate(conversation.enquiry.createdAt)
+                          : 'recently'}
+                        {conversation.enquiry.packageTitle
+                          ? ` · ${conversation.enquiry.packageTitle}`
+                          : ''}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="inline-flex shrink-0 items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
+                    <MessageSquare className="h-3.5 w-3.5" aria-hidden />
+                    {conversation.messages.length}{' '}
+                    {conversation.messages.length === 1 ? 'message' : 'messages'}
+                  </span>
+                </div>
+
+                <EnquiryTimeline
+                  className="min-h-0 flex-1"
+                  messages={conversation.messages}
+                  viewer="traveller"
+                  opening={{
+                    authorName: conversation.traveller.name,
+                    body: conversation.enquiry.message,
+                    createdAt: conversation.enquiry.createdAt,
+                  }}
+                  agency={{
+                    name: conversation.agency.name,
+                    logoUrl: agencyProfile?.logoUrl ?? null,
+                  }}
+                  canReply={conversation.canReply}
+                  onSend={send}
+                  placeholder="Write a reply…"
+                  proposals={proposals}
+                  party={conversation.enquiry.party}
+                  dates={conversation.enquiry.dates}
+                  onPreviewProposal={openPreview}
+                  onAcceptProposal={guest ? undefined : acceptProposal}
+                  onDeclineProposal={guest ? undefined : declineProposal}
+                  emptyHint="No replies yet. Your enquiry is with the agency."
+                  footer={
+                    <p className="flex flex-wrap items-center justify-center gap-1.5 px-4 pb-3 text-center text-[10px] text-muted-foreground">
+                      <Lock className="h-3 w-3 shrink-0" aria-hidden />
+                      Replies are private between you and the agency.
+                      {guest && conversation.expiresAt
+                        ? ` This link works until ${formatAgencyDate(conversation.expiresAt)}.`
+                        : ''}
+                    </p>
+                  }
+                />
+              </section>
             </div>
           </div>
         )}

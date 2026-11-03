@@ -5,8 +5,10 @@ import {
   Check,
   Compass,
   Sparkles,
+  Users,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export interface HeroProps {
   tripCount: number;
@@ -19,11 +21,20 @@ export interface HeroProps {
 interface Door {
   to: string;
   icon: LucideIcon;
-  kicker: string;
+  tone: "primary" | "accent" | "indigo";
   headline: string;
   note: string;
   cta: string;
+  /** Live tallies stay honest: no invented totals, no going counts. */
+  count: string;
 }
+
+const DOOR_TONE: Record<Door["tone"], string> = {
+  primary: "bg-primary/10 text-primary group-hover:bg-primary/15",
+  accent: "bg-accent/10 text-accent group-hover:bg-accent/15",
+  indigo:
+    "bg-indigo-500/10 text-indigo-600 group-hover:bg-indigo-500/15 dark:text-indigo-400",
+};
 
 /**
  * The homepage's first screen. Three doors instead of one pitch: trips to join
@@ -41,74 +52,82 @@ const Hero = ({
     ? {
         to: "/explore",
         icon: Compass,
-        kicker: "Find a trip",
-        headline: "Looking for what's on…",
+        tone: "primary",
+        headline: "Find a trip",
         note: "Checking the trips and events people shared.",
         cta: "Browse anyway",
+        count: "Looking for what's on…",
       }
     : tripCount === 0
     ? {
         to: "/plan",
         icon: Compass,
-        kicker: "Find a trip",
-        headline: "Nobody has shared one yet",
+        tone: "primary",
+        headline: "Find a trip",
         note: "Plan something and publish it — yours could be the first trip someone else joins.",
         cta: "Start the first trip",
+        count: "Be the first to share one",
       }
     : tripCount < 5
     ? {
         to: "/explore",
         icon: Compass,
-        kicker: "Find a trip",
-        headline: `${tripCount} ${tripCount === 1 ? "trip" : "trips"} to look at`,
+        tone: "primary",
+        headline: "Find a trip",
         note: "The gallery is just warming up. Read one, ask the owner to come along, or take a copy.",
         cta: "See the trips",
+        count: `${tripCount} ${tripCount === 1 ? "trip" : "trips"} shared so far`,
       }
     : {
         to: "/explore",
         icon: Compass,
-        kicker: "Find a trip",
-        headline: `${tripCount} trips to join`,
+        tone: "primary",
+        headline: "Find a trip",
         note: "Real trips, shared by the people who planned them. Ask the owner and join the plan.",
         cta: "Browse the trips",
+        count: `${tripCount} trips to join`,
       };
 
   const eventsDoor: Door = discovering
     ? {
         to: "/explore",
         icon: CalendarRange,
-        kicker: "Find an event",
-        headline: "Checking the calendar…",
+        tone: "accent",
+        headline: "Find an event",
         note: "Looking for camps, retreats and group departures.",
         cta: "Browse anyway",
+        count: "Checking the calendar…",
       }
     : eventCount === 0
     ? {
         to: directoryEnabled ? "/agencies" : "/explore",
         icon: CalendarRange,
-        kicker: "Find an event",
-        headline: "No events on the calendar",
+        tone: "accent",
+        headline: "Find an event",
         note: directoryEnabled
           ? "Agencies post camps and retreats here. Browse the directory in the meantime."
           : "When an agency posts a camp or retreat, it shows up here. Trips are open in the meantime.",
         cta: directoryEnabled ? "Meet the agencies" : "Browse trips instead",
+        count: "No events yet",
       }
     : {
         to: "/explore#events",
         icon: CalendarRange,
-        kicker: "Find an event",
-        headline: `${eventCount} ${eventCount === 1 ? "event" : "events"} open`,
+        tone: "accent",
+        headline: "Find an event",
         note: "Camps, retreats and group departures you can ask about — no plan of your own needed.",
         cta: "See what's on",
+        count: `${eventCount} ${eventCount === 1 ? "event" : "events"} open`,
       };
 
   const planDoor: Door = {
     to: "/plan",
     icon: Sparkles,
-    kicker: "Or start from scratch",
+    tone: "indigo",
     headline: "Plan it with AI",
     note: "Tell us where and who. Get a day-by-day plan with a map and costs in one message.",
     cta: "Plan a trip",
+    count: "One message, one plan",
   };
 
   const doors = [tripsDoor, eventsDoor, planDoor];
@@ -149,32 +168,40 @@ const Hero = ({
           </p>
         </div>
 
-        <div className="mx-auto mt-12 grid max-w-5xl gap-4 sm:mt-14 sm:grid-cols-3">
+        <div className="mx-auto mt-12 grid max-w-5xl gap-4 sm:mt-14 md:grid-cols-3">
           {doors.map((door) => (
             <Link
-              key={door.kicker}
+              key={door.headline}
               to={door.to}
               className="group flex flex-col rounded-3xl border border-border/70 bg-card/85 p-6 text-left shadow-card backdrop-blur transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
-              <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary transition-colors group-hover:bg-primary/15">
-                <door.icon className="h-5 w-5" aria-hidden="true" />
-              </span>
-              <p className="mt-5 text-[11px] font-semibold tracking-wide text-primary">
-                {door.kicker}
-              </p>
-              <h2 className="mt-1 font-display text-xl font-semibold tracking-tight text-foreground">
-                {door.headline}
-              </h2>
-              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+              <div className="flex items-center gap-3">
+                <span
+                  className={cn(
+                    "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl transition-colors",
+                    DOOR_TONE[door.tone]
+                  )}
+                >
+                  <door.icon className="h-5 w-5" aria-hidden="true" />
+                </span>
+                <h2 className="font-display text-xl font-semibold tracking-tight text-foreground">
+                  {door.headline}
+                </h2>
+              </div>
+              <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
                 {door.note}
               </p>
-              <span className="mt-5 inline-flex items-center gap-1.5 text-xs font-bold text-primary">
+              <span className="mt-4 inline-flex items-center gap-1.5 text-xs font-bold text-primary">
                 {door.cta}
                 <ArrowRight
                   className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5"
                   aria-hidden="true"
                 />
               </span>
+              <p className="mt-auto inline-flex items-center gap-1.5 border-t border-border/60 pt-3 text-[11px] font-semibold text-muted-foreground">
+                <Users className="h-3.5 w-3.5" aria-hidden="true" />
+                {door.count}
+              </p>
             </Link>
           ))}
         </div>

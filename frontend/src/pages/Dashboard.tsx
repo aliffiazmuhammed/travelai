@@ -384,12 +384,25 @@ const Dashboard: React.FC = () => {
           </div>
         )}
         {loading ? (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between p-6 rounded-3xl bg-card border border-border/70 shadow-xs">
-              <div className="space-y-2">
-                <div className="h-4 w-28 bg-muted rounded-md animate-pulse" />
-                <div className="h-7 w-48 bg-muted rounded-md animate-pulse" />
+          <div className="mx-auto max-w-6xl space-y-6">
+            {/* Mirrors the my-trips header: crumb, serif title, one quiet line,
+                actions on the right, then the tab/search rail. */}
+            <div className="space-y-4">
+              <div className="h-3 w-24 rounded bg-muted animate-pulse" />
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                <div className="space-y-2">
+                  <div className="h-10 w-56 rounded-lg bg-muted animate-pulse" />
+                  <div className="h-3 w-72 max-w-full rounded bg-muted animate-pulse" />
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="h-11 w-40 rounded-xl bg-muted animate-pulse" />
+                  <div className="h-11 w-40 rounded-xl bg-muted animate-pulse" />
+                </div>
               </div>
+            </div>
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="h-10 w-72 max-w-full rounded-full bg-muted animate-pulse" />
+              <div className="h-11 w-full rounded-xl bg-muted animate-pulse lg:w-[340px]" />
             </div>
             <TripsGridSkeleton />
           </div>

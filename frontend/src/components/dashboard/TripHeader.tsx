@@ -1,29 +1,31 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
-  Calendar,
-  Users,
-  IndianRupee,
-  Sun,
-  Share2,
-  Printer,
-  Sparkles,
-  Check,
-  MapPin,
-  ShieldCheck,
-  TrendingUp,
   ArrowLeft,
-  Save,
-  Loader2,
+  Calendar,
+  Check,
+  ChevronDown,
+  FileDown,
   GitBranch,
+  IndianRupee,
+  Loader2,
+  Pencil,
+  Printer,
+  Share2,
+  Sparkles,
+  TrendingUp,
+  Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ShareExportModal } from "./ShareExportModal";
 import { avatarSrc } from "@/lib/avatar";
+import { tripCoverUrl } from "@/lib/tripCover";
+import { formatDateOnly } from "@/lib/date";
+import { endDateFromStart } from "@/lib/weather";
+import { cn } from "@/lib/utils";
 import type { PresenceUser } from "@/hooks/useTripEvents";
-import type { ItineraryData } from "@/types/trip";
+import type { ItineraryData, TripMember } from "@/types/trip";
 import type {
   TripPublicationSnapshot,
   TripPublicationState,
@@ -42,10 +44,18 @@ interface TripHeaderProps {
   presence?: PresenceUser[];
   /** The viewer's user id — their own presence entry is not shown back to them. */
   currentUserId?: string;
+  /** Member roster (People data), used for the avatar stack and the count. */
+  members?: TripMember[];
+  /** Count from the sanitized trip summary, used before the roster arrives. */
+  memberCount?: number;
+  /** Planned trip start date (ISO) — renders the date range under the title. */
+  startDate?: string;
   onStatusChange?: (newStatus: "draft" | "planned" | "ongoing" | "completed") => void;
   onSave?: () => void;
   isSaving?: boolean;
   hasUnsavedChanges?: boolean;
+  /** Takes an editor to the surface where the plan is edited. */
+  onEditPlan?: () => void;
   onBackToList?: () => void;
   onNewPlan?: () => void;
   /** Agency trips share through proposal links only; hides the personal share modal. */
@@ -55,36 +65,47 @@ interface TripHeaderProps {
   onPublicationChange?: (state: TripPublicationState) => void;
 }
 
-// Curated high quality imagery mapping for destinations (specific hill stations prioritized before broad regions)
-const DESTINATION_IMAGES: Record<string, string> = {
-  // Hill Stations & Mountain Ranges (Western Ghats & Himalayas)
-  wayanad: "https://images.unsplash.com/photo-1630938819488-ba7d1440d48b?auto=format&fit=crop&w=1600&q=80",
-  munnar: "https://images.unsplash.com/photo-1596176530529-78163a4f7af2?auto=format&fit=crop&w=1600&q=80",
-  coorg: "https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=1600&q=80",
-  ooty: "https://images.unsplash.com/photo-1582510003544-4d00b7f74220?auto=format&fit=crop&w=1600&q=80",
-  manali: "https://images.unsplash.com/photo-1626621341517-bbf3d9990a23?auto=format&fit=crop&w=1600&q=80",
-  shimla: "https://images.unsplash.com/photo-1600683796695-103347b7fe70?auto=format&fit=crop&w=1600&q=80",
-  kashmir: "https://images.unsplash.com/photo-1595815771614-ade9d652a65d?auto=format&fit=crop&w=1600&q=80",
-  ladakh: "https://images.unsplash.com/photo-1581793745862-99fde7fa73d2?auto=format&fit=crop&w=1600&q=80",
-  rishikesh: "https://images.unsplash.com/photo-1609137144822-263a238fb065?auto=format&fit=crop&w=1600&q=80",
+type TripStatus = NonNullable<TripHeaderProps["status"]>;
 
-  // Coastal, Backwaters & Island destinations
-  alleppey: "https://images.unsplash.com/photo-1602216056096-3b40cc0c9944?auto=format&fit=crop&w=1600&q=80",
-  alappuzha: "https://images.unsplash.com/photo-1602216056096-3b40cc0c9944?auto=format&fit=crop&w=1600&q=80",
-  goa: "https://images.unsplash.com/photo-1512343879784-a960bf40e7f2?auto=format&fit=crop&w=1600&q=80",
-  andaman: "https://images.unsplash.com/photo-1589182373726-e4f658ab50f0?auto=format&fit=crop&w=1600&q=80",
-
-  // Heritage & Cultural Cities
-  jaipur: "https://images.unsplash.com/photo-1603262110263-fb010d6e75dc?auto=format&fit=crop&w=1600&q=80",
-  udaipur: "https://images.unsplash.com/photo-1615836245337-f5b9b2303f10?auto=format&fit=crop&w=1600&q=80",
-  varanasi: "https://images.unsplash.com/photo-1561359313-0639aad49ca6?auto=format&fit=crop&w=1600&q=80",
-
-  // Broad state/region fallbacks (evaluated only if specific hill stations or cities are not matched)
-  kerala: "https://images.unsplash.com/photo-1602216056096-3b40cc0c9944?auto=format&fit=crop&w=1600&q=80",
+const STATUS_STYLES: Record<TripStatus, { label: string; pill: string; dot: string }> = {
+  planned: {
+    label: "Planned",
+    pill: "border-accent/25 bg-accent/10 text-accent",
+    dot: "bg-accent",
+  },
+  ongoing: {
+    label: "Ongoing",
+    pill: "border-primary/25 bg-primary/10 text-primary",
+    dot: "bg-primary",
+  },
+  completed: {
+    label: "Completed",
+    pill: "border-border bg-muted text-muted-foreground",
+    dot: "bg-muted-foreground",
+  },
+  draft: {
+    label: "Draft",
+    pill: "border-border bg-background text-muted-foreground",
+    dot: "bg-muted-foreground/60",
+  },
 };
 
-const DEFAULT_COVER =
-  "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=1600&q=80";
+const STATUS_OPTIONS: Array<{ value: TripStatus; label: string }> = [
+  { value: "planned", label: "Planned" },
+  { value: "ongoing", label: "Ongoing" },
+  { value: "completed", label: "Completed" },
+  { value: "draft", label: "Draft" },
+];
+
+/** "AS" for a name, "ad" for an email local part — never a guessed face. */
+const initialsFor = (label: string): string => {
+  const clean = (label || "Traveler").trim();
+  if (clean.includes("@")) return clean.slice(0, 2).toUpperCase();
+  const parts = clean.split(/\s+/).filter(Boolean);
+  const first = parts[0]?.[0] ?? "T";
+  const last = parts.length > 1 ? parts[parts.length - 1][0] : "";
+  return `${first}${last}`.toUpperCase();
+};
 
 export const TripHeader: React.FC<TripHeaderProps> = ({
   data,
@@ -96,10 +117,14 @@ export const TripHeader: React.FC<TripHeaderProps> = ({
   onShareIdChange,
   presence,
   currentUserId,
+  members,
+  memberCount,
+  startDate,
   onStatusChange,
   onSave,
   isSaving,
   hasUnsavedChanges,
+  onEditPlan,
   onBackToList,
   onNewPlan,
   hideShare,
@@ -107,38 +132,23 @@ export const TripHeader: React.FC<TripHeaderProps> = ({
   onPublicationChange,
 }) => {
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   // E4b — other people currently viewing this trip (never ourselves).
   const others = (presence ?? []).filter(
     (person) => !currentUserId || String(person.userId) !== String(currentUserId)
   );
+  const liveIds = new Set(others.map((person) => String(person.userId)));
 
-  // Match cover image prioritizing specific destinations before regional keywords
+  // Match cover image from the trip title and highlights; a named place wins
+  // over a region mentioned in the same text.
   const getCoverImage = (): string => {
     const textToMatch = [
       data.trip_title || "",
       ...(data.highlights || []),
-    ].join(" ").toLowerCase();
+    ].join(" ");
 
-    // Specific hill stations & cities take precedence over generic state names
-    const priorityDestinations = [
-      "wayanad", "munnar", "coorg", "ooty", "manali", "shimla",
-      "kashmir", "ladakh", "rishikesh", "alleppey", "alappuzha",
-      "goa", "andaman", "jaipur", "udaipur", "varanasi"
-    ];
-
-    for (const key of priorityDestinations) {
-      if (textToMatch.includes(key)) {
-        return DESTINATION_IMAGES[key];
-      }
-    }
-
-    // Fall back to broader region tags (e.g. 'kerala' backwaters)
-    for (const [key, url] of Object.entries(DESTINATION_IMAGES)) {
-      if (textToMatch.includes(key)) return url;
-    }
-
-    return DEFAULT_COVER;
+    return tripCoverUrl(textToMatch, 1600);
   };
 
   const handleShare = () => {
@@ -149,230 +159,346 @@ export const TripHeader: React.FC<TripHeaderProps> = ({
     window.print();
   };
 
+  /** Same A4 document the share modal builds, one click from the header. */
+  const handleExportPdf = async () => {
+    try {
+      setIsExporting(true);
+      const { exportItineraryPdf } = await import("@/lib/pdfExport");
+      exportItineraryPdf(data);
+      toast.success("Itinerary PDF downloaded");
+    } catch (err) {
+      console.error("Failed to generate PDF:", err);
+      toast.error("Could not build the PDF. Please try again.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const dailyAvg = Math.round(data.budget_breakdown.total / Math.max(1, data.duration_days));
   const coverUrl = getCoverImage();
+  const statusTone = STATUS_STYLES[status] ?? STATUS_STYLES.planned;
+
+  // Date range works from the planned start; without one, the length is still
+  // a true fact from the plan.
+  const dayCount = Math.max(
+    1,
+    data.day_by_day_itinerary?.length || data.duration_days || 1
+  );
+  const start = startDate ? String(startDate).slice(0, 10) : null;
+  const end = start ? endDateFromStart(start, dayCount) : null;
+  const dateLabel = start
+    ? end
+      ? `${formatDateOnly(start)} – ${formatDateOnly(end)}`
+      : formatDateOnly(start)
+    : `${dayCount} ${dayCount === 1 ? "day" : "days"} · ${Math.max(1, dayCount - 1)} ${
+        Math.max(1, dayCount - 1) === 1 ? "night" : "nights"
+      }`;
+
+  // Roster avatars when the roster is loaded, live presence until then.
+  const roster = members ?? [];
+  const stack = (roster.length
+    ? roster.map((member) => ({
+        userId: member.userId,
+        label: member.label || member.email || "Traveler",
+        avatarUrl: member.avatarUrl,
+      }))
+    : others.map((person) => ({
+        userId: person.userId,
+        label: person.label,
+        avatarUrl: person.avatarUrl,
+      }))
+  ).slice(0, 4);
+  const stackOverflow = Math.max(0, (roster.length || others.length) - stack.length);
+  const goingCount = roster.length || memberCount || 0;
 
   return (
-    <div className="relative rounded-3xl overflow-hidden shadow-2xl border border-border/60 bg-card">
-      {/* Cover Image Background with Gradient Overlay */}
-      <div className="relative min-h-[340px] sm:min-h-[360px] md:h-96 w-full overflow-hidden flex flex-col justify-between">
-        <img
-          src={coverUrl}
-          alt={data.trip_title}
-          className="absolute inset-0 w-full h-full object-cover object-center filter brightness-[0.8] contrast-[1.05] transition-transform duration-700 hover:scale-105"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-black/30" />
+    <div className="space-y-4">
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 flex-1 space-y-3">
+          {onBackToList && (
+            <button
+              type="button"
+              onClick={onBackToList}
+              className="inline-flex items-center gap-1.5 rounded-md text-[11px] font-semibold text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
+              All trips
+            </button>
+          )}
 
-        {/* Top Floating Actions */}
-        <div className="relative p-3 sm:p-4 flex items-center justify-between z-10 flex-wrap gap-2">
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            {onBackToList && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={onBackToList}
-                className="bg-black/60 hover:bg-black/80 text-white border-white/20 backdrop-blur-md rounded-xl text-xs font-bold gap-1 sm:gap-1.5 h-8 sm:h-9 px-2.5 sm:px-3"
-              >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">All Trips</span>
-                <span className="sm:hidden">Trips</span>
-              </Button>
-            )}
+          <div className="flex items-start gap-3 sm:gap-4">
+            <img
+              src={coverUrl}
+              alt=""
+              aria-hidden="true"
+              loading="lazy"
+              className="hidden h-14 w-14 shrink-0 rounded-xl border border-border object-cover shadow-xs sm:block lg:h-16 lg:w-16"
+            />
 
-            <Badge className="bg-black/60 backdrop-blur-md text-white border-white/20 px-2.5 py-1 text-[11px] sm:text-xs font-semibold gap-1 sm:gap-1.5 shadow-md hidden sm:inline-flex">
-              <Sparkles className="w-3.5 h-3.5 text-yellow-400" />
-              <span>AI Optimized</span>
-            </Badge>
+            <div className="min-w-0 space-y-2.5">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                <h1 className="min-w-0 font-display text-[1.75rem] font-semibold leading-[1.1] tracking-tight text-foreground sm:text-4xl lg:text-[2.6rem]">
+                  {data.trip_title}
+                </h1>
 
-            {version != null && (
-              <Badge className="bg-black/60 backdrop-blur-md text-white border-white/20 px-2.5 py-1 text-[11px] sm:text-xs font-semibold gap-1 sm:gap-1.5 shadow-md">
-                <GitBranch className="w-3 h-3 text-sky-300" />
-                <span>
-                  v{version}
-                  {hasEdited ? " · edited" : ""}
-                </span>
-              </Badge>
-            )}
-          </div>
-
-          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-            {/* E4b — live collaborators right now (empty when the tier is off) */}
-            {others.length > 0 && (
-              <div className="flex items-center gap-1.5 mr-1">
-                <div className="flex -space-x-2">
-                  {others.slice(0, 4).map((person) => (
-                    <Avatar key={person.userId} className="h-8 w-8 ring-2 ring-white/40 shadow-md">
-                      {avatarSrc(person.avatarUrl) && (
-                        <AvatarImage src={avatarSrc(person.avatarUrl)} alt={person.label} />
+                {onStatusChange ? (
+                  <span className="relative inline-flex shrink-0 rounded-full focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background">
+                    <span
+                      className={cn(
+                        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold",
+                        statusTone.pill
                       )}
-                      <AvatarFallback
-                        className="bg-primary text-primary-foreground text-[10px] font-bold"
-                        title={`${person.label} (${person.role}) is viewing this trip`}
-                      >
-                        {person.label.slice(0, 2).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                  ))}
-                </div>
-                {others.length > 4 && (
-                  <span className="text-[10px] font-bold text-white/90 bg-black/60 backdrop-blur-md rounded-full px-2 py-0.5">
-                    +{others.length - 4}
+                    >
+                      <span className={cn("h-1.5 w-1.5 rounded-full", statusTone.dot)} />
+                      {statusTone.label}
+                      <ChevronDown className="h-3 w-3 opacity-60" aria-hidden />
+                    </span>
+                    <select
+                      aria-label="Trip status"
+                      title="Change trip status"
+                      value={status}
+                      onChange={(e) => onStatusChange(e.target.value as TripStatus)}
+                      className="absolute inset-0 h-full w-full cursor-pointer appearance-none rounded-full opacity-0"
+                    >
+                      {STATUS_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </span>
+                ) : (
+                  <span
+                    className={cn(
+                      "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold",
+                      statusTone.pill
+                    )}
+                  >
+                    <span className={cn("h-1.5 w-1.5 rounded-full", statusTone.dot)} />
+                    {statusTone.label}
                   </span>
                 )}
-                <span className="hidden lg:inline text-[10px] font-semibold text-white/80">
-                  {others.length === 1 ? "is here" : "are here"}
-                </span>
               </div>
-            )}
 
-            {/* Save Changes Button if unsaved changes exist */}
-            {onSave && (
-              <Button
-                type="button"
-                size="sm"
-                variant={hasUnsavedChanges ? "hero" : "outline"}
-                disabled={isSaving}
-                onClick={onSave}
-                className={`rounded-xl text-xs font-bold gap-1 sm:gap-1.5 h-8 sm:h-9 px-2.5 sm:px-3 backdrop-blur-md shadow-md ${
-                  hasUnsavedChanges
-                    ? "animate-pulse"
-                    : "bg-black/50 hover:bg-black/75 text-white border-white/20"
-                }`}
-              >
-                {isSaving ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Save className="w-3.5 h-3.5" />
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-muted-foreground">
+                <span className="inline-flex items-center gap-1.5">
+                  <Calendar className="h-3.5 w-3.5" aria-hidden />
+                  {dateLabel}
+                </span>
+
+                {goingCount > 0 && (
+                  <>
+                    <span className="hidden h-3 w-px bg-border sm:block" aria-hidden />
+                    <span className="inline-flex items-center gap-1.5">
+                      <Users className="h-3.5 w-3.5" aria-hidden />
+                      <span className="font-semibold text-foreground">{goingCount}</span>
+                      {goingCount === 1 ? "member" : "members"}
+                    </span>
+                    {stack.length > 0 && (
+                      <span className="flex -space-x-2">
+                        {stack.map((person) => (
+                          <span key={person.userId} className="relative">
+                            <Avatar className="h-7 w-7 border border-card ring-1 ring-border">
+                              {avatarSrc(person.avatarUrl) && (
+                                <AvatarImage
+                                  src={avatarSrc(person.avatarUrl)}
+                                  alt={person.label}
+                                />
+                              )}
+                              <AvatarFallback
+                                className="bg-muted text-[10px] font-semibold text-muted-foreground"
+                                title={person.label}
+                              >
+                                {initialsFor(person.label)}
+                              </AvatarFallback>
+                            </Avatar>
+                            {liveIds.has(String(person.userId)) && (
+                              <span
+                                className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-accent ring-2 ring-card"
+                                title={`${person.label} is viewing this trip`}
+                              />
+                            )}
+                          </span>
+                        ))}
+                        {stackOverflow > 0 && (
+                          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background text-[10px] font-semibold text-muted-foreground">
+                            +{stackOverflow}
+                          </span>
+                        )}
+                      </span>
+                    )}
+                  </>
                 )}
-                <span>{isSaving ? "Saving..." : hasUnsavedChanges ? "Save*" : "Saved"}</span>
-              </Button>
-            )}
 
-            {!hideShare && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleShare}
-                className="bg-black/50 hover:bg-black/75 text-white border-white/20 backdrop-blur-md rounded-xl text-xs font-semibold gap-1 sm:gap-1.5 h-8 sm:h-9 px-2.5 sm:px-3"
-              >
-                <Share2 className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Share & Export</span>
-                <span className="sm:hidden">Share</span>
-              </Button>
-            )}
+                {others.length > 0 && (
+                  <span className="inline-flex items-center gap-1.5 text-accent">
+                    <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
+                    {others.length === 1 ? "1 here now" : `${others.length} here now`}
+                  </span>
+                )}
 
+                {version != null && (
+                  <>
+                    <span className="hidden h-3 w-px bg-border sm:block" aria-hidden />
+                    <span className="inline-flex items-center gap-1.5">
+                      <GitBranch className="h-3.5 w-3.5" aria-hidden />v{version}
+                      {hasEdited ? " · edited" : ""}
+                    </span>
+                  </>
+                )}
+
+                {onSave && (
+                  <>
+                    <span className="hidden h-3 w-px bg-border sm:block" aria-hidden />
+                    {isSaving ? (
+                      <span className="inline-flex items-center gap-1.5 text-primary">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                        Saving…
+                      </span>
+                    ) : hasUnsavedChanges ? (
+                      <button
+                        type="button"
+                        onClick={onSave}
+                        className="rounded-md font-semibold text-primary underline-offset-4 hover:underline"
+                      >
+                        Unsaved changes — save now
+                      </button>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5">
+                        <Check className="h-3.5 w-3.5 text-accent" aria-hidden />
+                        Saved
+                      </span>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Actions — the three concept actions first, quieter extras after. */}
+        <div className="flex flex-wrap items-center gap-2 lg:shrink-0 lg:justify-end">
+          {!hideShare && (
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onClick={handlePrint}
-              className="bg-black/50 hover:bg-black/75 text-white border-white/20 backdrop-blur-md rounded-xl text-xs font-semibold gap-1.5 h-9 hidden md:inline-flex"
+              onClick={handleShare}
+              className="h-9 rounded-lg border-border bg-card px-3 text-xs font-semibold text-foreground"
             >
-              <Printer className="w-3.5 h-3.5" />
-              <span>Print</span>
+              <Share2 className="h-3.5 w-3.5" aria-hidden />
+              <span>Share</span>
             </Button>
+          )}
 
-            {onNewPlan && (
-              <Button
-                type="button"
-                size="sm"
-                onClick={onNewPlan}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-xs font-bold gap-1 sm:gap-1.5 h-8 sm:h-9 px-2.5 sm:px-3 shadow-md"
-              >
-                <span>Plan New</span>
-              </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void handleExportPdf()}
+            disabled={isExporting}
+            className="h-9 rounded-lg border-border bg-card px-3 text-xs font-semibold text-foreground"
+          >
+            {isExporting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+            ) : (
+              <FileDown className="h-3.5 w-3.5" aria-hidden />
             )}
-          </div>
-        </div>
+            <span>{isExporting ? "Preparing…" : "Export PDF"}</span>
+          </Button>
 
-        {/* Bottom Banner Title & Badges */}
-        <div className="relative p-4 sm:p-6 z-10 text-white space-y-2.5">
-          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-            <Badge className="bg-primary/90 text-primary-foreground font-bold px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full text-[11px] sm:text-xs">
-              <MapPin className="w-3 h-3 mr-1" /> {data.group_type || "Traveler"}
-            </Badge>
-            <Badge className="bg-white/20 backdrop-blur-md text-white font-medium px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full text-[11px] sm:text-xs border-white/20">
-              <Sun className="w-3 h-3 mr-1 text-yellow-300" /> {data.season}
-            </Badge>
+          {onSave && onEditPlan && (
+            <Button
+              type="button"
+              size="sm"
+              onClick={onEditPlan}
+              className="h-9 rounded-lg px-3 text-xs font-semibold"
+            >
+              <Pencil className="h-3.5 w-3.5" aria-hidden />
+              <span>Edit plan</span>
+            </Button>
+          )}
 
-            {/* Status Change Selector */}
-            {onStatusChange && (
-              <div className="inline-flex items-center gap-1 bg-black/50 backdrop-blur-md rounded-full px-2 py-0.5 border border-white/20 text-xs">
-                <span className="text-white/70 text-[10px] pl-1 uppercase font-semibold">Status:</span>
-                <select
-                  value={status}
-                  onChange={(e) =>
-                    onStatusChange(e.target.value as "draft" | "planned" | "ongoing" | "completed")
-                  }
-                  className="bg-transparent text-white font-bold text-xs focus:outline-none cursor-pointer pr-1"
-                >
-                  <option value="planned" className="text-black">Planned</option>
-                  <option value="ongoing" className="text-black">Ongoing</option>
-                  <option value="completed" className="text-black">Completed</option>
-                  <option value="draft" className="text-black">Draft</option>
-                </select>
-              </div>
-            )}
-          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={handlePrint}
+            title="Print this itinerary"
+            aria-label="Print this itinerary"
+            className="h-9 w-9 rounded-lg text-muted-foreground hover:text-foreground"
+          >
+            <Printer className="h-4 w-4" aria-hidden />
+          </Button>
 
-          <h1 className="text-xl sm:text-3xl md:text-5xl font-extrabold tracking-tight drop-shadow-md leading-tight line-clamp-2 sm:line-clamp-none">
-            {data.trip_title}
-          </h1>
+          {onNewPlan && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onNewPlan}
+              aria-label="Plan a new trip"
+              className="h-9 rounded-lg px-2.5 text-xs font-semibold text-muted-foreground hover:text-foreground"
+            >
+              <Sparkles className="h-3.5 w-3.5" aria-hidden />
+              <span className="hidden sm:inline">New plan</span>
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* Quick Stats Strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-border/60 bg-card/90 backdrop-blur-sm p-2 sm:p-6">
-        {/* Total Cost */}
-        <div className="p-2 sm:p-3 text-center sm:text-left space-y-1">
-          <div className="flex items-center justify-center sm:justify-start gap-1.5 text-muted-foreground text-xs font-semibold uppercase tracking-wider">
-            <IndianRupee className="w-3.5 h-3.5 text-primary" />
-            <span>Total Estimated</span>
+      {/* Quieter version of the old stat strip: hairline-tiled figures. */}
+      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-4">
+        <div className="bg-card px-4 py-3">
+          <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+            <IndianRupee className="h-3 w-3" aria-hidden />
+            Total for the group
           </div>
-          <div className="text-xl sm:text-2xl font-black text-foreground">
+          <div className="mt-1 text-lg font-semibold tabular-nums text-foreground">
             ₹{data.budget_breakdown.total.toLocaleString("en-IN")}
           </div>
-          <p className="text-[11px] text-muted-foreground">All inclusions & buffers</p>
+          <p className="text-[11px] text-muted-foreground">Planned budget</p>
         </div>
 
-        {/* Budget Per Person */}
-        <div className="p-3 text-center sm:text-left space-y-1">
-          <div className="flex items-center justify-center sm:justify-start gap-1.5 text-muted-foreground text-xs font-semibold uppercase tracking-wider">
-            <Users className="w-3.5 h-3.5 text-emerald-500" />
-            <span>Per Person</span>
+        <div className="bg-card px-4 py-3">
+          <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+            <Users className="h-3 w-3" aria-hidden />
+            Per person
           </div>
-          <div className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400">
+          <div className="mt-1 text-lg font-semibold tabular-nums text-foreground">
             ₹{data.budget_per_person.toLocaleString("en-IN")}
           </div>
-          <p className="text-[11px] text-muted-foreground">Based on {data.group_type}</p>
+          <p className="truncate text-[11px] text-muted-foreground">
+            Based on {data.group_type}
+          </p>
         </div>
 
-        {/* Daily Average */}
-        <div className="p-3 text-center sm:text-left space-y-1">
-          <div className="flex items-center justify-center sm:justify-start gap-1.5 text-muted-foreground text-xs font-semibold uppercase tracking-wider">
-            <TrendingUp className="w-3.5 h-3.5 text-blue-500" />
-            <span>Daily Average</span>
+        <div className="bg-card px-4 py-3">
+          <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+            <TrendingUp className="h-3 w-3" aria-hidden />
+            Daily average
           </div>
-          <div className="text-xl sm:text-2xl font-black text-foreground">
+          <div className="mt-1 text-lg font-semibold tabular-nums text-foreground">
             ₹{dailyAvg.toLocaleString("en-IN")}
           </div>
-          <p className="text-[11px] text-muted-foreground">Across {data.duration_days} days</p>
+          <p className="text-[11px] text-muted-foreground">
+            Across {data.duration_days} {data.duration_days === 1 ? "day" : "days"}
+          </p>
         </div>
 
-        {/* Duration & Season */}
-        <div className="p-3 text-center sm:text-left space-y-1">
-          <div className="flex items-center justify-center sm:justify-start gap-1.5 text-muted-foreground text-xs font-semibold uppercase tracking-wider">
-            <Calendar className="w-3.5 h-3.5 text-purple-500" />
-            <span>Duration</span>
+        <div className="bg-card px-4 py-3">
+          <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+            <Calendar className="h-3 w-3" aria-hidden />
+            Duration
           </div>
-          <div className="text-xl sm:text-2xl font-black text-foreground">
-            {data.duration_days} Days / {Math.max(1, data.duration_days - 1)} Nights
+          <div className="mt-1 text-lg font-semibold text-foreground">
+            {data.duration_days} {data.duration_days === 1 ? "Day" : "Days"} /{" "}
+            {Math.max(1, data.duration_days - 1)}{" "}
+            {Math.max(1, data.duration_days - 1) === 1 ? "Night" : "Nights"}
           </div>
-          <p className="text-[11px] text-purple-600 dark:text-purple-400 font-medium">
-            Optimal {data.season} Season
-          </p>
+          {data.season ? (
+            <p className="text-[11px] text-muted-foreground">{data.season} season</p>
+          ) : null}
         </div>
       </div>
 

@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { AlertCircle, Download, FileText, Loader2 } from 'lucide-react';
+import { AlertCircle, Download, Loader2 } from 'lucide-react';
 import PdfDocumentViewer from '@/components/agency/PdfDocumentViewer';
 import LiveProposalDocument from '@/components/directory/LiveProposalDocument';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -108,18 +107,17 @@ export const ProposalPreviewDialog: React.FC<ProposalPreviewDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] max-w-5xl overflow-y-auto rounded-3xl">
-        <DialogHeader>
-          <DialogTitle className="flex flex-wrap items-center gap-2 text-base">
-            <FileText className="h-4 w-4 text-primary" />
+      <DialogContent className="max-h-[92vh] max-w-5xl gap-5 overflow-y-auto rounded-2xl border-border/70 bg-background p-5 sm:p-6">
+        <DialogHeader className="space-y-1.5 pr-8">
+          <DialogTitle className="flex flex-wrap items-center gap-2 font-display text-lg font-semibold tracking-tight sm:text-xl">
             {proposal?.trip.title ?? 'Proposal document'}
             {quote ? (
-              <Badge variant="outline" className="text-[10px]">
+              <span className="rounded-full border border-border/70 bg-card px-2 py-0.5 text-[10px] font-medium tracking-normal text-muted-foreground">
                 {quote.number} · v{quote.version}
-              </Badge>
+              </span>
             ) : null}
           </DialogTitle>
-          <DialogDescription className="text-xs">
+          <DialogDescription className="text-[11px] text-muted-foreground">
             {proposal?.agency.name ?? 'Your agency'}
             {quote ? ` · ${formatMoney(quote.total, quote.currency)} total` : ''}
             {proposal && proposal.documentMode !== 'live' && proposal.expiresAt
@@ -134,14 +132,14 @@ export const ProposalPreviewDialog: React.FC<ProposalPreviewDialogProps> = ({
             Opening the proposal…
           </div>
         ) : error || !proposal ? (
-          <div className="flex flex-col items-center gap-2 rounded-2xl border border-destructive/30 bg-destructive/5 px-6 py-12 text-center text-xs text-destructive">
+          <div className="flex flex-col items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-6 py-12 text-center text-xs text-destructive">
             <AlertCircle className="h-5 w-5" />
             {error ?? 'This proposal could not be opened.'}
           </div>
         ) : (
           <div className="space-y-4">
             {quote ? (
-              <div className="grid gap-2 rounded-2xl border border-border/70 p-3 text-xs sm:grid-cols-4">
+              <dl className="grid divide-y divide-border/70 overflow-hidden rounded-xl border border-border/70 bg-card text-xs sm:grid-cols-4 sm:divide-x sm:divide-y-0">
                 <Summary label="Total" value={formatMoney(quote.total, quote.currency)} />
                 <Summary
                   label="Per person"
@@ -152,7 +150,7 @@ export const ProposalPreviewDialog: React.FC<ProposalPreviewDialogProps> = ({
                   label="Valid until"
                   value={quote.validUntil ? formatDateOnly(quote.validUntil) : '—'}
                 />
-              </div>
+              </dl>
             ) : null}
 
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -162,7 +160,12 @@ export const ProposalPreviewDialog: React.FC<ProposalPreviewDialogProps> = ({
                   : `${proposal.pageCount} page${proposal.pageCount === 1 ? '' : 's'} · ${proposal.templateName}`}
               </p>
               {proposal.pdf && downloadUrl ? (
-                <Button asChild size="sm" className="rounded-xl text-xs font-bold gap-1.5">
+                <Button
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 text-xs font-semibold"
+                >
                   <a href={downloadUrl} target="_blank" rel="noreferrer">
                     <Download className="h-3.5 w-3.5" />
                     Download PDF
@@ -175,17 +178,17 @@ export const ProposalPreviewDialog: React.FC<ProposalPreviewDialogProps> = ({
               proposal.itinerary ? (
                 <LiveProposalDocument
                   document={proposal.itinerary}
-                  className="max-h-[70vh] overflow-y-auto"
+                  className="max-h-[70vh] overflow-y-auto shadow-card"
                 />
               ) : (
-                <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-border/70 px-6 py-16 text-center text-xs text-muted-foreground">
+                <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-border/70 px-6 py-16 text-center text-xs text-muted-foreground">
                   <AlertCircle className="h-5 w-5" />
                   This proposal's itinerary could not be loaded.
                 </div>
               )
             ) : proposal.documentMode === 'pdf' ? (
               pdfError ? (
-                <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50/60 px-6 py-16 text-center text-xs text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-300">
+                <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-6 py-16 text-center text-xs text-destructive">
                   <AlertCircle className="h-5 w-5" />
                   {pdfError}
                 </div>
@@ -201,7 +204,7 @@ export const ProposalPreviewDialog: React.FC<ProposalPreviewDialogProps> = ({
                 title={`${proposal.trip.title} proposal`}
                 srcDoc={proposal.html}
                 sandbox=""
-                className="h-[70vh] w-full rounded-2xl border border-slate-200 bg-white"
+                className="h-[70vh] w-full rounded-xl border border-border/70 bg-card"
               />
             )}
           </div>
@@ -212,11 +215,13 @@ export const ProposalPreviewDialog: React.FC<ProposalPreviewDialogProps> = ({
 };
 
 const Summary: React.FC<{ label: string; value: string }> = ({ label, value }) => (
-  <div className="space-y-0.5">
-    <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
+  <div className="px-3.5 py-2.5">
+    <dt className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
       {label}
-    </p>
-    <p className="truncate text-xs font-semibold capitalize text-foreground">{value}</p>
+    </dt>
+    <dd className="mt-0.5 truncate text-xs font-semibold capitalize text-foreground">
+      {value}
+    </dd>
   </div>
 );
 

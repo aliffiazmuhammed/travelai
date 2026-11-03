@@ -11,7 +11,7 @@ export interface LandingDiscovery {
   loading: boolean;
 }
 
-const PREVIEW_SIZE = 3;
+const PREVIEW_SIZE = 4;
 
 /**
  * What the homepage shows above the fold: a few recent shared trips and the

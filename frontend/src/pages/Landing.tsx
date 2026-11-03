@@ -1,8 +1,10 @@
-import { Link } from "react-router-dom";
+import { useEffect } from "react";
+import { Link, useLocation } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import Hero from "@/components/Hero";
 import LandingChat from "@/components/LandingChat";
 import { PublicEventCard } from "@/components/events/PublicEventCard";
+import { TripCover } from "@/components/gallery/TripCover";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -170,41 +172,42 @@ const SectionHeading = ({
 const LiveTripCard = ({ trip }: { trip: GalleryTripSummary }) => (
   <Link
     to={`/explore/${trip._id}`}
-    className="group flex flex-col rounded-3xl border border-border/70 bg-card p-5 shadow-xs transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md"
+    className="group flex flex-col overflow-hidden rounded-3xl border border-border/70 bg-card shadow-xs transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md"
   >
-    <p className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary">
-      <MapPin className="h-3 w-3 shrink-0" aria-hidden="true" />
-      <span className="truncate">{trip.destination || "Somewhere new"}</span>
-    </p>
-    <h3 className="mt-2 line-clamp-2 font-display text-lg font-semibold tracking-tight text-foreground transition-colors group-hover:text-primary">
-      {trip.title}
-    </h3>
-    {trip.summary ? (
-      <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-        {trip.summary}
+    <TripCover destination={trip.destination} title={trip.title} width={640} />
+    <div className="flex flex-1 flex-col gap-1 p-4">
+      <p className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary">
+        <MapPin className="h-3 w-3 shrink-0" aria-hidden="true" />
+        <span className="truncate">{trip.destination || "Somewhere new"}</span>
       </p>
-    ) : null}
-    <div className="mt-auto flex items-center justify-between gap-2 border-t border-border/60 pt-4 text-[11px]">
-      <span className="inline-flex items-center gap-1 text-muted-foreground">
-        <CalendarDays className="h-3 w-3" aria-hidden="true" />
+      <h3 className="line-clamp-2 font-display text-lg font-semibold tracking-tight text-foreground transition-colors group-hover:text-primary">
+        {trip.title}
+      </h3>
+      <p className="mt-1 inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+        <CalendarDays className="h-3 w-3 shrink-0" aria-hidden="true" />
         {formatGalleryDates(trip.dates)}
-      </span>
-      <span className="inline-flex min-w-0 items-center gap-1.5">
-        <Avatar className="h-5 w-5 shrink-0">
+      </p>
+      <div className="mt-auto flex items-center gap-2 border-t border-border/60 pt-3">
+        <Avatar className="h-7 w-7 shrink-0">
           {trip.publisher.avatarUrl && (
             <AvatarImage
               src={avatarSrc(trip.publisher.avatarUrl)}
               alt={trip.publisher.name}
             />
           )}
-          <AvatarFallback className="bg-primary/10 text-[8px] font-bold text-primary">
+          <AvatarFallback className="bg-primary/10 text-[9px] font-bold text-primary">
             {initialsFor(trip.publisher.name || trip.publisher.handle)}
           </AvatarFallback>
         </Avatar>
-        <span className="truncate font-semibold text-muted-foreground">
-          {trip.publisher.name}
+        <span className="min-w-0">
+          <span className="block truncate text-[11px] font-semibold text-foreground/90">
+            {trip.publisher.name}
+          </span>
+          <span className="block text-[10px] text-muted-foreground">
+            Trip host
+          </span>
         </span>
-      </span>
+      </div>
     </div>
   </Link>
 );
@@ -213,7 +216,17 @@ const Landing = () => {
   const discovery = useLandingDiscovery();
   const { isAuthenticated } = useAuth();
   const directoryEnabled = useAgencyDirectoryEnabled();
+  const location = useLocation();
   const hasAnything = discovery.trips.length > 0 || discovery.events.length > 0;
+
+  // The navbar's "How it works" link points at a hash; SPA navigation does not
+  // scroll to one on its own.
+  useEffect(() => {
+    if (location.hash !== "#how-it-works") return;
+    document
+      .getElementById("how-it-works")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [location.hash]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -227,18 +240,33 @@ const Landing = () => {
 
       {/* Live discovery */}
       <section className="px-4 pb-16 sm:pb-24" aria-labelledby="live-now">
-        <div className="container mx-auto max-w-6xl space-y-10">
-          <SectionHeading
-            eyebrow="Live right now"
-            icon={Globe2}
-            title={
-              <span id="live-now">
-                What people are up to
-                <span className="block text-primary">right now</span>
-              </span>
-            }
-            description="Trips shared by other travellers and events with spots open. No sign-up needed to look."
-          />
+        <div className="container mx-auto max-w-6xl space-y-8">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div className="space-y-1.5">
+              <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-primary">
+                <Globe2 className="h-3.5 w-3.5" aria-hidden="true" />
+                Live right now
+              </p>
+              <h2
+                id="live-now"
+                className="font-display text-2xl font-semibold tracking-tight text-foreground sm:text-4xl"
+              >
+                What people are up to{" "}
+                <span className="text-primary">right now</span>
+              </h2>
+              <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">
+                Real travellers. Real plans. Get inspired and join the next
+                adventure.
+              </p>
+            </div>
+            <Link
+              to="/explore"
+              className="inline-flex items-center gap-1 text-xs font-bold text-primary transition-all hover:gap-1.5"
+            >
+              See more trips
+              <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </Link>
+          </div>
 
           {discovery.loading ? (
             <p className="text-center text-xs font-medium text-muted-foreground">
@@ -247,30 +275,10 @@ const Landing = () => {
           ) : hasAnything ? (
             <div className="space-y-10">
               {discovery.trips.length > 0 && (
-                <div className="space-y-4">
-                  <div className="flex flex-wrap items-end justify-between gap-2">
-                    <div className="space-y-0.5">
-                      <h3 className="font-display text-lg font-semibold tracking-tight text-foreground">
-                        Trips to join
-                      </h3>
-                      <p className="text-xs text-muted-foreground">
-                        {discovery.tripTotal} shared{" "}
-                        {discovery.tripTotal === 1 ? "trip" : "trips"} so far
-                      </p>
-                    </div>
-                    <Link
-                      to="/explore"
-                      className="inline-flex items-center gap-1 text-[11px] font-bold text-primary transition-all hover:gap-1.5"
-                    >
-                      See every trip
-                      <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-                    </Link>
-                  </div>
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {discovery.trips.map((trip) => (
-                      <LiveTripCard key={trip._id} trip={trip} />
-                    ))}
-                  </div>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  {discovery.trips.map((trip) => (
+                    <LiveTripCard key={trip._id} trip={trip} />
+                  ))}
                 </div>
               )}
 
@@ -293,7 +301,7 @@ const Landing = () => {
                       <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
                     </Link>
                   </div>
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     {discovery.events.map((event) => (
                       <PublicEventCard key={event._id} event={event} showAgency />
                     ))}
@@ -331,15 +339,16 @@ const Landing = () => {
 
       {/* How it goes */}
       <section
-        className="border-y border-border/60 bg-muted/30 px-4 py-16 sm:py-24"
-        aria-labelledby="how-it-works"
+        id="how-it-works"
+        className="scroll-mt-20 border-y border-border/60 bg-muted/30 px-4 py-16 sm:py-24"
+        aria-labelledby="how-it-works-title"
       >
         <div className="container mx-auto max-w-6xl">
           <SectionHeading
             eyebrow="How it usually goes"
             icon={Users}
             title={
-              <span id="how-it-works">
+              <span id="how-it-works-title">
                 A trip, from someone's idea
                 <span className="block text-primary">to everyone's plan</span>
               </span>

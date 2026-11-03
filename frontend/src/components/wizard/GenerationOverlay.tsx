@@ -35,28 +35,28 @@ interface GenerationOverlayProps {
 const STAGES = [
   {
     stage: 1,
-    title: "Destination Climate & Advisory",
-    icon: <MapPin className="w-4 h-4 text-primary" />,
+    title: "Destination climate & advisory",
+    icon: <MapPin className="h-4 w-4" />,
   },
   {
     stage: 2,
-    title: "Day-by-Day Activity Scheduling",
-    icon: <Calendar className="w-4 h-4 text-blue-500" />,
+    title: "Day-by-day activity scheduling",
+    icon: <Calendar className="h-4 w-4" />,
   },
   {
     stage: 3,
-    title: "Stays & Regional Culinary Hotspots",
-    icon: <Utensils className="w-4 h-4 text-orange-500" />,
+    title: "Stays & regional culinary hotspots",
+    icon: <Utensils className="h-4 w-4" />,
   },
   {
     stage: 4,
-    title: "Budget Optimization & Local Transit",
-    icon: <IndianRupee className="w-4 h-4 text-emerald-500" />,
+    title: "Budget optimisation & local transit",
+    icon: <IndianRupee className="h-4 w-4" />,
   },
   {
     stage: 5,
-    title: "Safety, Permits & Connectivity",
-    icon: <ShieldCheck className="w-4 h-4 text-purple-500" />,
+    title: "Safety, permits & connectivity",
+    icon: <ShieldCheck className="h-4 w-4" />,
   },
 ];
 
@@ -107,150 +107,168 @@ export const GenerationOverlay: React.FC<GenerationOverlayProps> = ({
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-background/80 backdrop-blur-md animate-fade-in">
-      <div className="relative w-full max-w-lg max-h-[92vh] overflow-y-auto overflow-x-hidden p-5 sm:p-7 rounded-3xl bg-card border border-border/80 shadow-2xl text-center space-y-3.5 sm:space-y-4">
-        {/* Subtle Background Glow - clipped inside container so it never triggers scrollbars */}
-        <div className="absolute inset-0 overflow-hidden rounded-3xl pointer-events-none">
-          <div className="absolute -top-24 -left-24 w-48 h-48 bg-primary/20 rounded-full blur-3xl" />
-          <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-accent/20 rounded-full blur-3xl" />
-        </div>
+  const clampedProgress = Math.min(100, Math.max(10, progress));
 
-        {/* Close / Cancel Button if error */}
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="generation-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-3 backdrop-blur-md animate-fade-in sm:p-4"
+    >
+      <div className="relative max-h-[92vh] w-full max-w-lg overflow-x-hidden overflow-y-auto rounded-3xl border border-border/70 bg-card p-5 text-center shadow-card sm:p-8">
         {error && (
           <button
             type="button"
             onClick={onCancel}
-            className="absolute top-4 right-4 p-2 rounded-full text-muted-foreground hover:text-foreground bg-muted/60 transition-colors"
+            aria-label="Close"
+            className="absolute right-4 top-4 rounded-full p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <X className="w-4 h-4" />
+            <X className="h-4 w-4" />
           </button>
         )}
 
-        {/* Animated Central Visual */}
-        <div className="relative mx-auto w-24 h-24 flex items-center justify-center">
+        {/* State Visual */}
+        <div className="relative mx-auto flex h-20 w-20 items-center justify-center">
           {error ? (
-            <div className="w-20 h-20 rounded-2xl bg-destructive/10 text-destructive flex items-center justify-center shadow-inner">
-              <AlertCircle className="w-10 h-10 animate-bounce" />
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+              <AlertCircle className="h-8 w-8" aria-hidden="true" />
             </div>
           ) : progress >= 100 ? (
-            <div className="w-20 h-20 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shadow-md animate-fade-in">
-              <CheckCircle2 className="w-10 h-10 stroke-[2.5]" />
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-accent/10 text-accent">
+              <CheckCircle2 className="h-8 w-8 stroke-[2.5]" aria-hidden="true" />
             </div>
           ) : (
-            <div className="relative flex items-center justify-center">
-              {/* Outer Pulsing Ring */}
-              <div className="absolute inset-0 w-24 h-24 rounded-full border-2 border-primary/30 animate-ping opacity-30" />
-              {/* Rotating Gradient Border */}
-              <div className="w-20 h-20 rounded-2xl bg-gradient-to-tr from-primary via-accent to-secondary p-1 shadow-lg animate-spin [animation-duration:6s]">
-                <div className="w-full h-full bg-card rounded-xl flex items-center justify-center" />
+            <>
+              <span
+                aria-hidden="true"
+                className="absolute inset-0 rounded-full border border-primary/20 animate-ping opacity-40"
+              />
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <Compass
+                  className="h-8 w-8 animate-pulse"
+                  aria-hidden="true"
+                />
               </div>
-              <Compass className="absolute w-8 h-8 text-primary animate-pulse" />
-            </div>
+            </>
           )}
         </div>
 
-        {/* Main Status Text */}
-        <div className="space-y-1.5">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs font-semibold text-primary">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>AI Travel Assistant</span>
-          </div>
+        {/* Status Copy */}
+        <div className="mt-4 space-y-1.5">
+          <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-primary">
+            <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+            AI travel assistant
+          </p>
 
-          <h3 className="text-xl sm:text-2xl font-extrabold text-foreground tracking-tight">
+          <h3
+            id="generation-title"
+            className="font-display text-2xl font-semibold tracking-tight text-foreground"
+          >
             {error
-              ? "Itinerary Generation Paused"
+              ? "Itinerary generation paused"
               : progress >= 100
-              ? "Itinerary Ready!"
-              : `Synthesizing Your ${days}-Day Trip`}
+              ? "Your itinerary is ready"
+              : `Synthesizing your ${days}-day trip`}
           </h3>
 
-          <p className="text-xs sm:text-sm text-muted-foreground font-medium px-4">
-            {error ? error : statusMessage || `Planning activities for ${destination}...`}
+          <p
+            aria-live="polite"
+            className="px-2 text-sm leading-relaxed text-muted-foreground"
+          >
+            {error
+              ? error
+              : statusMessage || `Planning activities for ${destination}...`}
           </p>
         </div>
 
-        {/* Live Progress Bar */}
+        {/* Progress */}
         {!error && (
-          <div className="space-y-2 max-w-sm mx-auto">
-            <div className="flex justify-between items-center text-xs font-bold text-muted-foreground px-1">
+          <div className="mx-auto mt-4 max-w-sm space-y-2">
+            <div className="flex items-center justify-between px-1 text-xs font-semibold text-muted-foreground">
               <span>Progress</span>
-              <span className="text-primary">{Math.min(100, Math.max(10, progress))}%</span>
+              <span className="text-primary">{clampedProgress}%</span>
             </div>
-            <Progress
-              value={Math.min(100, Math.max(10, progress))}
-              className="h-2.5 rounded-full bg-muted/60"
-            />
+            <Progress value={clampedProgress} className="h-2 rounded-full bg-muted/60" />
           </div>
         )}
 
-        {/* Progressive Stages List */}
+        {/* Stages */}
         {!error && (
-          <div className="p-4 rounded-2xl bg-muted/30 border border-border/60 text-left space-y-2.5">
+          <ol className="mt-4 divide-y divide-border/60 overflow-hidden rounded-2xl border border-border/70 text-left">
             {STAGES.map((s) => {
               const isPast = stage > s.stage || progress >= 100;
               const isCurrent = stage === s.stage && progress < 100;
 
               return (
-                <div
+                <li
                   key={s.stage}
                   className={cn(
-                    "flex items-center justify-between text-xs py-1 px-2 rounded-lg transition-all",
-                    isCurrent && "bg-primary/10 font-bold text-foreground",
+                    "flex items-center justify-between gap-3 px-4 py-2.5 text-xs transition-colors",
+                    isCurrent && "bg-primary/5 font-semibold text-foreground",
                     isPast && "text-muted-foreground",
-                    !isPast && !isCurrent && "opacity-40 text-muted-foreground"
+                    !isPast && !isCurrent && "text-muted-foreground/60"
                   )}
                 >
-                  <div className="flex items-center gap-2.5">
-                    <span className="shrink-0">{s.icon}</span>
-                    <span className={cn(isCurrent ? "text-primary" : "")}>
-                      {s.title}
+                  <span className="flex min-w-0 items-center gap-2.5">
+                    <span
+                      className={cn(
+                        "shrink-0",
+                        isCurrent ? "text-primary" : "text-muted-foreground"
+                      )}
+                    >
+                      {s.icon}
                     </span>
-                  </div>
-                  <div>
+                    <span className="truncate">{s.title}</span>
+                  </span>
+                  <span className="shrink-0">
                     {isPast ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                      <CheckCircle2
+                        className="h-4 w-4 text-accent"
+                        aria-hidden="true"
+                      />
                     ) : isCurrent ? (
-                      <span className="w-2 h-2 rounded-full bg-primary animate-ping" />
+                      <span className="block h-2 w-2 animate-ping rounded-full bg-primary" />
                     ) : (
-                      <span className="w-1.5 h-1.5 rounded-full bg-border" />
+                      <span className="block h-1.5 w-1.5 rounded-full bg-border" />
                     )}
-                  </div>
-                </div>
+                  </span>
+                </li>
               );
             })}
-          </div>
+          </ol>
         )}
 
-        {/* Rotating Travel Tip Box */}
+        {/* Rotating Travel Tip */}
         {!error && progress < 100 && (
-          <div className="flex items-start gap-2.5 p-3 bg-card/60 border border-border/60 rounded-xl text-[11px] text-muted-foreground transition-all duration-300">
+          <div className="mt-4 flex items-start gap-2.5 rounded-2xl border border-border/60 bg-muted/30 p-3 text-left text-[11px] text-muted-foreground">
             {React.createElement(TRAVEL_TIPS[tipIndex].icon, {
-              className: "w-4 h-4 shrink-0 mt-px text-primary",
+              className: "mt-px h-4 w-4 shrink-0 text-primary",
+              "aria-hidden": true,
             })}
             <span className="leading-relaxed">{TRAVEL_TIPS[tipIndex].text}</span>
           </div>
         )}
 
-        {/* Actions for Error State */}
+        {/* Error Actions */}
         {error && (
-          <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
+          <div className="mt-5 flex flex-col justify-center gap-3 sm:flex-row">
             <Button
               type="button"
               variant="outline"
               onClick={onCancel}
-              className="rounded-xl h-11 text-xs font-semibold"
+              className="h-11 rounded-xl text-xs font-semibold"
             >
-              Back to Wizard
+              Back to the wizard
             </Button>
             <Button
               type="button"
               variant="hero"
               onClick={onRetry}
-              className="rounded-xl h-11 text-xs font-bold gap-2"
+              className="h-11 rounded-xl text-xs font-bold gap-2"
             >
-              <RefreshCw className="w-4 h-4" />
-              <span>Retry Generation</span>
+              <RefreshCw className="h-4 w-4" />
+              <span>Retry generation</span>
             </Button>
           </div>
         )}

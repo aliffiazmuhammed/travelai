@@ -1,14 +1,32 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowUpRight, Inbox, Loader2, RefreshCw, Sparkles } from 'lucide-react';
+import {
+  ArrowRight,
+  ArrowUpRight,
+  CheckCircle2,
+  Eye,
+  Inbox,
+  Link2,
+  Loader2,
+  MessageSquare,
+  RefreshCw,
+  Send,
+  Tag,
+  X,
+  XCircle,
+} from 'lucide-react';
 import Navbar from '@/components/Navbar';
-import { TravellerPageHeader } from '@/components/traveller/TravellerPageHeader';
+import { TravellerBreadcrumbs } from '@/components/traveller/TravellerBreadcrumbs';
 import { TravellerSegmented } from '@/components/traveller/TravellerSegmented';
-import ProposalComparison from '@/components/directory/ProposalComparison';
+import { AgencyLogoTile } from '@/components/directory/AgencyLogoTile';
 import ProposalPreviewDialog from '@/components/directory/ProposalPreviewDialog';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { useEnquiryLiveRefresh } from '@/hooks/useEnquiryEvents';
 import { notifyEnquiryBadgeChanged } from '@/lib/enquiryBadge';
+import { formatMoney } from '@/lib/currency';
+import { formatDate, formatDateOnly } from '@/lib/date';
+import { cn } from '@/lib/utils';
 import { api } from '@/services/api';
 import type { AgencyProposalSummary } from '@/types/agency';
 import { toast } from 'sonner';
@@ -151,26 +169,35 @@ const MyProposals: React.FC = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
       <main className="container mx-auto max-w-6xl px-4 pb-20 pt-24">
-        <TravellerPageHeader
-          eyebrow="Compare and choose"
-          icon={Sparkles}
-          title="Your proposals"
-          description="Every proposal an agency sent in answer to your enquiries, side by side. Compare the price and what is included, open the full document, ask a question, then accept the one you want — nothing is booked or charged here."
-          crumbs={[{ label: 'Proposals' }]}
-          meta={
-            liveMode === 'live' ? (
-              <span
-                className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary"
-                title="New proposals appear here as they arrive"
+        <header className="mb-8 space-y-4">
+          <TravellerBreadcrumbs items={[{ label: 'Proposals' }]} />
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div className="min-w-0 space-y-1.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="font-display text-3xl font-semibold leading-tight tracking-tight text-foreground sm:text-4xl">
+                  Your proposals
+                </h1>
+                {liveMode === 'live' ? (
+                  <span
+                    className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/5 px-2.5 py-0.5 text-[10px] font-semibold text-primary"
+                    title="New proposals appear here as they arrive"
+                  >
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
+                    Live
+                  </span>
+                ) : null}
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Quotes agencies sent you, in one place.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                asChild
+                variant="outline"
+                size="sm"
+                className="gap-1.5 text-xs font-semibold"
               >
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
-                Live
-              </span>
-            ) : null
-          }
-          actions={
-            <>
-              <Button asChild variant="outline" size="sm" className="rounded-xl text-xs font-semibold gap-1.5">
                 <Link to="/enquiries">
                   <Inbox className="h-3.5 w-3.5" />
                   Your enquiries
@@ -180,7 +207,7 @@ const MyProposals: React.FC = () => {
                 type="button"
                 variant="outline"
                 size="sm"
-                className="rounded-xl text-xs font-semibold gap-1.5"
+                className="gap-1.5 text-xs font-semibold"
                 onClick={() => setReloadKey((key) => key + 1)}
                 disabled={loading}
               >
@@ -191,13 +218,12 @@ const MyProposals: React.FC = () => {
                 )}
                 Refresh
               </Button>
-            </>
-          }
-          className="mb-5"
-        />
+            </div>
+          </div>
+        </header>
 
         {!loading && proposals.length > 0 ? (
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
             <TravellerSegmented<ProposalFilter>
               ariaLabel="Filter proposals"
               value={filter}
@@ -209,10 +235,9 @@ const MyProposals: React.FC = () => {
                 { value: 'declined', label: 'Declined', count: counts.declined },
               ]}
             />
-            <p className="text-[11px] font-semibold text-muted-foreground">
+            <p className="text-[11px] font-medium text-muted-foreground">
               {proposals.length} proposal{proposals.length === 1 ? '' : 's'} from{' '}
-              {agencies.size} agenc{agencies.size === 1 ? 'y' : 'ies'} · nothing is
-              booked or merged
+              {agencies.size} agenc{agencies.size === 1 ? 'y' : 'ies'}
             </p>
           </div>
         ) : null}
@@ -225,7 +250,7 @@ const MyProposals: React.FC = () => {
                 type="button"
                 size="sm"
                 variant="outline"
-                className="rounded-xl text-xs font-semibold"
+                className="text-xs font-semibold"
                 onClick={() => setReloadKey((key) => key + 1)}
               >
                 Try again
@@ -233,11 +258,11 @@ const MyProposals: React.FC = () => {
             </div>
           </div>
         ) : loading ? (
-          <div className="grid gap-4 lg:grid-cols-2">
-            {[0, 1].map((card) => (
+          <div className="grid gap-4 md:grid-cols-2">
+            {[0, 1, 2, 3].map((card) => (
               <div
                 key={card}
-                className="h-56 animate-pulse rounded-2xl border border-border/60 bg-card"
+                className="h-64 animate-pulse rounded-2xl border border-border/60 bg-card"
               />
             ))}
           </div>
@@ -251,7 +276,7 @@ const MyProposals: React.FC = () => {
               Send an enquiry from an agency profile. When the agency prepares a
               proposal, it appears here and in the conversation.
             </p>
-            <Button asChild size="sm" className="mt-4 rounded-xl text-xs font-semibold gap-1.5">
+            <Button asChild size="sm" className="mt-4 gap-1.5 text-xs font-semibold">
               <Link to="/agencies">
                 Browse agencies
                 <ArrowUpRight className="h-3.5 w-3.5" />
@@ -270,23 +295,35 @@ const MyProposals: React.FC = () => {
               type="button"
               variant="outline"
               size="sm"
-              className="mt-4 rounded-xl text-xs font-semibold"
+              className="mt-4 text-xs font-semibold"
               onClick={() => setFilter('all')}
             >
               Show every proposal
             </Button>
           </div>
         ) : (
-          <ProposalComparison
-            proposals={visibleProposals}
-            onPreview={(proposal) => {
-              setPreview(proposal);
-              setPreviewOpen(true);
-            }}
-            onMessage={send}
-            onAccept={accept}
-            onDecline={decline}
-          />
+          <>
+            <div className="grid gap-4 md:grid-cols-2">
+              {visibleProposals.map((proposal) => (
+                <ProposalCard
+                  key={proposal.id}
+                  proposal={proposal}
+                  onPreview={(row) => {
+                    setPreview(row);
+                    setPreviewOpen(true);
+                  }}
+                  onMessage={send}
+                  onAccept={accept}
+                  onDecline={decline}
+                />
+              ))}
+            </div>
+
+            <p className="mt-10 flex items-center justify-center gap-2 border-t border-border/60 pt-6 text-[11px] text-muted-foreground">
+              <Link2 className="h-3.5 w-3.5" aria-hidden="true" />
+              Proposals stay linked to their enquiry thread.
+            </p>
+          </>
         )}
       </main>
 
@@ -303,6 +340,416 @@ const MyProposals: React.FC = () => {
         />
       ) : null}
     </div>
+  );
+};
+
+type AnswerChoice = 'accept' | 'decline';
+
+interface ProposalCardProps {
+  proposal: AgencyProposalSummary;
+  onPreview: (proposal: AgencyProposalSummary) => void;
+  onMessage?: (proposal: AgencyProposalSummary, body: string) => Promise<void>;
+  onAccept?: (proposal: AgencyProposalSummary) => Promise<void>;
+  onDecline?: (proposal: AgencyProposalSummary) => Promise<void>;
+}
+
+/**
+ * One proposal as the traveller reads it: who sent it, what it costs, and the
+ * one decision that matters. The answer is two-step (ask, then confirm) for
+ * both accept and decline, exactly as before.
+ */
+const ProposalCard: React.FC<ProposalCardProps> = ({
+  proposal,
+  onPreview,
+  onMessage,
+  onAccept,
+  onDecline,
+}) => {
+  const [composing, setComposing] = useState(false);
+  const [body, setBody] = useState('');
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [answering, setAnswering] = useState<AnswerChoice | null>(null);
+  const [working, setWorking] = useState(false);
+  const [answerError, setAnswerError] = useState<string | null>(null);
+
+  const quote = proposal.quote;
+  const accepted = Boolean(proposal.acceptedAt) || quote?.status === 'accepted';
+  const declined = Boolean(proposal.declinedAt);
+  // Another version of this trip already won; the server refuses a second
+  // acceptance, so the card stops offering one.
+  const settled = Boolean(proposal.settledByAcceptedTrip) && !accepted && !declined;
+  const open = quote?.status === 'sent' && !accepted && !declined && !settled;
+  const canAnswer = Boolean(onAccept && onDecline) && open;
+  const canMessage = Boolean(onMessage && proposal.enquiryId);
+
+  const badge = accepted
+    ? {
+        label: 'Accepted',
+        className: 'border-transparent bg-accent/10 text-accent',
+        icon: <CheckCircle2 className="h-3 w-3" />,
+      }
+    : declined
+      ? {
+          label: 'Declined',
+          className: 'border-transparent bg-muted text-muted-foreground',
+          icon: <X className="h-3 w-3" />,
+        }
+      : settled
+        ? {
+            label: 'Another version accepted',
+            className: 'border-border bg-muted text-muted-foreground',
+            icon: null,
+          }
+        : quote?.status === 'expired'
+          ? {
+              label: 'Expired',
+              className: 'border-border bg-muted text-muted-foreground',
+              icon: null,
+            }
+          : quote?.status === 'cancelled'
+            ? {
+                label: 'Withdrawn',
+                className: 'border-border bg-muted text-muted-foreground',
+                icon: null,
+              }
+            : {
+                label: 'New',
+                className: 'border-transparent bg-primary/10 text-primary',
+                icon: <span className="h-1.5 w-1.5 rounded-full bg-primary" />,
+              };
+
+  const answer = async (choice: AnswerChoice) => {
+    const handler = choice === 'accept' ? onAccept : onDecline;
+    if (!handler) return;
+    // First click asks, the second one answers: both are final for this version.
+    if (answering !== choice) {
+      setAnswering(choice);
+      setAnswerError(null);
+      return;
+    }
+    setWorking(true);
+    setAnswerError(null);
+    try {
+      await handler(proposal);
+      setAnswering(null);
+    } catch (err) {
+      setAnswerError(
+        err instanceof Error && err.message
+          ? err.message
+          : 'Your answer could not be sent.'
+      );
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const sendMessage = async () => {
+    if (!onMessage || !body.trim() || sending) return;
+    setSending(true);
+    setError(null);
+    try {
+      await onMessage(proposal, body.trim());
+      setBody('');
+      setComposing(false);
+      setSent(true);
+    } catch (err) {
+      setError(
+        err instanceof Error && err.message
+          ? err.message
+          : 'Your message could not be sent.'
+      );
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <article className="flex h-full flex-col gap-4 rounded-2xl border border-border/70 bg-card p-5 shadow-card sm:p-6">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <AgencyLogoTile name={proposal.agency.name} className="h-11 w-11 text-sm" />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-foreground">
+              {proposal.agency.name}
+            </p>
+            {quote ? (
+              <p className="text-[11px] text-muted-foreground">
+                {proposal.kind === 'live' ? 'Live proposal' : 'Proposal document'}
+              </p>
+            ) : null}
+          </div>
+        </div>
+        <span
+          className={cn(
+            'inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold',
+            badge.className
+          )}
+        >
+          {badge.icon}
+          {badge.label}
+        </span>
+      </div>
+
+      <h2 className="font-display text-xl font-semibold leading-snug tracking-tight text-foreground sm:text-2xl">
+        {proposal.trip.title}
+      </h2>
+
+      {quote ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5">
+            <Tag className="h-3.5 w-3.5" aria-hidden="true" />
+            {quote.number} · v{quote.version}
+          </span>
+          {quote.validUntil && open ? (
+            <span>· Price held until {formatDateOnly(quote.validUntil)}</span>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className="border-t border-border/70 pt-4">
+        {quote ? (
+          <>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Total
+            </p>
+            <p className="mt-0.5 text-2xl font-semibold tabular-nums tracking-tight text-foreground">
+              {formatMoney(quote.total, quote.currency)}
+            </p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              {formatMoney(quote.perPerson, quote.currency)} per person
+            </p>
+          </>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            Pricing is inside the linked document.
+          </p>
+        )}
+      </div>
+
+      <div className="mt-auto space-y-3">
+        {accepted ? (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-accent/20 bg-accent/10 px-3.5 py-3">
+            <span className="inline-flex items-center gap-2 text-xs font-semibold text-accent">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              {proposal.acceptedAt
+                ? `Accepted on ${formatDate(proposal.acceptedAt)}`
+                : 'Accepted'}
+            </span>
+            <button
+              type="button"
+              onClick={() => onPreview(proposal)}
+              className="inline-flex items-center gap-1.5 rounded-md px-1 text-xs font-semibold text-accent transition-colors hover:text-accent/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              See the trip
+              <ArrowRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ) : declined ? (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+              <X className="h-3.5 w-3.5 shrink-0" />
+              You declined this quote
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2 text-xs font-semibold text-primary hover:text-primary"
+              onClick={() => onPreview(proposal)}
+            >
+              View proposal
+            </Button>
+          </div>
+        ) : settled ? (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-xs text-muted-foreground">
+              Another version of this trip was accepted.
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2 text-xs font-semibold text-primary hover:text-primary"
+              onClick={() => onPreview(proposal)}
+            >
+              View proposal
+            </Button>
+          </div>
+        ) : quote?.status === 'expired' || quote?.status === 'cancelled' ? (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-xs text-muted-foreground">
+              {quote.status === 'expired'
+                ? 'This quote has expired.'
+                : 'This proposal was withdrawn.'}
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2 text-xs font-semibold text-primary hover:text-primary"
+              onClick={() => onPreview(proposal)}
+            >
+              View proposal
+            </Button>
+          </div>
+        ) : answering ? (
+          <div className="space-y-2">
+            <p className="text-[11px] font-medium leading-5 text-foreground">
+              {answering === 'accept'
+                ? 'Accepting confirms this quote and tells the agency. No payment is taken here.'
+                : 'Declining closes this version. The conversation stays open.'}
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant={answering === 'decline' ? 'destructive' : 'default'}
+                className="gap-1.5 text-xs font-semibold"
+                onClick={() => void answer(answering)}
+                disabled={working}
+              >
+                {working ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : answering === 'accept' ? (
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                ) : (
+                  <XCircle className="h-3.5 w-3.5" />
+                )}
+                {answering === 'accept' ? 'Confirm acceptance' : 'Confirm decline'}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="text-xs font-semibold text-muted-foreground"
+                onClick={() => setAnswering(null)}
+                disabled={working}
+              >
+                Cancel
+              </Button>
+            </div>
+            {answerError ? (
+              <p className="text-[11px] font-medium text-destructive">{answerError}</p>
+            ) : null}
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="gap-1.5 text-xs font-semibold"
+              onClick={() => onPreview(proposal)}
+            >
+              <Eye className="h-3.5 w-3.5" />
+              View proposal
+            </Button>
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              {canMessage ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className={cn(
+                    'gap-1.5 text-xs font-semibold text-muted-foreground',
+                    composing && 'text-foreground'
+                  )}
+                  onClick={() => setComposing((value) => !value)}
+                >
+                  <MessageSquare className="h-3.5 w-3.5" />
+                  {sent ? 'Message sent' : 'Ask a question'}
+                </Button>
+              ) : null}
+              {canAnswer ? (
+                <>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="gap-1.5 text-xs font-semibold"
+                    onClick={() => void answer('accept')}
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Accept
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="text-xs font-semibold text-muted-foreground hover:text-destructive"
+                    onClick={() => void answer('decline')}
+                  >
+                    Decline
+                  </Button>
+                </>
+              ) : null}
+            </div>
+          </div>
+        )}
+
+        {(accepted || declined || settled) && canMessage && !composing && !sent ? (
+          <button
+            type="button"
+            onClick={() => setComposing(true)}
+            className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            <MessageSquare className="h-3.5 w-3.5" />
+            Ask {proposal.agency.name} a question
+          </button>
+        ) : null}
+
+        {sent ? (
+          <p className="flex items-center gap-1.5 text-[11px] text-accent">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            Sent in your conversation with {proposal.agency.name}.
+          </p>
+        ) : null}
+
+        {composing && canMessage ? (
+          <div className="space-y-2">
+            <Textarea
+              value={body}
+              onChange={(event) => setBody(event.target.value)}
+              placeholder={`Ask ${proposal.agency.name} about this proposal — dates, inclusions, or the price…`}
+              maxLength={2000}
+              rows={3}
+              className="rounded-xl text-xs"
+              disabled={sending}
+            />
+            {error ? (
+              <p className="text-[11px] font-medium text-destructive">{error}</p>
+            ) : null}
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="text-xs font-semibold text-muted-foreground"
+                onClick={() => setComposing(false)}
+                disabled={sending}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="gap-1.5 text-xs font-semibold"
+                onClick={() => void sendMessage()}
+                disabled={sending || !body.trim()}
+              >
+                {sending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Send className="h-3.5 w-3.5" />
+                )}
+                Send message
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </article>
   );
 };
 

@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { Link } from "react-router-dom";
+import { toast } from "sonner";
 import { AdminPagination } from "@/components/admin/AdminPagination";
+import { tripCoverUrl } from "@/lib/tripCover";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   AlertDialog,
@@ -16,10 +17,17 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   MapPin,
   Calendar,
+  CalendarDays,
   Users,
-  IndianRupee,
   Search,
   LayoutGrid,
   List,
@@ -27,10 +35,8 @@ import {
   Trash2,
   PlusCircle,
   ExternalLink,
-  Sparkles,
   Compass,
   CheckCircle2,
-  Clock,
   Archive,
   ArchiveRestore,
   RotateCcw,
@@ -38,12 +44,16 @@ import {
   ChevronUp,
   Loader2,
   Globe2,
+  Link2,
+  MoreHorizontal,
+  ArrowRight,
+  UserRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatDate } from "@/lib/date";
-import { TravellerPageHeader } from "@/components/traveller/TravellerPageHeader";
+import { formatDate, formatDateShort } from "@/lib/date";
+import { TravellerBreadcrumbs } from "@/components/traveller/TravellerBreadcrumbs";
 import { TravellerSegmented } from "@/components/traveller/TravellerSegmented";
-import type { Trip } from "@/types/trip";
+import type { Trip, TripMemberSummary } from "@/types/trip";
 import type { AgencyMember } from "@/types";
 import {
   Select,
@@ -96,32 +106,6 @@ interface MyTripsViewProps {
   pageSize?: number;
 }
 
-const DESTINATION_IMAGES: Record<string, string> = {
-  // Hill stations & mountains
-  wayanad: "https://images.unsplash.com/photo-1630938819488-ba7d1440d48b?auto=format&fit=crop&w=600&q=80",
-  munnar: "https://images.unsplash.com/photo-1596176530529-78163a4f7af2?auto=format&fit=crop&w=600&q=80",
-  coorg: "https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=600&q=80",
-  ooty: "https://images.unsplash.com/photo-1582510003544-4d00b7f74220?auto=format&fit=crop&w=600&q=80",
-  manali: "https://images.unsplash.com/photo-1626621341517-bbf3d9990a23?auto=format&fit=crop&w=600&q=80",
-  shimla: "https://images.unsplash.com/photo-1600683796695-103347b7fe70?auto=format&fit=crop&w=600&q=80",
-  kashmir: "https://images.unsplash.com/photo-1595815771614-ade9d652a65d?auto=format&fit=crop&w=600&q=80",
-  ladakh: "https://images.unsplash.com/photo-1581793745862-99fde7fa73d2?auto=format&fit=crop&w=600&q=80",
-  rishikesh: "https://images.unsplash.com/photo-1609137144822-263a238fb065?auto=format&fit=crop&w=600&q=80",
-  // Backwaters, coasts & heritage
-  alleppey: "https://images.unsplash.com/photo-1602216056096-3b40cc0c9944?auto=format&fit=crop&w=600&q=80",
-  alappuzha: "https://images.unsplash.com/photo-1602216056096-3b40cc0c9944?auto=format&fit=crop&w=600&q=80",
-  goa: "https://images.unsplash.com/photo-1512343879784-a960bf40e7f2?auto=format&fit=crop&w=600&q=80",
-  andaman: "https://images.unsplash.com/photo-1589182373726-e4f658ab50f0?auto=format&fit=crop&w=600&q=80",
-  jaipur: "https://images.unsplash.com/photo-1603262110263-fb010d6e75dc?auto=format&fit=crop&w=600&q=80",
-  udaipur: "https://images.unsplash.com/photo-1615836245337-f5b9b2303f10?auto=format&fit=crop&w=600&q=80",
-  varanasi: "https://images.unsplash.com/photo-1561359313-0639aad49ca6?auto=format&fit=crop&w=600&q=80",
-  // Regional fallbacks
-  kerala: "https://images.unsplash.com/photo-1602216056096-3b40cc0c9944?auto=format&fit=crop&w=600&q=80",
-};
-
-const DEFAULT_THUMB =
-  "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=600&q=80";
-
 const STATUS_CONFIG = {
   planned: {
     label: "Planned",
@@ -143,6 +127,21 @@ const STATUS_CONFIG = {
     badgeClass: "bg-muted text-muted-foreground border-border",
     icon: <Archive className="w-3 h-3" />,
   },
+};
+
+/** Card chip: one dot, one word. Joined reads from the caller's real trip role. */
+const STATUS_CHIP: Record<string, { label: string; dotClass: string }> = {
+  planned: { label: "Planned", dotClass: "bg-accent" },
+  ongoing: { label: "Ongoing", dotClass: "bg-primary" },
+  completed: { label: "Completed", dotClass: "bg-foreground/40" },
+  draft: { label: "Draft", dotClass: "bg-muted-foreground" },
+};
+
+const MEMBER_ROLE_LABEL: Record<string, string> = {
+  owner: "Owner",
+  editor: "Editor",
+  commenter: "Commenter",
+  viewer: "Viewer",
 };
 
 const PACKAGE_STATE_BADGE = {
@@ -199,6 +198,260 @@ const PROPOSAL_STATE = {
   },
 } as const;
 
+/** Personal library tabs. They group the four real statuses plus the trash. */
+type PersonalTab = "upcoming" | "drafts" | "past" | "trash";
+
+const matchesPersonalTab = (trip: Trip, tab: PersonalTab): boolean => {
+  const status = trip.status || "planned";
+  if (tab === "drafts") return status === "draft";
+  if (tab === "past") return status === "completed";
+  if (tab === "upcoming") return status === "planned" || status === "ongoing";
+  return false;
+};
+
+const tripTitleOf = (trip: Trip): string =>
+  trip.title || trip.tripDetails?.trip_title || "Custom Trip";
+
+/** The list projection carries no destination today, so use it only when it is really there. */
+const tripDestinationOf = (trip: Trip): string => {
+  const value = trip.generationMeta?.request?.destination;
+  return typeof value === "string" ? value.trim() : "";
+};
+
+/** "12 Jun – 20 Jun 2025" when the window is known; otherwise null (never a made-up date). */
+const tripScheduleLabel = (trip: Trip): string | null => {
+  if (!trip.startDate) return null;
+  const start = new Date(trip.startDate);
+  if (Number.isNaN(start.getTime())) return null;
+  if (!trip.endDate) return formatDate(trip.startDate);
+  const end = new Date(trip.endDate);
+  if (Number.isNaN(end.getTime()) || trip.startDate === trip.endDate) {
+    return formatDate(trip.startDate);
+  }
+  if (start.getUTCFullYear() === end.getUTCFullYear()) {
+    return `${formatDateShort(trip.startDate)} – ${formatDate(trip.endDate)}`;
+  }
+  return `${formatDate(trip.startDate)} – ${formatDate(trip.endDate)}`;
+};
+
+const statusChipFor = (trip: Trip, joined: boolean) => {
+  if (joined) return { label: "Joined", dotClass: "bg-primary" };
+  return STATUS_CHIP[trip.status || "planned"] ?? STATUS_CHIP.planned;
+};
+
+const searchHaystack = (trip: Trip): string => {
+  const days = trip.tripDetails?.duration_days;
+  return [
+    tripTitleOf(trip),
+    tripDestinationOf(trip),
+    tripScheduleLabel(trip) ?? "",
+    trip.startDate ? formatDate(trip.startDate) : "",
+    days ? `${days} days` : "",
+    trip.tripDetails?.group_type ?? "",
+    trip.createdAt ? formatDate(trip.createdAt) : "",
+  ]
+    .join(" ")
+    .toLowerCase();
+};
+
+/**
+ * Avatar row for the people who really are on the trip. The list payload ships
+ * role-only member rows, so the stack stays anonymous instead of inventing names
+ * or photos; the role rides along in the tooltip.
+ */
+const MemberStack: React.FC<{ members?: TripMemberSummary[] }> = ({ members }) => {
+  const rows = (members ?? []).filter((member) => member?.userId);
+  if (rows.length === 0) return null;
+  const shown = rows.slice(0, 4);
+  const extra = rows.length - shown.length;
+
+  return (
+    <div className="flex items-center">
+      <div className="flex items-center">
+        {shown.map((member, index) => (
+          <span
+            key={member.userId}
+            title={`${MEMBER_ROLE_LABEL[member.role] ?? "Member"} on this trip`}
+            className={cn(
+              "inline-flex h-7 w-7 items-center justify-center rounded-full border-2 border-card bg-muted text-muted-foreground",
+              index > 0 && "-ml-2"
+            )}
+          >
+            <UserRound className="h-3.5 w-3.5" aria-hidden="true" />
+          </span>
+        ))}
+        {extra > 0 ? (
+          <span className="-ml-2 inline-flex h-7 w-7 items-center justify-center rounded-full border-2 border-card bg-muted text-[10px] font-bold text-muted-foreground">
+            +{extra}
+          </span>
+        ) : null}
+      </div>
+      <span className="sr-only">
+        {rows.length === 1 ? "1 person is on this trip" : `${rows.length} people are on this trip`}
+      </span>
+    </div>
+  );
+};
+
+const TripActionsMenu: React.FC<{
+  label: string;
+  acting?: boolean;
+  children: React.ReactNode;
+}> = ({ label, acting, children }) => {
+  if (acting) {
+    return (
+      <span className="grid h-8 w-8 place-items-center">
+        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+      </span>
+    );
+  }
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label={`More actions for ${label}`}
+          onClick={(event) => event.stopPropagation()}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-52 rounded-xl border-border/80 p-1">
+        {children}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+};
+
+const MenuItem: React.FC<{
+  onSelect: () => void;
+  children: React.ReactNode;
+  destructive?: boolean;
+}> = ({ onSelect, children, destructive }) => (
+  <DropdownMenuItem
+    onSelect={onSelect}
+    className={cn(
+      "gap-2 rounded-lg text-xs font-medium",
+      destructive && "text-destructive focus:bg-destructive/10 focus:text-destructive"
+    )}
+  >
+    {children}
+  </DropdownMenuItem>
+);
+
+/** One photo card for the library grid. */
+const TripCard: React.FC<{
+  trip: Trip;
+  joined?: boolean;
+  onOpen: () => void;
+  menuItems?: React.ReactNode;
+  acting?: boolean;
+  note?: string;
+}> = ({ trip, joined = false, onOpen, menuItems, acting, note }) => {
+  const title = tripTitleOf(trip);
+  const destination = tripDestinationOf(trip);
+  const schedule = tripScheduleLabel(trip);
+  const days = trip.tripDetails?.duration_days;
+  const chip = statusChipFor(trip, joined);
+  const cover = tripCoverUrl(`${destination} ${title}`, 800);
+  const scheduleText =
+    schedule ??
+    (days
+      ? `${days} ${days === 1 ? "day" : "days"}`
+      : trip.createdAt
+      ? `Created ${formatDate(trip.createdAt)}`
+      : "");
+
+  return (
+    <article
+      onClick={onOpen}
+      className="group flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-border/70 bg-card shadow-xs transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-card"
+    >
+      <div className="relative aspect-video w-full overflow-hidden bg-muted">
+        <img
+          src={cover}
+          alt={destination ? `${title} in ${destination}` : title}
+          loading="lazy"
+          decoding="async"
+          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+        />
+        <span className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-background/90 px-2.5 py-1 text-[10px] font-bold text-foreground shadow-xs backdrop-blur">
+          <span className={cn("h-1.5 w-1.5 rounded-full", chip.dotClass)} aria-hidden="true" />
+          {chip.label}
+        </span>
+      </div>
+
+      <div className="flex flex-1 flex-col gap-2.5 p-4">
+        <h3 className="line-clamp-2 font-display text-lg font-semibold leading-snug tracking-tight text-foreground transition-colors group-hover:text-primary">
+          {title}
+        </h3>
+        <div className="space-y-1 text-[11px] text-muted-foreground">
+          {destination ? (
+            <p className="flex min-w-0 items-center gap-1.5">
+              <MapPin className="h-3 w-3 shrink-0" aria-hidden="true" />
+              <span className="truncate">{destination}</span>
+            </p>
+          ) : null}
+          <p className="flex min-w-0 items-center gap-1.5">
+            <CalendarDays className="h-3 w-3 shrink-0" aria-hidden="true" />
+            <span className="truncate">{scheduleText}</span>
+          </p>
+        </div>
+        <div className="mt-auto flex items-center justify-between gap-2 pt-1">
+          <MemberStack members={trip.members} />
+          {note ? (
+            <span
+              className="min-w-0 truncate text-[10px] text-muted-foreground"
+              title={note}
+            >
+              {note}
+            </span>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between gap-2 border-t border-border/60 px-4 py-2.5">
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpen();
+          }}
+          className="inline-flex items-center gap-1 text-xs font-semibold text-primary transition-colors hover:text-primary/80"
+        >
+          Open trip
+          <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+        </button>
+        {menuItems ? (
+          <TripActionsMenu label={title} acting={acting}>
+            {menuItems}
+          </TripActionsMenu>
+        ) : null}
+      </div>
+    </article>
+  );
+};
+
+const EmptyState: React.FC<{
+  title: string;
+  body: string;
+  action?: React.ReactNode;
+}> = ({ title, body, action }) => (
+  <div className="rounded-2xl border border-dashed border-border/80 bg-card/60 px-6 py-14 text-center">
+    <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-primary/10 text-primary">
+      <Compass className="h-5 w-5" aria-hidden="true" />
+    </span>
+    <h3 className="mt-4 font-display text-xl font-semibold tracking-tight text-foreground">
+      {title}
+    </h3>
+    <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-muted-foreground">
+      {body}
+    </p>
+    {action ? <div className="mt-5 flex justify-center">{action}</div> : null}
+  </div>
+);
+
 export const MyTripsView: React.FC<MyTripsViewProps> = ({
   trips,
   deletedTrips = [],
@@ -235,7 +488,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
 }) => {
   const isAgency = variant === "agency";
   const showingArchived = archivedValue === "archived";
-  const planLabel = newPlanLabel ?? (isAgency ? "Create Agency Trip" : "Plan New Trip");
+  const planLabel = newPlanLabel ?? (isAgency ? "Create Agency Trip" : "Plan a new trip");
   const [internalSearch, setInternalSearch] = useState("");
   const [internalStatusFilter, setInternalStatusFilter] = useState<string>("all");
   const search = searchValue ?? internalSearch;
@@ -244,6 +497,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
     onSearchChange ? onSearchChange(value) : setInternalSearch(value);
   const setStatusFilter = (value: string) =>
     onStatusChange ? onStatusChange(value) : setInternalStatusFilter(value);
+  const [personalTab, setPersonalTab] = useState<PersonalTab>("upcoming");
   const [viewMode, setViewMode] = useState<"grid" | "list">(
     variant === "agency" ? "list" : "grid"
   );
@@ -253,52 +507,21 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [tripPage, setTripPage] = useState(1);
 
-  const getTripCover = (title: string): string => {
-    const lower = title.toLowerCase();
-    const priorityDestinations = [
-      "wayanad", "munnar", "coorg", "ooty", "manali", "shimla",
-      "kashmir", "ladakh", "rishikesh", "alleppey", "alappuzha",
-      "goa", "andaman", "jaipur", "udaipur", "varanasi"
-    ];
-    for (const key of priorityDestinations) {
-      if (lower.includes(key)) return DESTINATION_IMAGES[key];
-    }
-    for (const [key, url] of Object.entries(DESTINATION_IMAGES)) {
-      if (lower.includes(key)) return url;
-    }
-    return DEFAULT_THUMB;
-  };
-
   const searchedTrips = useMemo(() => {
-    return trips.filter((trip) => {
-      const title = trip.title || trip.tripDetails?.trip_title || "";
-      return (
-        !search.trim() || title.toLowerCase().includes(search.toLowerCase())
-      );
-    });
+    const query = search.trim().toLowerCase();
+    if (!query) return trips;
+    return trips.filter((trip) => searchHaystack(trip).includes(query));
   }, [trips, search]);
 
   const filteredTrips = useMemo(() => {
+    if (!isAgency) {
+      return searchedTrips.filter((trip) => matchesPersonalTab(trip, personalTab));
+    }
     return searchedTrips.filter((trip) => {
       const tripStatus = trip.status || "planned";
       return statusFilter === "all" || tripStatus === statusFilter;
     });
-  }, [searchedTrips, statusFilter]);
-
-  const statusCounts = useMemo(() => {
-    const counts: Record<string, number> = {
-      all: searchedTrips.length,
-      planned: 0,
-      ongoing: 0,
-      completed: 0,
-      draft: 0,
-    };
-    for (const trip of searchedTrips) {
-      const status = trip.status || "planned";
-      counts[status] = (counts[status] ?? 0) + 1;
-    }
-    return counts;
-  }, [searchedTrips]);
+  }, [searchedTrips, isAgency, personalTab, statusFilter]);
 
   // Milestone 6 (F9): trips the user owns vs trips shared with them. The role
   // annotation comes with every trip row; a missing role reads as owned
@@ -330,14 +553,13 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
   // rows off the last page steps back instead of leaving an empty table.
   useEffect(() => {
     setTripPage(1);
-  }, [search, statusFilter, assigneeValue, archivedValue, viewMode, pageSize]);
+  }, [search, statusFilter, personalTab, assigneeValue, archivedValue, viewMode, pageSize]);
 
   useEffect(() => {
     if (tripPage > tripTotalPages) setTripPage(tripTotalPages);
   }, [tripPage, tripTotalPages]);
 
-  const handleDuplicate = async (e: React.MouseEvent, tripId: string) => {
-    e.stopPropagation();
+  const runDuplicate = async (tripId: string) => {
     try {
       setActionLoadingId(tripId);
       await onDuplicateTrip(tripId);
@@ -414,177 +636,518 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
     }
   };
 
+  /** The owner's own share token is the only copyable link; members never receive it. */
+  const copyShareLink = async (trip: Trip) => {
+    if (!trip.shareId) return;
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/shared/${trip.shareId}`);
+      toast.success("Share link copied.");
+    } catch {
+      toast.error("Could not copy the share link.");
+    }
+  };
+
   const deletedDate = (trip: Trip): string =>
     formatDate(trip.deletedAt || trip.updatedAt || "") || "recently";
 
-  return (
-    <div className={`space-y-6 animate-fade-in${hideHeader ? "" : " max-w-6xl mx-auto"}`}>
-      {/* Top Controls Header */}
-      {hideHeader ? null : isAgency ? (
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-3xl bg-card border border-border/70 shadow-xs">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-primary">
-              {eyebrow ?? "Agency Trip Library"}
-            </span>
-            <Badge variant="outline" className="text-[10px]">
-              {trips.length} Agency Trips
-            </Badge>
-          </div>
-          <h2 className="text-2xl font-black text-foreground">
-            {heading ?? "Agency trips"}
-          </h2>
-        </div>
+  const deletedRow = (trip: Trip) => {
+    const title = trip.title || trip.tripDetails?.trip_title || "Deleted trip";
+    const days = trip.tripDetails?.duration_days;
+    const schedule = tripScheduleLabel(trip);
+    const destination = tripDestinationOf(trip);
+    const cover = tripCoverUrl(`${destination} ${title}`, 320);
+    const isActing = actionLoadingId === trip._id;
+    const detail = schedule ?? (days ? `${days} ${days === 1 ? "day" : "days"}` : null);
 
-        <div className="flex items-center gap-2 self-start md:self-auto">
-          {travelPageHandle && (
-            <Button
-              asChild
-              variant="outline"
-              className="rounded-2xl h-11 px-4 text-xs font-bold gap-2"
-            >
-              <Link to={`/travelers/${encodeURIComponent(travelPageHandle)}`}>
-                <Globe2 className="h-4 w-4" />
-                Your travel page
-              </Link>
-            </Button>
-          )}
+    return (
+      <div
+        key={trip._id}
+        className="flex flex-col gap-3 rounded-xl border border-border/60 bg-card p-3 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <div className="flex min-w-0 items-center gap-3">
+          <img
+            src={cover}
+            alt={title}
+            loading="lazy"
+            className="h-12 w-16 shrink-0 rounded-lg object-cover opacity-80"
+          />
+          <div className="min-w-0">
+            <h4 className="truncate font-display text-sm font-semibold tracking-tight text-foreground">
+              {title}
+            </h4>
+            <p className="truncate text-[11px] text-muted-foreground">
+              {[detail, `Deleted ${deletedDate(trip)}`].filter(Boolean).join(" · ")}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-1 self-end sm:self-center">
           <Button
             type="button"
-            variant="hero"
-            onClick={onNewPlan}
-            className="rounded-2xl h-11 px-5 text-xs font-bold gap-2 shadow-sm"
+            size="sm"
+            variant="ghost"
+            disabled={isActing}
+            onClick={() => handleRestore(trip)}
+            className="h-8 gap-1.5 rounded-lg px-2.5 text-xs font-semibold text-primary hover:bg-primary/10 hover:text-primary"
           >
-            <PlusCircle className="w-4 h-4" />
-            <span>{planLabel}</span>
+            {isActing ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RotateCcw className="h-3.5 w-3.5" />
+            )}
+            Restore
           </Button>
+          {onPurgeTrip ? (
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              title="Delete forever"
+              disabled={isActing}
+              onClick={() => setTripToPurge(trip)}
+              className="h-8 w-8 rounded-lg text-muted-foreground hover:text-destructive"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          ) : null}
         </div>
       </div>
+    );
+  };
+
+  const deletedShelf = (expanded: boolean) => (
+    <section className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-xs">
+      <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground">
+            <Trash2 className="h-4 w-4" aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="font-display text-base font-semibold tracking-tight text-foreground">
+                Recently deleted
+              </h2>
+              <Badge variant="outline" className="text-[10px]">
+                {deletedTrips.length}
+              </Badge>
+            </div>
+            <p className="mt-0.5 max-w-xl text-[11px] leading-relaxed text-muted-foreground">
+              {deletedHelpText ??
+                "Trips you removed. Restore one to bring back the itinerary and chat; old share links and invites stay revoked."}
+            </p>
+          </div>
+        </div>
+        {personalTab === "trash" ? null : (
+          <button
+            type="button"
+            onClick={() => setShowDeleted((open) => !open)}
+            aria-expanded={showDeleted}
+            aria-label={showDeleted ? "Hide recently deleted trips" : "Show recently deleted trips"}
+            className="self-start rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:self-auto"
+          >
+            {showDeleted ? (
+              <ChevronUp className="h-4 w-4" aria-hidden="true" />
+            ) : (
+              <ChevronDown className="h-4 w-4" aria-hidden="true" />
+            )}
+          </button>
+        )}
+      </div>
+      {expanded ? (
+        <div className="space-y-2 border-t border-border/60 p-3">
+          {deletedTrips.map((trip) => deletedRow(trip))}
+        </div>
+      ) : null}
+    </section>
+  );
+
+  const ownedMenu = (trip: Trip) => (
+    <>
+      <MenuItem onSelect={() => onSelectTrip(trip)}>Open trip</MenuItem>
+      {(!canDuplicateTrip || canDuplicateTrip(trip)) && (
+        <MenuItem onSelect={() => void runDuplicate(trip._id)}>
+          <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+          Duplicate as draft
+        </MenuItem>
+      )}
+      {trip.shareId ? (
+        <MenuItem onSelect={() => void copyShareLink(trip)}>
+          <Link2 className="h-3.5 w-3.5" aria-hidden="true" />
+          Copy share link
+        </MenuItem>
+      ) : null}
+      {onDeleteTrip && (!canDeleteTrip || canDeleteTrip(trip)) ? (
+        <>
+          <DropdownMenuSeparator />
+          <MenuItem destructive onSelect={() => setTripToDelete(trip)}>
+            <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+            Move to Recently deleted
+          </MenuItem>
+        </>
+      ) : null}
+    </>
+  );
+
+  const sharedMenu = (trip: Trip) => (
+    <>
+      <MenuItem onSelect={() => onSelectTrip(trip)}>Open trip</MenuItem>
+      {(!canDuplicateTrip || canDuplicateTrip(trip)) && (
+        <MenuItem onSelect={() => void runDuplicate(trip._id)}>
+          <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+          Copy to my trips
+        </MenuItem>
+      )}
+    </>
+  );
+
+  const agencyMenu = (trip: Trip) => (
+    <>
+      <MenuItem onSelect={() => onSelectTrip(trip)}>Open trip</MenuItem>
+      {!showingArchived && (!canDuplicateTrip || canDuplicateTrip(trip)) && (
+        <MenuItem onSelect={() => void runDuplicate(trip._id)}>
+          <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+          Duplicate as draft
+        </MenuItem>
+      )}
+      {!showingArchived &&
+      onArchiveTrip &&
+      (!canArchiveTrip || canArchiveTrip(trip)) ? (
+        <MenuItem onSelect={() => void handleArchive(trip)}>
+          <Archive className="h-3.5 w-3.5" aria-hidden="true" />
+          Archive trip
+        </MenuItem>
+      ) : null}
+      {showingArchived &&
+      onUnarchiveTrip &&
+      (!canArchiveTrip || canArchiveTrip(trip)) ? (
+        <MenuItem onSelect={() => void handleUnarchive(trip)}>
+          <ArchiveRestore className="h-3.5 w-3.5" aria-hidden="true" />
+          Restore to active list
+        </MenuItem>
+      ) : null}
+    </>
+  );
+
+  const hasQuery =
+    Boolean(search.trim()) ||
+    (isAgency ? statusFilter !== "all" : false) ||
+    Boolean(assigneeValue && assigneeValue !== "all");
+
+  const emptyCopy = (() => {
+    if (showingArchived) {
+      return {
+        title: "No archived trips",
+        body:
+          "Archive a trip from the active list to keep the library tidy; pinned exports and client links keep working.",
+      };
+    }
+    if (hasQuery) {
+      return {
+        title: "No matching trips found",
+        body: "Try a different word, a destination, or another tab.",
+      };
+    }
+    if (isAgency) {
+      return {
+        title: emptyTitle ?? "No agency trips yet",
+        body:
+          emptyBody ??
+          "Plan a client trip with AI, then refine it with your team and invite the client from the People tab.",
+      };
+    }
+    if (personalTab === "drafts") {
+      return {
+        title: emptyTitle ?? "No drafts",
+        body: emptyBody ?? "Drafts are trips still taking shape. Start one and it will wait for you here.",
+      };
+    }
+    if (personalTab === "past") {
+      return {
+        title: emptyTitle ?? "No past trips yet",
+        body:
+          emptyBody ??
+          "Set a trip to completed when you are back and it will move here so the upcoming list stays current.",
+      };
+    }
+    if (deletedTrips.length > 0) {
+      return {
+        title: emptyTitle ?? "No trips here right now",
+        body: "Restore a trip from Recently deleted below, or start a new plan.",
+      };
+    }
+    return {
+      title: emptyTitle ?? "No upcoming trips yet",
+      body: emptyBody ?? "Plan a trip and it will show up here.",
+    };
+  })();
+
+  const emptyAction = (
+    <Button
+      type="button"
+      variant="hero"
+      onClick={onNewPlan}
+      className="h-10 gap-2 rounded-xl px-4 text-xs font-semibold"
+    >
+      <PlusCircle className="h-4 w-4" aria-hidden="true" />
+      <span>{planLabel}</span>
+    </Button>
+  );
+
+  const personalListRow = (trip: Trip) => {
+    const title = tripTitleOf(trip);
+    const destination = tripDestinationOf(trip);
+    const schedule = tripScheduleLabel(trip);
+    const days = trip.tripDetails?.duration_days;
+    const chip = statusChipFor(trip, Boolean(trip.role && trip.role !== "owner"));
+    const cover = tripCoverUrl(`${destination} ${title}`, 320);
+    const isActing = actionLoadingId === trip._id;
+    const scheduleText =
+      schedule ??
+      (days
+        ? `${days} ${days === 1 ? "day" : "days"}`
+        : trip.createdAt
+        ? `Created ${formatDate(trip.createdAt)}`
+        : "");
+
+    return (
+      <article
+        key={trip._id}
+        onClick={() => onSelectTrip(trip)}
+        className="group flex cursor-pointer flex-col gap-3 rounded-2xl border border-border/70 bg-card p-3 shadow-xs transition-colors hover:border-primary/30 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <div className="flex min-w-0 items-center gap-3">
+          <img
+            src={cover}
+            alt={title}
+            loading="lazy"
+            className="h-16 w-24 shrink-0 rounded-xl object-cover"
+          />
+          <div className="min-w-0 space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold text-foreground">
+                <span className={cn("h-1.5 w-1.5 rounded-full", chip.dotClass)} aria-hidden="true" />
+                {chip.label}
+              </span>
+              <span className="text-[11px] text-muted-foreground">{scheduleText}</span>
+            </div>
+            <h3 className="truncate font-display text-base font-semibold tracking-tight text-foreground transition-colors group-hover:text-primary">
+              {title}
+            </h3>
+            {destination ? (
+              <p className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+                <MapPin className="h-3 w-3 shrink-0" aria-hidden="true" />
+                <span className="truncate">{destination}</span>
+              </p>
+            ) : null}
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5 self-end sm:self-center">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-9 gap-1.5 rounded-xl px-3 text-xs font-semibold"
+            onClick={(event) => {
+              event.stopPropagation();
+              onSelectTrip(trip);
+            }}
+          >
+            <span>Open trip</span>
+            <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+          </Button>
+          <TripActionsMenu label={title} acting={isActing}>
+            {trip.role && trip.role !== "owner" ? sharedMenu(trip) : ownedMenu(trip)}
+          </TripActionsMenu>
+        </div>
+      </article>
+    );
+  };
+
+  return (
+    <div className={cn("animate-fade-in space-y-6", hideHeader ? "" : "mx-auto max-w-6xl")}>
+      {/* Top Controls Header */}
+      {hideHeader ? null : isAgency ? (
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-2xl bg-card border border-border/70 shadow-xs">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-primary">
+                {eyebrow ?? "Agency Trip Library"}
+              </span>
+              <Badge variant="outline" className="text-[10px]">
+                {trips.length} Agency Trips
+              </Badge>
+            </div>
+            <h2 className="mt-1 font-display text-2xl font-semibold tracking-tight text-foreground">
+              {heading ?? "Agency trips"}
+            </h2>
+          </div>
+
+          <div className="flex items-center gap-2 self-start md:self-auto">
+            {travelPageHandle && (
+              <Button
+                asChild
+                variant="outline"
+                className="rounded-xl h-11 px-4 text-xs font-bold gap-2"
+              >
+                <Link to={`/travelers/${encodeURIComponent(travelPageHandle)}`}>
+                  <Globe2 className="h-4 w-4" />
+                  Your travel page
+                </Link>
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="hero"
+              onClick={onNewPlan}
+              className="rounded-xl h-11 px-5 text-xs font-bold gap-2"
+            >
+              <PlusCircle className="w-4 h-4" />
+              <span>{planLabel}</span>
+            </Button>
+          </div>
+        </div>
       ) : (
-        <TravellerPageHeader
-          eyebrow={eyebrow ?? "Trip library"}
-          icon={Compass}
-          title={heading ?? "Your trips"}
-          description="Everything you have planned, plus trips friends share with you. Open one to edit the plan, split costs, or invite the group."
-          crumbs={[{ label: "My Trips" }]}
-          actions={
-            <>
-              {travelPageHandle && (
+        <header className="space-y-4">
+          <TravellerBreadcrumbs items={[{ label: "Dashboard" }]} />
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div className="min-w-0 space-y-1.5">
+              <h1 className="font-display text-4xl font-semibold leading-[1.05] tracking-tight text-foreground sm:text-5xl">
+                {heading ?? "My trips"}
+              </h1>
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                Your plans, drafts and the trips you joined.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {travelPageHandle ? (
                 <Button
                   asChild
                   variant="outline"
-                  className="h-10 rounded-xl px-3.5 text-xs font-semibold gap-1.5"
+                  className="h-11 gap-2 rounded-xl px-4 text-sm font-semibold"
                 >
                   <Link to={`/travelers/${encodeURIComponent(travelPageHandle)}`}>
-                    <Globe2 className="h-4 w-4" />
-                    Your travel page
+                    <Link2 className="h-4 w-4" aria-hidden="true" />
+                    My public page
                   </Link>
                 </Button>
-              )}
+              ) : null}
               <Button
                 type="button"
                 variant="hero"
                 onClick={onNewPlan}
-                className="h-10 rounded-xl px-4 text-xs font-semibold gap-1.5 shadow-sm"
+                className="h-11 gap-2 rounded-xl px-5 text-sm font-semibold"
               >
-                <PlusCircle className="w-4 h-4" />
+                <PlusCircle className="h-4 w-4" aria-hidden="true" />
                 <span>{planLabel}</span>
               </Button>
-            </>
-          }
-        />
+            </div>
+          </div>
+        </header>
       )}
 
       {/* Filter & Search Bar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-        {/* Search Input */}
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by destination or title..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-10 h-11 rounded-2xl bg-card border-border/70 text-xs shadow-2xs"
-          />
-        </div>
-
-        {/* View Switcher & Status Pills */}
-        <div className="flex items-center gap-2 justify-between sm:justify-end overflow-x-auto pb-1 scrollbar-none">
-          {isAgency && onAssigneeChange && assigneeOptions ? (
-            <Select value={assigneeValue || "all"} onValueChange={onAssigneeChange}>
-              <SelectTrigger className="h-8 w-[150px] rounded-xl text-xs">
-                <SelectValue placeholder="Assignee" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all" className="text-xs">
-                  All assignees
-                </SelectItem>
-                <SelectItem value="unassigned" className="text-xs">
-                  Unassigned
-                </SelectItem>
-                {assigneeOptions.map((member) => (
-                  <SelectItem key={member.userId} value={member.userId} className="text-xs">
-                    {member.label || member.email || "Agency member"}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        {isAgency ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {onAssigneeChange && assigneeOptions ? (
+              <Select value={assigneeValue || "all"} onValueChange={onAssigneeChange}>
+                <SelectTrigger className="h-9 w-[150px] rounded-xl text-xs">
+                  <SelectValue placeholder="Assignee" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all" className="text-xs">
+                    All assignees
                   </SelectItem>
+                  <SelectItem value="unassigned" className="text-xs">
+                    Unassigned
+                  </SelectItem>
+                  {assigneeOptions.map((member) => (
+                    <SelectItem key={member.userId} value={member.userId} className="text-xs">
+                      {member.label || member.email || "Agency member"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : null}
+
+            {onArchivedChange ? (
+              <div className="inline-flex rounded-full border border-border/70 bg-card p-1">
+                {(["active", "archived"] as const).map((view) => (
+                  <button
+                    key={view}
+                    type="button"
+                    aria-pressed={showingArchived === (view === "archived")}
+                    onClick={() => onArchivedChange(view)}
+                    className={cn(
+                      "inline-flex min-h-[30px] items-center rounded-full px-3 py-1 text-xs font-semibold capitalize transition-colors",
+                      showingArchived === (view === "archived")
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    )}
+                  >
+                    {view}
+                  </button>
                 ))}
-              </SelectContent>
-            </Select>
-          ) : null}
+              </div>
+            ) : null}
 
-          {isAgency && onArchivedChange ? (
-            <div className="inline-flex p-1 bg-muted/60 rounded-2xl border border-border/60">
-              {(["active", "archived"] as const).map((view) => (
-                <Button
-                  key={view}
-                  type="button"
-                  size="sm"
-                  variant={showingArchived === (view === "archived") ? "hero" : "ghost"}
-                  onClick={() => onArchivedChange(view)}
-                  className="rounded-xl text-xs font-bold h-8 px-3 capitalize"
-                >
-                  {view}
-                </Button>
-              ))}
-            </div>
-          ) : null}
-
-          {isAgency ? (
-            <div className="inline-flex p-1 bg-muted/60 rounded-2xl border border-border/60">
+            <div className="inline-flex flex-wrap rounded-full border border-border/70 bg-card p-1">
               {["all", "planned", "ongoing", "completed", "draft"].map((status) => (
-                <Button
+                <button
                   key={status}
                   type="button"
-                  size="sm"
-                  variant={statusFilter === status ? "hero" : "ghost"}
+                  aria-pressed={statusFilter === status}
                   onClick={() => setStatusFilter(status)}
-                  className="rounded-xl text-xs font-bold h-8 px-3 capitalize"
+                  className={cn(
+                    "inline-flex min-h-[30px] items-center rounded-full px-3 py-1 text-xs font-semibold capitalize transition-colors",
+                    statusFilter === status
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
                 >
                   {status}
-                </Button>
+                </button>
               ))}
             </div>
-          ) : (
-            <TravellerSegmented
-              ariaLabel="Filter trips by status"
-              value={statusFilter}
-              onChange={(value) => setStatusFilter(value)}
-              options={[
-                { value: "all", label: "All", count: statusCounts.all },
-                { value: "planned", label: "Planned", count: statusCounts.planned },
-                { value: "ongoing", label: "Ongoing", count: statusCounts.ongoing },
-                { value: "completed", label: "Completed", count: statusCounts.completed },
-                { value: "draft", label: "Drafts", count: statusCounts.draft },
-              ]}
-            />
-          )}
+          </div>
+        ) : (
+          <TravellerSegmented<PersonalTab>
+            ariaLabel="Filter trips"
+            value={personalTab}
+            onChange={(value) => setPersonalTab(value)}
+            options={[
+              { value: "upcoming", label: "Upcoming" },
+              { value: "drafts", label: "Drafts" },
+              { value: "past", label: "Past" },
+              { value: "trash", label: "Trash" },
+            ]}
+            className="border-border/70 bg-muted/50 [&>button]:min-h-[34px] [&>button]:px-4"
+          />
+        )}
 
-          <div className="inline-flex p-1 bg-muted/60 rounded-2xl border border-border/60">
+        <div className="flex items-center gap-2">
+          <div className="relative min-w-0 flex-1 lg:w-[340px] lg:flex-none">
+            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder={
+                isAgency
+                  ? "Search by destination or title…"
+                  : "Search trips, destinations or dates…"
+              }
+              aria-label="Search trips"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-11 rounded-xl border-border/70 bg-card pl-10 text-xs shadow-xs"
+            />
+          </div>
+          <div className="inline-flex shrink-0 rounded-xl border border-border/70 bg-card p-0.5">
             <Button
               type="button"
               size="icon"
               variant={viewMode === "grid" ? "default" : "ghost"}
+              aria-label="Grid view"
+              aria-pressed={viewMode === "grid"}
               onClick={() => setViewMode("grid")}
-              className="h-8 w-8 rounded-xl"
+              className="h-9 w-9 rounded-lg"
             >
               <LayoutGrid className="w-4 h-4" />
             </Button>
@@ -592,8 +1155,10 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
               type="button"
               size="icon"
               variant={viewMode === "list" ? "default" : "ghost"}
+              aria-label="List view"
+              aria-pressed={viewMode === "list"}
               onClick={() => setViewMode("list")}
-              className="h-8 w-8 rounded-xl"
+              className="h-9 w-9 rounded-lg"
             >
               <List className="w-4 h-4" />
             </Button>
@@ -602,228 +1167,36 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
       </div>
 
       {/* Trips Content */}
-      {ownedTrips.length === 0 && sharedTrips.length === 0 ? (
-        <div className="p-12 text-center rounded-3xl bg-card/60 backdrop-blur-sm border border-dashed border-border/80 space-y-4">
-          <div className="w-16 h-16 rounded-3xl bg-primary/10 text-primary flex items-center justify-center mx-auto shadow-inner">
-            <Compass className="w-8 h-8 animate-pulse" />
-          </div>
-          <div className="space-y-1 max-w-sm mx-auto">
-            <h3 className="text-lg font-bold text-foreground">
-              {showingArchived
-                ? "No archived trips"
-                : search ||
-                  statusFilter !== "all" ||
-                  (assigneeValue && assigneeValue !== "all")
-                ? "No matching trips found"
-                : emptyTitle ??
-                  (isAgency ? "No agency trips yet" : "No saved trips yet")}
-            </h3>
-            <p className="text-xs text-muted-foreground">
-              {showingArchived
-                ? "Archive a trip from the active list to keep the library tidy; pinned exports and client links keep working."
-                : search ||
-                  statusFilter !== "all" ||
-                  (assigneeValue && assigneeValue !== "all")
-                ? "Try adjusting your search keywords or filters."
-                : !isAgency && deletedTrips.length > 0
-                ? "Restore a trip from Recently deleted below, or start a new plan."
-                : emptyBody ??
-                  (isAgency
-                    ? "Plan a client trip with AI, then refine it with your team and invite the client from the People tab."
-                    : "Plan your first trip and it will show up here.")}
-            </p>
-          </div>
-          <Button
-            type="button"
-            variant="hero"
-            onClick={onNewPlan}
-            className="rounded-2xl px-5 text-xs font-bold gap-2"
-          >
-            <PlusCircle className="w-4 h-4" />
-            <span>{isAgency ? planLabel : "Create Itinerary"}</span>
-          </Button>
-        </div>
+      {!isAgency && personalTab === "trash" ? (
+        deletedTrips.length > 0 ? (
+          deletedShelf(true)
+        ) : (
+          <EmptyState
+            title="Trash is empty"
+            body="Trips you remove from your library wait here, so you can restore one if you change your mind."
+            action={emptyAction}
+          />
+        )
+      ) : ownedTrips.length === 0 && sharedTrips.length === 0 ? (
+        <EmptyState title={emptyCopy.title} body={emptyCopy.body} action={emptyAction} />
       ) : viewMode === "grid" ? (
         /* GRID VIEW */
-        <div className="space-y-10">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {pagedOwnedTrips.map((trip) => {
-            const title =
-              trip.title || trip.tripDetails?.trip_title || "Custom Trip";
-            const cover = getTripCover(title);
-            const statusKey =
-              (trip.status as keyof typeof STATUS_CONFIG) || "planned";
-            const statusInfo = STATUS_CONFIG[statusKey] || STATUS_CONFIG.planned;
-            const days = trip.tripDetails?.duration_days || 5;
-            const budget = trip.tripDetails?.budget_per_person ?? 0;
-            const isActing = actionLoadingId === trip._id;
-
-            return (
-              <Card
-                key={trip._id}
-                onClick={() => onSelectTrip(trip)}
-                className="group rounded-3xl border border-border/70 hover:border-primary/50 bg-card overflow-hidden shadow-card hover:shadow-hover transition-all duration-300 cursor-pointer flex flex-col justify-between"
-              >
-                <div>
-                  {/* Card Thumbnail */}
-                  <div className="relative h-44 w-full overflow-hidden">
-                    <img
-                      src={cover}
-                      alt={title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-
-                    {/* Status Badge */}
-                    <div className="absolute top-3 left-3">
-                      <Badge
-                        className={cn(
-                          "backdrop-blur-md px-2.5 py-1 text-[11px] font-bold gap-1 shadow-sm",
-                          statusInfo.badgeClass
-                        )}
-                      >
-                        {statusInfo.icon}
-                        <span>{statusInfo.label}</span>
-                      </Badge>
-                    </div>
-
-                    {/* Days Count Overlay */}
-                    <div className="absolute bottom-3 left-3 text-white text-xs font-bold flex items-center gap-1.5">
-                      <Calendar className="w-3.5 h-3.5 text-primary" />
-                      <span>{days} Days</span>
-                      {budget > 0 && (
-                        <>
-                          <span>•</span>
-                          <span className="text-white/80">
-                            ₹{budget.toLocaleString("en-IN")}/person
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Card Body */}
-                  <CardContent className="p-5 space-y-3">
-                    <h3 className="font-extrabold text-base text-foreground line-clamp-2 group-hover:text-primary transition-colors">
-                      {title}
-                    </h3>
-                    <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border/60">
-                      <span>Created {formatDate(trip.createdAt)}</span>
-                      {isAgency ? (
-                        <span
-                          className="max-w-[45%] truncate font-semibold text-foreground"
-                          title={`Assigned to ${assigneeName(trip.assignedTo)}`}
-                        >
-                          {assigneeName(trip.assignedTo)}
-                        </span>
-                      ) : (
-                        <span className="font-semibold text-foreground">
-                          {trip.tripDetails?.group_type || "Traveler"}
-                        </span>
-                      )}
-                    </div>
-                  </CardContent>
-                </div>
-
-                {/* Card Actions Footer */}
-                <div className="px-5 pb-5 pt-0 flex items-center justify-between gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="flex-1 rounded-xl text-xs font-bold gap-1.5 h-9"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onSelectTrip(trip);
-                    }}
-                  >
-                    <span>View Itinerary</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </Button>
-
-                  {!showingArchived && (!canDuplicateTrip || canDuplicateTrip(trip)) && (
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      title="Duplicate as draft"
-                      disabled={isActing}
-                      onClick={(e) => handleDuplicate(e, trip._id)}
-                      className="h-9 w-9 text-muted-foreground hover:text-primary rounded-xl"
-                    >
-                      <Copy className="w-4 h-4" />
-                    </Button>
-                  )}
-
-                  {!isAgency &&
-                    !showingArchived &&
-                    onDeleteTrip &&
-                    (!canDeleteTrip || canDeleteTrip(trip)) && (
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      title="Delete trip"
-                      disabled={isActing}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setTripToDelete(trip);
-                      }}
-                      className="h-9 w-9 text-muted-foreground hover:text-destructive rounded-xl"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  )}
-
-                  {isAgency &&
-                    !showingArchived &&
-                    onArchiveTrip &&
-                    (!canArchiveTrip || canArchiveTrip(trip)) && (
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        title="Archive trip"
-                        disabled={isActing}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void handleArchive(trip);
-                        }}
-                        className="h-9 w-9 text-muted-foreground hover:text-amber-600 rounded-xl"
-                      >
-                        <Archive className="w-4 h-4" />
-                      </Button>
-                    )}
-
-                  {isAgency &&
-                    showingArchived &&
-                    onUnarchiveTrip &&
-                    (!canArchiveTrip || canArchiveTrip(trip)) && (
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        title="Restore to the active list"
-                        disabled={isActing}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void handleUnarchive(trip);
-                        }}
-                        className="h-9 w-9 text-muted-foreground hover:text-emerald-600 rounded-xl"
-                      >
-                        <ArchiveRestore className="w-4 h-4" />
-                      </Button>
-                    )}
-                </div>
-              </Card>
-            );
-          })}
-        </div>
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {pagedOwnedTrips.map((trip) => (
+            <TripCard
+              key={trip._id}
+              trip={trip}
+              onOpen={() => onSelectTrip(trip)}
+              acting={actionLoadingId === trip._id}
+              note={isAgency ? `Assigned to ${assigneeName(trip.assignedTo)}` : undefined}
+              menuItems={isAgency ? agencyMenu(trip) : ownedMenu(trip)}
+            />
+          ))}
         </div>
       ) : isAgency ? (
         /* AGENCY LIST VIEW: one row per trip, so package, quote and proposal
            state line up instead of hiding in separate tabs. */
-        <div className="overflow-x-auto rounded-3xl border border-border/70 bg-card shadow-xs">
+        <div className="overflow-x-auto rounded-2xl border border-border/70 bg-card shadow-xs">
           <table className="w-full min-w-[880px] text-left text-xs">
             <thead className="border-b border-border/70 bg-muted/40 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
               <tr>
@@ -963,7 +1336,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
                           type="button"
                           size="sm"
                           variant="outline"
-                          className="h-8 rounded-xl px-2.5 text-[11px] font-bold gap-1"
+                          className="h-8 rounded-lg px-2.5 text-[11px] font-bold gap-1"
                           onClick={() => onSelectTrip(trip)}
                         >
                           Open
@@ -977,8 +1350,8 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
                               variant="ghost"
                               title="Duplicate as draft"
                               disabled={isActing}
-                              onClick={(e) => handleDuplicate(e, trip._id)}
-                              className="h-8 w-8 rounded-xl text-muted-foreground hover:text-primary"
+                              onClick={() => void runDuplicate(trip._id)}
+                              className="h-8 w-8 rounded-lg text-muted-foreground hover:text-primary"
                             >
                               <Copy className="h-3.5 w-3.5" />
                             </Button>
@@ -992,11 +1365,8 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
                               variant="ghost"
                               title="Archive trip"
                               disabled={isActing}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                void handleArchive(trip);
-                              }}
-                              className="h-8 w-8 rounded-xl text-muted-foreground hover:text-amber-600"
+                              onClick={() => void handleArchive(trip)}
+                              className="h-8 w-8 rounded-lg text-muted-foreground hover:text-amber-600"
                             >
                               <Archive className="h-3.5 w-3.5" />
                             </Button>
@@ -1010,11 +1380,8 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
                               variant="ghost"
                               title="Restore to the active list"
                               disabled={isActing}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                void handleUnarchive(trip);
-                              }}
-                              className="h-8 w-8 rounded-xl text-muted-foreground hover:text-emerald-600"
+                              onClick={() => void handleUnarchive(trip)}
+                              className="h-8 w-8 rounded-lg text-muted-foreground hover:text-emerald-600"
                             >
                               <ArchiveRestore className="h-3.5 w-3.5" />
                             </Button>
@@ -1028,152 +1395,8 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
           </table>
         </div>
       ) : (
-        /* LIST VIEW */
-        <div className="space-y-3">
-          {pagedOwnedTrips.map((trip) => {
-            const title =
-              trip.title || trip.tripDetails?.trip_title || "Custom Trip";
-            const cover = getTripCover(title);
-            const statusKey =
-              (trip.status as keyof typeof STATUS_CONFIG) || "planned";
-            const statusInfo = STATUS_CONFIG[statusKey] || STATUS_CONFIG.planned;
-            const days = trip.tripDetails?.duration_days || 5;
-            const budget = trip.tripDetails?.budget_per_person || 15000;
-            const isActing = actionLoadingId === trip._id;
-
-            return (
-              <div
-                key={trip._id}
-                onClick={() => onSelectTrip(trip)}
-                className="p-4 rounded-3xl bg-card border border-border/70 hover:border-primary/50 shadow-xs hover:shadow-card transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer group"
-              >
-                <div className="flex items-center gap-4">
-                  <img
-                    src={cover}
-                    alt={title}
-                    className="w-16 h-16 rounded-2xl object-cover shrink-0 shadow-xs"
-                  />
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <Badge
-                        className={cn(
-                          "px-2 py-0.5 text-[10px] font-bold gap-1",
-                          statusInfo.badgeClass
-                        )}
-                      >
-                        {statusInfo.icon}
-                        <span>{statusInfo.label}</span>
-                      </Badge>
-                      <span className="text-xs text-muted-foreground">
-                        {formatDate(trip.createdAt)}
-                      </span>
-                    </div>
-                    <h4 className="font-extrabold text-sm sm:text-base text-foreground group-hover:text-primary transition-colors line-clamp-1">
-                      {title}
-                    </h4>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <span>{days} Days</span>
-                      {budget > 0 && (
-                        <>
-                          <span>•</span>
-                          <span>₹{budget.toLocaleString("en-IN")}/person</span>
-                        </>
-                      )}
-                      <span>•</span>
-                      <span>{trip.tripDetails?.group_type || "Couple"}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 self-end sm:self-center">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="rounded-xl text-xs font-bold h-9 px-3 gap-1"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onSelectTrip(trip);
-                    }}
-                  >
-                    <span>Open</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </Button>
-                  {!showingArchived && (!canDuplicateTrip || canDuplicateTrip(trip)) && (
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      title="Duplicate as draft"
-                      disabled={isActing}
-                      onClick={(e) => handleDuplicate(e, trip._id)}
-                      className="h-9 w-9 text-muted-foreground hover:text-primary rounded-xl"
-                    >
-                      <Copy className="w-4 h-4" />
-                    </Button>
-                  )}
-                  {!isAgency &&
-                    !showingArchived &&
-                    onDeleteTrip &&
-                    (!canDeleteTrip || canDeleteTrip(trip)) && (
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      title="Delete trip"
-                      disabled={isActing}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setTripToDelete(trip);
-                      }}
-                      className="h-9 w-9 text-muted-foreground hover:text-destructive rounded-xl"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  )}
-                  {isAgency &&
-                    !showingArchived &&
-                    onArchiveTrip &&
-                    (!canArchiveTrip || canArchiveTrip(trip)) && (
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        title="Archive trip"
-                        disabled={isActing}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void handleArchive(trip);
-                        }}
-                        className="h-9 w-9 text-muted-foreground hover:text-amber-600 rounded-xl"
-                      >
-                        <Archive className="w-4 h-4" />
-                      </Button>
-                    )}
-                  {isAgency &&
-                    showingArchived &&
-                    onUnarchiveTrip &&
-                    (!canArchiveTrip || canArchiveTrip(trip)) && (
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        title="Restore to the active list"
-                        disabled={isActing}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void handleUnarchive(trip);
-                        }}
-                        className="h-9 w-9 text-muted-foreground hover:text-emerald-600 rounded-xl"
-                      >
-                        <ArchiveRestore className="w-4 h-4" />
-                      </Button>
-                    )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        /* PERSONAL LIST VIEW */
+        <div className="space-y-3">{pagedOwnedTrips.map((trip) => personalListRow(trip))}</div>
       )}
 
       {pageLength > 0 && ownedTrips.length > 0 ? (
@@ -1183,208 +1406,44 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
           total={ownedTrips.length}
           noun="trip"
           onChange={setTripPage}
-          className="rounded-2xl border border-border/70 bg-card"
+          className="rounded-xl border border-border/70 bg-card"
         />
       ) : null}
 
       {/* "Shared with me" (Milestone 6 §3.8): trips owned by someone else.
           Deletion is never offered — only the owner can delete on the server. */}
       {sharedTrips.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 pt-2">
-            <Users className="w-4 h-4 text-primary" />
-            <h3 className="text-sm font-semibold tracking-wide text-foreground">
+        <section className="space-y-3 pt-2">
+          <div className="flex items-center gap-2">
+            <Users className="h-4 w-4 text-primary" aria-hidden="true" />
+            <h2 className="font-display text-lg font-semibold tracking-tight text-foreground">
               Shared with me
-            </h3>
+            </h2>
             <Badge variant="outline" className="text-[10px]">
               {sharedTrips.length}
             </Badge>
           </div>
-          {sharedTrips.map((trip) => {
-            const title =
-              trip.title || trip.tripDetails?.trip_title || "Shared trip";
-            const cover = getTripCover(title);
-            const days = trip.tripDetails?.duration_days || 5;
-            const budget = trip.tripDetails?.budget_per_person ?? 0;
-            const isActing = actionLoadingId === trip._id;
-            const roleStyle =
-              trip.role === "editor"
-                ? "bg-emerald-500/10 text-emerald-600 border-emerald-200 dark:border-emerald-800"
-                : trip.role === "commenter"
-                ? "bg-sky-500/10 text-sky-600 border-sky-200 dark:border-sky-800"
-                : "bg-muted text-muted-foreground border-border";
-
-            return (
-              <div
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {sharedTrips.map((trip) => (
+              <TripCard
                 key={trip._id}
-                onClick={() => onSelectTrip(trip)}
-                className="p-4 rounded-3xl bg-card border border-border/70 hover:border-primary/50 shadow-xs hover:shadow-card transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer group"
-              >
-                <div className="flex items-center gap-4">
-                  <img
-                    src={cover}
-                    alt={title}
-                    className="w-16 h-16 rounded-2xl object-cover shrink-0 shadow-xs"
-                  />
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <Badge
-                        className={cn(
-                          "px-2 py-0.5 text-[10px] font-bold capitalize",
-                          roleStyle
-                        )}
-                      >
-                        {trip.role}
-                      </Badge>
-                      <span className="text-xs text-muted-foreground">
-                        {formatDate(trip.createdAt)}
-                      </span>
-                    </div>
-                    <h4 className="font-extrabold text-sm sm:text-base text-foreground group-hover:text-primary transition-colors line-clamp-1">
-                      {title}
-                    </h4>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <span>{days} Days</span>
-                      {budget > 0 && (
-                        <>
-                          <span>•</span>
-                          <span>₹{budget.toLocaleString("en-IN")}/person</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 self-end sm:self-center">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="rounded-xl text-xs font-bold h-9 px-3 gap-1"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onSelectTrip(trip);
-                    }}
-                  >
-                    <span>Open</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </Button>
-                  {(!canDuplicateTrip || canDuplicateTrip(trip)) && (
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      title="Duplicate this trip into your own library"
-                      disabled={isActing}
-                      onClick={(e) => handleDuplicate(e, trip._id)}
-                      className="h-9 w-9 text-muted-foreground hover:text-primary rounded-xl"
-                    >
-                      <Copy className="w-4 h-4" />
-                    </Button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+                trip={trip}
+                joined
+                onOpen={() => onSelectTrip(trip)}
+                acting={actionLoadingId === trip._id}
+                menuItems={sharedMenu(trip)}
+              />
+            ))}
+          </div>
+        </section>
       )}
 
       {/* M7.7: Recently deleted. Only current owners ever receive these rows;
           members without the owner role have no restore action. The agency
           library is archive-only and never renders this shelf. */}
-      {!isAgency && deletedTrips.length > 0 && (
-        <div className="space-y-3 pt-3">
-          <button
-            type="button"
-            onClick={() => setShowDeleted((open) => !open)}
-            className="flex w-full items-center gap-2 rounded-2xl border border-border/70 bg-card px-4 py-3 text-left transition-colors hover:border-primary/40"
-            aria-expanded={showDeleted}
-          >
-            <Archive className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm font-semibold tracking-wide text-foreground">
-              Recently deleted
-            </span>
-            <Badge variant="outline" className="text-[10px]">
-              {deletedTrips.length}
-            </Badge>
-            <span className="ml-auto text-muted-foreground">
-              {showDeleted ? (
-                <ChevronUp className="w-4 h-4" />
-              ) : (
-                <ChevronDown className="w-4 h-4" />
-              )}
-            </span>
-          </button>
-
-          {showDeleted && (
-            <>
-              <p className="px-1 text-[11px] leading-relaxed text-muted-foreground">
-                {deletedHelpText ??
-                  "Only owners see this list. Restoring brings back the itinerary and chat; old share links and invites stay revoked."}
-              </p>
-              <div className="space-y-2">
-                {deletedTrips.map((trip) => {
-                  const title =
-                    trip.title || trip.tripDetails?.trip_title || "Deleted trip";
-                  const cover = getTripCover(title);
-                  const days = trip.tripDetails?.duration_days || 5;
-                  const isActing = actionLoadingId === trip._id;
-                  return (
-                    <div
-                      key={trip._id}
-                      className="flex flex-col gap-3 rounded-3xl border border-border/70 bg-card/70 p-3 sm:flex-row sm:items-center sm:justify-between"
-                    >
-                      <div className="flex min-w-0 items-center gap-3">
-                        <img
-                          src={cover}
-                          alt={title}
-                          className="h-12 w-12 shrink-0 rounded-xl object-cover opacity-70"
-                        />
-                        <div className="min-w-0">
-                          <h4 className="truncate text-sm font-extrabold text-foreground">
-                            {title}
-                          </h4>
-                          <p className="text-[11px] text-muted-foreground">
-                            Deleted {deletedDate(trip)} · {days} days
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 self-end sm:self-center">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          disabled={isActing}
-                          onClick={() => handleRestore(trip)}
-                          className="h-9 rounded-xl px-3 text-xs font-bold gap-1.5"
-                        >
-                          {isActing ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <RotateCcw className="w-3.5 h-3.5" />
-                          )}
-                          Restore
-                        </Button>
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          title="Delete forever"
-                          disabled={isActing}
-                          onClick={() => setTripToPurge(trip)}
-                          className="h-9 w-9 rounded-xl text-muted-foreground hover:text-destructive"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </div>
-      )}
+      {!isAgency && personalTab !== "trash" && deletedTrips.length > 0
+        ? deletedShelf(showDeleted)
+        : null}
 
       {/* Delete Confirmation Alert Dialog */}
       <AlertDialog
@@ -1393,9 +1452,9 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
           if (!open) setTripToDelete(null);
         }}
       >
-        <AlertDialogContent className="rounded-3xl max-w-md w-[92vw] sm:w-full p-5 sm:p-6">
+        <AlertDialogContent className="rounded-2xl max-w-md w-[92vw] sm:w-full p-5 sm:p-6">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-lg font-bold">
+            <AlertDialogTitle className="font-display text-lg font-semibold">
               Move to Recently deleted?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-xs leading-relaxed">
@@ -1429,9 +1488,9 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
           if (!open) setTripToPurge(null);
         }}
       >
-        <AlertDialogContent className="rounded-3xl max-w-md w-[92vw] sm:w-full p-5 sm:p-6">
+        <AlertDialogContent className="rounded-2xl max-w-md w-[92vw] sm:w-full p-5 sm:p-6">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-lg font-bold">
+            <AlertDialogTitle className="font-display text-lg font-semibold">
               Delete this trip forever?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-xs leading-relaxed">

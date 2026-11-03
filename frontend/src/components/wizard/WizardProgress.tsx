@@ -16,79 +16,88 @@ interface WizardProgressProps {
   canNavigateToStep: (stepId: number) => boolean;
 }
 
+/**
+ * Numbered-step rail. Completed steps are filled, the current step is filled
+ * in primary with its label below, and steps that are not reachable yet stay
+ * muted. On narrow screens the rail scrolls inside its own strip so the page
+ * itself never gains a horizontal scrollbar.
+ */
 export const WizardProgress: React.FC<WizardProgressProps> = ({
   steps,
   currentStep,
   onStepClick,
   canNavigateToStep,
 }) => {
-  const progressPercent = ((currentStep - 1) / (steps.length - 1)) * 100;
-
   return (
-    <div className="w-full mb-8">
-      {/* Top Progress Track */}
-      <div className="relative mb-6">
-        <div className="h-2 w-full bg-muted/60 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-gradient-to-r from-primary to-accent transition-all duration-500 ease-out rounded-full"
-            style={{ width: `${progressPercent}%` }}
-          />
-        </div>
-      </div>
-
-      {/* Step Pills */}
-      <div className="flex items-center justify-between relative">
-        {steps.map((step) => {
+    <nav aria-label="Trip planner steps" className="w-full">
+      <ol className="no-scrollbar -mx-1 flex items-start overflow-x-auto px-1">
+        {steps.map((step, index) => {
           const isCompleted = step.id < currentStep;
           const isCurrent = step.id === currentStep;
           const isClickable = canNavigateToStep(step.id);
+          const isLast = index === steps.length - 1;
 
           return (
-            <button
+            <li
               key={step.id}
-              type="button"
-              disabled={!isClickable}
-              onClick={() => isClickable && onStepClick(step.id)}
               className={cn(
-                "flex flex-col items-center group transition-all text-center focus:outline-none",
-                !isClickable && "cursor-not-allowed opacity-50"
+                "flex min-w-0 items-start",
+                isLast ? "flex-none" : "flex-1"
               )}
             >
-              <div
+              <button
+                type="button"
+                disabled={!isClickable}
+                aria-current={isCurrent ? "step" : undefined}
+                aria-label={`Step ${step.id}: ${step.title}`}
+                onClick={() => isClickable && onStepClick(step.id)}
                 className={cn(
-                  "w-7 h-7 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm transition-all duration-300 shadow-sm mb-1.5",
-                  isCompleted && "bg-primary text-primary-foreground shadow-md scale-95",
-                  isCurrent && "bg-primary text-primary-foreground ring-2 sm:ring-4 ring-primary/20 scale-105 sm:scale-110 shadow-md",
-                  !isCompleted && !isCurrent && "bg-card border border-border/80 text-muted-foreground group-hover:border-primary/50"
+                  "group flex shrink-0 flex-col items-center gap-2 rounded-xl px-1.5 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                  isClickable ? "cursor-pointer" : "cursor-not-allowed"
                 )}
               >
-                {isCompleted ? (
-                  <Check className="w-3.5 h-3.5 sm:w-5 sm:h-5 stroke-[2.5]" />
-                ) : (
-                  <span>{step.id}</span>
-                )}
-              </div>
-              <span
-                className={cn(
-                  "text-xs font-medium transition-colors hidden sm:block",
-                  isCurrent ? "text-primary font-bold" : "text-muted-foreground",
-                  isCompleted && "text-foreground"
-                )}
-              >
-                {step.title}
-              </span>
-              <span
-                className={cn(
-                  "text-[10px] font-medium transition-colors sm:hidden",
-                  isCurrent ? "text-primary font-bold" : "text-muted-foreground"
-                )}
-              >
-                {step.shortTitle}
-              </span>
-            </button>
+                <span
+                  className={cn(
+                    "flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold transition-colors sm:h-9 sm:w-9 sm:text-sm",
+                    isCompleted && "bg-primary text-primary-foreground",
+                    isCurrent &&
+                      "bg-primary text-primary-foreground ring-4 ring-primary/15",
+                    !isCompleted &&
+                      !isCurrent &&
+                      "border border-border/80 bg-muted/60 text-muted-foreground"
+                  )}
+                >
+                  {isCompleted ? (
+                    <Check className="h-4 w-4 stroke-[2.5]" aria-hidden="true" />
+                  ) : (
+                    <span>{step.id}</span>
+                  )}
+                </span>
+                <span
+                  className={cn(
+                    "text-[11px] font-medium leading-none transition-colors sm:text-xs",
+                    isCurrent && "font-semibold text-primary",
+                    isCompleted && "text-foreground/80",
+                    !isCompleted && !isCurrent && "text-muted-foreground"
+                  )}
+                >
+                  {step.shortTitle}
+                </span>
+              </button>
+
+              {!isLast && (
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "mt-5 h-px min-w-[8px] flex-1 transition-colors sm:mt-[22px]",
+                    isCompleted ? "bg-primary/30" : "bg-border/80"
+                  )}
+                />
+              )}
+            </li>
           );
         })}
-      </div>
-    </div>
+      </ol>
+    </nav>
   );
 };

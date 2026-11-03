@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Menu, Plane, Sun, Moon, Sparkles, LogOut, UserCircle2, Globe2, FileText, Search, Home } from "lucide-react";
+import { Menu, Sun, Moon, LogOut, UserCircle2, Globe2, FileText, Search, Home, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import TravellerCommandMenu, { commandIconFor } from "@/components/traveller/TravellerCommandMenu";
@@ -141,18 +141,19 @@ const Navbar = () => {
   // Milestone 9 D3: the same content gate for agencies — five published
   // profiles before the link is offered, while `/agencies` stays reachable.
   const directoryEnabled = useAgencyDirectoryEnabled();
-  // The homepage now leads with discovery, so the nav does too: trips to join
-  // and events sit before the planner. The logo is the way home.
+  const onHome = location.pathname === "/";
+  // Discovery leads: trips to join, events and agencies before the planner.
   const navItems = [
     ...(exploreEnabled ? [{ label: "Explore", path: "/explore" }] : []),
     ...(directoryEnabled === true ? [{ label: "Agencies", path: "/agencies" }] : []),
-    { label: "Plan Trip", path: "/plan" },
-    { label: "My Trips", path: "/dashboard" },
+    ...(isAuthenticated ? [{ label: "My trips", path: "/dashboard" }] : []),
     // M9: replies live in conversations, so the list of sent enquiries needs a
     // door of its own — signed-in only, because anonymous enquiries are never
     // attributed to an account.
     ...(isAuthenticated ? [{ label: "Enquiries", path: "/enquiries" }] : []),
   ];
+  const howItWorks = { label: "How it works", path: "/#how-it-works" };
+  const desktopLinks = [...navItems, ...(onHome ? [howItWorks] : [])];
 
   const commandSections = [
     {
@@ -179,95 +180,74 @@ const Navbar = () => {
       : []),
   ];
 
+  const linkClass = (path: string) => {
+    const isActive =
+      path !== "/" && !path.includes("#") && location.pathname.startsWith(path);
+    return cn(
+      "relative flex min-h-[44px] items-center gap-1 text-sm font-semibold transition-colors",
+      isActive
+        ? "text-foreground after:absolute after:inset-x-0 after:-bottom-[10px] after:h-0.5 after:rounded-full after:bg-primary"
+        : "text-foreground/70 hover:text-foreground"
+    );
+  };
+
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 bg-card/85 backdrop-blur-xl border-b border-border/70 shadow-xs">
-      <div className="container mx-auto px-4 py-3.5">
-        <div className="flex items-center justify-between">
-          {/* Logo & Brand */}
+    <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border/70 bg-card/85 shadow-xs backdrop-blur-xl">
+      <div className="container mx-auto px-4">
+        <div className="flex h-16 items-center justify-between gap-3">
+          {/* Wordmark */}
           <Link
             to="/"
-            className="flex items-center gap-2.5 group select-none min-h-[44px]"
-            aria-label="TravelAI Home"
+            className="flex shrink-0 items-center select-none"
+            aria-label="TravelAI home"
           >
-            <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center group-hover:scale-105 transition-all">
-              <Plane className="h-5 w-5 fill-primary/20 stroke-[2.2]" />
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-xl font-black text-foreground">
-                TravelAI
-              </span>
-              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/25">
-                Assistant
-              </span>
-            </div>
+            <span className="font-display text-2xl font-semibold tracking-tight text-foreground">
+              Travel<span className="text-primary">AI</span>
+            </span>
           </Link>
 
-          {/* Desktop Navigation Links */}
-          <div className="hidden md:flex items-center gap-1.5 p-1 bg-muted/60 rounded-2xl border border-border/70">
-            {navItems.map((item) => {
-              const isActive =
-                item.path === "/"
-                  ? location.pathname === "/"
-                  : location.pathname.startsWith(item.path);
-
-              return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className={cn(
-                    "px-4 py-2 text-xs font-bold rounded-xl transition-all min-h-[36px] flex items-center",
-                    isActive
-                      ? "bg-card text-primary shadow-xs border border-border/40"
-                      : "text-foreground/75 hover:text-foreground hover:bg-card/60"
-                  )}
-                >
-                  {item.label}
-                  {item.path === "/enquiries" ? (
-                    <EnquiryBadge
-                      unread={enquiryBadge.unread}
-                      proposals={enquiryBadge.proposals}
-                    />
-                  ) : null}
-                </Link>
-              );
-            })}
+          {/* Plain links with an active underline */}
+          <div className="hidden items-center gap-7 md:flex">
+            {desktopLinks.map((item) => (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={cn(
+                  linkClass(item.path),
+                  item.path === howItWorks.path && "hidden lg:flex"
+                )}
+              >
+                {item.label}
+                {item.path === "/enquiries" ? (
+                  <EnquiryBadge
+                    unread={enquiryBadge.unread}
+                    proposals={enquiryBadge.proposals}
+                  />
+                ) : null}
+              </Link>
+            ))}
           </div>
 
           {/* Right Action Controls */}
-          <div className="flex items-center gap-2">
-            {/* Jump menu (⌘K) */}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setCommandOpen(true)}
-              className="hidden md:inline-flex h-10 items-center gap-2 rounded-xl border-border/70 bg-card/60 px-3 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
-              aria-label="Search pages and actions (Control or Command K)"
-            >
-              <Search className="h-3.5 w-3.5" />
-              Search
-              <kbd className="rounded border border-border bg-muted px-1 py-0.5 font-sans text-[10px] font-medium text-muted-foreground">
-                ⌘K
-              </kbd>
-            </Button>
+          <div className="flex shrink-0 items-center gap-1">
             <Button
               type="button"
               variant="ghost"
               size="icon"
               onClick={() => setCommandOpen(true)}
-              className="md:hidden rounded-xl h-10 w-10 text-muted-foreground hover:text-foreground"
-              aria-label="Search pages and actions"
+              className="h-10 w-10 rounded-xl text-muted-foreground hover:text-foreground"
+              title="Search pages and actions (Control or Command K)"
+              aria-label="Search pages and actions (Control or Command K)"
             >
               <Search className="h-4 w-4" />
             </Button>
 
-            {/* Theme Toggle Button */}
             <Button
               type="button"
               variant="ghost"
               size="icon"
               onClick={toggleTheme}
-              className="rounded-xl h-10 w-10 text-muted-foreground hover:text-foreground"
+              className="h-10 w-10 rounded-xl text-muted-foreground hover:text-foreground"
               aria-label={isDark ? "Switch to light theme" : "Switch to dark theme"}
             >
               {isDark ? (
@@ -278,94 +258,91 @@ const Navbar = () => {
             </Button>
 
             {/* Desktop Auth Controls */}
-            <div className="hidden md:flex items-center gap-2">
+            <div className="hidden items-center gap-1 md:flex">
               {isAuthenticated ? (
-                <div className="flex items-center gap-2 pl-1">
-                  <Link
-                    to="/profile"
-                    className="flex items-center gap-2 px-2 py-1.5 rounded-xl bg-muted/60 border border-border/60 text-xs font-semibold text-foreground/90 max-w-[200px] hover:bg-muted transition-colors"
-                    title="Your profile"
-                  >
-                    <Avatar className="h-7 w-7 shrink-0">
-                      {avatarSrc(user?.avatarUrl) && (
-                        <AvatarImage src={avatarSrc(user?.avatarUrl)} alt={displayName} />
-                      )}
-                      <AvatarFallback className="text-[10px] font-bold bg-primary/10 text-primary">
-                        {initialsFor(displayName)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span className="truncate">{displayName}</span>
-                  </Link>
+                <>
                   {user?.handle && (
                     <Button
                       asChild
                       variant="ghost"
                       size="icon"
-                      className="rounded-xl h-10 w-10 text-muted-foreground hover:text-foreground"
+                      className="h-10 w-10 rounded-xl text-muted-foreground hover:text-foreground"
                       title="Your travel page"
                     >
                       <Link
                         to={`/travelers/${encodeURIComponent(user.handle)}`}
                         aria-label="Your travel page"
                       >
-                        <Globe2 className="w-4 h-4" />
+                        <Globe2 className="h-4 w-4" />
                       </Link>
                     </Button>
                   )}
+                  <Link
+                    to="/profile"
+                    className="flex min-h-[40px] items-center gap-2 rounded-full px-1.5 py-1 text-xs font-semibold text-foreground/90 transition-colors hover:bg-muted"
+                    title="Your profile"
+                  >
+                    <Avatar className="h-8 w-8 shrink-0">
+                      {avatarSrc(user?.avatarUrl) && (
+                        <AvatarImage src={avatarSrc(user?.avatarUrl)} alt={displayName} />
+                      )}
+                      <AvatarFallback className="bg-primary/10 text-[10px] font-bold text-primary">
+                        {initialsFor(displayName)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="hidden max-w-[140px] truncate lg:inline">
+                      {displayName}
+                    </span>
+                  </Link>
                   <Button
                     variant="ghost"
-                    size="sm"
+                    size="icon"
                     onClick={logout}
-                    className="rounded-xl text-xs font-semibold h-10 px-3 text-muted-foreground hover:text-destructive gap-1.5"
+                    className="h-10 w-10 rounded-xl text-muted-foreground hover:text-destructive"
+                    title="Log out"
+                    aria-label="Log out"
                   >
-                    <LogOut className="w-3.5 h-3.5" />
-                    <span>Logout</span>
+                    <LogOut className="h-4 w-4" />
                   </Button>
-                </div>
+                </>
               ) : (
-                <div className="flex items-center gap-2">
-                  <Link to="/auth">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="rounded-xl text-xs font-bold h-10 px-4"
-                    >
-                      Sign In
-                    </Button>
+                <>
+                  <Link
+                    to="/auth"
+                    className="inline-flex min-h-[40px] items-center px-3 text-sm font-semibold text-foreground/80 transition-colors hover:text-foreground"
+                  >
+                    Sign in
                   </Link>
-                  <Link to="/auth">
-                    <Button
-                      variant="hero"
-                      size="sm"
-                      className="rounded-xl text-xs font-bold h-10 px-4 shadow-sm"
-                    >
-                      Get Started
-                    </Button>
-                  </Link>
-                </div>
+                  <Button
+                    asChild
+                    className="ml-1 h-10 rounded-full px-5 text-xs font-bold shadow-sm"
+                  >
+                    <Link to="/plan">
+                      Plan a trip
+                      <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                    </Link>
+                  </Button>
+                </>
               )}
             </div>
 
-            {/* Mobile Sheet Drawer Menu */}
+            {/* Mobile sheet */}
             <div className="md:hidden">
               <Sheet open={isOpen} onOpenChange={setIsOpen}>
                 <SheetTrigger asChild>
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="rounded-xl h-10 w-10"
+                    className="h-10 w-10 rounded-xl"
                     aria-label="Open mobile navigation menu"
                   >
                     <Menu className="h-5 w-5" />
                   </Button>
                 </SheetTrigger>
-                <SheetContent side="right" className="w-[300px] p-6 space-y-6">
-                  <div className="flex items-center gap-2.5 pt-2">
-                    <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-                      <Plane className="h-5 w-5" />
-                    </div>
-                    <span className="text-lg font-black text-foreground">
-                      TravelAI
+                <SheetContent side="right" className="w-[300px] space-y-6 p-6">
+                  <div className="pt-2">
+                    <span className="font-display text-xl font-semibold tracking-tight text-foreground">
+                      Travel<span className="text-primary">AI</span>
                     </span>
                   </div>
 
@@ -384,12 +361,11 @@ const Navbar = () => {
                     </kbd>
                   </button>
 
-                  <div className="flex flex-col gap-2 pt-2">
-                    {navItems.map((item) => {
+                  <div className="flex flex-col gap-1 pt-1">
+                    {desktopLinks.map((item) => {
                       const isActive =
-                        item.path === "/"
-                          ? location.pathname === "/"
-                          : location.pathname.startsWith(item.path);
+                        !item.path.includes("#") &&
+                        location.pathname.startsWith(item.path);
 
                       return (
                         <Link
@@ -397,7 +373,7 @@ const Navbar = () => {
                           to={item.path}
                           onClick={() => setIsOpen(false)}
                           className={cn(
-                            "px-4 py-3 rounded-2xl text-sm font-bold min-h-[44px] flex items-center transition-all",
+                            "flex min-h-[44px] items-center rounded-2xl px-4 py-3 text-sm font-bold transition-all",
                             isActive
                               ? "bg-primary text-primary-foreground shadow-xs"
                               : "text-foreground hover:bg-muted"
@@ -422,25 +398,30 @@ const Navbar = () => {
                       <Link
                         to="/profile"
                         onClick={() => setIsOpen(false)}
-                        className="flex items-center gap-3 p-3 rounded-2xl bg-muted/50 hover:bg-muted transition-colors min-w-0"
+                        className="flex min-w-0 items-center gap-3 rounded-2xl bg-muted/50 p-3 transition-colors hover:bg-muted"
                       >
                         <Avatar className="h-9 w-9 shrink-0">
                           {avatarSrc(user?.avatarUrl) && (
                             <AvatarImage src={avatarSrc(user?.avatarUrl)} alt={displayName} />
                           )}
-                          <AvatarFallback className="text-[11px] font-bold bg-primary/10 text-primary">
+                          <AvatarFallback className="bg-primary/10 text-[11px] font-bold text-primary">
                             {initialsFor(displayName)}
                           </AvatarFallback>
                         </Avatar>
                         <div className="min-w-0">
-                          <div className="text-xs font-bold text-foreground truncate">
+                          <div className="truncate text-xs font-bold text-foreground">
                             {displayName}
                           </div>
-                          <div className="text-[10px] text-muted-foreground truncate">
+                          <div className="truncate text-[10px] text-muted-foreground">
                             {user?.email}
                           </div>
                         </div>
-                        <UserCircle2 className="h-4 w-4 text-muted-foreground ml-auto shrink-0" />
+                        <UserCircle2 className="ml-auto h-4 w-4 shrink-0 text-muted-foreground" />
+                      </Link>
+                      <Link to="/plan" onClick={() => setIsOpen(false)}>
+                        <Button className="h-11 w-full rounded-2xl text-xs font-bold">
+                          Plan a trip
+                        </Button>
                       </Link>
                       {user?.handle && (
                         <Link
@@ -449,7 +430,7 @@ const Navbar = () => {
                         >
                           <Button
                             variant="outline"
-                            className="w-full rounded-2xl h-11 text-xs font-bold gap-2"
+                            className="h-11 w-full rounded-2xl text-xs font-bold gap-2"
                           >
                             <Globe2 className="h-4 w-4" />
                             Your travel page
@@ -462,9 +443,9 @@ const Navbar = () => {
                           logout();
                           setIsOpen(false);
                         }}
-                        className="w-full rounded-2xl h-11 text-xs font-bold text-destructive hover:bg-destructive/10"
+                        className="h-11 w-full rounded-2xl text-xs font-bold text-destructive hover:bg-destructive/10"
                       >
-                        Logout
+                        Log out
                       </Button>
                     </div>
                   ) : (
@@ -472,17 +453,14 @@ const Navbar = () => {
                       <Link to="/auth" onClick={() => setIsOpen(false)}>
                         <Button
                           variant="outline"
-                          className="w-full rounded-2xl h-11 text-xs font-bold"
+                          className="h-11 w-full rounded-2xl text-xs font-bold"
                         >
-                          Sign In
+                          Sign in
                         </Button>
                       </Link>
-                      <Link to="/auth" onClick={() => setIsOpen(false)}>
-                        <Button
-                          variant="hero"
-                          className="w-full rounded-2xl h-11 text-xs font-bold shadow-sm"
-                        >
-                          Get Started Free
+                      <Link to="/plan" onClick={() => setIsOpen(false)}>
+                        <Button className="h-11 w-full rounded-2xl text-xs font-bold shadow-sm">
+                          Plan a trip
                         </Button>
                       </Link>
                     </div>

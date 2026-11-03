@@ -1,99 +1,49 @@
 import React from "react";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import {
-  MapPin,
-  Search,
-  Sparkles,
-  Check,
-  Map,
-  Palmtree,
-  Mountain,
-  Landmark,
-  Trees,
-  MoonStar,
-  Flame,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { CalendarDays, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface PopularDestination {
   id: string;
   name: string;
-  state: string;
-  tagline: string;
-  icon: LucideIcon;
-  tags: string[];
-  gradient: string;
 }
 
+/** The suggestion chips shown under the search field. */
 const POPULAR_DESTINATIONS: PopularDestination[] = [
-  {
-    id: "goa",
-    name: "Goa",
-    state: "Goa",
-    tagline: "Sun-kissed beaches, coastal cafes & vibrant nightlife",
-    icon: Palmtree,
-    tags: ["Beaches", "Nightlife", "Seafood"],
-    gradient: "from-amber-500/10 via-orange-500/10 to-rose-500/10",
-  },
-  {
-    id: "manali",
-    name: "Manali",
-    state: "Himachal Pradesh",
-    tagline: "Snow peaks, Solang Valley adventure & mountain breeze",
-    icon: Mountain,
-    tags: ["Mountains", "Adventure", "Snow"],
-    gradient: "from-blue-500/10 via-cyan-500/10 to-teal-500/10",
-  },
-  {
-    id: "jaipur",
-    name: "Jaipur",
-    state: "Rajasthan",
-    tagline: "Royal palaces, majestic forts & vibrant bazaars",
-    icon: Landmark,
-    tags: ["Heritage", "Culture", "Royal"],
-    gradient: "from-rose-500/10 via-pink-500/10 to-amber-500/10",
-  },
-  {
-    id: "kerala",
-    name: "Kerala (Munnar & Alleppey)",
-    state: "Kerala",
-    tagline: "Lush tea hills, tranquil backwaters & Ayurveda",
-    icon: Trees,
-    tags: ["Nature", "Backwaters", "Relaxation"],
-    gradient: "from-emerald-500/10 via-green-500/10 to-teal-500/10",
-  },
-  {
-    id: "ladakh",
-    name: "Leh Ladakh",
-    state: "Ladakh",
-    tagline: "Pangong Tso, high passes, monasteries & raw landscapes",
-    icon: MoonStar,
-    tags: ["Biking", "Lakes", "Stargazing"],
-    gradient: "from-indigo-500/10 via-purple-500/10 to-blue-500/10",
-  },
-  {
-    id: "varanasi",
-    name: "Varanasi",
-    state: "Uttar Pradesh",
-    tagline: "Spiritual ghats, Ganga Aarti & timeless heritage",
-    icon: Flame,
-    tags: ["Spiritual", "Ghats", "Culture"],
-    gradient: "from-orange-500/10 via-amber-500/10 to-yellow-500/10",
-  },
+  { id: "goa", name: "Goa" },
+  { id: "manali", name: "Manali" },
+  { id: "jaipur", name: "Jaipur" },
+  { id: "kerala", name: "Kerala (Munnar & Alleppey)" },
+  { id: "ladakh", name: "Leh Ladakh" },
+  { id: "varanasi", name: "Varanasi" },
+];
+
+/**
+ * Rough trip-length shortcuts. The day counts match the quick presets on the
+ * When step, so choosing one here moves the real start/end dates there.
+ */
+const DURATION_OPTIONS: { id: string; label: string; days: number }[] = [
+  { id: "weekend", label: "Weekend", days: 3 },
+  { id: "week", label: "4–7 days", days: 7 },
+  { id: "fortnight", label: "2 weeks+", days: 14 },
 ];
 
 interface StepWhereProps {
   destination: string;
   onChange: (value: string) => void;
   onEnterNext?: () => void;
+  /** Current trip length in days, derived from the shared date state. */
+  durationDays?: number;
+  /** Apply a rough duration; the parent writes the real start/end dates. */
+  onSelectDuration?: (days: number) => void;
 }
 
 export const StepWhere: React.FC<StepWhereProps> = ({
   destination,
   onChange,
   onEnterNext,
+  durationDays,
+  onSelectDuration,
 }) => {
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && destination.trim() && onEnterNext) {
@@ -102,107 +52,116 @@ export const StepWhere: React.FC<StepWhereProps> = ({
     }
   };
 
+  // Collapse any real trip length into the three rough buckets above.
+  const activeDuration =
+    !durationDays || durationDays <= 0
+      ? null
+      : durationDays <= 3
+      ? 3
+      : durationDays <= 7
+      ? 7
+      : 14;
+
   return (
     <div className="space-y-6">
-      <div className="text-center space-y-2">
-        <h2 className="text-2xl font-bold tracking-tight text-foreground flex items-center justify-center gap-2">
-          <span>Where are you dreaming of going?</span>
-          <Map className="w-6 h-6 text-primary" aria-hidden="true" />
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
+        <h2 className="font-display text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+          Where do you want to go?
         </h2>
-        <p className="text-sm text-muted-foreground max-w-lg mx-auto">
-          Choose a trending Indian hotspot or type any city, hill station, or country you want to explore.
+        <p className="text-xs text-muted-foreground sm:text-sm">
+          Search destinations, regions or countries
         </p>
       </div>
 
       {/* Destination Search Box */}
-      <div className="relative max-w-xl mx-auto">
-        <div className="relative flex items-center">
-          <MapPin className="absolute left-4 w-5 h-5 text-primary pointer-events-none" />
-          <Input
-            id="destination-input"
-            type="text"
-            autoFocus
-            value={destination}
-            onChange={(e) => onChange(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Search destination (e.g. Udaipur, Shimla, Bali, Pondicherry)..."
-            className="h-14 pl-12 pr-12 text-base font-medium rounded-2xl shadow-sm border-border/80 focus-visible:ring-primary/30"
-          />
-          {destination && (
-            <button
-              type="button"
-              onClick={() => onChange("")}
-              className="absolute right-4 text-xs font-semibold text-muted-foreground hover:text-foreground bg-muted px-2 py-1 rounded-md"
-            >
-              Clear
-            </button>
-          )}
+      <div className="relative">
+        <Search
+          className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground"
+          aria-hidden="true"
+        />
+        <Input
+          id="destination-input"
+          type="text"
+          autoFocus
+          aria-label="Destination"
+          value={destination}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Search destination (e.g. Udaipur, Shimla, Bali, Pondicherry)..."
+          className="h-14 rounded-2xl border-border/80 bg-background pl-12 pr-12 text-base font-medium shadow-xs focus-visible:ring-primary/30"
+        />
+        {destination && (
+          <button
+            type="button"
+            onClick={() => onChange("")}
+            aria-label="Clear destination"
+            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+
+      {/* Popular Destinations */}
+      <div className="space-y-3">
+        <p className="text-xs font-semibold text-muted-foreground">
+          Popular right now
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {POPULAR_DESTINATIONS.map((dest) => {
+            const isSelected = destination
+              .toLowerCase()
+              .includes(dest.name.toLowerCase());
+
+            return (
+              <button
+                key={dest.id}
+                type="button"
+                aria-pressed={isSelected}
+                onClick={() => onChange(dest.name)}
+                className={cn(
+                  "inline-flex min-h-[40px] items-center rounded-full border px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  isSelected
+                    ? "border-primary/50 bg-primary/10 text-primary"
+                    : "border-border/80 bg-card text-foreground/80 hover:border-primary/40 hover:text-foreground"
+                )}
+              >
+                {dest.name}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* Popular Trending Destinations Grid */}
-      <div className="space-y-3 pt-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-muted-foreground">
-            <Sparkles className="w-3.5 h-3.5 text-primary" />
-            <span>Popular destinations</span>
-          </div>
-          <span className="text-xs text-muted-foreground">Click to select</span>
+      {/* Rough Duration */}
+      <div className="space-y-3 border-t border-border/60 pt-6">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
+          <h3 className="font-display text-lg font-semibold tracking-tight text-foreground sm:text-xl">
+            How long?
+          </h3>
+          <p className="text-xs text-muted-foreground sm:text-sm">
+            Choose a rough duration (you can fine-tune later)
+          </p>
         </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {POPULAR_DESTINATIONS.map((dest) => {
-            const isSelected = destination.toLowerCase().includes(dest.name.toLowerCase());
-
+        <div className="grid grid-cols-3 overflow-hidden rounded-2xl border border-border/80">
+          {DURATION_OPTIONS.map((option) => {
+            const isActive = activeDuration === option.days;
             return (
-              <div
-                key={dest.id}
-                onClick={() => onChange(dest.name)}
+              <button
+                key={option.id}
+                type="button"
+                aria-pressed={isActive}
+                onClick={() => onSelectDuration?.(option.days)}
                 className={cn(
-                  "relative group p-4 rounded-xl border text-left cursor-pointer transition-all duration-200 bg-gradient-to-br",
-                  dest.gradient,
-                  isSelected
-                    ? "border-primary bg-primary/10 shadow-md ring-2 ring-primary/20 scale-[1.02]"
-                    : "border-border/60 hover:border-primary/50 hover:shadow-sm hover:scale-[1.01]"
+                  "flex min-h-[52px] items-center justify-center gap-2 border-r border-border/60 px-2 py-3 text-xs font-semibold transition-colors last:border-r-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:text-sm",
+                  isActive
+                    ? "bg-primary/5 text-primary"
+                    : "bg-card text-foreground/80 hover:bg-muted/50"
                 )}
               >
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="p-2 bg-white/70 dark:bg-card/70 rounded-lg shadow-2xs flex items-center justify-center">
-                      <dest.icon className="w-5 h-5 text-primary" />
-                    </span>
-                    <div>
-                      <h4 className="font-bold text-foreground text-sm flex items-center gap-1.5">
-                        {dest.name}
-                      </h4>
-                      <p className="text-[11px] text-muted-foreground font-medium">
-                        {dest.state}
-                      </p>
-                    </div>
-                  </div>
-                  {isSelected && (
-                    <div className="w-5 h-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
-                      <Check className="w-3 h-3 stroke-[3]" />
-                    </div>
-                  )}
-                </div>
-
-                <p className="text-xs text-muted-foreground line-clamp-2 mb-2 leading-relaxed">
-                  {dest.tagline}
-                </p>
-
-                <div className="flex flex-wrap gap-1">
-                  {dest.tags.map((tag) => (
-                    <Badge
-                      key={tag}
-                      variant="outline"
-                      className="text-[10px] px-2 py-0.5 border-border/70 bg-card/60"
-                    >
-                      {tag}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
+                <CalendarDays className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span>{option.label}</span>
+              </button>
             );
           })}
         </div>

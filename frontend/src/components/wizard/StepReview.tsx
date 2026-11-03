@@ -1,22 +1,20 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   MapPin,
-  Calendar,
+  CalendarDays,
   Users,
   IndianRupee,
   Sparkles,
   Edit2,
-  CheckCircle2,
   ShieldCheck,
   Loader2,
   AlertCircle,
   Gauge,
   Languages,
   UtensilsCrossed,
-  ClipboardCheck,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { differenceInCalendarDays } from "date-fns";
 import { formatDate, formatDateShort } from "@/lib/date";
 import type { TripLanguage, TravelPace } from "@/types/trip";
@@ -38,6 +36,51 @@ const PACE_LABELS: Record<TravelPace, string> = {
   balanced: "Balanced",
   packed: "Action-packed",
 };
+
+interface ReviewRowProps {
+  icon: LucideIcon;
+  label: string;
+  value: string;
+  detail?: string;
+  editLabel: string;
+  onEdit: () => void;
+}
+
+const ReviewRow: React.FC<ReviewRowProps> = ({
+  icon: Icon,
+  label,
+  value,
+  detail,
+  editLabel,
+  onEdit,
+}) => (
+  <div className="flex items-start justify-between gap-3 px-4 py-4 sm:px-5">
+    <div className="flex min-w-0 items-start gap-3">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted">
+        <Icon className="h-4 w-4 text-primary" aria-hidden="true" />
+      </span>
+      <div className="min-w-0">
+        <p className="text-[11px] font-medium text-muted-foreground">{label}</p>
+        <p className="mt-0.5 break-words text-sm font-semibold text-foreground">
+          {value}
+        </p>
+        {detail && (
+          <p className="mt-0.5 break-words text-xs text-muted-foreground">
+            {detail}
+          </p>
+        )}
+      </div>
+    </div>
+    <button
+      type="button"
+      onClick={onEdit}
+      aria-label={editLabel}
+      className="shrink-0 rounded-full p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <Edit2 className="h-3.5 w-3.5" aria-hidden="true" />
+    </button>
+  </div>
+);
 
 interface StepReviewProps {
   destination: string;
@@ -84,233 +127,157 @@ export const StepReview: React.FC<StepReviewProps> = ({
 
   return (
     <div className="space-y-6">
-      <div className="text-center space-y-2">
-        <h2 className="text-2xl font-bold tracking-tight text-foreground flex items-center justify-center gap-2">
-          <span>Review your trip details</span>
-          <ClipboardCheck className="w-6 h-6 text-primary" aria-hidden="true" />
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
+        <h2 className="font-display text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+          Everything look right?
         </h2>
-        <p className="text-sm text-muted-foreground max-w-lg mx-auto">
-          Everything is set! Check your preferences below before our AI crafts your personalized day-by-day itinerary.
+        <p className="text-xs text-muted-foreground sm:text-sm">
+          Check the details, then generate your plan
         </p>
       </div>
 
       {error && (
-        <div className="flex items-start gap-2.5 p-4 bg-destructive/10 border border-destructive/20 text-destructive rounded-2xl text-xs font-medium">
-          <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+        <div className="flex items-start gap-2.5 rounded-2xl border border-destructive/20 bg-destructive/10 p-4 text-xs font-medium text-destructive">
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
           <div>
-            <h4 className="font-bold">Generation Failed</h4>
-            <p className="text-destructive/90">{error}</p>
+            <p className="font-semibold">Generation failed</p>
+            <p className="mt-0.5 text-destructive/90">{error}</p>
           </div>
         </div>
       )}
 
-      {/* Review Summary Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Destination Card */}
-        <div className="p-5 rounded-2xl border border-border/80 bg-card/60 backdrop-blur-sm relative group hover:border-primary/40 transition-all">
-          <div className="flex items-start justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-                <MapPin className="w-5 h-5" />
-              </div>
-              <div>
-                <span className="text-xs font-semibold tracking-wide text-muted-foreground">
-                  Destination
-                </span>
-                <h3 className="text-base font-bold text-foreground">
-                  {destination || "Not set"}
-                </h3>
-              </div>
-            </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => onEditStep(1)}
-              className="h-8 w-8 text-muted-foreground hover:text-primary"
-            >
-              <Edit2 className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
-
-        {/* Dates Card */}
-        <div className="p-5 rounded-2xl border border-border/80 bg-card/60 backdrop-blur-sm relative group hover:border-primary/40 transition-all">
-          <div className="flex items-start justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center">
-                <Calendar className="w-5 h-5" />
-              </div>
-              <div>
-                <span className="text-xs font-semibold tracking-wide text-muted-foreground">
-                  Duration & Dates
-                </span>
-                <h3 className="text-base font-bold text-foreground">
-                  {durationDays} Days / {durationDays > 1 ? durationDays - 1 : 1} Nights
-                </h3>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {startDate && formatDateShort(startDate)} →{" "}
-                  {endDate && formatDate(endDate)}
-                </p>
-              </div>
-            </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => onEditStep(2)}
-              className="h-8 w-8 text-muted-foreground hover:text-primary"
-            >
-              <Edit2 className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
-
-        {/* Travelers Card */}
-        <div className="p-5 rounded-2xl border border-border/80 bg-card/60 backdrop-blur-sm relative group hover:border-primary/40 transition-all">
-          <div className="flex items-start justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
-                <Users className="w-5 h-5" />
-              </div>
-              <div>
-                <span className="text-xs font-semibold tracking-wide text-muted-foreground">
-                  Group & Travelers
-                </span>
-                <h3 className="text-base font-bold text-foreground">
-                  {groupType} ({totalTravelers} {totalTravelers === 1 ? "Person" : "People"})
-                </h3>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {adultsCount} Adults {childrenCount > 0 && `• ${childrenCount} Children`}
-                </p>
-              </div>
-            </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => onEditStep(3)}
-              className="h-8 w-8 text-muted-foreground hover:text-primary"
-            >
-              <Edit2 className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
-
-        {/* Budget Card */}
-        <div className="p-5 rounded-2xl border border-border/80 bg-card/60 backdrop-blur-sm relative group hover:border-primary/40 transition-all">
-          <div className="flex items-start justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
-                <IndianRupee className="w-5 h-5" />
-              </div>
-              <div>
-                <span className="text-xs font-semibold tracking-wide text-muted-foreground">
-                  Budget Allocation
-                </span>
-                <h3 className="text-base font-bold text-primary">
-                  ₹{budgetPerPerson.toLocaleString("en-IN")}{" "}
-                  <span className="text-xs text-muted-foreground font-normal">/ person</span>
-                </h3>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Approx. ₹{totalBudget.toLocaleString("en-IN")} total trip budget
-                </p>
-              </div>
-            </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => onEditStep(4)}
-              className="h-8 w-8 text-muted-foreground hover:text-primary"
-            >
-              <Edit2 className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
+      {/* Trip Summary */}
+      <div className="divide-y divide-border/60 overflow-hidden rounded-2xl border border-border/80">
+        <ReviewRow
+          icon={MapPin}
+          label="Destination"
+          value={destination || "Not set"}
+          editLabel="Edit destination"
+          onEdit={() => onEditStep(1)}
+        />
+        <ReviewRow
+          icon={CalendarDays}
+          label="Dates"
+          value={`${durationDays} ${durationDays === 1 ? "day" : "days"} / ${
+            durationDays > 1 ? durationDays - 1 : 1
+          } ${durationDays > 1 ? "nights" : "night"}`}
+          detail={`${startDate && formatDateShort(startDate)} – ${
+            endDate && formatDate(endDate)
+          }`}
+          editLabel="Edit dates"
+          onEdit={() => onEditStep(2)}
+        />
+        <ReviewRow
+          icon={Users}
+          label="Travelers"
+          value={`${groupType} · ${totalTravelers} ${
+            totalTravelers === 1 ? "person" : "people"
+          }`}
+          detail={`${adultsCount} ${
+            adultsCount === 1 ? "adult" : "adults"
+          }${childrenCount > 0 ? ` · ${childrenCount} children` : ""}`}
+          editLabel="Edit travelers"
+          onEdit={() => onEditStep(3)}
+        />
+        <ReviewRow
+          icon={IndianRupee}
+          label="Budget"
+          value={`₹${budgetPerPerson.toLocaleString("en-IN")} per person`}
+          detail={`Approx. ₹${totalBudget.toLocaleString("en-IN")} for the whole trip`}
+          editLabel="Edit budget"
+          onEdit={() => onEditStep(4)}
+        />
       </div>
 
-      {/* Style & Preferences Card */}
-      <div className="p-5 rounded-2xl border border-border/80 bg-card/60 backdrop-blur-sm space-y-3">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold tracking-wide text-muted-foreground">
-            Travel Style & Interests
-          </span>
-          <Button
+      {/* Style & Preferences */}
+      <div className="space-y-3 rounded-2xl border border-border/80 p-4 sm:p-5">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-xs font-semibold text-muted-foreground">
+            Travel style &amp; preferences
+          </h3>
+          <button
             type="button"
-            variant="ghost"
-            size="sm"
             onClick={() => onEditStep(5)}
-            className="h-7 text-xs text-primary"
+            className="text-xs font-semibold text-primary transition-colors hover:underline"
           >
             Edit
-          </Button>
+          </button>
         </div>
         <div className="flex flex-wrap gap-2">
           {interests.map((interest) => (
-            <Badge
+            <span
               key={interest}
-              variant="secondary"
-              className="px-3 py-1 text-xs font-semibold bg-primary/10 text-primary border border-primary/20"
+              className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-medium text-primary"
             >
               {interest}
-            </Badge>
+            </span>
           ))}
         </div>
 
-        {/* Pace, dietary & language summary */}
-        <div className="flex flex-wrap gap-x-6 gap-y-2 pt-2 border-t border-border/50 text-xs">
-          <div className="flex items-center gap-1.5">
-            <Gauge className="w-3.5 h-3.5 text-primary" />
-            <span className="text-muted-foreground font-semibold">Pace:</span>
-            <span className="font-bold text-foreground">{PACE_LABELS[pace]}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Languages className="w-3.5 h-3.5 text-primary" />
-            <span className="text-muted-foreground font-semibold">Language:</span>
-            <span className="font-bold text-foreground">{LANGUAGE_LABELS[language]}</span>
-          </div>
+        <div className="flex flex-wrap gap-x-6 gap-y-2 border-t border-border/60 pt-3 text-xs">
+          <span className="inline-flex items-center gap-1.5">
+            <Gauge className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+            <span className="text-muted-foreground">Pace</span>
+            <span className="font-semibold text-foreground">
+              {PACE_LABELS[pace]}
+            </span>
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <Languages className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+            <span className="text-muted-foreground">Language</span>
+            <span className="font-semibold text-foreground">
+              {LANGUAGE_LABELS[language]}
+            </span>
+          </span>
           {dietary.length > 0 && (
-            <div className="flex items-center gap-1.5">
-              <UtensilsCrossed className="w-3.5 h-3.5 text-primary" />
-              <span className="text-muted-foreground font-semibold">Diet:</span>
-              <span className="font-bold text-foreground">{dietary.join(", ")}</span>
-            </div>
+            <span className="inline-flex items-center gap-1.5">
+              <UtensilsCrossed
+                className="h-3.5 w-3.5 text-primary"
+                aria-hidden="true"
+              />
+              <span className="text-muted-foreground">Diet</span>
+              <span className="font-semibold text-foreground">
+                {dietary.join(", ")}
+              </span>
+            </span>
           )}
         </div>
       </div>
 
       {/* AI Features Notice */}
-      <div className="p-4 rounded-2xl bg-muted/40 border border-border/60 flex items-start gap-3 text-xs text-muted-foreground">
-        <ShieldCheck className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+      <div className="flex items-start gap-3 rounded-2xl border border-border/60 bg-muted/30 p-4 text-xs text-muted-foreground">
+        <ShieldCheck
+          className="mt-0.5 h-4 w-4 shrink-0 text-primary"
+          aria-hidden="true"
+        />
         <p className="leading-relaxed">
-          Our AI synthesizes local travel timing, verified stay options, regional dhabas & restaurants, transit tips (cabs vs buses), weather advisories, and UPI/cash recommendations.
+          Our AI synthesizes local travel timing, verified stay options, regional
+          dhabas &amp; restaurants, transit tips (cabs vs buses), weather
+          advisories, and UPI/cash recommendations.
         </p>
       </div>
 
-      {/* Generate CTA Button */}
-      <div className="pt-2">
-        <Button
-          type="button"
-          size="xl"
-          variant="hero"
-          disabled={loading}
-          onClick={onSubmit}
-          className="w-full text-base font-bold h-14 rounded-2xl shadow-card"
-        >
-          {loading ? (
-            <>
-              <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-              Crafting Your Custom Itinerary with AI...
-            </>
-          ) : (
-            <>
-              <Sparkles className="w-5 h-5 mr-2" />
-              Generate My Travel Itinerary
-            </>
-          )}
-        </Button>
-      </div>
+      {/* Generate CTA */}
+      <Button
+        type="button"
+        size="xl"
+        variant="hero"
+        disabled={loading}
+        onClick={onSubmit}
+        className="h-14 w-full rounded-2xl text-base font-semibold shadow-card"
+      >
+        {loading ? (
+          <>
+            <Loader2 className="mr-2 h-5 w-5 animate-spin" aria-hidden="true" />
+            Crafting your itinerary...
+          </>
+        ) : (
+          <>
+            <Sparkles className="mr-2 h-5 w-5" aria-hidden="true" />
+            Generate my travel itinerary
+          </>
+        )}
+      </Button>
     </div>
   );
 };

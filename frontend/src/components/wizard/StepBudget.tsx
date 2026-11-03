@@ -1,8 +1,7 @@
 import React, { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
-import { Badge } from "@/components/ui/badge";
-import { IndianRupee, Sparkles, Check, Backpack, Coffee, Gem, Crown } from "lucide-react";
+import { Check, Backpack, Coffee, Gem, Crown } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -20,7 +19,6 @@ interface BudgetTier {
   preset: number;
   icon: LucideIcon;
   tagline: string;
-  color: string;
 }
 
 const BUDGET_TIERS: BudgetTier[] = [
@@ -32,7 +30,6 @@ const BUDGET_TIERS: BudgetTier[] = [
     preset: 6000,
     icon: Backpack,
     tagline: "Social hostels, street eats & local public transit",
-    color: "border-blue-500/40 text-blue-600 bg-blue-500/10",
   },
   {
     id: "moderate",
@@ -42,7 +39,6 @@ const BUDGET_TIERS: BudgetTier[] = [
     preset: 15000,
     icon: Coffee,
     tagline: "Cozy 3★ hotels, authentic dining & app cabs / autos",
-    color: "border-emerald-500/40 text-emerald-600 bg-emerald-500/10",
   },
   {
     id: "premium",
@@ -52,7 +48,6 @@ const BUDGET_TIERS: BudgetTier[] = [
     preset: 30000,
     icon: Gem,
     tagline: "Boutique 4★ stays, private car hire & premier cafes",
-    color: "border-purple-500/40 text-purple-600 bg-purple-500/10",
   },
   {
     id: "luxury",
@@ -62,7 +57,6 @@ const BUDGET_TIERS: BudgetTier[] = [
     preset: 60000,
     icon: Crown,
     tagline: "5★ heritage palaces, private chauffeur & bespoke tours",
-    color: "border-amber-500/40 text-amber-600 bg-amber-500/10",
   },
 ];
 
@@ -98,61 +92,63 @@ export const StepBudget: React.FC<StepBudgetProps> = ({
 
   return (
     <div className="space-y-6">
-      <div className="text-center space-y-2">
-        <h2 className="text-2xl font-bold tracking-tight text-foreground flex items-center justify-center gap-2">
-          <span>What is your budget?</span>
-          <IndianRupee className="w-6 h-6 text-primary" aria-hidden="true" />
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
+        <h2 className="font-display text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+          What&rsquo;s the travel budget?
         </h2>
-        <p className="text-sm text-muted-foreground max-w-lg mx-auto">
-          AI will allocate expenses realistically across stays, food, permits, activities, and transit.
+        <p className="text-xs text-muted-foreground sm:text-sm">
+          A rough number is fine — we allocate it realistically
         </p>
       </div>
 
       {/* Mode Switch (Per Person vs Total Group) */}
-      <div className="flex justify-center">
-        <div className="inline-flex items-center p-1 bg-muted/80 rounded-full border border-border/80">
+      <div className="flex">
+        <div className="inline-flex items-center rounded-full border border-border/80 bg-muted/60 p-1">
           <button
             type="button"
+            aria-pressed={!isTotalMode}
             onClick={() => setIsTotalMode(false)}
             className={cn(
-              "px-4 py-1.5 rounded-full text-xs font-semibold transition-all",
+              "rounded-full px-4 py-1.5 text-xs font-semibold transition-colors",
               !isTotalMode
                 ? "bg-card text-foreground shadow-xs"
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
-            Per Person
+            Per person
           </button>
           <button
             type="button"
+            aria-pressed={isTotalMode}
             onClick={() => setIsTotalMode(true)}
             className={cn(
-              "px-4 py-1.5 rounded-full text-xs font-semibold transition-all",
+              "rounded-full px-4 py-1.5 text-xs font-semibold transition-colors",
               isTotalMode
                 ? "bg-card text-foreground shadow-xs"
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
-            Total for {totalTravelers} {totalTravelers === 1 ? "Person" : "People"}
+            Total for {totalTravelers} {totalTravelers === 1 ? "person" : "people"}
           </button>
         </div>
       </div>
 
       {/* Main Budget Display & Input */}
-      <div className="p-6 rounded-2xl border border-border/80 bg-card/60 backdrop-blur-sm shadow-sm space-y-6">
-        <div className="text-center space-y-2">
-          <div className="flex items-center justify-center gap-2">
-            <span className="text-3xl sm:text-4xl font-extrabold text-foreground">
+      <div className="space-y-5 rounded-2xl border border-border/80 px-4 py-6 sm:px-6">
+        <div className="text-center">
+          <div className="flex items-baseline justify-center gap-1">
+            <span className="font-display text-2xl font-semibold text-muted-foreground sm:text-3xl">
               ₹
             </span>
             <Input
               type="text"
+              aria-label={isTotalMode ? "Total trip budget" : "Budget per person"}
               value={(isTotalMode ? totalBudget : budgetPerPerson).toLocaleString("en-IN")}
               onChange={handleInputChange}
-              className="h-16 text-3xl sm:text-4xl font-extrabold text-center max-w-[280px] border-none shadow-none focus-visible:ring-0 bg-transparent text-primary tracking-tight"
+              className="h-14 max-w-[260px] border-none bg-transparent p-0 text-center font-display text-3xl font-semibold tracking-tight text-primary shadow-none focus-visible:ring-0 sm:text-4xl"
             />
           </div>
-          <p className="text-xs text-muted-foreground font-medium">
+          <p className="mt-1 text-xs text-muted-foreground">
             {isTotalMode
               ? `(approx. ₹${budgetPerPerson.toLocaleString("en-IN")} per person)`
               : totalTravelers > 1
@@ -162,7 +158,7 @@ export const StepBudget: React.FC<StepBudgetProps> = ({
         </div>
 
         {/* Interactive Slider */}
-        <div className="space-y-2 px-2">
+        <div className="space-y-2 px-1">
           <Slider
             min={3000}
             max={100000}
@@ -171,7 +167,7 @@ export const StepBudget: React.FC<StepBudgetProps> = ({
             onValueChange={handleSliderChange}
             className="py-4"
           />
-          <div className="flex justify-between text-[11px] text-muted-foreground font-medium">
+          <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-[11px] font-medium text-muted-foreground">
             <span>₹3,000 (Shoestring)</span>
             <span>₹25,000 (Popular)</span>
             <span>₹1,00,000+ (Luxury)</span>
@@ -181,48 +177,58 @@ export const StepBudget: React.FC<StepBudgetProps> = ({
 
       {/* Preset Budget Tiers */}
       <div className="space-y-3">
-        <div className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-muted-foreground">
-          <Sparkles className="w-3.5 h-3.5 text-primary" />
-          <span>Recommended budget tiers</span>
-        </div>
+        <p className="text-xs font-semibold text-muted-foreground">
+          Recommended budget tiers
+        </p>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {BUDGET_TIERS.map((tier) => {
             const isSelected = activeTier?.id === tier.id;
             const TierIcon = tier.icon;
             return (
-              <div
+              <button
                 key={tier.id}
+                type="button"
+                aria-pressed={isSelected}
                 onClick={() => onChange(tier.preset)}
                 className={cn(
-                  "p-3.5 rounded-xl border text-left cursor-pointer transition-all duration-200 bg-card",
+                  "rounded-2xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   isSelected
-                    ? "border-primary bg-primary/10 shadow-sm ring-2 ring-primary/20 scale-[1.01]"
-                    : "border-border/70 hover:border-primary/40 hover:bg-muted/30"
+                    ? "border-primary/50 bg-primary/5"
+                    : "border-border/70 bg-card hover:border-primary/40 hover:bg-muted/30"
                 )}
               >
-                <div className="flex items-start justify-between mb-1.5">
-                  <div className="flex items-center gap-2">
-                    <TierIcon className="w-5 h-5 text-primary shrink-0" />
-                    <div>
-                      <h4 className="text-xs font-bold text-foreground">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted">
+                      <TierIcon className="h-5 w-5 text-primary" aria-hidden="true" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold text-foreground">
                         {tier.name}
-                      </h4>
-                      <span className="text-[11px] font-semibold text-primary">
+                      </span>
+                      <span className="block text-xs font-medium text-primary">
                         ~₹{tier.preset.toLocaleString("en-IN")} / person
                       </span>
-                    </div>
+                    </span>
                   </div>
-                  {isSelected && (
-                    <div className="w-4 h-4 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
-                      <Check className="w-2.5 h-2.5 stroke-[3]" />
-                    </div>
-                  )}
+                  <span
+                    className={cn(
+                      "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-colors",
+                      isSelected
+                        ? "bg-primary text-primary-foreground"
+                        : "border border-border/80 bg-background"
+                    )}
+                  >
+                    {isSelected && (
+                      <Check className="h-3 w-3 stroke-[3]" aria-hidden="true" />
+                    )}
+                  </span>
                 </div>
-                <p className="text-[11px] text-muted-foreground leading-snug pl-0.5">
+                <p className="mt-2.5 text-xs leading-relaxed text-muted-foreground">
                   {tier.tagline}
                 </p>
-              </div>
+              </button>
             );
           })}
         </div>

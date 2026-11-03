@@ -1,8 +1,6 @@
 import React from "react";
-import { Badge } from "@/components/ui/badge";
 import {
   Check,
-  Sparkles,
   Languages,
   Gauge,
   UtensilsCrossed,
@@ -126,6 +124,15 @@ interface StepStyleProps {
   onToggleDietary: (item: string) => void;
 }
 
+/** Shared pill for dietary and language choices. */
+const pillClass = (isActive: boolean) =>
+  cn(
+    "inline-flex min-h-[36px] items-center gap-1.5 rounded-full border px-3.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+    isActive
+      ? "border-primary/50 bg-primary/10 text-primary"
+      : "border-border/80 bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground"
+  );
+
 export const StepStyle: React.FC<StepStyleProps> = ({
   selectedInterests,
   onToggleInterest,
@@ -140,133 +147,138 @@ export const StepStyle: React.FC<StepStyleProps> = ({
 }) => {
   return (
     <div className="space-y-6">
-      <div className="text-center space-y-2">
-        <h2 className="text-2xl font-bold tracking-tight text-foreground flex items-center justify-center gap-2">
-          <span>What travel style inspires you?</span>
-          <Sparkles className="w-6 h-6 text-primary" aria-hidden="true" />
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
+        <h2 className="font-display text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+          What kind of trip do you enjoy?
         </h2>
-        <p className="text-sm text-muted-foreground max-w-lg mx-auto">
-          Choose the experiences that match your vibe. Select one or more to personalize daily activities.
+        <p className="text-xs text-muted-foreground sm:text-sm">
+          Pick one or more — this shapes your days
         </p>
       </div>
 
-      {/* Action Header */}
-      <div className="flex items-center justify-between text-xs">
-        <div className="flex items-center gap-1.5 font-semibold text-muted-foreground">
-          <Sparkles className="w-3.5 h-3.5 text-primary" />
-          <span>
-            {selectedInterests.length === 0
-              ? "Select at least 1 interest"
-              : `${selectedInterests.length} selected`}
-          </span>
-        </div>
-        <div className="flex gap-2">
+      {/* Selection Actions */}
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+        <span className="font-medium text-muted-foreground">
+          {selectedInterests.length === 0
+            ? "Select at least one interest"
+            : `${selectedInterests.length} selected`}
+        </span>
+        <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={onSelectAll}
-            className="text-primary hover:underline font-semibold"
+            className="font-semibold text-primary transition-colors hover:underline"
           >
-            Select All
+            Select all
           </button>
-          <span className="text-border">•</span>
           <button
             type="button"
             onClick={onClearAll}
-            className="text-muted-foreground hover:text-foreground font-semibold"
+            className="font-semibold text-muted-foreground transition-colors hover:text-foreground"
           >
-            Reset
+            Clear
           </button>
         </div>
       </div>
 
-      {/* Grid of Styles */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+      {/* Styles */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {STYLE_OPTIONS.map((style) => {
           const isSelected = selectedInterests.includes(style.id);
           const StyleIcon = style.icon;
           return (
-            <div
+            <button
               key={style.id}
+              type="button"
+              aria-pressed={isSelected}
               onClick={() => onToggleInterest(style.id)}
               className={cn(
-                "relative p-4 rounded-2xl border text-left cursor-pointer transition-all duration-200 bg-card",
+                "rounded-2xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 isSelected
-                  ? "border-primary bg-primary/10 shadow-sm ring-2 ring-primary/20 scale-[1.01]"
-                  : "border-border/70 hover:border-primary/40 hover:bg-muted/30"
+                  ? "border-primary/50 bg-primary/5"
+                  : "border-border/70 bg-card hover:border-primary/40 hover:bg-muted/30"
               )}
             >
-              <div className="flex items-start justify-between mb-2">
-                <div className="flex items-center gap-2.5">
-                  <span className="p-2 bg-card rounded-lg border border-border/50 shadow-2xs flex items-center justify-center">
-                    <StyleIcon className="w-5 h-5 text-primary" />
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted">
+                    <StyleIcon className="h-5 w-5 text-primary" aria-hidden="true" />
                   </span>
-                  <div>
-                    <h4 className="font-bold text-foreground text-sm">
-                      {style.name}
-                    </h4>
-                  </div>
+                  <span className="truncate text-sm font-semibold text-foreground">
+                    {style.name}
+                  </span>
                 </div>
-                <div
+                <span
                   className={cn(
-                    "w-5 h-5 rounded-full flex items-center justify-center transition-all",
+                    "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-colors",
                     isSelected
-                      ? "bg-primary text-primary-foreground shadow-xs"
+                      ? "bg-primary text-primary-foreground"
                       : "border border-border/80 bg-background"
                   )}
                 >
-                  {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
-                </div>
+                  {isSelected && (
+                    <Check className="h-3 w-3 stroke-[3]" aria-hidden="true" />
+                  )}
+                </span>
               </div>
 
-              <p className="text-xs text-muted-foreground leading-relaxed mb-2.5 pl-0.5">
+              <p className="mt-2.5 text-xs leading-relaxed text-muted-foreground">
                 {style.description}
               </p>
-
-              <div className="flex flex-wrap gap-1">
-                {style.tags.map((tag) => (
-                  <Badge
-                    key={tag}
-                    variant="outline"
-                    className="text-[10px] px-2 py-0.5 border-border/60 bg-muted/30"
-                  >
-                    {tag}
-                  </Badge>
-                ))}
-              </div>
-            </div>
+              <p className="mt-1.5 text-[11px] text-muted-foreground/80">
+                {style.tags.join(" · ")}
+              </p>
+            </button>
           );
         })}
       </div>
 
       {/* Travel Pace */}
-      <div className="space-y-3 pt-2">
-        <div className="flex items-center gap-2">
-          <Gauge className="w-4 h-4 text-primary" />
-          <h3 className="text-sm font-bold text-foreground">Travel pace</h3>
-          <span className="text-xs text-muted-foreground">— how packed should each day be?</span>
+      <div className="space-y-3 border-t border-border/60 pt-6">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
+          <h3 className="flex items-center gap-2 font-display text-lg font-semibold tracking-tight text-foreground sm:text-xl">
+            <Gauge className="h-4 w-4 text-primary" aria-hidden="true" />
+            Travel pace
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            How packed should each day be?
+          </p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           {PACE_OPTIONS.map((option) => {
             const isActive = pace === option.id;
             const PaceIcon = option.icon;
             return (
               <button
-                type="button"
                 key={option.id}
+                type="button"
+                aria-pressed={isActive}
                 onClick={() => onPaceChange(option.id)}
                 className={cn(
-                  "p-3 rounded-2xl border text-left transition-all duration-200 bg-card",
+                  "rounded-2xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   isActive
-                    ? "border-primary bg-primary/10 ring-2 ring-primary/20"
-                    : "border-border/70 hover:border-primary/40 hover:bg-muted/30"
+                    ? "border-primary/50 bg-primary/5"
+                    : "border-border/70 bg-card hover:border-primary/40 hover:bg-muted/30"
                 )}
               >
                 <div className="flex items-center justify-between">
-                  <PaceIcon className="w-5 h-5 text-primary" />
-                  {isActive && <Check className="w-4 h-4 text-primary stroke-[3]" />}
+                  <PaceIcon
+                    className={cn(
+                      "h-5 w-5",
+                      isActive ? "text-primary" : "text-muted-foreground"
+                    )}
+                    aria-hidden="true"
+                  />
+                  {isActive && (
+                    <Check className="h-4 w-4 text-primary" aria-hidden="true" />
+                  )}
                 </div>
-                <p className="mt-1 text-sm font-bold text-foreground">{option.label}</p>
-                <p className="text-[11px] text-muted-foreground leading-snug">{option.description}</p>
+                <p className="mt-2 text-sm font-semibold text-foreground">
+                  {option.label}
+                </p>
+                <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
+                  {option.description}
+                </p>
               </button>
             );
           })}
@@ -275,25 +287,23 @@ export const StepStyle: React.FC<StepStyleProps> = ({
 
       {/* Dietary Preferences */}
       <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <UtensilsCrossed className="w-4 h-4 text-primary" />
-          <h3 className="text-sm font-bold text-foreground">Dietary preferences</h3>
-          <span className="text-xs text-muted-foreground">— optional</span>
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
+          <h3 className="flex items-center gap-2 font-display text-lg font-semibold tracking-tight text-foreground sm:text-xl">
+            <UtensilsCrossed className="h-4 w-4 text-primary" aria-hidden="true" />
+            Dietary preferences
+          </h3>
+          <p className="text-xs text-muted-foreground">Optional</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {DIETARY_OPTIONS.map((item) => {
             const isActive = dietary.includes(item);
             return (
               <button
-                type="button"
                 key={item}
+                type="button"
+                aria-pressed={isActive}
                 onClick={() => onToggleDietary(item)}
-                className={cn(
-                  "px-3 py-1.5 rounded-full border text-xs font-semibold transition-all",
-                  isActive
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-border/70 bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground"
-                )}
+                className={pillClass(isActive)}
               >
                 {item}
               </button>
@@ -304,29 +314,31 @@ export const StepStyle: React.FC<StepStyleProps> = ({
 
       {/* Output Language */}
       <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <Languages className="w-4 h-4 text-primary" />
-          <h3 className="text-sm font-bold text-foreground">Itinerary language</h3>
-          <span className="text-xs text-muted-foreground">— the language of your plan</span>
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
+          <h3 className="flex items-center gap-2 font-display text-lg font-semibold tracking-tight text-foreground sm:text-xl">
+            <Languages className="h-4 w-4 text-primary" aria-hidden="true" />
+            Itinerary language
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            The language your plan is written in
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           {LANGUAGE_OPTIONS.map((option) => {
             const isActive = language === option.id;
             return (
               <button
-                type="button"
                 key={option.id}
+                type="button"
+                aria-pressed={isActive}
                 onClick={() => onLanguageChange(option.id)}
-                className={cn(
-                  "px-3 py-1.5 rounded-full border text-xs font-semibold transition-all flex items-center gap-1.5",
-                  isActive
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-border/70 bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground"
-                )}
+                className={pillClass(isActive)}
               >
                 <span>{option.native}</span>
                 {option.native !== option.label && (
-                  <span className="text-[10px] opacity-70">{option.label}</span>
+                  <span className="text-[10px] font-normal opacity-70">
+                    {option.label}
+                  </span>
                 )}
               </button>
             );

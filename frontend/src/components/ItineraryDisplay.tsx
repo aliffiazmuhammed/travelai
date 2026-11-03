@@ -3,17 +3,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Calendar,
   MapPin,
-  Compass,
   Bed,
   ShieldCheck,
   Sparkles,
-  Camera,
   Receipt,
   Users,
   History,
+  UserPlus,
+  Maximize2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent } from "@/components/ui/card";
 import { api } from "@/services/api";
 import { isRevConflict, toastConflict } from "@/lib/conflicts";
@@ -30,13 +32,23 @@ import { NearbyExplorer } from "./dashboard/NearbyExplorer";
 import { WeatherRoutingCard } from "./dashboard/WeatherRoutingCard";
 import { DayAlternativeDialog } from "./dashboard/DayAlternativeDialog";
 import { TripMembers } from "./dashboard/TripMembers";
+import { InviteDialog } from "./dashboard/InviteDialog";
 import { TripVersions } from "./dashboard/TripVersions";
 import { DiscussionDrawer } from "./dashboard/DiscussionDrawer";
 import { useTripComments } from "@/hooks/useTripComments";
 import { useTripChatCrypto } from "@/hooks/useTripChatCrypto";
+import { roleLabel } from "@/hooks/useTripAccess";
 import type { ChatRealm } from "@/lib/chatCrypto";
 import { useTripEvents, type PresenceUser } from "@/hooks/useTripEvents";
 import { endDateFromStart, itineraryAnchor, zipWeatherToDays } from "@/lib/weather";
+import {
+  formatDistance,
+  formatDuration,
+  isValidCoord,
+  totalRoute,
+} from "@/lib/geo";
+import type { LatLng } from "@/lib/geo";
+import { avatarSrc } from "@/lib/avatar";
 import { swapDayPlans } from "@/lib/weatherRouting";
 import { applyActivityEdit } from "@/lib/proposalApply";
 import type {
@@ -52,6 +64,7 @@ import type {
   TripFeedback as TripFeedbackType,
   TripFinance,
   TripGenerationMeta,
+  TripMember,
   TripMemberSummary,
   TripParticipant,
   TripRole,
@@ -126,6 +139,76 @@ interface ItineraryDisplayProps {
 /** Debounce window (ms) for automatic background saving of local edits. */
 const AUTOSAVE_DELAY = 1500;
 
+/**
+ * One tab voice: a calm white strip where the active tab carries a light-primary
+ * fill and a short underline. The row scrolls sideways inside the strip on
+ * narrow screens instead of wrapping into cramped cells.
+ */
+const TAB_TRIGGER_CLASS = cn(
+  "group relative inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold text-muted-foreground transition-colors",
+  "hover:bg-muted/60 hover:text-foreground",
+  "data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none",
+  "after:absolute after:inset-x-3 after:bottom-1 after:h-0.5 after:rounded-full after:bg-transparent",
+  "data-[state=active]:after:bg-primary",
+  "lg:flex-1"
+);
+
+/** Role pills for the Going card — the roster's own role, never a guess. */
+const ROLE_PILL_CLASS: Record<TripRole, string> = {
+  owner: "bg-accent/10 text-accent",
+  editor: "bg-primary/10 text-primary",
+  commenter: "bg-muted text-muted-foreground",
+  viewer: "border border-border text-muted-foreground",
+};
+
+/**
+ * The rail reuses the full interactive map with its chrome folded away: the
+ * filter bar, saved-route list and legend stay in the Map tab, while the
+ * viewport (child 2 of the map root, controls off) becomes a quiet preview.
+ */
+const MAP_PREVIEW_CLASS = cn(
+  "[&>div]:!space-y-0",
+  "[&>div>*:first-child]:hidden",
+  "[&>div>*:nth-child(n+3)]:hidden",
+  "[&>div>*:nth-child(2)]:!h-[280px]",
+  "[&>div>*:nth-child(2)]:!rounded-none",
+  "[&>div>*:nth-child(2)]:!border-0",
+  "[&>div>*:nth-child(2)]:!shadow-none",
+  "[&_.absolute.bottom-4]:hidden"
+);
+
+/** The rail only exists from `xl`; mounting a Leaflet map into a hidden box breaks it. */
+function useRailMapVisible(): boolean {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const mql = window.matchMedia("(min-width: 1280px)");
+    const update = () => setVisible(mql.matches);
+    update();
+    mql.addEventListener("change", update);
+    return () => mql.removeEventListener("change", update);
+  }, []);
+  return visible;
+}
+
+/** Two-letter initials from the roster label (or email local part). */
+function memberInitials(member: TripMember): string {
+  const source = (member.label || member.email || "Traveler").trim();
+  if (source.includes("@")) return source.slice(0, 2).toUpperCase();
+  const parts = source.split(/\s+/).filter(Boolean);
+  const first = parts[0]?.[0] ?? "T";
+  const last = parts.length > 1 ? parts[parts.length - 1][0] : "";
+  return `${first}${last}`.toUpperCase();
+}
+
+/** Valid `[lat, lng]` from an activity, or null when it has none. */
+function activityLatLng(activity: ActivityItem | string): LatLng | null {
+  if (typeof activity !== "object" || activity === null) return null;
+  const coords = activity.coordinates;
+  if (!Array.isArray(coords) || coords.length < 2) return null;
+  const pair: [number, number] = [Number(coords[0]), Number(coords[1])];
+  return isValidCoord(pair) ? pair : null;
+}
+
 /** Immutably replaces a single activity within a day (matched by day number). */
 function replaceActivity(
   itinerary: ItineraryData["day_by_day_itinerary"],
@@ -184,6 +267,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
     safeData.day_by_day_itinerary
   );
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
+  const railMapVisible = useRailMapVisible();
 
   /**
    * F12b/F12d: compose a TravelAI proposal into the itinerary snapshot and save
@@ -319,6 +403,87 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
     onDecisionEvent: (frame) => commentsDecisionRef.current(frame),
     onPollEvent: (frame) => commentsPollRef.current(frame),
   });
+
+  // --- Right rail (concept 11): route preview + who is going --------------
+  // The roster is read from the same members endpoint the People tab uses:
+  // labels and photos for every member, email only when the viewer is the
+  // owner. Refreshed whenever the timeline is re-entered so a role change in
+  // People is reflected here without a reload.
+  const [roster, setRoster] = useState<TripMember[] | null>(null);
+  const [rosterFailed, setRosterFailed] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const timelineRef = useRef<HTMLDivElement | null>(null);
+
+  const sortedRoster = useMemo(() => {
+    const rank: Record<TripRole, number> = {
+      owner: 0,
+      editor: 1,
+      commenter: 2,
+      viewer: 3,
+    };
+    return [...(roster ?? [])].sort((a, b) => rank[a.role] - rank[b.role]);
+  }, [roster]);
+
+  useEffect(() => {
+    if (!showPeopleTab || !tripId || activeTab !== "timeline") return;
+    let cancelled = false;
+    setRosterFailed(false);
+    api
+      .getTripMembers(tripId)
+      .then((result) => {
+        if (!cancelled) setRoster(result.members ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setRosterFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showPeopleTab, tripId, activeTab]);
+
+  // Stops and drive time for the rail card — straight-line estimates from the
+  // same geo helpers the timeline uses, summed per day.
+  const routeSummary = useMemo(() => {
+    let stops = 0;
+    let km = 0;
+    let minutes = 0;
+    itinerary.forEach((day) => {
+      stops += day.activities.length;
+      const points = day.activities
+        .map(activityLatLng)
+        .filter((point): point is LatLng => point !== null);
+      if (points.length >= 2) {
+        const totals = totalRoute(points, "drive");
+        km += totals.km;
+        minutes += totals.minutes;
+      }
+    });
+    return { stops, km, minutes };
+  }, [itinerary]);
+
+  const mapMeta = [
+    `${itinerary.length} ${itinerary.length === 1 ? "day" : "days"}`,
+    `${routeSummary.stops} ${routeSummary.stops === 1 ? "stop" : "stops"}`,
+    routeSummary.minutes > 0
+      ? `${formatDistance(routeSummary.km)} · ~${formatDuration(routeSummary.minutes)} drive`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  /** Roster count when loaded, the sanitized summary's count until then. */
+  const goingCount = sortedRoster.length || members?.length || 0;
+
+  /** "Edit plan" lands on the day cards, where the plan is actually edited. */
+  const focusEditor = () => {
+    setActiveTab("timeline");
+    window.requestAnimationFrame(() => {
+      const node = timelineRef.current;
+      if (!node) return;
+      const top = node.getBoundingClientRect().top + window.scrollY - 128;
+      window.scrollTo({ top, behavior: "smooth" });
+    });
+  };
 
   // --- Weather advisories (Milestone 4.4) ---
   const [weatherByDay, setWeatherByDay] = useState<Record<number, DailyWeather>>({});
@@ -665,21 +830,26 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
         hideShare={agencyTrip}
         publication={publication}
         onPublicationChange={onPublicationChange}
+        members={sortedRoster}
+        memberCount={members?.length}
+        startDate={startDate}
+        onEditPlan={onSave ? focusEditor : undefined}
       />
 
-      {/* Highlights Bar */}
+      {/* Highlights — one quiet line of chips, not a second hero. */}
       {safeData.highlights && safeData.highlights.length > 0 && (
-        <Card className="rounded-3xl border border-border/70 bg-card/60 backdrop-blur-sm shadow-xs overflow-hidden">
-          <CardContent className="p-4 sm:p-5 flex flex-wrap items-center gap-2.5">
-            <div className="flex items-center gap-2 text-xs font-bold text-primary uppercase tracking-wider shrink-0 pr-2">
-              <Camera className="w-4 h-4" />
-              <span>Key Highlights:</span>
-            </div>
+        <Card className="overflow-hidden rounded-xl border border-border bg-card shadow-none">
+          <CardContent className="flex flex-wrap items-center gap-2 px-4 py-3">
+            <span className="inline-flex shrink-0 items-center gap-1.5 pr-1 text-[11px] font-semibold text-muted-foreground">
+              <Sparkles className="h-3.5 w-3.5 text-primary" aria-hidden />
+              Highlights
+            </span>
+            <span className="hidden h-3.5 w-px bg-border sm:block" aria-hidden />
             {safeData.highlights.map((h, i) => (
               <Badge
                 key={i}
                 variant="outline"
-                className="bg-background/80 hover:bg-background border-border/80 text-xs font-semibold px-3 py-1 rounded-full text-foreground/90 transition-colors"
+                className="rounded-full border-border bg-background px-2.5 py-0.5 text-[11px] font-medium text-foreground/80"
               >
                 {h}
               </Badge>
@@ -703,82 +873,48 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
       <Tabs
         value={activeTab}
         onValueChange={setActiveTab}
-        className="w-full space-y-6"
+        className="w-full space-y-4"
       >
-        <div className="sticky top-16 z-30 bg-background/85 backdrop-blur-md py-2 -mx-2 px-2">
-          <TabsList
-            className={cn(
-              // Mobile/tablet: one horizontally-scrollable row of icon-only
-              // pills (labels would wrap into two cramped rows of tiny cells).
-              // From lg up: the familiar label grid.
-              "flex w-full max-w-full overflow-x-auto scrollbar-none h-auto p-1.5 bg-muted/60 border border-border/60 rounded-2xl shadow-xs gap-1 lg:grid lg:grid-cols-7",
-              !showPeopleTab && "lg:grid-cols-6"
-            )}
-          >
-            <TabsTrigger
-              value="timeline"
-              title="Day Timeline"
-              className="py-2.5 px-3 rounded-xl text-xs font-bold gap-2 shrink-0 data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
-            >
-              <Calendar className="w-3.5 h-3.5" />
-              <span className="hidden lg:inline">Day Timeline</span>
+        {/* One white strip. Labels stay readable and the row scrolls inside
+            the strip on narrow screens instead of wrapping. */}
+        <div className="sticky top-16 z-30 bg-background py-2">
+          <TabsList className="flex h-auto w-full max-w-full items-center gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1.5 shadow-xs scrollbar-none">
+            <TabsTrigger value="timeline" title="Day Timeline" className={TAB_TRIGGER_CLASS}>
+              <Calendar className="h-3.5 w-3.5" aria-hidden />
+              <span>Day Timeline</span>
             </TabsTrigger>
 
-            <TabsTrigger
-              value="map"
-              title="Interactive Map"
-              className="py-2.5 px-3 rounded-xl text-xs font-bold gap-2 shrink-0 data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
-            >
-              <MapPin className="w-3.5 h-3.5" />
-              <span className="hidden lg:inline">Interactive Map</span>
+            <TabsTrigger value="map" title="Interactive Map" className={TAB_TRIGGER_CLASS}>
+              <MapPin className="h-3.5 w-3.5" aria-hidden />
+              <span>Interactive Map</span>
             </TabsTrigger>
 
-            <TabsTrigger
-              value="stays"
-              title="Stays & Dining"
-              className="py-2.5 px-3 rounded-xl text-xs font-bold gap-2 shrink-0 data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
-            >
-              <Bed className="w-3.5 h-3.5" />
-              <span className="hidden lg:inline">Stays & Dining</span>
+            <TabsTrigger value="stays" title="Stays & Dining" className={TAB_TRIGGER_CLASS}>
+              <Bed className="h-3.5 w-3.5" aria-hidden />
+              <span>Stays & Dining</span>
             </TabsTrigger>
 
-            <TabsTrigger
-              value="guide"
-              title="Guide & Safety"
-              className="py-2.5 px-3 rounded-xl text-xs font-bold gap-2 shrink-0 data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
-            >
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span className="hidden lg:inline">Guide & Safety</span>
+            <TabsTrigger value="guide" title="Guide & Safety" className={TAB_TRIGGER_CLASS}>
+              <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
+              <span>Guide & Safety</span>
             </TabsTrigger>
 
-            <TabsTrigger
-              value="expenses"
-              title="Expenses"
-              className="py-2.5 px-3 rounded-xl text-xs font-bold gap-2 shrink-0 data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
-            >
-              <Receipt className="w-3.5 h-3.5" />
-              <span className="hidden lg:inline">Expenses</span>
+            <TabsTrigger value="expenses" title="Expenses" className={TAB_TRIGGER_CLASS}>
+              <Receipt className="h-3.5 w-3.5" aria-hidden />
+              <span>Expenses</span>
             </TabsTrigger>
 
             {isRealTrip && (
-              <TabsTrigger
-                value="history"
-                title="Version History"
-                className="py-2.5 px-3 rounded-xl text-xs font-bold gap-2 shrink-0 data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
-              >
-                <History className="w-3.5 h-3.5" />
-                <span className="hidden lg:inline">History</span>
+              <TabsTrigger value="history" title="Version History" className={TAB_TRIGGER_CLASS}>
+                <History className="h-3.5 w-3.5" aria-hidden />
+                <span>History</span>
               </TabsTrigger>
             )}
 
             {showPeopleTab && (
-              <TabsTrigger
-                value="people"
-                title="People"
-                className="py-2.5 px-3 rounded-xl text-xs font-bold gap-2 shrink-0 data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
-              >
-                <Users className="w-3.5 h-3.5" />
-                <span className="hidden lg:inline">People</span>
+              <TabsTrigger value="people" title="People" className={TAB_TRIGGER_CLASS}>
+                <Users className="h-3.5 w-3.5" aria-hidden />
+                <span>People</span>
               </TabsTrigger>
             )}
           </TabsList>
@@ -786,18 +922,145 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
 
         {/* TAB 1: Day Timeline View */}
         <TabsContent value="timeline" className="outline-hidden animate-fade-in">
-          <DayTimeline
-            itinerary={itinerary}
-            onUpdateItinerary={onSave ? handleUpdateItinerary : undefined}
-            onUpdateActivity={handleUpdateActivity}
-            onReorderActivities={handleReorderActivities}
-            onMoveDay={handleMoveDay}
-            isPersisting={isPersisting}
-            weatherByDay={weatherByDay}
-            onSuggestAlternative={isRealTrip && Boolean(onSave) ? openDayAlternative : undefined}
-            alternativeLoadingDay={alternativeLoading ? alternativeDay : null}
-            commentCounts={showDiscussion ? commentsController.state.dayCounts : undefined}
-          />
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
+            <div ref={timelineRef} className="min-w-0">
+              <DayTimeline
+                itinerary={itinerary}
+                onUpdateItinerary={onSave ? handleUpdateItinerary : undefined}
+                onUpdateActivity={handleUpdateActivity}
+                onReorderActivities={handleReorderActivities}
+                onMoveDay={handleMoveDay}
+                isPersisting={isPersisting}
+                weatherByDay={weatherByDay}
+                onSuggestAlternative={isRealTrip && Boolean(onSave) ? openDayAlternative : undefined}
+                alternativeLoadingDay={alternativeLoading ? alternativeDay : null}
+                commentCounts={showDiscussion ? commentsController.state.dayCounts : undefined}
+              />
+            </div>
+
+            {/* Rail: the day route plus who is coming. Desktop only — the same
+                map and roster live in their own tabs on smaller screens. */}
+            <aside className="hidden space-y-4 xl:block" aria-label="Trip at a glance">
+              <section className="overflow-hidden rounded-xl border border-border bg-card">
+                <div className="flex items-start justify-between gap-3 px-4 py-3">
+                  <div className="min-w-0">
+                    <h2 className="font-display text-base font-semibold leading-tight text-foreground">
+                      Route map
+                    </h2>
+                    <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                      {mapMeta}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setActiveTab("map")}
+                    title="Open the interactive map"
+                    aria-label="Open the interactive map"
+                    className="h-8 w-8 shrink-0 rounded-lg text-muted-foreground hover:text-primary"
+                  >
+                    <Maximize2 className="h-3.5 w-3.5" aria-hidden />
+                  </Button>
+                </div>
+                <div className={cn("border-t border-border", MAP_PREVIEW_CLASS)}>
+                  {railMapVisible && (
+                    <TripMap
+                      destination={safeData.trip_title}
+                      itinerary={itinerary}
+                      tripId={tripId}
+                      customRoutes={customRoutes}
+                      canEdit={false}
+                      nearbyPlaces={nearbyPlaces}
+                      weatherByDay={weatherByDay}
+                    />
+                  )}
+                </div>
+              </section>
+
+              {showPeopleTab && (
+                <section className="overflow-hidden rounded-xl border border-border bg-card">
+                  <div className="flex items-center justify-between gap-2 px-4 py-3">
+                    <h2 className="font-display text-base font-semibold text-foreground">
+                      Going{" "}
+                      <span className="font-sans text-xs font-medium text-muted-foreground">
+                        ({goingCount})
+                      </span>
+                    </h2>
+                    {isOwner && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setInviteOpen(true)}
+                        className="h-8 gap-1.5 rounded-lg px-2 text-[11px] font-semibold text-primary hover:bg-primary/10 hover:text-primary"
+                      >
+                        <UserPlus className="h-3.5 w-3.5" aria-hidden />
+                        Invite
+                      </Button>
+                    )}
+                  </div>
+
+                  {roster === null && !rosterFailed ? (
+                    <div className="space-y-2 border-t border-border p-3">
+                      {[0, 1, 2].map((row) => (
+                        <div
+                          key={row}
+                          className="h-9 animate-pulse rounded-lg bg-muted"
+                        />
+                      ))}
+                    </div>
+                  ) : sortedRoster.length === 0 ? (
+                    <p className="border-t border-border px-4 py-3 text-[11px] leading-relaxed text-muted-foreground">
+                      {rosterFailed
+                        ? "The roster did not load here — open People for the full list."
+                        : "No one has joined this trip yet."}
+                    </p>
+                  ) : (
+                    <ul className="max-h-[268px] divide-y divide-border/70 overflow-y-auto border-t border-border">
+                      {sortedRoster.map((member) => (
+                        <li
+                          key={member.userId}
+                          className="flex items-center gap-3 px-4 py-2.5"
+                        >
+                          <Avatar className="h-8 w-8 shrink-0 border border-border">
+                            {avatarSrc(member.avatarUrl) && (
+                              <AvatarImage
+                                src={avatarSrc(member.avatarUrl)}
+                                alt={member.label || "Member"}
+                              />
+                            )}
+                            <AvatarFallback className="bg-muted text-[10px] font-semibold text-muted-foreground">
+                              {memberInitials(member)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-semibold text-foreground">
+                              {member.label || "Traveler"}
+                              {member.isYou ? " (you)" : ""}
+                            </p>
+                            {member.email && (
+                              <p className="truncate text-[11px] text-muted-foreground">
+                                {member.email}
+                              </p>
+                            )}
+                          </div>
+                          <span
+                            className={cn(
+                              "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                              ROLE_PILL_CLASS[member.role]
+                            )}
+                          >
+                            {roleLabel(member.role)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
+              )}
+            </aside>
+          </div>
         </TabsContent>
 
         {/* TAB 2: Interactive Map View */}
@@ -929,6 +1192,15 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
           if (alternativeDay != null) void openDayAlternative(alternativeDay);
         }}
       />
+
+      {/* Invite by link, launched from the Going card in the right rail */}
+      {showPeopleTab && isOwner && isRealTrip && tripId && (
+        <InviteDialog
+          open={inviteOpen}
+          onClose={() => setInviteOpen(false)}
+          tripId={tripId}
+        />
+      )}
     </div>
   );
 };

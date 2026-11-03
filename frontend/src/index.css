@@ -115,6 +115,82 @@ All colors MUST be HSL.
     --shadow-card: 0 8px 30px -6px hsl(0 0% 0% / 0.5);
     --shadow-hover: 0 12px 40px -8px hsl(200 50% 40% / 0.4);
   }
+
+  /* Agency workspace surfaces: warm paper, one teal accent, hairline rules. */
+  :root {
+    --agency-canvas: 45 22% 96.5%;
+    --agency-panel: 0 0% 100%;
+    --agency-line: 42 21% 88%;
+    --agency-ink: 60 5% 11%;
+    --agency-muted: 60 4% 40%;
+    --agency-soft: 40 20% 93%;
+    --agency-accent: 174 72% 28%;
+    --agency-accent-soft: 174 60% 95%;
+  }
+
+  .dark {
+    --agency-canvas: 60 4% 8%;
+    --agency-panel: 60 4% 11%;
+    --agency-line: 60 4% 20%;
+    --agency-ink: 40 20% 96%;
+    --agency-muted: 40 8% 65%;
+    --agency-soft: 60 4% 14%;
+    --agency-accent: 174 65% 42%;
+    --agency-accent-soft: 174 40% 16%;
+  }
+
+  /*
+   * Scoped to the agency workspace. The theme class sits on <html> while an
+   * agency route is mounted, so dialogs and sheets portalled to <body> pick up
+   * the same teal primary and warm borders.
+   */
+  .agency-theme {
+    --background: 45 22% 96.5%;
+    --foreground: 60 5% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 60 5% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 60 5% 11%;
+
+    --primary: 174 72% 28%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 40 20% 94%;
+    --secondary-foreground: 60 5% 15%;
+
+    --muted: 40 20% 94%;
+    --muted-foreground: 60 4% 40%;
+
+    --border: 42 21% 88%;
+    --input: 42 21% 88%;
+    --ring: 174 72% 28%;
+  }
+
+  .agency-theme.dark {
+    --background: 60 4% 8%;
+    --foreground: 40 20% 96%;
+
+    --card: 60 4% 11%;
+    --card-foreground: 40 20% 96%;
+
+    --popover: 60 4% 11%;
+    --popover-foreground: 40 20% 96%;
+
+    --primary: 174 65% 42%;
+    --primary-foreground: 60 4% 8%;
+
+    --secondary: 60 4% 14%;
+    --secondary-foreground: 40 20% 96%;
+
+    --muted: 60 4% 14%;
+    --muted-foreground: 40 8% 65%;
+
+    --border: 60 4% 20%;
+    --input: 60 4% 20%;
+    --ring: 174 65% 48%;
+  }
 }
 
 @layer base {

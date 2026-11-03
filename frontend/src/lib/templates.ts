@@ -29,7 +29,7 @@ export function templateStatusClass(status: AgencyTemplateStatus): string {
     case 'draft':
       return 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300';
     default:
-      return 'border-slate-300 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300';
+      return 'border-agency-line bg-agency-soft text-agency-muted';
   }
 }
 

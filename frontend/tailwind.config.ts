@@ -56,6 +56,16 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        agency: {
+          canvas: "hsl(var(--agency-canvas))",
+          panel: "hsl(var(--agency-panel))",
+          line: "hsl(var(--agency-line))",
+          ink: "hsl(var(--agency-ink))",
+          muted: "hsl(var(--agency-muted))",
+          soft: "hsl(var(--agency-soft))",
+          accent: "hsl(var(--agency-accent))",
+          "accent-soft": "hsl(var(--agency-accent-soft))",
+        },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",
