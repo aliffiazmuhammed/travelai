@@ -44,6 +44,14 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { AgencyEmptyState } from '@/components/agency/AgencyEmptyState';
 import { AgencyPageHeader } from '@/components/agency/AgencyPageHeader';
@@ -52,7 +60,6 @@ import ConversationThread from '@/components/directory/ConversationThread';
 import { useAgency } from '@/context/AgencyContext';
 import { useAgencyAuth } from '@/context/AgencyAuthContext';
 import { useEnquiryLiveRefresh } from '@/hooks/useEnquiryEvents';
-import { useIsMobile } from '@/hooks/use-mobile';
 import {
   AGENCY_ENQUIRY_BUDGET_LABELS,
   AGENCY_ENQUIRY_STATUSES,
@@ -470,7 +477,6 @@ const AgencyEnquiries: React.FC = () => {
   const canPlan = role === 'owner' || role === 'admin' || role === 'planner';
   const canAssign = role === 'owner' || role === 'admin';
   const myId = user?._id ?? null;
-  const isMobile = useIsMobile();
 
   const [enquiries, setEnquiries] = useState<AgencyEnquiry[]>([]);
   const [filter, setFilter] = useState<Filter>('all');
@@ -491,16 +497,15 @@ const AgencyEnquiries: React.FC = () => {
   const [detailError, setDetailError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [members, setMembers] = useState<AgencyMember[]>([]);
-  const [lostOpen, setLostOpen] = useState(false);
+  const [lostTarget, setLostTarget] = useState<AgencyEnquiry | null>(null);
   const [lostReason, setLostReason] = useState('');
 
   // Newer reads win: a quiet live refresh can overlap the first page load, and
   // an older response must never overwrite a fresher list or thread.
   const requestSeq = useRef(0);
   const detailSeq = useRef(0);
-  // The thread is on screen when a lead is open: always in the desktop pane,
-  // and in the sheet on mobile.
-  const detailOpen = Boolean(selected) && (!isMobile || sheetOpen);
+  // The thread is on screen when a lead is open in the drawer.
+  const detailOpen = Boolean(selected) && sheetOpen;
   // Read by the live callback, which runs outside React's render cycle.
   const selectedIdRef = useRef<string | null>(null);
   const detailOpenRef = useRef(false);
@@ -597,7 +602,7 @@ const AgencyEnquiries: React.FC = () => {
       .then((result) => {
         if (cancelled) return;
         setSelected(result.enquiry);
-        if (isMobile) setSheetOpen(true);
+        setSheetOpen(true);
       })
       .catch(() => {
         if (!cancelled) {
@@ -613,7 +618,7 @@ const AgencyEnquiries: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [deepLinkEnquiryId, activeAgencyId, isMobile, searchParams, setSearchParams]);
+  }, [deepLinkEnquiryId, activeAgencyId, searchParams, setSearchParams]);
 
   // Reading a lead's thread is reading it (D8): the detail GET returns the
   // messages and stamps the agency's read receipts, so the badge clears as the
@@ -772,9 +777,7 @@ const AgencyEnquiries: React.FC = () => {
 
   const openEnquiry = (enquiry: AgencyEnquiry) => {
     setSelected(enquiry);
-    setLostOpen(false);
-    setLostReason('');
-    if (isMobile) setSheetOpen(true);
+    setSheetOpen(true);
   };
 
   const startTrip = useCallback(
@@ -807,22 +810,27 @@ const AgencyEnquiries: React.FC = () => {
     [loadSummary, navigate]
   );
 
-  const changeStatus = (status: AgencyEnquiryStatus) => {
-    if (!selected) return;
+  // Status moves are available from a row and from the open thread. A loss
+  // always asks for the reason first, whichever surface started it.
+  const requestStatusChange = (
+    enquiry: AgencyEnquiry,
+    status: AgencyEnquiryStatus
+  ) => {
     if (status === 'lost') {
-      setLostReason(selected.lostReason ?? '');
-      setLostOpen(true);
+      setLostReason(enquiry.lostReason ?? '');
+      setLostTarget(enquiry);
       return;
     }
-    void applyUpdate(selected, { status }, `status-${status}`);
+    void applyUpdate(enquiry, { status }, `status-${status}`);
   };
 
   const confirmLost = () => {
-    if (!selected) return;
+    if (!lostTarget) return;
     const reason = lostReason.trim();
     if (!reason) return;
-    setLostOpen(false);
-    void applyUpdate(selected, { status: 'lost', lostReason: reason }, 'status-lost');
+    const target = lostTarget;
+    setLostTarget(null);
+    void applyUpdate(target, { status: 'lost', lostReason: reason }, 'status-lost');
   };
 
   const claim = () => {
@@ -839,6 +847,14 @@ const AgencyEnquiries: React.FC = () => {
     if (!selected) return;
     void applyUpdate(
       selected,
+      { assigneeId: value === 'unassigned' ? null : value },
+      'assign'
+    );
+  };
+
+  const assignEnquiry = (enquiry: AgencyEnquiry, value: string) => {
+    void applyUpdate(
+      enquiry,
       { assigneeId: value === 'unassigned' ? null : value },
       'assign'
     );
@@ -928,7 +944,7 @@ const AgencyEnquiries: React.FC = () => {
     <div className="space-y-5">
       <AgencyPageHeader
         title="Enquiries"
-        description="Leads from your public directory page and package cards. Claim one, reply in the thread, quote, then convert it into a client — the traveller reads every reply in their own conversation, and the workspace keeps the whole history."
+        description="Leads from your public directory page and package cards. Update status and owner right in the table, open a row for the thread, then quote and convert it into a client — the traveller reads every reply in their own conversation, and the workspace keeps the whole history."
         actions={
           <>
             {liveMode === 'live' ? (
@@ -979,25 +995,27 @@ const AgencyEnquiries: React.FC = () => {
         ))}
       </section>
 
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] xl:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">
-        <section
-          aria-label="Enquiry inbox"
-          className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"
-        >
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-3 py-2.5 dark:border-slate-800">
-            <AgencySegmented
-              ariaLabel="Filter enquiries by status"
-              value={filter}
-              onChange={(value) => setFilter(value)}
-              options={FILTERS.map((option) => ({
-                ...option,
-                count:
-                  option.value === 'all'
-                    ? summary?.total ?? total
-                    : summary?.byStatus[option.value],
-              }))}
-            />
-          </div>
+      <section
+        aria-label="Enquiry inbox"
+        className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-3 py-2.5 dark:border-slate-800">
+          <AgencySegmented
+            ariaLabel="Filter enquiries by status"
+            value={filter}
+            onChange={(value) => setFilter(value)}
+            options={FILTERS.map((option) => ({
+              ...option,
+              count:
+                option.value === 'all'
+                  ? summary?.total ?? total
+                  : summary?.byStatus[option.value],
+            }))}
+          />
+          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+            {total} {total === 1 ? 'lead' : 'leads'}
+          </p>
+        </div>
 
       {error ? (
         <div className="flex flex-wrap items-center justify-between gap-3 p-4">
@@ -1031,105 +1049,251 @@ const AgencyEnquiries: React.FC = () => {
           }
         />
       ) : (
-        <div className="divide-y divide-slate-100 lg:max-h-[calc(100vh-24rem)] lg:overflow-y-auto dark:divide-slate-800">
-          {enquiries.map((enquiry) => {
-            const active = selected?.id === enquiry.id;
-            const unread = enquiry.unread.agency;
-            const stamp = enquiry.lastMessageAt || enquiry.createdAt;
-            return (
-              <button
-                key={enquiry.id}
-                type="button"
-                onClick={() => openEnquiry(enquiry)}
-                aria-current={active ? 'true' : undefined}
-                className={cn(
-                  'block w-full px-4 py-3 text-left transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-600 dark:hover:bg-slate-800/60',
-                  active &&
-                    'bg-teal-50/70 hover:bg-teal-50 dark:bg-teal-950/30 dark:hover:bg-teal-950/40'
-                )}
-              >
-                <div className="flex items-center gap-2">
-                  <span
+        <>
+          <Table className="min-w-[1080px]">
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="h-10 text-xs">Lead</TableHead>
+                <TableHead className="h-10 text-xs">Trip</TableHead>
+                <TableHead className="h-10 text-xs">Package</TableHead>
+                <TableHead className="h-10 text-xs">Status</TableHead>
+                <TableHead className="h-10 text-xs">Owner</TableHead>
+                <TableHead className="h-10 text-xs">Proposal</TableHead>
+                <TableHead className="h-10 text-xs">Last activity</TableHead>
+                <TableHead className="h-10 text-right text-xs">Thread</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {enquiries.map((enquiry) => {
+                const active = selected?.id === enquiry.id && sheetOpen;
+                const unread = enquiry.unread.agency;
+                const stamp = enquiry.lastMessageAt || enquiry.createdAt;
+                const stopRow = (event: React.SyntheticEvent) =>
+                  event.stopPropagation();
+                return (
+                  <TableRow
+                    key={enquiry.id}
+                    tabIndex={0}
+                    aria-current={active ? 'true' : undefined}
+                    onClick={() => openEnquiry(enquiry)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        openEnquiry(enquiry);
+                      }
+                    }}
                     className={cn(
-                      'truncate text-sm',
-                      unread > 0
-                        ? 'font-semibold text-slate-900 dark:text-slate-50'
-                        : 'font-medium text-slate-800 dark:text-slate-200'
+                      'cursor-pointer align-top hover:bg-slate-50/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-600 dark:hover:bg-slate-800/40',
+                      active &&
+                        'bg-teal-50/70 hover:bg-teal-50 dark:bg-teal-950/30 dark:hover:bg-teal-950/40'
                     )}
                   >
-                    {enquiry.contact.name}
-                  </span>
-                  {unread > 0 ? (
-                    <span className="inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-teal-600 px-1 text-[10px] font-semibold text-white">
-                      {unread}
-                    </span>
-                  ) : null}
-                  {stamp ? (
-                    <span className="ml-auto shrink-0 text-[11px] text-slate-400 dark:text-slate-500">
-                      {formatAgencyDate(stamp)}
-                    </span>
-                  ) : null}
-                </div>
-                <p className="mt-0.5 line-clamp-1 text-xs text-slate-500 dark:text-slate-400">
-                  {enquiry.message}
-                </p>
-                <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <Badge
-                    variant="outline"
-                    className={cn('text-[10px]', agencyEnquiryStatusBadgeClass(enquiry.status))}
-                  >
-                    {AGENCY_ENQUIRY_STATUS_LABELS[enquiry.status]}
-                  </Badge>
-                  <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                    {partyLabel(enquiry)} · {datesLabel(enquiry)}
-                  </span>
-                </div>
-                {enquiry.package ||
-                enquiry.client ||
-                enquiry.proposals?.lastDeclinedAt ||
-                enquiry.assignee ? (
-                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                    {enquiry.package ? (
-                      <Badge
-                        variant="secondary"
-                        className="max-w-full truncate text-[10px]"
+                    <TableCell className="py-3">
+                      <div className="flex items-start gap-3">
+                        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-teal-50 text-xs font-bold text-teal-700 dark:bg-teal-950/50 dark:text-teal-300">
+                          {enquiry.contact.name.trim().slice(0, 1).toUpperCase() || 'L'}
+                        </span>
+                        <div className="min-w-0 max-w-[15rem]">
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className={cn(
+                                'truncate text-sm',
+                                unread > 0
+                                  ? 'font-semibold text-slate-900 dark:text-slate-50'
+                                  : 'font-medium text-slate-800 dark:text-slate-200'
+                              )}
+                            >
+                              {enquiry.contact.name}
+                            </span>
+                            {unread > 0 ? (
+                              <span className="inline-flex h-4 min-w-[1rem] shrink-0 items-center justify-center rounded-full bg-teal-600 px-1 text-[10px] font-semibold text-white">
+                                {unread}
+                              </span>
+                            ) : null}
+                          </div>
+                          <p className="truncate text-[11px] text-slate-500 dark:text-slate-400">
+                            {enquiry.contact.email}
+                          </p>
+                          <p className="mt-0.5 line-clamp-1 text-[11px] text-slate-400 dark:text-slate-500">
+                            {enquiry.message}
+                          </p>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-3">
+                      <p className="text-xs text-slate-700 dark:text-slate-200">
+                        {partyLabel(enquiry)}
+                      </p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        {datesLabel(enquiry)}
+                      </p>
+                      {enquiry.budgetBand ? (
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                          {AGENCY_ENQUIRY_BUDGET_LABELS[enquiry.budgetBand]}
+                        </p>
+                      ) : null}
+                    </TableCell>
+                    <TableCell className="py-3">
+                      {enquiry.package ? (
+                        <Badge
+                          variant="secondary"
+                          className="max-w-[12rem] truncate text-[10px]"
+                        >
+                          {enquiry.package.title}
+                        </Badge>
+                      ) : (
+                        <span className="text-xs text-slate-500 dark:text-slate-400">
+                          Profile enquiry
+                        </span>
+                      )}
+                      {enquiry.client ? (
+                        <p className="mt-1 flex items-center gap-1 text-[11px] font-medium text-teal-700 dark:text-teal-300">
+                          <BriefcaseBusiness className="h-3 w-3" />
+                          {enquiry.client.name}
+                        </p>
+                      ) : null}
+                    </TableCell>
+                    <TableCell
+                      className="py-3"
+                      onClick={stopRow}
+                      onKeyDown={stopRow}
+                    >
+                      {canPlan ? (
+                        <Select
+                          value={enquiry.status}
+                          onValueChange={(value) =>
+                            requestStatusChange(
+                              enquiry,
+                              value as AgencyEnquiryStatus
+                            )
+                          }
+                          disabled={busy !== null}
+                        >
+                          <SelectTrigger
+                            className="h-8 w-[124px] text-xs"
+                            aria-label={`Status for ${enquiry.contact.name}`}
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {AGENCY_ENQUIRY_STATUSES.map((status) => (
+                              <SelectItem key={status} value={status}>
+                                {AGENCY_ENQUIRY_STATUS_LABELS[status]}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            'text-[10px]',
+                            agencyEnquiryStatusBadgeClass(enquiry.status)
+                          )}
+                        >
+                          {AGENCY_ENQUIRY_STATUS_LABELS[enquiry.status]}
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell
+                      className="py-3"
+                      onClick={stopRow}
+                      onKeyDown={stopRow}
+                    >
+                      {canAssign ? (
+                        <Select
+                          value={enquiry.assignedTo ?? 'unassigned'}
+                          onValueChange={(value) => assignEnquiry(enquiry, value)}
+                          disabled={busy !== null}
+                        >
+                          <SelectTrigger
+                            className="h-8 w-[150px] text-xs"
+                            aria-label={`Owner for ${enquiry.contact.name}`}
+                          >
+                            <SelectValue placeholder="Unassigned" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="unassigned">Unassigned</SelectItem>
+                            {members.map((member) => (
+                              <SelectItem key={member.userId} value={member.userId}>
+                                {member.userId === myId ? 'You' : member.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <span className="text-xs text-slate-600 dark:text-slate-300">
+                          {enquiry.assignee
+                            ? enquiry.assignee.id === myId
+                              ? 'You'
+                              : enquiry.assignee.name
+                            : 'Unclaimed'}
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="py-3">
+                      {enquiry.proposals?.lastDeclinedAt ? (
+                        <Badge
+                          variant="outline"
+                          className="gap-1 border-rose-300 bg-rose-50 text-[10px] text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300"
+                          title={`Traveller declined the proposal on ${formatAgencyDate(
+                            enquiry.proposals.lastDeclinedAt
+                          )}`}
+                        >
+                          <XCircle className="h-2.5 w-2.5" />
+                          Declined
+                        </Badge>
+                      ) : enquiry.proposals && enquiry.proposals.count > 0 ? (
+                        <>
+                          <Badge variant="outline" className="text-[10px]">
+                            {enquiry.proposals.count} sent
+                          </Badge>
+                          {enquiry.proposals.lastAt ? (
+                            <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                              {formatAgencyDate(enquiry.proposals.lastAt)}
+                            </p>
+                          ) : null}
+                        </>
+                      ) : (
+                        <span className="text-xs text-slate-400">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="py-3">
+                      <p className="text-xs text-slate-600 dark:text-slate-300">
+                        {stamp ? formatAgencyDate(stamp) : '—'}
+                      </p>
+                      <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                        {enquiry.lastMessageAt
+                          ? enquiry.lastMessageBy === 'agency'
+                            ? 'You replied'
+                            : 'Traveller replied'
+                          : 'New lead'}
+                      </p>
+                    </TableCell>
+                    <TableCell
+                      className="py-3 text-right"
+                      onClick={stopRow}
+                      onKeyDown={stopRow}
+                    >
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1.5 text-xs"
+                        onClick={() => openEnquiry(enquiry)}
                       >
-                        {enquiry.package.title}
-                      </Badge>
-                    ) : null}
-                    {enquiry.client ? (
-                      <Badge
-                        variant="outline"
-                        className="text-[10px] text-teal-700 dark:text-teal-300"
-                      >
-                        Client
-                      </Badge>
-                    ) : null}
-                    {enquiry.proposals?.lastDeclinedAt ? (
-                      <Badge
-                        variant="outline"
-                        className="gap-1 border-rose-300 bg-rose-50 text-[10px] text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300"
-                        title={`Traveller declined the proposal on ${formatAgencyDate(
-                          enquiry.proposals.lastDeclinedAt
-                        )}`}
-                      >
-                        <XCircle className="h-2.5 w-2.5" />
-                        Proposal declined
-                      </Badge>
-                    ) : null}
-                    {enquiry.assignee ? (
-                      <Badge variant="outline" className="text-[10px]">
-                        {enquiry.assignee.id === myId ? 'You' : enquiry.assignee.name}
-                      </Badge>
-                    ) : null}
-                  </div>
-                ) : null}
-              </button>
-            );
-          })}
+                        Open
+                        <ArrowUpRight className="h-3.5 w-3.5" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
 
           {hasMore ? (
-            <div className="p-3">
+            <div className="border-t border-slate-200 p-3 dark:border-slate-800">
               <Button
                 type="button"
                 variant="outline"
@@ -1145,47 +1309,11 @@ const AgencyEnquiries: React.FC = () => {
               </Button>
             </div>
           ) : null}
-        </div>
+        </>
       )}
-        </section>
+      </section>
 
-        <section
-          aria-label="Selected enquiry"
-          className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white lg:block dark:border-slate-800 dark:bg-slate-900"
-        >
-          {selected ? (
-            <div className="max-h-[calc(100vh-24rem)] overflow-y-auto p-5">
-              <EnquiryDetail
-                enquiry={selected}
-                myId={myId}
-                canPlan={canPlan}
-                canAssign={canAssign}
-                members={members}
-                detailLoading={detailLoading}
-                detailError={detailError}
-                busy={busy}
-                quoteHref={quoteHref}
-                onChangeStatus={changeStatus}
-                onClaim={claim}
-                onRelease={release}
-                onAssign={assignTo}
-                onConvert={() => void convert(selected)}
-                onStartTrip={() => void startTrip(selected)}
-                onSendReply={sendReply}
-              />
-            </div>
-          ) : (
-            <AgencyEmptyState
-              className="m-5"
-              icon={MessageSquare}
-              title="Pick a conversation"
-              body="Leads open here beside the inbox, so you can read the thread without losing your place. New leads appear on the left as they arrive."
-            />
-          )}
-        </section>
-      </div>
-
-      <Sheet open={sheetOpen && isMobile} onOpenChange={setSheetOpen}>
+      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetContent
           side="right"
           className="w-full overflow-y-auto p-0 sm:max-w-xl"
@@ -1209,7 +1337,9 @@ const AgencyEnquiries: React.FC = () => {
                   detailError={detailError}
                   busy={busy}
                   quoteHref={quoteHref}
-                  onChangeStatus={changeStatus}
+                  onChangeStatus={(status) =>
+                    requestStatusChange(selected, status)
+                  }
                   onClaim={claim}
                   onRelease={release}
                   onAssign={assignTo}
@@ -1223,7 +1353,12 @@ const AgencyEnquiries: React.FC = () => {
         </SheetContent>
       </Sheet>
 
-      <Dialog open={lostOpen} onOpenChange={setLostOpen}>
+      <Dialog
+        open={Boolean(lostTarget)}
+        onOpenChange={(open) => {
+          if (!open) setLostTarget(null);
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Mark this enquiry lost</DialogTitle>
@@ -1260,7 +1395,7 @@ const AgencyEnquiries: React.FC = () => {
             <Button
               type="button"
               variant="outline"
-              onClick={() => setLostOpen(false)}
+              onClick={() => setLostTarget(null)}
             >
               Cancel
             </Button>
