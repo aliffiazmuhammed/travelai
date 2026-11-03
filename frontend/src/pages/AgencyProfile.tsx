@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import AgencyEnquiryDialog from "@/components/directory/AgencyEnquiryDialog";
 import AgencyPackageCard from "@/components/directory/AgencyPackageCard";
+import AgencyPackageDialog from "@/components/directory/AgencyPackageDialog";
 import DirectoryProfilePreview from "@/components/directory/DirectoryProfilePreview";
 import { PublicEventCard } from "@/components/events/PublicEventCard";
 import { ReportDialog } from "@/components/gallery/ReportDialog";
@@ -48,6 +49,7 @@ const AgencyProfile = () => {
   const [reloadKey, setReloadKey] = useState(0);
   const [enquiryOpen, setEnquiryOpen] = useState(false);
   const [enquiryPackage, setEnquiryPackage] = useState<AgencyDirectoryPackage | null>(null);
+  const [planPackage, setPlanPackage] = useState<AgencyDirectoryPackage | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
 
   useEffect(() => {
@@ -282,8 +284,8 @@ const AgencyProfile = () => {
                     Trips this agency plans
                   </h2>
                   <p className="text-xs text-muted-foreground">
-                    A few of the trips they run, with what's included and a
-                    starting price.
+                    A few of the trips they run. Open one for the day-by-day
+                    plan, or ask about the one you like.
                   </p>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
@@ -300,6 +302,7 @@ const AgencyProfile = () => {
                         highlights: pkg.highlights,
                         inclusions: pkg.inclusions,
                       }}
+                      onOpen={() => setPlanPackage(pkg)}
                       onEnquire={() => {
                         setEnquiryPackage(pkg);
                         setEnquiryOpen(true);
@@ -351,6 +354,17 @@ const AgencyProfile = () => {
 
             {slug ? (
               <>
+                <AgencyPackageDialog
+                  open={planPackage !== null}
+                  onClose={() => setPlanPackage(null)}
+                  slug={slug}
+                  pkg={planPackage}
+                  onEnquire={(pkg) => {
+                    setPlanPackage(null);
+                    setEnquiryPackage(pkg);
+                    setEnquiryOpen(true);
+                  }}
+                />
                 <AgencyEnquiryDialog
                   open={enquiryOpen}
                   onClose={() => setEnquiryOpen(false)}

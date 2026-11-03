@@ -168,10 +168,11 @@ test('public agency directory pages are anonymous; the enquiry write is personal
       '/facets',
       '/:slug/logo',
       '/:slug/packages/:packageId/cover',
+      '/:slug/packages/:packageId',
       '/:slug/enquiries',
       '/:slug',
     ],
-    'D3 adds the listing, facets and public logo; D4 package covers; D5 the one write'
+    'D3 adds the listing, facets and public logo; D4 package covers; D5 the one write; package detail carries the price-free plan'
   );
   assert.deepEqual(
     layers.filter((layer) => guarded(layer)).map((layer) => `${pathOf(layer)} ${guardKind(layer)}`),

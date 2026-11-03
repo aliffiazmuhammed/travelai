@@ -19,6 +19,8 @@ import {
 import { directoryCatalog } from '../services/directory/taxonomy.js';
 import { loadPublicAgencyLogo } from '../services/directory/logo.js';
 import { loadPublicPackageCover } from '../services/directory/packageCover.js';
+import { loadPublicPackageDetail } from '../services/directory/packageDetail.js';
+import { projectDirectoryPackageDetail } from '../services/directory/projection.js';
 import {
   createAgencyPackage,
   deleteAgencyPackage,
@@ -105,6 +107,28 @@ export const getPublicPackageCover = catchAsync(
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Content-Disposition', `inline; filename="cover.${extension}"`);
     res.send(cover.buffer);
+  }
+);
+
+/**
+ * Public package detail (M9 follow-up). The card plus the price-free
+ * day-by-day plan. Same eligibility as the cover: a draft, a hidden package or
+ * an unpublished profile answers 404.
+ */
+export const getPublicPackageDetail = catchAsync(
+  async (req: Request, res: Response) => {
+    const slug = String(req.params.slug || '');
+    const pkg = await loadPublicPackageDetail(
+      slug,
+      String(req.params.packageId || '')
+    );
+    if (!pkg) {
+      throw new AppError('Package not found.', 404);
+    }
+    res.json({
+      success: true,
+      package: projectDirectoryPackageDetail(pkg, slug),
+    });
   }
 );
 

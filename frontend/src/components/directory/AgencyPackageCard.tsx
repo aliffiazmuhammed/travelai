@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { CalendarDays, Check, Compass, MessageCircle, Sparkles } from 'lucide-react';
+import { CalendarDays, Check, Compass, MessageCircle, Route, Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { formatMoney } from '@/lib/currency';
@@ -48,9 +48,11 @@ function nightsLabel(nights: number): string {
 export const AgencyPackageCard: React.FC<{
   package: AgencyPackageCardModel;
   className?: string;
+  /** Public profile only: opens the day-by-day plan for this package. */
+  onOpen?: () => void;
   /** Public profile only: opens the enquiry form for this package. */
   onEnquire?: () => void;
-}> = ({ package: pkg, className, onEnquire }) => {
+}> = ({ package: pkg, className, onOpen, onEnquire }) => {
   const title = pkg.title.trim() || 'Trip package';
   const [failed, setFailed] = useState(false);
 
@@ -66,6 +68,36 @@ export const AgencyPackageCard: React.FC<{
       ? 'Price on request'
       : `From ${formatMoney(pkg.pricePerPerson, pkg.currency)} per person`;
 
+  const cover = (
+    <div
+      className={cn(
+        'relative aspect-[16/9] w-full overflow-hidden bg-gradient-to-br',
+        toneFor(title)
+      )}
+    >
+      {showCover ? (
+        <img
+          src={pkg.coverUrl ?? undefined}
+          alt=""
+          decoding="async"
+          onError={() => setFailed(true)}
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <div className="grid h-full w-full place-items-center">
+          <Compass
+            className="h-10 w-10 text-teal-600/40 dark:text-teal-300/30"
+            aria-hidden="true"
+          />
+        </div>
+      )}
+      <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-bold text-slate-700 shadow-sm dark:bg-slate-900/90 dark:text-slate-200">
+        <CalendarDays className="h-3 w-3" />
+        {nightsLabel(pkg.nights)}
+      </span>
+    </div>
+  );
+
   return (
     <article
       className={cn(
@@ -74,37 +106,34 @@ export const AgencyPackageCard: React.FC<{
       )}
       aria-label={`${title} package`}
     >
-      <div
-        className={cn(
-          'relative aspect-[16/9] w-full overflow-hidden bg-gradient-to-br',
-          toneFor(title)
-        )}
-      >
-        {showCover ? (
-          <img
-            src={pkg.coverUrl ?? undefined}
-            alt=""
-            decoding="async"
-            onError={() => setFailed(true)}
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <div className="grid h-full w-full place-items-center">
-            <Compass
-              className="h-10 w-10 text-teal-600/40 dark:text-teal-300/30"
-              aria-hidden="true"
-            />
-          </div>
-        )}
-        <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-bold text-slate-700 shadow-sm dark:bg-slate-900/90 dark:text-slate-200">
-          <CalendarDays className="h-3 w-3" />
-          {nightsLabel(pkg.nights)}
-        </span>
-      </div>
+      {onOpen ? (
+        <button
+          type="button"
+          onClick={onOpen}
+          className="block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2"
+          aria-label={`Open the day-by-day plan for ${title}`}
+        >
+          {cover}
+        </button>
+      ) : (
+        cover
+      )}
 
       <div className="space-y-3 p-5">
         <div className="space-y-1">
-          <h3 className="text-base font-bold text-foreground">{title}</h3>
+          <h3 className="text-base font-bold text-foreground">
+            {onOpen ? (
+              <button
+                type="button"
+                onClick={onOpen}
+                className="text-left transition-colors hover:text-teal-700 dark:hover:text-teal-300"
+              >
+                {title}
+              </button>
+            ) : (
+              title
+            )}
+          </h3>
           {pkg.summary.trim() ? (
             <p className="text-sm leading-relaxed text-muted-foreground">
               {pkg.summary.trim()}
@@ -155,11 +184,24 @@ export const AgencyPackageCard: React.FC<{
           {price}
         </p>
 
+        {onOpen ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="hero"
+            className="w-full rounded-xl text-xs font-bold gap-1.5"
+            onClick={onOpen}
+          >
+            <Route className="h-3.5 w-3.5" />
+            View the day-by-day plan
+          </Button>
+        ) : null}
+
         {onEnquire ? (
           <Button
             type="button"
             size="sm"
-            variant="outline"
+            variant={onOpen ? 'outline' : 'hero'}
             className="w-full rounded-xl text-xs font-bold gap-1.5"
             onClick={onEnquire}
           >

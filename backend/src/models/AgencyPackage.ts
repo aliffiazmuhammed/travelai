@@ -1,4 +1,5 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
+import type { GalleryItinerary } from '../services/gallery/projection.js';
 
 /**
  * A published snapshot of one agency trip (Milestone 9 D4).
@@ -8,6 +9,11 @@ import mongoose, { Document, Schema, Types } from 'mongoose';
  * source trip can neither change nor break a public package. `tripId` is kept
  * only as provenance (and to stop one trip producing two packages); it is never
  * projected to a public payload.
+ *
+ * `itinerary` is the same deal for the day-by-day plan: a price-free copy taken
+ * when the package is created and refreshed on every publish. It uses the
+ * gallery projection's allow-list, so costs, budgets, expenses and notes are
+ * structurally absent from public reads.
  *
  * `coverAssetId` points at an `AgencyAsset` of kind `image`. Public visitors
  * read the bytes through `/api/agencies/:slug/packages/:id/cover`, which
@@ -52,6 +58,8 @@ export interface IAgencyPackage extends Document {
   coverAssetId?: Types.ObjectId | null;
   highlights: string[];
   inclusions: string[];
+  /** Price-free day-by-day plan captured from the source trip. */
+  itinerary?: GalleryItinerary | null;
   state: AgencyPackageState;
   order: number;
   publishedAt?: Date | null;
@@ -125,6 +133,10 @@ const agencyPackageSchema = new Schema<IAgencyPackage>(
     inclusions: {
       type: [String],
       default: () => [],
+    },
+    itinerary: {
+      type: Schema.Types.Mixed,
+      default: null,
     },
     state: {
       type: String,

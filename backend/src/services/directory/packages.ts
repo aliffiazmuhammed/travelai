@@ -9,6 +9,10 @@ import Trip from '../../models/Trip.js';
 import { AppError } from '../../utils/AppError.js';
 import { recordAgencyAudit } from '../agency/audit.js';
 import { agencyAssetContentUrl } from '../agency/assetStorage.js';
+import {
+  projectGalleryItinerary,
+  type GalleryItinerary,
+} from '../gallery/projection.js';
 import { normalizeTextList } from './taxonomy.js';
 
 /**
@@ -17,8 +21,10 @@ import { normalizeTextList } from './taxonomy.js';
  * Two rules shape this module:
  *
  * 1. **A package is a snapshot.** `createAgencyPackage` copies the trip's
- *    title, nights and highlights into the package row and never reads the trip
- *    again. Re-saving or deleting the trip cannot change a public payload.
+ *    title, nights, highlights and price-free itinerary into the package row.
+ *    The only later read of the source trip is an explicit publish, which
+ *    refreshes that itinerary; if the trip is gone the previous copy stands.
+ *    Re-saving or deleting the trip cannot otherwise change a public payload.
  * 2. **Publishing is a readiness decision.** A card without a title or a
  *    one-line summary cannot go public, because a bare card is worse than no
  *    card on a directory page.
@@ -235,6 +241,7 @@ export function snapshotFromTrip(trip: any): {
   title: string;
   nights: number;
   highlights: string[];
+  itinerary: GalleryItinerary;
 } {
   const details = trip?.tripDetails ?? {};
   const title = text(trip?.title) || text(details.trip_title);
@@ -247,6 +254,9 @@ export function snapshotFromTrip(trip: any): {
     highlights: textArray(details.highlights)
       .map((entry) => entry.slice(0, AGENCY_PACKAGE_LIMITS.listItem))
       .slice(0, AGENCY_PACKAGE_LIMITS.highlights),
+    // The gallery projection is the sanitizer: costs, budgets and notes are
+    // structurally absent, so a published plan can never carry a price.
+    itinerary: projectGalleryItinerary(details),
   };
 }
 
@@ -305,6 +315,7 @@ export async function createAgencyPackage(input: {
     highlights:
       (fields.highlights as string[] | undefined) ?? snapshot?.highlights ?? [],
     inclusions: (fields.inclusions as string[] | undefined) ?? [],
+    itinerary: snapshot?.itinerary ?? null,
     state: 'draft',
   });
 
@@ -384,6 +395,22 @@ export async function publishAgencyPackage(input: {
   const readiness = packageReadiness(pkg);
   if (!readiness.ready) {
     throw new AppError(`Finish these first: ${readiness.missing.join(' ')}`, 400);
+  }
+
+  // Publishing is the one moment the plan is refreshed: the agency is saying
+  // "this is the trip I am selling". A deleted trip keeps the last snapshot.
+  if (pkg.tripId) {
+    const trip = await Trip.findOne({
+      _id: pkg.tripId,
+      workspace: 'agency',
+      agencyId: input.agencyId,
+      isDeleted: { $ne: true },
+    })
+      .select('tripDetails')
+      .lean();
+    if (trip) {
+      pkg.itinerary = projectGalleryItinerary((trip as any).tripDetails);
+    }
   }
 
   pkg.state = 'published';

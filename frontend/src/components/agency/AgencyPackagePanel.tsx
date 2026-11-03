@@ -390,7 +390,7 @@ const AgencyPackagePanel: React.FC<AgencyPackagePanelProps> = ({
       }
       const result = await api.publishAgencyPackage(agencyId, pkg.id);
       apply(result.package);
-      toast.success('Package is live on your public profile.');
+      toast.success('Package is live with its day-by-day plan.');
     } catch (error) {
       toast.error(messageOf(error));
     } finally {
@@ -499,9 +499,10 @@ const AgencyPackagePanel: React.FC<AgencyPackagePanelProps> = ({
               Turn this trip into a package
             </h3>
             <p className="mx-auto max-w-md text-xs text-muted-foreground">
-              We copy the title, nights and highlights, then you set the public
-              summary, price and inclusions. From that moment the package is a
-              snapshot: later edits to the trip never change it.
+              We copy the title, nights, highlights and day-by-day plan, then
+              you set the public summary, price and inclusions. From that moment
+              the package is a snapshot: later edits to the trip never change
+              it, and publishing again refreshes the plan.
             </p>
           </div>
           {archived ? (
@@ -559,8 +560,9 @@ const AgencyPackagePanel: React.FC<AgencyPackagePanelProps> = ({
             ) : null}
           </div>
           <CardDescription className="text-xs">
-            This card is a snapshot. Re-saving or deleting the trip will not
-            change it.
+            This card and its day-by-day plan are a snapshot. Publishing copies
+            the trip's current plan; re-saving or deleting the trip will not
+            change what visitors see.
             {published
               ? ' It appears on your public profile while that page is published.'
               : ''}

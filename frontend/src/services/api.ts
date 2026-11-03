@@ -61,6 +61,7 @@ import type {
   AgencyDirectoryFilters,
   AgencyDirectoryPage,
   AgencyDirectoryPublicProfileResponse,
+  AgencyDirectoryPackageResponse,
   AgencyEnquiry,
   AgencyEnquiryAcknowledgement,
   AgencyApplicationInput,
@@ -2388,6 +2389,20 @@ class ApiClient {
     slug: string
   ): Promise<AgencyDirectoryPublicProfileResponse> {
     return this.request(`/api/agencies/${encodeURIComponent(slug)}`);
+  }
+
+  /**
+   * One published package from the directory, with its price-free day-by-day
+   * plan. The server re-checks the profile's public eligibility, so a draft,
+   * hidden package or unpublished profile answers 404.
+   */
+  async getPublicAgencyPackage(
+    slug: string,
+    packageId: string
+  ): Promise<AgencyDirectoryPackageResponse> {
+    return this.request(
+      `/api/agencies/${encodeURIComponent(slug)}/packages/${encodeURIComponent(packageId)}`
+    );
   }
 
   /**

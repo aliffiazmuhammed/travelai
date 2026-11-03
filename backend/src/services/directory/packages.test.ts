@@ -154,6 +154,15 @@ test('the snapshot copies the trip title, nights and highlights, never money', (
       highlights: ['Kaas plateau', `  ${'x'.repeat(90)}  `],
       total_budget: 42000,
       price: 42000,
+      day_by_day_itinerary: [
+        {
+          day: 1,
+          title: '  Pune to Lonavala  ',
+          activities: [{ name: 'Fort walk', approx_cost: 500 }],
+          stay_recommendations: [{ name: 'Hill stay', price_per_night: 3200 }],
+          food_spots: [{ name: 'Thali house', avg_cost: 450 }],
+        },
+      ],
     },
   });
 
@@ -161,7 +170,18 @@ test('the snapshot copies the trip title, nights and highlights, never money', (
   assert.equal(snapshot.nights, 4);
   assert.equal(snapshot.highlights[0], 'Kaas plateau');
   assert.equal(snapshot.highlights[1].length, 80);
-  assert.deepEqual(Object.keys(snapshot).sort(), ['highlights', 'nights', 'title']);
+  assert.deepEqual(Object.keys(snapshot).sort(), [
+    'highlights',
+    'itinerary',
+    'nights',
+    'title',
+  ]);
+
+  const serialized = JSON.stringify(snapshot.itinerary);
+  assert.match(serialized, /Pune to Lonavala/);
+  for (const money of ['total_budget', 'price', 'approx_cost', 'price_per_night', 'avg_cost', '3200', '450']) {
+    assert.ok(!serialized.includes(money), `the plan must not contain ${money}`);
+  }
 });
 
 test('the snapshot falls back to the itinerary, dates and the trip title field', () => {
@@ -471,6 +491,57 @@ test('publishing stamps the date once and unpublishing clears it', async () => {
   assert.equal(draft.state, 'draft');
   assert.equal(draft.publishedAt, null);
   assert.equal(audits.at(-1)?.action, 'package.unpublished');
+});
+
+test('publishing refreshes the plan from the source trip, and keeps it if the trip is gone', async () => {
+  captureAudit();
+  const doc = packageDoc({
+    tripId: TRIP_A,
+    itinerary: {
+      day_by_day_itinerary: [{ day: 1, title: 'Old plan', activities: [] }],
+    },
+  });
+  stubPackageLookup(doc);
+
+  let tripFilter: any = null;
+  (Trip as any).findOne = (filter: unknown) => {
+    tripFilter = filter;
+    return {
+      select: () => ({
+        lean: async () => ({
+          tripDetails: {
+            day_by_day_itinerary: [
+              {
+                day: 1,
+                title: 'New plan',
+                activities: [{ name: 'Fort walk', approx_cost: 500 }],
+              },
+            ],
+          },
+        }),
+      }),
+    };
+  };
+
+  await publishAgencyPackage({ agencyId: AGENCY_A, packageId: PACKAGE_A });
+  assert.deepEqual(tripFilter, {
+    _id: TRIP_A,
+    workspace: 'agency',
+    agencyId: AGENCY_A,
+    isDeleted: { $ne: true },
+  });
+  assert.equal(doc.itinerary.day_by_day_itinerary[0].title, 'New plan');
+  assert.ok(!JSON.stringify(doc.itinerary).includes('approx_cost'));
+
+  (Trip as any).findOne = () => ({
+    select: () => ({ lean: async () => null }),
+  });
+  await publishAgencyPackage({ agencyId: AGENCY_A, packageId: PACKAGE_A });
+  assert.equal(
+    doc.itinerary.day_by_day_itinerary[0].title,
+    'New plan',
+    'a deleted trip must not erase the last published plan'
+  );
 });
 
 test('deleting a package is a tenant-scoped delete and an audit event', async () => {

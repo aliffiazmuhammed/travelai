@@ -1,6 +1,7 @@
 /** Agency Workspace A1 client types. */
 
 import type { User } from './auth';
+import type { GalleryItinerary } from './gallery';
 
 export type AgencyRole = 'owner' | 'admin' | 'planner' | 'viewer';
 export type AgencyInvitableRole = Exclude<AgencyRole, 'owner'>;
@@ -225,6 +226,19 @@ export interface AgencyDirectoryPackage {
   coverUrl: string | null;
   highlights: string[];
   inclusions: string[];
+}
+
+/**
+ * A package opened from the directory: the card plus the price-free day-by-day
+ * plan captured when it was published.
+ */
+export interface AgencyDirectoryPackageDetail extends AgencyDirectoryPackage {
+  itinerary: GalleryItinerary | null;
+}
+
+export interface AgencyDirectoryPackageResponse {
+  success: boolean;
+  package: AgencyDirectoryPackageDetail;
 }
 
 /** The public profile payload (`GET /api/agencies/:slug`). */

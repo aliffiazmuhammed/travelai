@@ -2,10 +2,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   DIRECTORY_CARD_KEYS,
+  DIRECTORY_PACKAGE_DETAIL_KEYS,
   DIRECTORY_PACKAGE_KEYS,
   DIRECTORY_PROFILE_KEYS,
   projectDirectoryListingCard,
   projectDirectoryPackage,
+  projectDirectoryPackageDetail,
   projectDirectoryProfile,
 } from './projection.js';
 
@@ -274,6 +276,63 @@ test('a package clamps nights and list lengths instead of trusting the row', () 
   assert.equal(view.nights, 0);
   assert.equal(view.highlights.length, 6);
   assert.equal(view.inclusions.length, 12);
+});
+
+test('a package detail adds the price-free plan and nothing else', () => {
+  const row = packageRow({
+    itinerary: {
+      trip_title: 'Monsoon in the ghats',
+      duration_days: 1,
+      day_by_day_itinerary: [
+        {
+          day: 1,
+          title: 'Pune to Lonavala',
+          activities: [{ name: 'Fort walk', time: 'Morning', approx_cost: 500 }],
+          stay_recommendations: [{ name: 'Hill stay', price_per_night: 3200 }],
+          food_spots: [{ name: 'Thali house', avg_cost: 450 }],
+          pro_tip: 'Carry a rain shell.',
+        },
+      ],
+      local_transport: 'Hire car from Pune.',
+      total_budget: 42000,
+    },
+  });
+
+  const view = projectDirectoryPackageDetail(row, 'hills-and-horizons');
+  assert.deepEqual(
+    Object.keys(view).sort(),
+    [...DIRECTORY_PACKAGE_DETAIL_KEYS].sort()
+  );
+  assert.equal(view.itinerary?.day_by_day_itinerary[0].title, 'Pune to Lonavala');
+
+  const serialized = JSON.stringify(view);
+  for (const secret of [
+    'approx_cost',
+    'price_per_night',
+    'avg_cost',
+    'total_budget',
+    'trip-object-id',
+    'agency-object-id',
+  ]) {
+    assert.ok(!serialized.includes(secret), `the detail must not contain ${secret}`);
+  }
+  assert.ok(!serialized.includes('500'));
+  assert.ok(!serialized.includes('3200'));
+  assert.ok(!serialized.includes('450'));
+});
+
+test('a package without a plan answers null rather than an empty plan', () => {
+  assert.equal(
+    projectDirectoryPackageDetail(packageRow(), 'hills-and-horizons').itinerary,
+    null
+  );
+  assert.equal(
+    projectDirectoryPackageDetail(
+      packageRow({ itinerary: { day_by_day_itinerary: [] } }),
+      'hills-and-horizons'
+    ).itinerary,
+    null
+  );
 });
 
 test('a profile joins its published packages with public cover URLs', () => {

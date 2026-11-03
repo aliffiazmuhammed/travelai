@@ -4,6 +4,7 @@ import {
   getPublicAgencyLogo,
   getPublicAgencyProfile,
   getPublicPackageCover,
+  getPublicPackageDetail,
   listPublicAgencies,
 } from '../controllers/directory.controller.js';
 import { createAgencyEnquiryHandler } from '../controllers/enquiries.controller.js';
@@ -40,6 +41,11 @@ router.get(
   '/:slug/packages/:packageId/cover',
   publicDirectoryLimiter,
   getPublicPackageCover
+);
+router.get(
+  '/:slug/packages/:packageId',
+  publicDirectoryLimiter,
+  getPublicPackageDetail
 );
 router.post(
   '/:slug/enquiries',

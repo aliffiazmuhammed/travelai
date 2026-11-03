@@ -4,6 +4,10 @@ import {
   type DirectoryLanguageView,
   type DirectoryServiceView,
 } from './taxonomy.js';
+import {
+  projectGalleryItinerary,
+  type GalleryItinerary,
+} from '../gallery/projection.js';
 
 /**
  * Public directory projection (Milestone 9 D1).
@@ -149,6 +153,36 @@ export function projectDirectoryPackage(
     coverUrl: publicPackageCoverUrl(slug, id, pkg?.coverAssetId),
     highlights: textArray(pkg?.highlights).slice(0, 6),
     inclusions: textArray(pkg?.inclusions).slice(0, 12),
+  };
+}
+
+/**
+ * A published package opened from the directory (M9 follow-up). Same card plus
+ * the day-by-day plan captured from the source trip. The plan is re-sanitized
+ * here rather than trusted from the row, so a stored snapshot can never widen
+ * the public shape on its own.
+ */
+export interface DirectoryPackageDetailView extends DirectoryPackageView {
+  itinerary: GalleryItinerary | null;
+}
+
+/** Sorted for the key-set test; keep in sync with the interface above. */
+export const DIRECTORY_PACKAGE_DETAIL_KEYS = [
+  ...DIRECTORY_PACKAGE_KEYS,
+  'itinerary',
+] as const;
+
+export function projectDirectoryPackageDetail(
+  pkg: any,
+  slug: string
+): DirectoryPackageDetailView {
+  const itinerary =
+    pkg?.itinerary && typeof pkg.itinerary === 'object'
+      ? projectGalleryItinerary(pkg.itinerary)
+      : null;
+  return {
+    ...projectDirectoryPackage(pkg, slug),
+    itinerary: itinerary && itinerary.day_by_day_itinerary.length > 0 ? itinerary : null,
   };
 }
 
