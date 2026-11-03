@@ -26,10 +26,10 @@ export interface AgencyPackageCardModel {
 }
 
 const TONES = [
-  'from-teal-100 via-white to-sky-100 dark:from-teal-950/60 dark:via-slate-900 dark:to-sky-950/40',
-  'from-amber-100 via-white to-rose-100 dark:from-amber-950/50 dark:via-slate-900 dark:to-rose-950/40',
-  'from-sky-100 via-white to-indigo-100 dark:from-sky-950/60 dark:via-slate-900 dark:to-indigo-950/40',
-  'from-emerald-100 via-white to-teal-100 dark:from-emerald-950/50 dark:via-slate-900 dark:to-teal-950/40',
+  'from-teal-600 via-teal-500 to-sky-600',
+  'from-amber-500 via-orange-500 to-rose-500',
+  'from-sky-600 via-indigo-500 to-violet-600',
+  'from-emerald-600 via-teal-500 to-cyan-600',
 ] as const;
 
 function toneFor(seed: string): string {
@@ -63,35 +63,48 @@ export const AgencyPackageCard: React.FC<{
   }, [pkg.coverUrl]);
 
   const showCover = Boolean(pkg.coverUrl) && !failed;
-  const price =
-    pkg.pricePerPerson === null
-      ? 'Price on request'
-      : `From ${formatMoney(pkg.pricePerPerson, pkg.currency)} per person`;
 
   const cover = (
-    <div
-      className={cn(
-        'relative aspect-[16/9] w-full overflow-hidden bg-gradient-to-br',
-        toneFor(title)
-      )}
-    >
+    <div className="relative aspect-[16/9] w-full overflow-hidden bg-gradient-to-br">
       {showCover ? (
-        <img
-          src={pkg.coverUrl ?? undefined}
-          alt=""
-          decoding="async"
-          onError={() => setFailed(true)}
-          className="h-full w-full object-cover"
-        />
-      ) : (
-        <div className="grid h-full w-full place-items-center">
-          <Compass
-            className="h-10 w-10 text-teal-600/40 dark:text-teal-300/30"
-            aria-hidden="true"
+        <>
+          <img
+            src={pkg.coverUrl ?? undefined}
+            alt=""
+            decoding="async"
+            onError={() => setFailed(true)}
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
           />
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 bg-gradient-to-t from-slate-900/25 via-transparent to-transparent"
+          />
+        </>
+      ) : (
+        <div
+          className={cn(
+            'relative grid h-full w-full place-items-center bg-gradient-to-br',
+            toneFor(title)
+          )}
+        >
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 bg-[radial-gradient(circle_at_25%_20%,rgba(255,255,255,0.35),transparent_45%)]"
+          />
+          <div
+            aria-hidden="true"
+            className="absolute -bottom-10 -right-6 h-32 w-32 rounded-full border border-white/20"
+          />
+          <div
+            aria-hidden="true"
+            className="absolute -bottom-4 -right-16 h-40 w-40 rounded-full border border-white/15"
+          />
+          <div className="relative grid h-14 w-14 place-items-center rounded-2xl bg-white/15 ring-1 ring-white/30 backdrop-blur-sm">
+            <Compass className="h-7 w-7 text-white" aria-hidden="true" />
+          </div>
         </div>
       )}
-      <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-bold text-slate-700 shadow-sm dark:bg-slate-900/90 dark:text-slate-200">
+      <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-bold text-slate-700 shadow-sm backdrop-blur dark:bg-slate-900/90 dark:text-slate-200">
         <CalendarDays className="h-3 w-3" />
         {nightsLabel(pkg.nights)}
       </span>
@@ -101,7 +114,7 @@ export const AgencyPackageCard: React.FC<{
   return (
     <article
       className={cn(
-        'overflow-hidden rounded-3xl border border-border/70 bg-card shadow-xs',
+        'group flex flex-col overflow-hidden rounded-3xl border border-border/70 bg-card shadow-xs transition-all duration-300 hover:-translate-y-0.5 hover:border-teal-200 hover:shadow-lg dark:hover:border-teal-900',
         className
       )}
       aria-label={`${title} package`}
@@ -119,9 +132,9 @@ export const AgencyPackageCard: React.FC<{
         cover
       )}
 
-      <div className="space-y-3 p-5">
+      <div className="flex flex-1 flex-col gap-3 p-5">
         <div className="space-y-1">
-          <h3 className="text-base font-bold text-foreground">
+          <h3 className="text-lg font-black leading-snug tracking-tight text-foreground">
             {onOpen ? (
               <button
                 type="button"
@@ -180,34 +193,54 @@ export const AgencyPackageCard: React.FC<{
           </section>
         ) : null}
 
-        <p className="border-t border-border/60 pt-3 text-sm font-bold text-foreground">
-          {price}
-        </p>
+        <div className="flex items-baseline gap-1.5 border-t border-border/60 pt-3">
+          {pkg.pricePerPerson === null ? (
+            <span className="text-sm font-bold text-foreground">
+              Price on request
+            </span>
+          ) : (
+            <>
+              <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                From
+              </span>
+              <span className="text-lg font-black text-foreground">
+                {formatMoney(pkg.pricePerPerson, pkg.currency)}
+              </span>
+              <span className="text-[11px] text-muted-foreground">
+                per person
+              </span>
+            </>
+          )}
+        </div>
 
-        {onOpen ? (
-          <Button
-            type="button"
-            size="sm"
-            variant="hero"
-            className="w-full rounded-xl text-xs font-bold gap-1.5"
-            onClick={onOpen}
-          >
-            <Route className="h-3.5 w-3.5" />
-            View the day-by-day plan
-          </Button>
-        ) : null}
+        {onOpen || onEnquire ? (
+          <div className="mt-auto space-y-2">
+            {onOpen ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="hero"
+                className="w-full rounded-xl text-xs font-bold gap-1.5"
+                onClick={onOpen}
+              >
+                <Route className="h-3.5 w-3.5" />
+                View the day-by-day plan
+              </Button>
+            ) : null}
 
-        {onEnquire ? (
-          <Button
-            type="button"
-            size="sm"
-            variant={onOpen ? 'outline' : 'hero'}
-            className="w-full rounded-xl text-xs font-bold gap-1.5"
-            onClick={onEnquire}
-          >
-            <MessageCircle className="h-3.5 w-3.5" />
-            Ask about this trip
-          </Button>
+            {onEnquire ? (
+              <Button
+                type="button"
+                size="sm"
+                variant={onOpen ? 'outline' : 'hero'}
+                className="w-full rounded-xl text-xs font-bold gap-1.5"
+                onClick={onEnquire}
+              >
+                <MessageCircle className="h-3.5 w-3.5" />
+                Ask about this trip
+              </Button>
+            ) : null}
+          </div>
         ) : null}
       </div>
     </article>

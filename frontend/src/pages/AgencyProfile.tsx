@@ -4,7 +4,11 @@ import Navbar from "@/components/Navbar";
 import AgencyEnquiryDialog from "@/components/directory/AgencyEnquiryDialog";
 import AgencyPackageCard from "@/components/directory/AgencyPackageCard";
 import AgencyPackageDialog from "@/components/directory/AgencyPackageDialog";
-import DirectoryProfilePreview from "@/components/directory/DirectoryProfilePreview";
+import {
+  DirectoryProfileFacts,
+  DirectoryProfileHero,
+} from "@/components/directory/DirectoryProfilePreview";
+import type { DirectoryProfilePreviewModel } from "@/components/directory/DirectoryProfilePreview";
 import { PublicEventCard } from "@/components/events/PublicEventCard";
 import { ReportDialog } from "@/components/gallery/ReportDialog";
 import { TravellerBreadcrumbs } from "@/components/traveller/TravellerBreadcrumbs";
@@ -15,6 +19,7 @@ import {
   AlertCircle,
   ArrowRight,
   Building2,
+  Compass,
   Flag,
   Loader2,
   MessageCircle,
@@ -27,8 +32,8 @@ import type { PublicEventSummary } from "@/types/events";
  *
  * Anonymous: the payload is the directory projection, and publishing readiness
  * guarantees the fields the preview expects (about, city, destination, service,
- * logo). The page renders with the exact component the agency saw in its
- * settings preview, so the two can never drift.
+ * logo). The hero and facts blocks are the same components the agency sees in
+ * its settings preview, so the two can never drift.
  *
  * D5 adds the two traveller actions: the enquiry form (profile-level, or scoped
  * to one package card) and the report link that feeds the manual moderation
@@ -37,6 +42,51 @@ import type { PublicEventSummary } from "@/types/events";
  * M10 E1 adds the agency's upcoming events, read through the public events
  * listing scoped by this slug, so a dated camp is one click from its own page.
  */
+const toProfileModel = (
+  profile: AgencyDirectoryPublicProfile
+): DirectoryProfilePreviewModel => ({
+  name: profile.name,
+  about: profile.about,
+  baseCity: profile.baseCity,
+  destinations: profile.destinations,
+  specialties: profile.specialties,
+  services: profile.services,
+  languages: profile.languages,
+  logoUrl: profile.logoUrl,
+  website: profile.website,
+  contactPhone: profile.contactPhone,
+  gstin: profile.gstin,
+  verified: profile.verified,
+  replyTimeHours: profile.replyTimeHours,
+});
+
+const SectionHeader = ({
+  id,
+  eyebrow,
+  title,
+  description,
+}: {
+  id: string;
+  eyebrow: string;
+  title: string;
+  description: string;
+}) => (
+  <div className="space-y-1.5">
+    <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">
+      {eyebrow}
+    </p>
+    <h2
+      id={id}
+      className="font-display text-2xl font-black tracking-tight text-foreground"
+    >
+      {title}
+    </h2>
+    <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+      {description}
+    </p>
+  </div>
+);
+
 const AgencyProfile = () => {
   const { slug } = useParams<{ slug: string }>();
   const location = useLocation();
@@ -157,11 +207,16 @@ const AgencyProfile = () => {
     }
   }, [loading, profile, notFound]);
 
+  const openProfileEnquiry = () => {
+    setEnquiryPackage(null);
+    setEnquiryOpen(true);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-hero flex flex-col">
       <Navbar />
 
-      <main className="flex-1 container mx-auto px-4 pt-24 pb-20 max-w-3xl space-y-5">
+      <main className="flex-1 container mx-auto max-w-6xl px-4 pt-24 pb-20 space-y-6">
         <TravellerBreadcrumbs
           items={[
             { label: "Agencies", to: "/agencies" },
@@ -175,7 +230,7 @@ const AgencyProfile = () => {
             <p className="text-xs text-muted-foreground">Opening this agency…</p>
           </div>
         ) : notFound ? (
-          <div className="rounded-3xl border border-dashed border-border/80 bg-card/60 p-10 text-center space-y-4">
+          <div className="mx-auto max-w-xl rounded-3xl border border-dashed border-border/80 bg-card/60 p-10 text-center space-y-4">
             <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto">
               <Building2 className="w-6 h-6" />
             </div>
@@ -193,7 +248,7 @@ const AgencyProfile = () => {
             </Button>
           </div>
         ) : error ? (
-          <div className="rounded-3xl border border-destructive/30 bg-destructive/5 p-8 text-center space-y-4">
+          <div className="mx-auto max-w-xl rounded-3xl border border-destructive/30 bg-destructive/5 p-8 text-center space-y-4">
             <div className="w-12 h-12 rounded-2xl bg-destructive/10 text-destructive flex items-center justify-center mx-auto">
               <AlertCircle className="w-6 h-6" />
             </div>
@@ -215,141 +270,142 @@ const AgencyProfile = () => {
           </div>
         ) : profile ? (
           <>
-            <p className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 border border-primary/20 px-3 py-1 text-[11px] font-bold text-primary">
-              <Building2 className="w-3 h-3" />
-              Travel agency
-            </p>
-
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-border/70 bg-card/80 p-3">
-              <p className="px-1 text-xs text-muted-foreground">
-                Planning a trip? Tell {profile.name} what you have in mind — the
-                enquiry lands in their inbox.
-              </p>
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  className="rounded-xl text-xs font-bold gap-1.5"
-                  onClick={() => {
-                    setEnquiryPackage(null);
-                    setEnquiryOpen(true);
-                  }}
-                >
-                  <MessageCircle className="h-3.5 w-3.5" />
-                  Enquire
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className="rounded-xl text-xs font-bold gap-1.5 text-muted-foreground hover:text-foreground"
-                  onClick={() => setReportOpen(true)}
-                >
-                  <Flag className="h-3.5 w-3.5" />
-                  Report
-                </Button>
-              </div>
-            </div>
-
-            <DirectoryProfilePreview
+            <DirectoryProfileHero
               headingAs="h1"
               ariaLabel={`${profile.name} profile`}
-              profile={{
-                name: profile.name,
-                about: profile.about,
-                baseCity: profile.baseCity,
-                destinations: profile.destinations,
-                specialties: profile.specialties,
-                services: profile.services,
-                languages: profile.languages,
-                logoUrl: profile.logoUrl,
-                website: profile.website,
-                contactPhone: profile.contactPhone,
-                gstin: profile.gstin,
-                verified: profile.verified,
-                replyTimeHours: profile.replyTimeHours,
-              }}
+              profile={toProfileModel(profile)}
+              actions={
+                <>
+                  <Button
+                    type="button"
+                    size="lg"
+                    variant="hero"
+                    className="rounded-xl text-sm font-bold gap-2"
+                    onClick={openProfileEnquiry}
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                    Enquire about a trip
+                  </Button>
+                  <Button
+                    type="button"
+                    size="lg"
+                    variant="ghost"
+                    className="rounded-xl text-sm font-bold gap-2 text-muted-foreground hover:text-foreground"
+                    onClick={() => setReportOpen(true)}
+                  >
+                    <Flag className="h-4 w-4" />
+                    Report
+                  </Button>
+                </>
+              }
             />
 
-            {profile.packages.length > 0 ? (
-              <section
-                aria-labelledby="agency-packages-heading"
-                className="space-y-3 pt-2"
-              >
-                <div className="space-y-1">
-                  <h2
-                    id="agency-packages-heading"
-                    className="text-base font-bold text-foreground"
+            <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+              <div className="min-w-0 space-y-10">
+                {profile.packages.length > 0 ? (
+                  <section
+                    aria-labelledby="agency-packages-heading"
+                    className="space-y-4"
                   >
-                    Trips this agency plans
-                  </h2>
-                  <p className="text-xs text-muted-foreground">
-                    A few of the trips they run. Open one for the day-by-day
-                    plan, or ask about the one you like.
-                  </p>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {profile.packages.map((pkg) => (
-                    <AgencyPackageCard
-                      key={pkg.id}
-                      package={{
-                        title: pkg.title,
-                        summary: pkg.summary,
-                        nights: pkg.nights,
-                        pricePerPerson: pkg.pricePerPerson,
-                        currency: pkg.currency,
-                        coverUrl: pkg.coverUrl,
-                        highlights: pkg.highlights,
-                        inclusions: pkg.inclusions,
-                      }}
-                      onOpen={() => setPlanPackage(pkg)}
-                      onEnquire={() => {
-                        setEnquiryPackage(pkg);
-                        setEnquiryOpen(true);
-                      }}
+                    <SectionHeader
+                      id="agency-packages-heading"
+                      eyebrow="Trip packages"
+                      title="Trips this agency plans"
+                      description="A few of the trips they run. Open one for the day-by-day plan, or ask about the one you like."
                     />
-                  ))}
-                </div>
-              </section>
-            ) : null}
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      {profile.packages.map((pkg) => (
+                        <AgencyPackageCard
+                          key={pkg.id}
+                          package={{
+                            title: pkg.title,
+                            summary: pkg.summary,
+                            nights: pkg.nights,
+                            pricePerPerson: pkg.pricePerPerson,
+                            currency: pkg.currency,
+                            coverUrl: pkg.coverUrl,
+                            highlights: pkg.highlights,
+                            inclusions: pkg.inclusions,
+                          }}
+                          onOpen={() => setPlanPackage(pkg)}
+                          onEnquire={() => {
+                            setEnquiryPackage(pkg);
+                            setEnquiryOpen(true);
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
 
-            {events.length > 0 ? (
-              <section
-                aria-labelledby="agency-events-heading"
-                className="space-y-3 pt-2"
-              >
-                <div className="space-y-1">
-                  <h2
-                    id="agency-events-heading"
-                    className="text-base font-bold text-foreground"
+                {events.length > 0 ? (
+                  <section
+                    aria-labelledby="agency-events-heading"
+                    className="space-y-4"
                   >
-                    Coming up
-                  </h2>
-                  <p className="text-xs text-muted-foreground">
-                    Dated camps, retreats and group trips — open the one you
-                    like and ask about a spot.
-                  </p>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {events.map((event) => (
-                    <PublicEventCard key={event._id} event={event} />
-                  ))}
-                </div>
-              </section>
-            ) : null}
+                    <SectionHeader
+                      id="agency-events-heading"
+                      eyebrow="Dated departures"
+                      title="Coming up"
+                      description="Camps, retreats and group trips with a fixed date — open the one you like and ask about a spot."
+                    />
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      {events.map((event) => (
+                        <PublicEventCard key={event._id} event={event} />
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
 
-            <div className="flex justify-center pt-2">
-              <Button
-                asChild
-                variant="outline"
-                size="sm"
-                className="rounded-xl text-xs font-bold gap-1.5"
-              >
-                <Link to="/agencies">
-                  Browse more agencies
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </Link>
-              </Button>
+                {profile.packages.length === 0 && events.length === 0 ? (
+                  <div className="rounded-3xl border border-dashed border-border/80 bg-card/60 p-10 text-center space-y-4">
+                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                      <Compass className="h-6 w-6" />
+                    </div>
+                    <div className="space-y-1">
+                      <h2 className="font-display text-xl font-black text-foreground">
+                        No published trips just yet
+                      </h2>
+                      <p className="mx-auto max-w-md text-sm text-muted-foreground">
+                        {profile.name} hasn't shared a package here yet. Tell
+                        them what you have in mind and they'll plan from there.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="rounded-xl text-xs font-bold gap-1.5"
+                      onClick={openProfileEnquiry}
+                    >
+                      <MessageCircle className="h-3.5 w-3.5" />
+                      Start a conversation
+                    </Button>
+                  </div>
+                ) : null}
+
+                <div className="flex justify-center border-t border-border/60 pt-8">
+                  <Button
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    className="rounded-xl text-xs font-bold gap-1.5"
+                  >
+                    <Link to="/agencies">
+                      Browse more agencies
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+
+              <aside className="lg:sticky lg:top-24">
+                <div className="rounded-3xl border border-border/70 bg-card p-6 shadow-xs">
+                  <DirectoryProfileFacts
+                    profile={toProfileModel(profile)}
+                    showEmptyHints={false}
+                  />
+                </div>
+              </aside>
             </div>
 
             {slug ? (
