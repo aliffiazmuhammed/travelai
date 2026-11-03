@@ -418,6 +418,17 @@ export interface Trip {
   deletedAt?: string;
   /** A8: when an admin archived the trip (read-only; excluded from the active list). */
   archivedAt?: string;
+  /**
+   * Agency library only: the commercial state shown in the trips table. The
+   * server batches it onto every row, so it costs no extra request.
+   */
+  agencySummary?: {
+    clientName: string | null;
+    packageState: 'none' | 'draft' | 'published';
+    quoteStatus: 'draft' | 'sent' | 'accepted' | 'expired' | 'cancelled' | null;
+    quoteNumber: string | null;
+    proposalState: 'none' | 'active' | 'accepted' | 'declined' | 'expired';
+  };
   version?: number;
   hasEdited?: boolean;
   /** Public share token — owner-only on the wire (Milestone 6 F6). */

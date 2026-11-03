@@ -142,6 +142,60 @@ const STATUS_CONFIG = {
   },
 };
 
+const PACKAGE_STATE_BADGE = {
+  none: {
+    label: "No package",
+    badgeClass: "bg-muted text-muted-foreground border-border",
+  },
+  draft: {
+    label: "Draft",
+    badgeClass: "bg-amber-500/10 text-amber-700 border-amber-200 dark:border-amber-800",
+  },
+  published: {
+    label: "Published",
+    badgeClass: "bg-teal-500/10 text-teal-700 border-teal-200 dark:border-teal-800",
+  },
+} as const;
+
+const QUOTE_STATE_LABEL: Record<string, string> = {
+  draft: "Draft",
+  sent: "Sent",
+  accepted: "Accepted",
+  expired: "Expired",
+  cancelled: "Cancelled",
+};
+
+const QUOTE_STATE_BADGE: Record<string, string> = {
+  draft: "bg-muted text-muted-foreground border-border",
+  sent: "bg-sky-500/10 text-sky-700 border-sky-200 dark:border-sky-800",
+  accepted: "bg-emerald-500/10 text-emerald-700 border-emerald-200 dark:border-emerald-800",
+  expired: "bg-amber-500/10 text-amber-700 border-amber-200 dark:border-amber-800",
+  cancelled: "bg-muted text-muted-foreground border-border",
+};
+
+const PROPOSAL_STATE = {
+  none: {
+    label: "Not shared",
+    badgeClass: "bg-muted text-muted-foreground border-border",
+  },
+  active: {
+    label: "Awaiting reply",
+    badgeClass: "bg-sky-500/10 text-sky-700 border-sky-200 dark:border-sky-800",
+  },
+  accepted: {
+    label: "Accepted",
+    badgeClass: "bg-emerald-500/10 text-emerald-700 border-emerald-200 dark:border-emerald-800",
+  },
+  declined: {
+    label: "Declined",
+    badgeClass: "bg-rose-500/10 text-rose-700 border-rose-200 dark:border-rose-800",
+  },
+  expired: {
+    label: "Closed",
+    badgeClass: "bg-muted text-muted-foreground border-border",
+  },
+} as const;
+
 export const MyTripsView: React.FC<MyTripsViewProps> = ({
   trips,
   deletedTrips = [],
@@ -186,7 +240,9 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
     onSearchChange ? onSearchChange(value) : setInternalSearch(value);
   const setStatusFilter = (value: string) =>
     onStatusChange ? onStatusChange(value) : setInternalStatusFilter(value);
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [viewMode, setViewMode] = useState<"grid" | "list">(
+    variant === "agency" ? "list" : "grid"
+  );
   const [tripToDelete, setTripToDelete] = useState<Trip | null>(null);
   const [tripToPurge, setTripToPurge] = useState<Trip | null>(null);
   const [showDeleted, setShowDeleted] = useState<boolean>(true);
@@ -740,6 +796,213 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
             );
           })}
         </div>
+        </div>
+      ) : isAgency ? (
+        /* AGENCY LIST VIEW: one row per trip, so package, quote and proposal
+           state line up instead of hiding in separate tabs. */
+        <div className="overflow-x-auto rounded-3xl border border-border/70 bg-card shadow-xs">
+          <table className="w-full min-w-[880px] text-left text-xs">
+            <thead className="border-b border-border/70 bg-muted/40 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              <tr>
+                <th className="px-4 py-3">Trip</th>
+                <th className="px-3 py-3">Client</th>
+                <th className="px-3 py-3">Planner</th>
+                <th className="px-3 py-3">Package</th>
+                <th className="px-3 py-3">Quote</th>
+                <th className="px-3 py-3">Proposal</th>
+                <th className="px-3 py-3">Updated</th>
+                <th className="px-4 py-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/60">
+              {ownedTrips.map((trip) => {
+                const title =
+                  trip.title || trip.tripDetails?.trip_title || "Custom Trip";
+                const statusKey =
+                  (trip.status as keyof typeof STATUS_CONFIG) || "planned";
+                const statusInfo =
+                  STATUS_CONFIG[statusKey] || STATUS_CONFIG.planned;
+                const days = trip.tripDetails?.duration_days || 5;
+                const isActing = actionLoadingId === trip._id;
+                const summary = trip.agencySummary;
+                const packageBadge =
+                  PACKAGE_STATE_BADGE[summary?.packageState ?? "none"];
+                const quoteStatus = summary?.quoteStatus ?? null;
+                const proposalBadge =
+                  PROPOSAL_STATE[summary?.proposalState ?? "none"];
+
+                return (
+                  <tr
+                    key={trip._id}
+                    className="transition-colors hover:bg-muted/30"
+                  >
+                    <td className="px-4 py-3">
+                      <button
+                        type="button"
+                        onClick={() => onSelectTrip(trip)}
+                        className="text-left font-extrabold text-foreground transition-colors hover:text-primary"
+                      >
+                        {title}
+                      </button>
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                        <Badge
+                          className={cn(
+                            "px-2 py-0.5 text-[10px] font-bold gap-1",
+                            statusInfo.badgeClass
+                          )}
+                        >
+                          {statusInfo.icon}
+                          <span>{statusInfo.label}</span>
+                        </Badge>
+                        <span>
+                          {days} {days === 1 ? "day" : "days"}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="max-w-[160px] px-3 py-3">
+                      {summary?.clientName ? (
+                        <span
+                          className="block truncate font-semibold text-foreground"
+                          title={summary.clientName}
+                        >
+                          {summary.clientName}
+                        </span>
+                      ) : trip.clientId ? (
+                        <span className="text-muted-foreground">Linked client</span>
+                      ) : (
+                        <span className="text-muted-foreground">No client</span>
+                      )}
+                    </td>
+                    <td className="max-w-[140px] px-3 py-3">
+                      <span
+                        className={cn(
+                          "block truncate",
+                          trip.assignedTo
+                            ? "font-semibold text-foreground"
+                            : "text-muted-foreground"
+                        )}
+                        title={assigneeName(trip.assignedTo)}
+                      >
+                        {assigneeName(trip.assignedTo)}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3">
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "text-[10px] font-bold",
+                          packageBadge.badgeClass
+                        )}
+                      >
+                        {packageBadge.label}
+                      </Badge>
+                    </td>
+                    <td className="px-3 py-3">
+                      {quoteStatus ? (
+                        <div className="space-y-0.5">
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              "text-[10px] font-bold",
+                              QUOTE_STATE_BADGE[quoteStatus] ??
+                                QUOTE_STATE_BADGE.draft
+                            )}
+                          >
+                            {QUOTE_STATE_LABEL[quoteStatus] ?? quoteStatus}
+                          </Badge>
+                          {summary?.quoteNumber ? (
+                            <p className="text-[10px] text-muted-foreground">
+                              {summary.quoteNumber}
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-3">
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "text-[10px] font-bold",
+                          proposalBadge.badgeClass
+                        )}
+                      >
+                        {proposalBadge.label}
+                      </Badge>
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-3 text-muted-foreground">
+                      {formatDate(trip.updatedAt || trip.createdAt)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-8 rounded-xl px-2.5 text-[11px] font-bold gap-1"
+                          onClick={() => onSelectTrip(trip)}
+                        >
+                          Open
+                          <ExternalLink className="h-3 w-3" />
+                        </Button>
+                        {!showingArchived &&
+                          (!canDuplicateTrip || canDuplicateTrip(trip)) && (
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              title="Duplicate as draft"
+                              disabled={isActing}
+                              onClick={(e) => handleDuplicate(e, trip._id)}
+                              className="h-8 w-8 rounded-xl text-muted-foreground hover:text-primary"
+                            >
+                              <Copy className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        {!showingArchived &&
+                          onArchiveTrip &&
+                          (!canArchiveTrip || canArchiveTrip(trip)) && (
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              title="Archive trip"
+                              disabled={isActing}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void handleArchive(trip);
+                              }}
+                              className="h-8 w-8 rounded-xl text-muted-foreground hover:text-amber-600"
+                            >
+                              <Archive className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        {showingArchived &&
+                          onUnarchiveTrip &&
+                          (!canArchiveTrip || canArchiveTrip(trip)) && (
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              title="Restore to the active list"
+                              disabled={isActing}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void handleUnarchive(trip);
+                              }}
+                              className="h-8 w-8 rounded-xl text-muted-foreground hover:text-emerald-600"
+                            >
+                              <ArchiveRestore className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       ) : (
         /* LIST VIEW */

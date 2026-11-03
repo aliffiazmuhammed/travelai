@@ -1,6 +1,10 @@
 import { Types } from 'mongoose';
 import Agency from '../../models/Agency.js';
+import AgencyClient from '../../models/AgencyClient.js';
 import AgencyMember from '../../models/AgencyMember.js';
+import AgencyPackage from '../../models/AgencyPackage.js';
+import AgencyProposalLink from '../../models/AgencyProposalLink.js';
+import AgencyQuote, { type QuoteStatus } from '../../models/AgencyQuote.js';
 import Trip from '../../models/Trip.js';
 import { AppError } from '../../utils/AppError.js';
 import { escapeRegex } from '../../utils/escapeRegex.js';
@@ -13,6 +17,7 @@ import {
 } from './access.js';
 import { recordAgencyAudit } from './audit.js';
 import { assertAgencyClient } from './clients.js';
+import { effectiveQuoteStatus } from './quotes.js';
 
 /**
  * Agency trip library (Agency Workspace A2).
@@ -64,6 +69,136 @@ export interface AgencyTripListInput {
   archived?: boolean;
 }
 
+/**
+ * The commercial state of a trip, for the library table (M9 follow-up). It is
+ * a read-only badge set: client name, package visibility, the latest quote's
+ * effective status and what the newest client proposal is waiting on.
+ */
+export interface AgencyTripSummary {
+  clientName: string | null;
+  packageState: 'none' | 'draft' | 'published';
+  quoteStatus: QuoteStatus | null;
+  quoteNumber: string | null;
+  proposalState: 'none' | 'active' | 'accepted' | 'declined' | 'expired';
+}
+
+const EMPTY_TRIP_SUMMARY: AgencyTripSummary = {
+  clientName: null,
+  packageState: 'none',
+  quoteStatus: null,
+  quoteNumber: null,
+  proposalState: 'none',
+};
+
+/**
+ * One batch read per collection, all tenant-scoped by the same agency id and a
+ * bounded set of trip ids. The list is polled, so this must stay four queries no
+ * matter how many trips the library holds.
+ */
+async function loadAgencyTripSummaries(
+  agencyId: string,
+  trips: any[]
+): Promise<Map<string, AgencyTripSummary>> {
+  const summaries = new Map<string, AgencyTripSummary>();
+  const tripIds = trips.map((trip) => trip?._id).filter(Boolean);
+  if (tripIds.length === 0) return summaries;
+
+  const clientIds = [
+    ...new Set(
+      trips
+        .map((trip) => (trip?.clientId ? String(trip.clientId) : ''))
+        .filter((id) => Types.ObjectId.isValid(id))
+    ),
+  ];
+
+  const [packages, quotes, links, clients] = await Promise.all([
+    AgencyPackage.find({ agencyId, tripId: { $in: tripIds } })
+      .select('tripId state')
+      .lean(),
+    AgencyQuote.find({ agencyId, tripId: { $in: tripIds } })
+      .select('tripId number version status validUntil')
+      .sort({ version: -1 })
+      .lean(),
+    AgencyProposalLink.find({ agencyId, tripId: { $in: tripIds } })
+      .select('tripId expiresAt revokedAt acceptedAt declinedAt')
+      .lean(),
+    clientIds.length > 0
+      ? AgencyClient.find({ agencyId, _id: { $in: clientIds } })
+          .select('name')
+          .lean()
+      : Promise.resolve([] as any[]),
+  ]);
+
+  const packageByTrip = new Map<string, 'draft' | 'published'>();
+  for (const row of packages as any[]) {
+    const key = String(row.tripId);
+    if (row.state === 'published' || !packageByTrip.has(key)) {
+      packageByTrip.set(key, row.state === 'published' ? 'published' : 'draft');
+    }
+  }
+
+  const quoteByTrip = new Map<string, { status: QuoteStatus; number: string }>();
+  for (const row of quotes as any[]) {
+    const key = String(row.tripId);
+    if (quoteByTrip.has(key)) continue;
+    quoteByTrip.set(key, {
+      status: effectiveQuoteStatus(row),
+      number: String(row.number || ''),
+    });
+  }
+
+  const linkStates = new Map<string, Set<string>>();
+  const now = Date.now();
+  for (const row of links as any[]) {
+    const key = String(row.tripId);
+    const state = row.acceptedAt
+      ? 'accepted'
+      : row.declinedAt
+        ? 'declined'
+        : row.revokedAt ||
+            !Number.isFinite(new Date(row.expiresAt).getTime()) ||
+            new Date(row.expiresAt).getTime() <= now
+          ? 'expired'
+          : 'active';
+    const bucket = linkStates.get(key) ?? new Set<string>();
+    bucket.add(state);
+    linkStates.set(key, bucket);
+  }
+
+  const clientNames = new Map<string, string>();
+  for (const row of clients as any[]) {
+    const name = String(row.name || '').trim();
+    if (name) clientNames.set(String(row._id), name);
+  }
+
+  for (const trip of trips) {
+    const key = String(trip._id);
+    const quote = quoteByTrip.get(key) ?? null;
+    const states = linkStates.get(key);
+    const proposalState: AgencyTripSummary['proposalState'] = !states
+      ? 'none'
+      : states.has('accepted')
+        ? 'accepted'
+        : states.has('active')
+          ? 'active'
+          : states.has('declined')
+            ? 'declined'
+            : 'expired';
+
+    summaries.set(key, {
+      clientName: trip.clientId
+        ? clientNames.get(String(trip.clientId)) ?? null
+        : null,
+      packageState: packageByTrip.get(key) ?? 'none',
+      quoteStatus: quote?.status ?? null,
+      quoteNumber: quote?.number || null,
+      proposalState,
+    });
+  }
+
+  return summaries;
+}
+
 function agencyRoleForTrip(role: AgencyRole) {
   const tripRole = mapAgencyRoleToTripRole(role);
   if (!tripRole) {
@@ -109,9 +244,12 @@ export async function listAgencyTrips(input: AgencyTripListInput) {
     .select(AGENCY_TRIP_SUMMARY_SELECT);
 
   const role = agencyRoleForTrip(input.role);
+  const summaries = await loadAgencyTripSummaries(input.agencyId, trips);
   return trips.map((trip) => ({
     ...sanitizeTripFor(trip, role),
     role,
+    agencySummary:
+      summaries.get(String((trip as any)._id)) ?? EMPTY_TRIP_SUMMARY,
   }));
 }
 
