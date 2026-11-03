@@ -13,6 +13,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { AgencyPageHeader } from '@/components/agency/AgencyPageHeader';
+import { AdminPagination } from '@/components/admin/AdminPagination';
 import { AgencySegmented } from '@/components/agency/AgencySegmented';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -54,6 +55,8 @@ import { toast } from 'sonner';
 const errorMessage = (error: unknown, fallback: string): string =>
   error instanceof Error && error.message ? error.message : fallback;
 
+const TEMPLATE_PAGE_SIZE = 9;
+
 const statusFilterLabel: Record<AgencyTemplateListStatus, string> = {
   all: 'All statuses',
   active: 'Active',
@@ -80,6 +83,7 @@ const AgencyTemplates: React.FC = () => {
     'all' | AgencyTemplateAudience
   >('all');
   const [manageId, setManageId] = useState<string | null>(null);
+  const [templatePage, setTemplatePage] = useState(1);
   const [uploadChoiceOpen, setUploadChoiceOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [pdfUploadOpen, setPdfUploadOpen] = useState(false);
@@ -191,6 +195,25 @@ const AgencyTemplates: React.FC = () => {
       return true;
     });
   }, [templates, canManage, statusFilter, audienceFilter]);
+
+  const templateTotalPages = Math.max(
+    1,
+    Math.ceil(visibleTemplates.length / TEMPLATE_PAGE_SIZE)
+  );
+  const pagedTemplates = visibleTemplates.slice(
+    (templatePage - 1) * TEMPLATE_PAGE_SIZE,
+    templatePage * TEMPLATE_PAGE_SIZE
+  );
+
+  useEffect(() => {
+    setTemplatePage(1);
+  }, [statusFilter, audienceFilter]);
+
+  useEffect(() => {
+    if (templatePage > templateTotalPages) {
+      setTemplatePage(templateTotalPages);
+    }
+  }, [templatePage, templateTotalPages]);
 
   const managingTemplate =
     templates.find((template) => template._id === manageId) ?? null;
@@ -398,7 +421,7 @@ const AgencyTemplates: React.FC = () => {
         </Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {visibleTemplates.map((template) => {
+          {pagedTemplates.map((template) => {
             const version = templateVersionNumber(template);
             const internal = template.audience === 'internal';
             return (
@@ -526,6 +549,15 @@ const AgencyTemplates: React.FC = () => {
               </Card>
             );
           })}
+
+          <AdminPagination
+            page={templatePage}
+            totalPages={templateTotalPages}
+            total={visibleTemplates.length}
+            noun="template"
+            onChange={setTemplatePage}
+            className="rounded-xl border border-slate-200 md:col-span-2 xl:col-span-3 dark:border-slate-800"
+          />
         </div>
       )}
 

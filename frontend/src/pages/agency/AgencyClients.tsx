@@ -13,6 +13,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { AgencyEmptyState } from '@/components/agency/AgencyEmptyState';
+import { AdminPagination } from '@/components/admin/AdminPagination';
 import { AgencyPageHeader } from '@/components/agency/AgencyPageHeader';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -45,6 +46,8 @@ import { toast } from 'sonner';
 const errorMessage = (error: unknown, fallback: string): string =>
   error instanceof Error && error.message ? error.message : fallback;
 
+const PAGE_SIZE = 10;
+
 type ClientForm = {
   name: string;
   company: string;
@@ -72,6 +75,7 @@ const AgencyClients: React.FC = () => {
   const canPlan = canManage || role === 'planner';
 
   const [clients, setClients] = useState<AgencyClient[]>([]);
+  const [clientPage, setClientPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -118,12 +122,25 @@ const AgencyClients: React.FC = () => {
 
   useEffect(() => {
     setClients([]);
+    setClientPage(1);
     if (!activeAgencyId) {
       setLoading(false);
       return;
     }
     void loadClients(true);
   }, [activeAgencyId, loadClients]);
+
+  const clientTotalPages = Math.max(1, Math.ceil(clients.length / PAGE_SIZE));
+  const pageClients = clients.slice(
+    (clientPage - 1) * PAGE_SIZE,
+    clientPage * PAGE_SIZE
+  );
+
+  useEffect(() => {
+    if (clientPage > clientTotalPages) {
+      setClientPage(clientTotalPages);
+    }
+  }, [clientPage, clientTotalPages]);
 
   const openCreate = () => {
     setEditing(null);
@@ -303,8 +320,10 @@ const AgencyClients: React.FC = () => {
         ) : (
           <>
             <div className="hidden md:block">
-              <Table>
-                <TableHeader>
+              <Table
+                containerClassName="max-h-[min(34rem,calc(100dvh-26rem))] overflow-y-auto"
+              >
+                <TableHeader className="sticky top-0 z-10 bg-white dark:bg-slate-900">
                   <TableRow className="hover:bg-transparent">
                     <TableHead className="h-10 text-xs">Client</TableHead>
                     <TableHead className="h-10 text-xs">Contact</TableHead>
@@ -314,7 +333,7 @@ const AgencyClients: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {clients.map((client) => (
+                  {pageClients.map((client) => (
                     <TableRow
                       key={client._id}
                       className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40"
@@ -413,7 +432,7 @@ const AgencyClients: React.FC = () => {
             </div>
 
             <div className="divide-y divide-slate-200 md:hidden dark:divide-slate-800">
-              {clients.map((client) => (
+              {pageClients.map((client) => (
                 <div
                   key={client._id}
                   className="flex flex-wrap items-start gap-3 px-4 py-3.5"
@@ -491,6 +510,15 @@ const AgencyClients: React.FC = () => {
                 </div>
               ))}
             </div>
+
+            <AdminPagination
+              page={clientPage}
+              totalPages={clientTotalPages}
+              total={clients.length}
+              noun="client"
+              onChange={setClientPage}
+              className="border-slate-200 dark:border-slate-800"
+            />
           </>
         )}
       </section>

@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { Link } from "react-router-dom";
+import { AdminPagination } from "@/components/admin/AdminPagination";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -91,6 +92,8 @@ interface MyTripsViewProps {
   travelPageHandle?: string;
   /** The agency page supplies its own shared page header; the library keeps only its controls. */
   hideHeader?: boolean;
+  /** Opt-in paging for long libraries; the personal dashboard leaves it unset. */
+  pageSize?: number;
 }
 
 const DESTINATION_IMAGES: Record<string, string> = {
@@ -228,6 +231,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
   onUnarchiveTrip,
   canArchiveTrip,
   travelPageHandle,
+  pageSize,
 }) => {
   const isAgency = variant === "agency";
   const showingArchived = archivedValue === "archived";
@@ -247,6 +251,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
   const [tripToPurge, setTripToPurge] = useState<Trip | null>(null);
   const [showDeleted, setShowDeleted] = useState<boolean>(true);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [tripPage, setTripPage] = useState(1);
 
   const getTripCover = (title: string): string => {
     const lower = title.toLowerCase();
@@ -312,6 +317,24 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
         : filteredTrips.filter((trip) => trip.role && trip.role !== "owner"),
     [filteredTrips, isAgency]
   );
+
+  const pageLength = pageSize && pageSize > 0 ? pageSize : 0;
+  const tripTotalPages = pageLength
+    ? Math.max(1, Math.ceil(ownedTrips.length / pageLength))
+    : 1;
+  const pagedOwnedTrips = pageLength
+    ? ownedTrips.slice((tripPage - 1) * pageLength, tripPage * pageLength)
+    : ownedTrips;
+
+  // A new search, filter or layout starts back at the first page; deleting
+  // rows off the last page steps back instead of leaving an empty table.
+  useEffect(() => {
+    setTripPage(1);
+  }, [search, statusFilter, assigneeValue, archivedValue, viewMode, pageSize]);
+
+  useEffect(() => {
+    if (tripPage > tripTotalPages) setTripPage(tripTotalPages);
+  }, [tripPage, tripTotalPages]);
 
   const handleDuplicate = async (e: React.MouseEvent, tripId: string) => {
     e.stopPropagation();
@@ -624,7 +647,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
         /* GRID VIEW */
         <div className="space-y-10">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {ownedTrips.map((trip) => {
+          {pagedOwnedTrips.map((trip) => {
             const title =
               trip.title || trip.tripDetails?.trip_title || "Custom Trip";
             const cover = getTripCover(title);
@@ -815,7 +838,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60">
-              {ownedTrips.map((trip) => {
+              {pagedOwnedTrips.map((trip) => {
                 const title =
                   trip.title || trip.tripDetails?.trip_title || "Custom Trip";
                 const statusKey =
@@ -1007,7 +1030,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
       ) : (
         /* LIST VIEW */
         <div className="space-y-3">
-          {ownedTrips.map((trip) => {
+          {pagedOwnedTrips.map((trip) => {
             const title =
               trip.title || trip.tripDetails?.trip_title || "Custom Trip";
             const cover = getTripCover(title);
@@ -1152,6 +1175,17 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
           })}
         </div>
       )}
+
+      {pageLength > 0 && ownedTrips.length > 0 ? (
+        <AdminPagination
+          page={tripPage}
+          totalPages={tripTotalPages}
+          total={ownedTrips.length}
+          noun="trip"
+          onChange={setTripPage}
+          className="rounded-2xl border border-border/70 bg-card"
+        />
+      ) : null}
 
       {/* "Shared with me" (Milestone 6 §3.8): trips owned by someone else.
           Deletion is never offered — only the owner can delete on the server. */}

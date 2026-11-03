@@ -678,6 +678,7 @@ const AgencyTrips: React.FC = () => {
             onArchiveTrip={canManage ? handleArchiveTrip : undefined}
             onUnarchiveTrip={canManage ? handleUnarchiveTrip : undefined}
             canArchiveTrip={() => canManage}
+            pageSize={8}
           />
         </>
       )}

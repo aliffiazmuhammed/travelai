@@ -194,7 +194,7 @@ export const EnquiryThreadPane: React.FC<EnquiryThreadPaneProps> = ({
 
   return (
     <div className={cn('space-y-4', className)}>
-      <div className="rounded-2xl border border-border/70 bg-card p-4">
+      <div className="rounded-2xl border border-border/70 bg-card p-4 lg:sticky lg:top-0 lg:z-10">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 space-y-1">
             <Button

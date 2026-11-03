@@ -11,6 +11,7 @@ import {
   Users,
 } from 'lucide-react';
 import { AgencyPageHeader } from '@/components/agency/AgencyPageHeader';
+import { AdminPagination } from '@/components/admin/AdminPagination';
 import { AgencySectionTabs } from '@/components/agency/AgencySectionTabs';
 import { AgencySegmented } from '@/components/agency/AgencySegmented';
 import { Badge } from '@/components/ui/badge';
@@ -33,7 +34,7 @@ import type {
 } from '@/types';
 import { toast } from 'sonner';
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 20;
 
 const AUDIT_FILTERS: { value: string; label: string }[] = [
   { value: '', label: 'All' },
@@ -140,7 +141,7 @@ const AgencyOperations: React.FC = () => {
   const [entries, setEntries] = useState<AgencyAuditEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [auditLoading, setAuditLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const [auditPage, setAuditPage] = useState(1);
   const [section, setSection] = useState<'usage' | 'audit'>('usage');
   const [actionFilter, setActionFilter] = useState('');
 
@@ -160,17 +161,23 @@ const AgencyOperations: React.FC = () => {
   }, [activeAgencyId]);
 
   const loadAudit = useCallback(
-    async (filter: string) => {
+    async (filter: string, page: number) => {
       if (!activeAgencyId) return;
       setAuditLoading(true);
       try {
         const result = await api.getAgencyAudit(activeAgencyId, {
-          page: 1,
+          page,
           limit: PAGE_SIZE,
           action: filter || undefined,
         });
         setEntries(result.entries || []);
         setTotal(result.total || 0);
+        // A filter can shrink the log under the open page; step back in.
+        const lastPage = Math.max(
+          1,
+          Math.ceil((result.total || 0) / PAGE_SIZE)
+        );
+        if (page > lastPage) setAuditPage(lastPage);
       } catch (err) {
         setEntries([]);
         setTotal(0);
@@ -187,42 +194,18 @@ const AgencyOperations: React.FC = () => {
   useEffect(() => {
     if (!activeAgencyId) return;
     void loadUsage();
-    void loadAudit(actionFilter);
-    // The filter change reloads through the handler below.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeAgencyId, loadUsage, loadAudit]);
+  }, [activeAgencyId, loadUsage]);
+
+  useEffect(() => {
+    if (!activeAgencyId) return;
+    void loadAudit(actionFilter, auditPage);
+  }, [activeAgencyId, actionFilter, auditPage, loadAudit]);
 
   const handleFilterChange = (filter: string) => {
     setActionFilter(filter);
-    void loadAudit(filter);
+    setAuditPage(1);
   };
 
-  const handleLoadMore = async () => {
-    if (!activeAgencyId || loadingMore) return;
-    setLoadingMore(true);
-    try {
-      const nextPage = Math.floor(entries.length / PAGE_SIZE) + 1;
-      const result = await api.getAgencyAudit(activeAgencyId, {
-        page: nextPage,
-        limit: PAGE_SIZE,
-        action: actionFilter || undefined,
-      });
-      setEntries((prev) => {
-        const seen = new Set(prev.map((entry) => entry._id));
-        const fresh = (result.entries || []).filter(
-          (entry) => !seen.has(entry._id)
-        );
-        return [...prev, ...fresh];
-      });
-      setTotal(result.total || 0);
-    } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : 'Could not load more entries.'
-      );
-    } finally {
-      setLoadingMore(false);
-    }
-  };
 
   if (!contextLoading && !canManage) {
     return <Navigate to="/agency" replace />;
@@ -416,22 +399,17 @@ const AgencyOperations: React.FC = () => {
               </table>
             </div>
           )}
-          {entries.length < total ? (
-            <div className="flex justify-center pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => void handleLoadMore()}
-                disabled={loadingMore}
-                className="rounded-xl text-xs font-bold"
-              >
-                {loadingMore ? (
-                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                ) : null}
-                Load more ({entries.length} of {total})
-              </Button>
-            </div>
+          {!auditLoading && entries.length > 0 ? (
+            <AdminPagination
+              page={auditPage}
+              totalPages={Math.max(1, Math.ceil(total / PAGE_SIZE))}
+              total={total}
+              noun="entry"
+              nounPlural="entries"
+              loading={auditLoading}
+              onChange={setAuditPage}
+              className="rounded-lg border border-slate-200 dark:border-slate-800"
+            />
           ) : null}
         </CardContent>
       </Card>

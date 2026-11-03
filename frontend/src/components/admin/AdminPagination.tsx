@@ -14,10 +14,12 @@ export const AdminPagination: React.FC<{
   /** `undefined` while the first page is still loading. */
   total?: number;
   noun: string;
+  /** Irregular plural, e.g. `entries`; defaults to `noun + "s"`. */
+  nounPlural?: string;
   loading?: boolean;
   onChange: (page: number) => void;
   className?: string;
-}> = ({ page, totalPages, total, noun, loading, onChange, className }) => (
+}> = ({ page, totalPages, total, noun, nounPlural, loading, onChange, className }) => (
   <div
     className={cn(
       'flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3',
@@ -27,7 +29,7 @@ export const AdminPagination: React.FC<{
     <p className="text-xs text-muted-foreground" aria-live="polite">
       {total === undefined
         ? 'Loading…'
-        : `${total} ${noun}${total === 1 ? '' : 's'} · page ${page} of ${Math.max(totalPages, 1)}`}
+        : `${total} ${total === 1 ? noun : nounPlural ?? `${noun}s`} · page ${page} of ${Math.max(totalPages, 1)}`}
     </p>
     <div className="flex items-center gap-2">
       <Button

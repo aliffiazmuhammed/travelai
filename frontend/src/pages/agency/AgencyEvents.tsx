@@ -20,6 +20,7 @@ import {
   X,
 } from 'lucide-react';
 import { AgencyPageHeader } from '@/components/agency/AgencyPageHeader';
+import { AdminPagination } from '@/components/admin/AdminPagination';
 import { AgencySegmented } from '@/components/agency/AgencySegmented';
 import {
   AlertDialog,
@@ -86,6 +87,7 @@ const COVER_MAX_BYTES = 2 * 1024 * 1024;
 const COVER_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const CAPACITY_MAX = 500;
 const PRICE_MAX = 10_000_000;
+const EVENT_PAGE_SIZE = 6;
 
 const errorMessage = (error: unknown, fallback: string): string =>
   error instanceof Error && error.message ? error.message : fallback;
@@ -380,6 +382,7 @@ const AgencyEvents: React.FC = () => {
   const [events, setEvents] = useState<AgencyEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<EventFilter>('all');
+  const [eventPage, setEventPage] = useState(1);
   const [searchParams, setSearchParams] = useSearchParams();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<AgencyEvent | null>(null);
@@ -481,6 +484,23 @@ const AgencyEvents: React.FC = () => {
         : events.filter((event) => filterKeyOf(event) === statusFilter),
     [events, statusFilter]
   );
+
+  const eventTotalPages = Math.max(
+    1,
+    Math.ceil(visibleEvents.length / EVENT_PAGE_SIZE)
+  );
+  const pagedEvents = visibleEvents.slice(
+    (eventPage - 1) * EVENT_PAGE_SIZE,
+    eventPage * EVENT_PAGE_SIZE
+  );
+
+  useEffect(() => {
+    setEventPage(1);
+  }, [statusFilter]);
+
+  useEffect(() => {
+    if (eventPage > eventTotalPages) setEventPage(eventTotalPages);
+  }, [eventPage, eventTotalPages]);
 
   const openEdit = (event: AgencyEvent) => {
     setEditing(event);
@@ -832,7 +852,7 @@ const AgencyEvents: React.FC = () => {
             </div>
           ) : (
             <div className="space-y-3">
-              {visibleEvents.map((event) => {
+              {pagedEvents.map((event) => {
                 const status = statusOf(event);
                 const totalInterests =
                   event.interests.pending +
@@ -1083,6 +1103,15 @@ const AgencyEvents: React.FC = () => {
                   </div>
                 );
               })}
+
+              <AdminPagination
+                page={eventPage}
+                totalPages={eventTotalPages}
+                total={visibleEvents.length}
+                noun="event"
+                onChange={setEventPage}
+                className="rounded-lg border border-slate-200 dark:border-slate-800"
+              />
             </div>
           )}
         </CardContent>

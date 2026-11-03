@@ -193,7 +193,12 @@ const Enquiries: React.FC = () => {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <main className="container mx-auto max-w-6xl px-4 pb-20 pt-24">
+      <main
+        className={cn(
+          'container mx-auto max-w-6xl px-4 pb-20 pt-24',
+          openId && 'lg:flex lg:h-[100dvh] lg:flex-col lg:pb-6'
+        )}
+      >
         <TravellerPageHeader
           eyebrow="Your conversations"
           icon={Inbox}
@@ -262,15 +267,25 @@ const Enquiries: React.FC = () => {
         <div
           className={cn(
             'grid gap-4',
-            openId && 'lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)]'
+            openId &&
+              'lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)]'
           )}
         >
           <section
             aria-label="Enquiry list"
-            className={cn('min-w-0 space-y-3', openId && 'hidden lg:block')}
+            className={cn(
+              'min-w-0 space-y-3',
+              openId &&
+                'hidden lg:block lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:pr-2'
+            )}
           >
             {!loading && enquiries.length > 0 ? (
-              <div className="flex flex-wrap items-center justify-between gap-2">
+              <div
+                className={cn(
+                  'flex flex-wrap items-center justify-between gap-2',
+                  openId && 'lg:sticky lg:top-0 lg:z-10 lg:bg-background lg:pb-2'
+                )}
+              >
                 <TravellerSegmented<EnquiryFilter>
                   ariaLabel="Filter enquiries"
                   value={filter}
@@ -446,7 +461,10 @@ const Enquiries: React.FC = () => {
           </section>
 
           {openId ? (
-            <section aria-label="Conversation" className="min-w-0">
+            <section
+              aria-label="Conversation"
+              className="min-w-0 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:pr-2"
+            >
               <EnquiryThreadPane
                 key={openId}
                 enquiryId={openId}

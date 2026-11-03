@@ -53,6 +53,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
+import { AdminPagination } from '@/components/admin/AdminPagination';
 import { AgencyEmptyState } from '@/components/agency/AgencyEmptyState';
 import { AgencyPageHeader } from '@/components/agency/AgencyPageHeader';
 import { AgencySegmented } from '@/components/agency/AgencySegmented';
@@ -95,6 +96,8 @@ const errorMessage = (error: unknown, fallback: string): string =>
   error instanceof Error && error.message ? error.message : fallback;
 
 type Filter = 'all' | AgencyEnquiryStatus;
+
+const PAGE_SIZE = 10;
 
 const LOST_REASON_PRESETS = [
   'Budget too high',
@@ -484,11 +487,9 @@ const AgencyEnquiries: React.FC = () => {
 
   const [enquiries, setEnquiries] = useState<AgencyEnquiry[]>([]);
   const [filter, setFilter] = useState<Filter>('all');
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(false);
+  const [pageIndex, setPageIndex] = useState(0);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -507,6 +508,9 @@ const AgencyEnquiries: React.FC = () => {
   // Newer reads win: a quiet live refresh can overlap the first page load, and
   // an older response must never overwrite a fresher list or thread.
   const requestSeq = useRef(0);
+  // The API pages by cursor, so each page start is remembered as you walk
+  // forward; Previous just reuses the cursor that opened the earlier page.
+  const cursorRef = useRef<Array<string | null>>([null]);
   const detailSeq = useRef(0);
   // The thread is on screen when a lead is open in the drawer.
   const detailOpen = Boolean(selected) && sheetOpen;
@@ -544,7 +548,7 @@ const AgencyEnquiries: React.FC = () => {
    * `quiet` keeps the rows already on screen: a live refresh that fails must not
    * replace a working inbox with an error card.
    */
-  const loadFirstPage = useCallback(
+  const loadPage = useCallback(
     async (quiet: boolean) => {
       const seq = ++requestSeq.current;
       if (!quiet) {
@@ -554,13 +558,17 @@ const AgencyEnquiries: React.FC = () => {
       try {
         const page = await api.getAgencyEnquiries({
           status: filter === 'all' ? undefined : filter,
-          limit: 20,
+          cursor: cursorRef.current[pageIndex] ?? undefined,
+          limit: PAGE_SIZE,
         });
         if (seq !== requestSeq.current) return;
         setEnquiries(page.enquiries);
-        setCursor(page.nextCursor);
-        setHasMore(page.hasMore);
         setTotal(page.total);
+        // Keep the cursor that opens this page and the one that opens the next
+        // page; everything after that is invalidated by this read.
+        const cursors = cursorRef.current.slice(0, pageIndex + 1);
+        if (page.nextCursor) cursors[pageIndex + 1] = page.nextCursor;
+        cursorRef.current = cursors;
         setError(null);
       } catch (err) {
         if (seq !== requestSeq.current || quiet) return;
@@ -571,12 +579,33 @@ const AgencyEnquiries: React.FC = () => {
         if (!quiet) setLoading(false);
       }
     },
-    [filter]
+    [filter, pageIndex]
   );
 
   useEffect(() => {
-    void loadFirstPage(false);
-  }, [loadFirstPage, reloadKey]);
+    void loadPage(false);
+  }, [loadPage, reloadKey]);
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  // A status change can shrink the filtered set under the open page; step back
+  // to the last page that still exists rather than showing an empty table.
+  useEffect(() => {
+    if (pageIndex > totalPages - 1) {
+      setPageIndex(Math.max(0, totalPages - 1));
+    }
+  }, [pageIndex, totalPages]);
+
+  const changeFilter = (value: Filter) => {
+    cursorRef.current = [null];
+    setPageIndex(0);
+    setFilter(value);
+  };
+
+  const changePage = (nextPage: number) => {
+    const clamped = Math.max(0, Math.min(nextPage, totalPages - 1));
+    if (clamped !== pageIndex) setPageIndex(clamped);
+  };
 
   useEffect(() => {
     if (!canAssign || !activeAgencyId) return;
@@ -674,31 +703,6 @@ const AgencyEnquiries: React.FC = () => {
     // should trigger a reload.
   }, [detailOpen, selected?.id, loadDetail]);
 
-  const loadMore = useCallback(async () => {
-    if (!cursor || loadingMore) return;
-    const seq = requestSeq.current;
-    setLoadingMore(true);
-    try {
-      const page = await api.getAgencyEnquiries({
-        status: filter === 'all' ? undefined : filter,
-        cursor,
-        limit: 20,
-      });
-      // A live refresh that landed first already replaced the list.
-      if (seq !== requestSeq.current) return;
-      setEnquiries((prev) => [...prev, ...page.enquiries]);
-      setCursor(page.nextCursor);
-      setHasMore(page.hasMore);
-      setTotal(page.total);
-    } catch (err) {
-      if (seq === requestSeq.current) {
-        toast.error(errorMessage(err, 'Could not load more enquiries.'));
-      }
-    } finally {
-      setLoadingMore(false);
-    }
-  }, [cursor, filter, loadingMore]);
-
   // R3: new leads, traveller replies, read receipts and status changes arrive
   // as frames. One quiet resync covers the counters and the list; a thread that
   // is on screen re-reads itself, which is also what clears its unread badge.
@@ -707,8 +711,8 @@ const AgencyEnquiries: React.FC = () => {
     // Read the open thread first: that GET stamps the receipts, so the list
     // read that follows cannot put a stale unread badge back on the row.
     if (openId) await loadDetail(openId, true);
-    await Promise.all([loadFirstPage(true), loadSummary(true)]);
-  }, [loadFirstPage, loadSummary, loadDetail]);
+    await Promise.all([loadPage(true), loadSummary(true)]);
+  }, [loadPage, loadSummary, loadDetail]);
 
   const liveMode = useEnquiryLiveRefresh(refreshLive, {
     enabled: Boolean(activeAgencyId),
@@ -1008,7 +1012,7 @@ const AgencyEnquiries: React.FC = () => {
           <AgencySegmented
             ariaLabel="Filter enquiries by status"
             value={filter}
-            onChange={(value) => setFilter(value)}
+            onChange={changeFilter}
             options={FILTERS.map((option) => ({
               ...option,
               count:
@@ -1047,7 +1051,11 @@ const AgencyEnquiries: React.FC = () => {
           body="Publish your directory profile and package cards; the enquiry button on both feeds this inbox. Every submission is rate-limited and consented."
           action={
             filter === 'all' ? undefined : (
-              <Button size="sm" variant="outline" onClick={() => setFilter('all')}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => changeFilter('all')}
+              >
                 Show all enquiries
               </Button>
             )
@@ -1055,8 +1063,11 @@ const AgencyEnquiries: React.FC = () => {
         />
       ) : (
         <>
-          <Table className="min-w-[1080px]">
-            <TableHeader>
+          <Table
+            className="min-w-[1080px]"
+            containerClassName="max-h-[min(34rem,calc(100dvh-24rem))] min-h-[16rem] overflow-y-auto"
+          >
+            <TableHeader className="sticky top-0 z-10 bg-white dark:bg-slate-900">
               <TableRow className="hover:bg-transparent">
                 <TableHead className="h-10 text-xs">Lead</TableHead>
                 <TableHead className="h-10 text-xs">Trip</TableHead>
@@ -1297,23 +1308,15 @@ const AgencyEnquiries: React.FC = () => {
             </TableBody>
           </Table>
 
-          {hasMore ? (
-            <div className="border-t border-slate-200 p-3 dark:border-slate-800">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="w-full"
-                onClick={() => void loadMore()}
-                disabled={loadingMore}
-              >
-                {loadingMore ? (
-                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                ) : null}
-                Load more
-              </Button>
-            </div>
-          ) : null}
+          <AdminPagination
+            page={pageIndex + 1}
+            totalPages={totalPages}
+            total={total}
+            noun="lead"
+            loading={loading}
+            onChange={(page) => changePage(page - 1)}
+            className="border-slate-200 dark:border-slate-800"
+          />
         </>
       )}
       </section>
