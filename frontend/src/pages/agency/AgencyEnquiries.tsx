@@ -454,8 +454,12 @@ const EnquiryDetail: React.FC<EnquiryDetailProps> = ({
         {!quoteHref ? (
           <p className="text-[11px] text-slate-500 dark:text-slate-400">
             {enquiry.client
-              ? 'No trip is linked to this lead yet. Starting one opens a blank trip with these dates, ready to quote.'
-              : 'Starting a trip turns this lead into a client and opens a blank trip with these dates, ready to quote.'}
+              ? enquiry.package
+                ? 'No client trip is linked to this lead yet. Starting one opens a copy of the package plan with these dates, ready to quote.'
+                : 'No trip is linked to this lead yet. Starting one opens a blank trip with these dates, ready to quote.'
+              : enquiry.package
+                ? 'Starting a trip turns this lead into a client and opens a copy of the package plan with these dates, ready to quote.'
+                : 'Starting a trip turns this lead into a client and opens a blank trip with these dates, ready to quote.'}
           </p>
         ) : null}
       </div>
@@ -894,17 +898,18 @@ const AgencyEnquiries: React.FC = () => {
     [filter, loadSummary, selected]
   );
 
+  // Always quote on the client's own trip. A package's source trip is the
+  // catalogue copy behind the public package and must never receive a quote or
+  // a proposal; until a client trip exists the drawer offers "Start a trip".
   const quoteHref = useMemo(() => {
-    if (!selected?.client) return null;
-    const tripId = selected.package?.tripId ?? selected.tripId;
-    if (!tripId) return null;
+    if (!selected?.client || !selected.tripId) return null;
     const params = new URLSearchParams({
       tab: 'quote',
       client: selected.client.id,
       adults: String(selected.party.adults),
       children: String(selected.party.children),
     });
-    return `/agency/trips/${tripId}?${params.toString()}`;
+    return `/agency/trips/${selected.tripId}?${params.toString()}`;
   }, [selected]);
 
   const summaryCards = [

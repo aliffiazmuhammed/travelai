@@ -280,6 +280,8 @@ function matchesFilter(row: any, filter: any): boolean {
   savedTrips.push(this);
   return this;
 };
+(Trip as any).findOne = (filter: any) =>
+  thenable(savedTrips.find((row) => matchesFilter(row, filter)) ?? null);
 
 (AgencyMember as any).exists = async (filter: any) =>
   memberIds.includes(String(filter?.userId)) ? { _id: 'member' } : null;
@@ -1258,6 +1260,79 @@ test('starting a trip turns the lead into a client and opens exactly one trip', 
       }),
     (error: any) => error.statusCode === 404
   );
+});
+
+test('a package lead gets a copy of the plan and never the catalogue trip itself', async () => {
+  reset();
+  const sourceTrip = {
+    _id: TRIP_ID,
+    agencyId: AGENCY_ID,
+    workspace: 'agency',
+    isDeleted: false,
+    title: 'Spiti Loop',
+    tripDetails: {
+      trip_title: 'Spiti Loop',
+      duration_days: 3,
+      budget_per_person: 42000,
+      day_by_day_itinerary: [
+        { day: 1, title: 'Kaza', activities: ['Acclimatise'] },
+        { day: 2, title: 'Key Monastery', activities: ['Visit'] },
+        { day: 3, title: 'Chandratal', activities: ['Drive'] },
+      ],
+    },
+    customRoutes: [
+      {
+        name: 'Kaza loop',
+        day: 3,
+        color: '#0d9488',
+        mode: 'drive',
+        points: [{ lat: 32.1, lng: 77.2 }],
+        distanceKm: 120,
+      },
+    ],
+  };
+  savedTrips.push(sourceTrip);
+  packageRows = [
+    { _id: PACKAGE_ID, agencyId: AGENCY_ID, title: 'Spiti Loop', tripId: TRIP_ID },
+  ];
+  enquiryRows = [
+    enquiryRow({
+      status: 'new',
+      userId: USER_ID,
+      packageId: PACKAGE_ID,
+      source: 'package',
+      dates: {
+        start: new Date('2027-01-10T00:00:00.000Z'),
+        end: new Date('2027-01-11T00:00:00.000Z'),
+        flexible: false,
+      },
+    }),
+  ];
+
+  const started = await startTripFromEnquiry({
+    agencyId: AGENCY_ID,
+    enquiryId: ENQUIRY_ID,
+    actorId: ACTOR_ID,
+    role: 'planner',
+  });
+
+  assert.notEqual(started.tripId, TRIP_ID, 'the catalogue trip stays a template');
+  const created: any = savedTrips.find((row) => String(row._id) === started.tripId);
+  assert.ok(created, 'the client trip is a new row');
+  assert.equal(savedTrips.length, 2);
+
+  assert.equal(created.tripDetails.trip_title, 'Trip for Asha Rao');
+  assert.equal(created.tripDetails.duration_days, 2, 'the lead dates set the length');
+  assert.deepEqual(
+    created.tripDetails.day_by_day_itinerary.map((day: any) => day.title),
+    ['Kaza', 'Key Monastery']
+  );
+  assert.equal(created.tripDetails.budget_per_person, 42000);
+  assert.equal(created.customRoutes?.length ?? 0, 0, 'routes past the new last day are dropped');
+
+  assert.equal(sourceTrip.tripDetails.trip_title, 'Spiti Loop');
+  assert.equal(sourceTrip.tripDetails.day_by_day_itinerary.length, 3);
+  assert.equal(sourceTrip.customRoutes.length, 1);
 });
 
 test('a lead whose trip was deleted by hand gets a new one', async () => {

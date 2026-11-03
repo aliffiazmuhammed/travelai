@@ -1484,13 +1484,15 @@ export interface StartTripFromEnquiryResult {
 /**
  * Starts a trip from a lead and links it back (M9 R5).
  *
- * A package enquiry already has a trip behind its package; a profile enquiry
- * has nothing to quote. This turns the lead into a client, opens a blank trip
- * carrying the dates the traveller asked for, and stamps the trip on the lead
- * so the inbox can hand it straight to the quote tab.
+ * A package enquiry starts from the package's own plan; a profile enquiry has
+ * nothing to quote. This turns the lead into a client and opens the client's
+ * own trip carrying the dates the traveller asked for — a copy of the package
+ * itinerary when there is one, a blank trip otherwise — so quoting and sending
+ * never touch the catalogue trip behind the published package. The trip is
+ * stamped on the lead so the inbox can hand it straight to the quote tab.
  *
  * The trip id is generated first and claimed on the enquiry with a
- * compare-and-set, so a double click cannot leave two blank trips behind; the
+ * compare-and-set, so a double click cannot leave two client trips behind; the
  * loser of the race reads the winner's link.
  */
 export async function startTripFromEnquiry(input: {
@@ -1569,6 +1571,21 @@ export async function startTripFromEnquiry(input: {
 
   const start = row.dates?.start ? new Date(row.dates.start) : undefined;
   const end = row.dates?.end ? new Date(row.dates.end) : undefined;
+
+  // The catalogue trip stays a template; the client works on a copy of its plan.
+  const sourcePackage: any = row.packageId
+    ? await AgencyPackage.findOne({
+        _id: String(row.packageId),
+        agencyId: input.agencyId,
+      })
+        .select('tripId')
+        .lean()
+    : null;
+  const cloneFromTripId =
+    sourcePackage?.tripId && Types.ObjectId.isValid(String(sourcePackage.tripId))
+      ? String(sourcePackage.tripId)
+      : undefined;
+
   try {
     await createAgencyTrip({
       agencyId: input.agencyId,
@@ -1579,6 +1596,7 @@ export async function startTripFromEnquiry(input: {
       endDate: end?.toISOString(),
       clientId,
       tripId,
+      cloneFromTripId,
     });
   } catch (error) {
     // The lead must not point at a trip that was never created.

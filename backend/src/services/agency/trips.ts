@@ -287,6 +287,12 @@ export interface CreateAgencyTripInput {
    * trip (the enquiry hand-off links the lead to the trip in one step).
    */
   tripId?: Types.ObjectId;
+  /**
+   * Copy the plan from another trip in the same tenant. A package enquiry uses
+   * this to give the client its own editable trip while the catalogue trip
+   * behind the published package stays untouched.
+   */
+  cloneFromTripId?: string;
 }
 
 function parseDate(value?: string): Date | undefined {
@@ -364,6 +370,61 @@ async function assertAgencyAssignee(agencyId: string, userId: string): Promise<v
   }
 }
 
+function itineraryDayCount(details: any): number {
+  const rows = Array.isArray(details?.day_by_day_itinerary)
+    ? details.day_by_day_itinerary.length
+    : 0;
+  const declared = Number(details?.duration_days);
+  return Math.min(30, Math.max(1, rows || (Number.isFinite(declared) ? declared : 1)));
+}
+
+function cloneAgencyItinerary(
+  source: any,
+  title: string,
+  days: number
+): Record<string, any> {
+  const cloned = source
+    ? JSON.parse(JSON.stringify(source))
+    : blankAgencyItinerary(title, days);
+  cloned.trip_title = title;
+  cloned.duration_days = days;
+  const rows = Array.isArray(cloned.day_by_day_itinerary)
+    ? cloned.day_by_day_itinerary
+    : [];
+  const blankDay = blankAgencyItinerary(title, 1).day_by_day_itinerary[0];
+  cloned.day_by_day_itinerary = Array.from({ length: days }, (_, index) => ({
+    ...(rows[index] ?? JSON.parse(JSON.stringify(blankDay))),
+    day: index + 1,
+  }));
+  return cloned;
+}
+
+function cloneCustomRoutes(routes: any, days: number): any[] {
+  return (Array.isArray(routes) ? routes : [])
+    .filter((route) => !route?.day || Number(route.day) <= days)
+    .map((route) => ({
+      name: route.name,
+      day: route.day,
+      color: route.color,
+      mode: route.mode,
+      points: route.points,
+      distanceKm: route.distanceKm,
+    }));
+}
+
+async function loadCloneSource(agencyId: string, tripId: string): Promise<any> {
+  if (!Types.ObjectId.isValid(tripId)) return null;
+  const source = await Trip.findOne({
+    _id: tripId,
+    agencyId,
+    workspace: 'agency',
+    isDeleted: { $ne: true },
+  })
+    .select('tripDetails customRoutes')
+    .lean();
+  return source as any;
+}
+
 export async function createAgencyTrip(input: CreateAgencyTripInput) {
   const title = input.title.trim() || 'Untitled agency trip';
   const startDate = parseDate(input.startDate);
@@ -378,6 +439,20 @@ export async function createAgencyTrip(input: CreateAgencyTripInput) {
     await assertAgencyClient(input.agencyId, input.clientId);
   }
 
+  let tripDetails = blankAgencyItinerary(title, dayCount(startDate, endDate));
+  let clonedRoutes: any[] | undefined;
+  if (input.cloneFromTripId) {
+    const source = await loadCloneSource(input.agencyId, input.cloneFromTripId);
+    if (source) {
+      const sourceDays = itineraryDayCount(source.tripDetails);
+      // Dates the traveller picked win; a flexible lead keeps the package length.
+      const days =
+        startDate && endDate ? dayCount(startDate, endDate) : sourceDays;
+      tripDetails = cloneAgencyItinerary(source.tripDetails, title, days);
+      clonedRoutes = cloneCustomRoutes(source.customRoutes, days);
+    }
+  }
+
   const trip = new Trip({
     ...(input.tripId ? { _id: input.tripId } : {}),
     userId: input.userId,
@@ -390,7 +465,8 @@ export async function createAgencyTrip(input: CreateAgencyTripInput) {
     isDeleted: false,
     startDate,
     endDate,
-    tripDetails: blankAgencyItinerary(title, dayCount(startDate, endDate)),
+    tripDetails,
+    ...(clonedRoutes && clonedRoutes.length ? { customRoutes: clonedRoutes } : {}),
   });
   await trip.save();
 
