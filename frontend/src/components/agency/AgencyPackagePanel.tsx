@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
+  CalendarDays,
   Eye,
   ImagePlus,
   Loader2,
@@ -37,6 +38,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import AgencyPackageCard from '@/components/directory/AgencyPackageCard';
 import { useAgencyAssetUrl } from '@/hooks/useAgencyAssetUrl';
+import { formatDate } from '@/lib/date';
 import { api } from '@/services/api';
 import type { AgencyAsset, AgencyPackage, AgencyPackageInput } from '@/types';
 import { toast } from 'sonner';
@@ -154,18 +156,18 @@ const PackageListEditor: React.FC<{
   return (
     <div className="space-y-2">
       <Label htmlFor={id}>{label}</Label>
-      <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-800 dark:bg-slate-950">
+      <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-agency-line bg-agency-panel px-2 py-1.5">
         {values.map((value) => (
           <span
             key={value}
-            className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200"
+            className="inline-flex items-center gap-1 rounded-full bg-agency-soft px-2.5 py-1 text-xs font-medium text-agency-ink"
           >
             {value}
             {disabled ? null : (
               <button
                 type="button"
                 onClick={() => onChange(values.filter((entry) => entry !== value))}
-                className="rounded-full p-0.5 text-slate-400 transition-colors hover:text-destructive"
+                className="rounded-full p-0.5 text-agency-muted transition-colors hover:text-destructive"
                 aria-label={`Remove ${value}`}
               >
                 <X className="h-3 w-3" />
@@ -194,12 +196,12 @@ const PackageListEditor: React.FC<{
               if (event.target.value.trim()) add(event.target.value);
             }}
             maxLength={LIST_ITEM_MAX}
-            className="min-w-[8rem] flex-1 bg-transparent px-1 py-0.5 text-sm outline-none placeholder:text-slate-400"
+            className="min-w-[8rem] flex-1 bg-transparent px-1 py-0.5 text-sm outline-none placeholder:text-agency-muted/70"
             placeholder={values.length ? 'Add another' : placeholder}
           />
         )}
       </div>
-      <p className="text-[11px] text-slate-500">{hint}</p>
+      <p className="text-[11px] text-agency-muted">{hint}</p>
     </div>
   );
 };
@@ -213,6 +215,8 @@ interface AgencyPackagePanelProps {
   /** Planner and above can edit; admins and owners publish and delete. */
   canEdit: boolean;
   canManage: boolean;
+  /** The trip's written days, shown as the plan that publishing will copy. */
+  planDays: Array<{ day: number; title: string }>;
 }
 
 const AgencyPackagePanel: React.FC<AgencyPackagePanelProps> = ({
@@ -222,6 +226,7 @@ const AgencyPackagePanel: React.FC<AgencyPackagePanelProps> = ({
   archived,
   canEdit,
   canManage,
+  planDays,
 }) => {
   const [pkg, setPkg] = useState<AgencyPackage | null>(null);
   const [draft, setDraft] = useState<PackageDraft | null>(null);
@@ -388,9 +393,14 @@ const AgencyPackagePanel: React.FC<AgencyPackagePanelProps> = ({
         const saved = await persist();
         if (!saved) return;
       }
+      const wasPublished = pkg.state === 'published';
       const result = await api.publishAgencyPackage(agencyId, pkg.id);
       apply(result.package);
-      toast.success('Package is live with its day-by-day plan.');
+      toast.success(
+        wasPublished
+          ? "Package refreshed with this trip's current plan."
+          : 'Package is live with its day-by-day plan.'
+      );
     } catch (error) {
       toast.error(messageOf(error));
     } finally {
@@ -455,7 +465,7 @@ const AgencyPackagePanel: React.FC<AgencyPackagePanelProps> = ({
 
   if (loading) {
     return (
-      <Card className="rounded-3xl border-border/70">
+      <Card className="rounded-2xl border-agency-line shadow-none">
         <CardContent className="flex items-center gap-2 p-8 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
           Loading this trip's package...
@@ -466,7 +476,7 @@ const AgencyPackagePanel: React.FC<AgencyPackagePanelProps> = ({
 
   if (loadError) {
     return (
-      <Card className="rounded-3xl border-destructive/30 bg-destructive/5">
+      <Card className="rounded-2xl border-destructive/30 bg-destructive/5 shadow-none">
         <CardContent className="space-y-3 p-8 text-center">
           <AlertCircle className="mx-auto h-6 w-6 text-destructive" />
           <p className="text-sm font-bold text-foreground">
@@ -489,9 +499,9 @@ const AgencyPackagePanel: React.FC<AgencyPackagePanelProps> = ({
 
   if (!pkg || !draft) {
     return (
-      <Card className="rounded-3xl border-dashed border-border/80 bg-card/60">
+      <Card className="rounded-2xl border-dashed border-agency-line bg-agency-panel/60 shadow-none">
         <CardContent className="space-y-4 p-8 text-center">
-          <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-teal-600/10 text-teal-700 dark:text-teal-300">
+          <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-agency-accent-soft text-agency-accent">
             <Sparkles className="h-6 w-6" />
           </div>
           <div className="space-y-1">
@@ -513,9 +523,8 @@ const AgencyPackagePanel: React.FC<AgencyPackagePanelProps> = ({
           ) : canEdit ? (
             <Button
               type="button"
-              variant="hero"
               size="sm"
-              className="rounded-xl text-xs font-bold"
+              className="rounded-xl text-xs font-semibold"
               disabled={busy === 'create'}
               onClick={() => void handleCreate()}
             >
@@ -537,17 +546,17 @@ const AgencyPackagePanel: React.FC<AgencyPackagePanelProps> = ({
   }
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
-      <Card className="rounded-3xl border-border/70">
+    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <Card className="rounded-2xl border-agency-line shadow-none">
         <CardHeader className="space-y-1 pb-3">
           <div className="flex flex-wrap items-center gap-2">
-            <CardTitle className="text-base font-bold">Public package</CardTitle>
+            <CardTitle className="text-base font-semibold">Public package</CardTitle>
             <Badge
               className={cn(
                 'text-[10px]',
                 published
-                  ? 'bg-teal-600 text-white hover:bg-teal-600'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300'
+                  ? 'bg-primary text-primary-foreground hover:bg-primary'
+                  : 'bg-agency-soft text-agency-muted hover:bg-agency-soft'
               )}
             >
               {published ? 'Published' : 'Draft'}
@@ -559,7 +568,7 @@ const AgencyPackagePanel: React.FC<AgencyPackagePanelProps> = ({
               </span>
             ) : null}
           </div>
-          <CardDescription className="text-xs">
+          <CardDescription className="text-xs leading-5 text-agency-muted">
             This card and its day-by-day plan are a snapshot. Publishing copies
             the trip's current plan; re-saving or deleting the trip will not
             change what visitors see.
@@ -593,7 +602,7 @@ const AgencyPackagePanel: React.FC<AgencyPackagePanelProps> = ({
               disabled={!editable}
               placeholder="Five nights of waterfalls, forts and slow roads, with small groups and local guides."
             />
-            <p className="text-[11px] text-slate-500">
+            <p className="text-[11px] text-agency-muted">
               One or two lines. This is the first thing a traveller reads, and
               publishing needs it.
             </p>
@@ -612,7 +621,7 @@ const AgencyPackagePanel: React.FC<AgencyPackagePanelProps> = ({
                 onChange={(event) => update({ nights: event.target.value })}
                 disabled={!editable}
               />
-              <p className="text-[11px] text-slate-500">
+              <p className="text-[11px] text-agency-muted">
                 A day trip is 0 nights.
               </p>
             </div>
@@ -628,7 +637,7 @@ const AgencyPackagePanel: React.FC<AgencyPackagePanelProps> = ({
                 disabled={!editable}
                 placeholder="Leave blank for price on request"
               />
-              <p className="text-[11px] text-slate-500">
+              <p className="text-[11px] text-agency-muted">
                 Whole rupees. Blank shows “price on request”.
               </p>
             </div>
@@ -658,6 +667,15 @@ const AgencyPackagePanel: React.FC<AgencyPackagePanelProps> = ({
 
           <div className="space-y-2">
             <Label htmlFor="package-cover">Cover image</Label>
+            {coverUrl ? (
+              <div className="overflow-hidden rounded-xl border border-agency-line">
+                <img
+                  src={coverUrl}
+                  alt=""
+                  className="aspect-[16/9] w-full object-cover"
+                />
+              </div>
+            ) : null}
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 type="button"
@@ -674,7 +692,7 @@ const AgencyPackagePanel: React.FC<AgencyPackagePanelProps> = ({
                 ) : (
                   <ImagePlus className="mr-1.5 h-3.5 w-3.5" />
                 )}
-                Upload image
+                {coverUrl ? 'Replace cover' : 'Upload image'}
               </Button>
               {coverUrl || coverChoice === null ? (
                 <Button
@@ -703,7 +721,7 @@ const AgencyPackagePanel: React.FC<AgencyPackagePanelProps> = ({
                 }}
               />
             </div>
-            <p className="text-[11px] text-slate-500">
+            <p className="text-[11px] text-agency-muted">
               JPEG, PNG or WebP up to 2 MB. Images come from your agency asset
               library, so you can reuse them elsewhere.
             </p>
@@ -721,57 +739,85 @@ const AgencyPackagePanel: React.FC<AgencyPackagePanelProps> = ({
           ) : null}
 
           {editable ? (
-            <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-4">
-              <Button
-                type="button"
-                size="sm"
-                className="rounded-xl text-xs font-bold"
-                disabled={(!dirty && !coverDirty) || busy !== null}
-                onClick={() => void handleSave()}
-              >
-                {busy === 'save' ? (
-                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Save className="mr-1.5 h-3.5 w-3.5" />
-                )}
-                Save
-              </Button>
+            <div className="flex flex-wrap items-center gap-2 border-t border-agency-line pt-4">
+              {canManage && published ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  className="rounded-xl text-xs font-semibold"
+                  disabled={busy !== null}
+                  onClick={() => void handlePublish()}
+                  title={
+                    ready
+                      ? "Copy this trip's current plan into the package"
+                      : missing.join(' ')
+                  }
+                >
+                  {busy === 'publish' ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Send className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  Publish again
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  size="sm"
+                  className="rounded-xl text-xs font-semibold"
+                  disabled={(!dirty && !coverDirty) || busy !== null}
+                  onClick={() => void handleSave()}
+                >
+                  {busy === 'save' ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Save className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  Save
+                </Button>
+              )}
 
-              {canManage ? (
-                published ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="rounded-xl text-xs font-bold"
-                    disabled={busy !== null}
-                    onClick={() => void handleUnpublish()}
-                  >
-                    {busy === 'unpublish' ? (
-                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <X className="mr-1.5 h-3.5 w-3.5" />
-                    )}
-                    Unpublish
-                  </Button>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="rounded-xl text-xs font-bold"
-                    disabled={busy !== null}
-                    onClick={() => void handlePublish()}
-                    title={ready ? undefined : missing.join(' ')}
-                  >
-                    {busy === 'publish' ? (
-                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Send className="mr-1.5 h-3.5 w-3.5" />
-                    )}
-                    Publish
-                  </Button>
-                )
+              {canManage && !published ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="rounded-xl text-xs font-semibold"
+                  disabled={busy !== null}
+                  onClick={() => void handlePublish()}
+                  title={ready ? undefined : missing.join(' ')}
+                >
+                  {busy === 'publish' ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Send className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  Publish
+                </Button>
+              ) : null}
+
+              {canManage && published ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="rounded-xl text-xs font-semibold"
+                  disabled={busy !== null}
+                  onClick={() => void handleUnpublish()}
+                >
+                  {busy === 'unpublish' ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <X className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  Unpublish
+                </Button>
+              ) : null}
+
+              {canManage && published && pkg.publishedAt ? (
+                <span className="text-[11px] text-agency-muted">
+                  Published {formatDate(pkg.publishedAt)}
+                </span>
               ) : null}
 
               {canManage ? (
@@ -788,7 +834,7 @@ const AgencyPackagePanel: React.FC<AgencyPackagePanelProps> = ({
                       Delete package
                     </Button>
                   </AlertDialogTrigger>
-                  <AlertDialogContent className="rounded-3xl">
+                  <AlertDialogContent className="rounded-2xl sm:rounded-2xl">
                     <AlertDialogHeader>
                       <AlertDialogTitle>Delete this package?</AlertDialogTitle>
                       <AlertDialogDescription>
@@ -813,23 +859,56 @@ const AgencyPackagePanel: React.FC<AgencyPackagePanelProps> = ({
               ) : null}
             </div>
           ) : (
-            <p className="border-t border-border/60 pt-4 text-xs text-muted-foreground">
+            <p className="border-t border-agency-line pt-4 text-xs text-muted-foreground">
               Planners, admins and owners can edit this package.
             </p>
           )}
         </CardContent>
       </Card>
 
-      <div className="space-y-2">
-        <p className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-500">
+      <div className="space-y-3 lg:sticky lg:top-32 lg:self-start">
+        <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-agency-muted">
           <Eye className="h-3.5 w-3.5" />
-          Live preview
+          What travellers see
         </p>
         {preview ? <AgencyPackageCard package={preview} /> : null}
-        <p className="text-[11px] text-slate-500">
-          The preview updates as you type. Travellers see this after you publish
-          and your public profile is live.
-        </p>
+
+        <div className="rounded-2xl border border-agency-line bg-agency-panel p-4">
+          <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-agency-muted">
+            <CalendarDays className="h-3.5 w-3.5" />
+            Day by day
+          </p>
+          {planDays.length > 0 ? (
+            <>
+              <ol className="mt-3 space-y-2.5 border-l border-agency-line pl-4">
+                {planDays.slice(0, 6).map((day) => (
+                  <li key={day.day} className="relative text-xs text-agency-ink">
+                    <span
+                      aria-hidden
+                      className="absolute -left-[21px] top-1.5 h-1.5 w-1.5 rounded-full bg-agency-accent"
+                    />
+                    <span className="font-medium">Day {day.day}</span>
+                    <span className="text-agency-muted"> · {day.title}</span>
+                  </li>
+                ))}
+              </ol>
+              {planDays.length > 6 ? (
+                <p className="mt-2 pl-4 text-[11px] text-agency-muted">
+                  +{planDays.length - 6} more days
+                </p>
+              ) : null}
+            </>
+          ) : (
+            <p className="mt-2 text-xs leading-5 text-agency-muted">
+              No days written yet. Build the itinerary first — publishing copies
+              it into the package.
+            </p>
+          )}
+          <p className="mt-3 border-t border-agency-line pt-3 text-[11px] leading-5 text-agency-muted">
+            Publishing copies this plan into the package snapshot — until then,
+            visitors keep seeing the last published days.
+          </p>
+        </div>
       </div>
     </div>
   );

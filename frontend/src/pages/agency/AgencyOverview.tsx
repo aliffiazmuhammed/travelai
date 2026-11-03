@@ -63,7 +63,7 @@ function tripRange(trip: Trip): string {
 
 /** A row skeleton that keeps the panel's height steady while data arrives. */
 const RowSkeleton: React.FC = () => (
-  <div className="flex items-center gap-3 rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+  <div className="flex items-center gap-3 rounded-xl border border-agency-line p-3">
     <Skeleton className="h-9 w-9 rounded-lg" />
     <div className="flex-1 space-y-1.5">
       <Skeleton className="h-3.5 w-1/2" />
@@ -139,7 +139,7 @@ const AgencyOverview: React.FC = () => {
 
   if (loading && agencies.length === 0) {
     return (
-      <div className="flex items-center gap-2 py-16 text-sm text-slate-500">
+      <div className="flex items-center gap-2 py-16 text-sm text-agency-muted">
         <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
         Loading your workspace...
       </div>
@@ -148,10 +148,10 @@ const AgencyOverview: React.FC = () => {
 
   if (!activeAgency) {
     return (
-      <Card className="border-slate-200 dark:border-slate-800">
+      <Card className="rounded-2xl border-agency-line shadow-none">
         <CardContent className="space-y-2 p-8 text-center">
           <h1 className="text-lg font-semibold">Workspace unavailable</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
+          <p className="text-sm text-agency-muted">
             We could not load this agency workspace. Refresh the page, or sign in
             again at the workspace login link.
           </p>
@@ -207,7 +207,7 @@ const AgencyOverview: React.FC = () => {
 
       <section aria-labelledby="needs-you" className="space-y-3">
         <div className="flex items-center justify-between gap-3">
-          <h2 id="needs-you" className="text-base font-semibold text-slate-900 dark:text-slate-50">
+          <h2 id="needs-you" className="text-base font-semibold text-agency-ink">
             Needs you today
           </h2>
         </div>
@@ -261,8 +261,8 @@ const AgencyOverview: React.FC = () => {
         </div>
       </section>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="border-slate-200 dark:border-slate-800 lg:col-span-2">
+      <div className="grid items-start gap-4 lg:grid-cols-3">
+        <Card className="rounded-2xl border-agency-line shadow-none lg:col-span-2">
           <CardHeader className="flex-row items-center justify-between space-y-0">
             <div className="space-y-1">
               <CardTitle className="text-base">Coming up</CardTitle>
@@ -297,7 +297,7 @@ const AgencyOverview: React.FC = () => {
                 <Link
                   key={trip._id}
                   to={`/agency/trips/${trip._id}`}
-                  className="flex items-center gap-3 rounded-xl border border-slate-200 p-3 outline-none transition hover:border-slate-300 hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-teal-600 dark:border-slate-800 dark:hover:border-slate-700 dark:hover:bg-slate-900/60"
+                  className="flex items-center gap-3 rounded-xl border border-agency-line p-3 outline-none transition-colors hover:border-agency-accent/40 hover:bg-agency-soft/60 focus-visible:ring-2 focus-visible:ring-agency-accent"
                 >
                   <span
                     aria-hidden
@@ -306,10 +306,10 @@ const AgencyOverview: React.FC = () => {
                     <Map className="h-4 w-4" />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium text-slate-900 dark:text-slate-50">
+                    <span className="block truncate text-sm font-medium text-agency-ink">
                       {trip.title?.trim() || 'Untitled trip'}
                     </span>
-                    <span className="block truncate text-xs text-slate-500 dark:text-slate-400">
+                    <span className="block truncate text-xs text-agency-muted">
                       {tripRange(trip)}
                     </span>
                   </span>
@@ -320,7 +320,7 @@ const AgencyOverview: React.FC = () => {
                         'shrink-0 text-[10px]',
                         trip.status === 'ongoing'
                           ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300'
-                          : 'text-slate-500'
+                          : 'text-agency-muted'
                       )}
                     >
                       {TRIP_STATUS_LABELS[trip.status]}
@@ -332,7 +332,7 @@ const AgencyOverview: React.FC = () => {
           </CardContent>
         </Card>
 
-        <Card className="border-slate-200 dark:border-slate-800">
+        <Card className="rounded-2xl border-agency-line shadow-none">
           <CardHeader>
             <CardTitle className="text-base">Live events</CardTitle>
             <CardDescription>Public pages taking interest.</CardDescription>
@@ -359,7 +359,7 @@ const AgencyOverview: React.FC = () => {
                 <Link
                   key={event.id}
                   to="/agency/events"
-                  className="flex items-center gap-3 rounded-xl border border-slate-200 p-3 outline-none transition hover:border-slate-300 hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-teal-600 dark:border-slate-800 dark:hover:border-slate-700 dark:hover:bg-slate-900/60"
+                  className="flex items-center gap-3 rounded-xl border border-agency-line p-3 outline-none transition-colors hover:border-agency-accent/40 hover:bg-agency-soft/60 focus-visible:ring-2 focus-visible:ring-agency-accent"
                 >
                   <span
                     aria-hidden
@@ -368,10 +368,10 @@ const AgencyOverview: React.FC = () => {
                     <CalendarDays className="h-4 w-4" />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium text-slate-900 dark:text-slate-50">
+                    <span className="block truncate text-sm font-medium text-agency-ink">
                       {event.title}
                     </span>
-                    <span className="block truncate text-xs text-slate-500 dark:text-slate-400">
+                    <span className="block truncate text-xs text-agency-muted">
                       {event.dateLabel}
                     </span>
                   </span>
@@ -391,7 +391,7 @@ const AgencyOverview: React.FC = () => {
       </div>
 
       {canManage && setupIncomplete ? (
-        <Card className="border-dashed bg-slate-50/60 dark:bg-slate-900/40">
+        <Card className="rounded-2xl border-dashed border-agency-line bg-agency-soft/40 shadow-none">
           <CardHeader>
             <CardTitle className="text-base">Finish setting up</CardTitle>
             <CardDescription>
@@ -469,21 +469,21 @@ const SetupRow: React.FC<{
   detail: string;
   action?: React.ReactNode;
 }> = ({ done, title, detail, action }) => (
-  <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-3.5 dark:border-slate-800 dark:bg-slate-900">
+  <div className="flex items-start gap-3 rounded-xl border border-agency-line bg-agency-panel p-3.5">
     <span
       className={cn(
         'mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border',
         done
           ? 'border-teal-600 bg-teal-600 text-white'
-          : 'border-slate-300 text-slate-400 dark:border-slate-700'
+          : 'border-agency-line text-agency-muted'
       )}
     >
       {done ? <CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> : null}
       <span className="sr-only">{done ? 'Done' : 'Not done yet'}</span>
     </span>
     <div className="min-w-0 flex-1">
-      <div className="text-sm font-medium text-slate-900 dark:text-slate-50">{title}</div>
-      <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{detail}</p>
+      <div className="text-sm font-medium text-agency-ink">{title}</div>
+      <p className="mt-0.5 text-xs text-agency-muted">{detail}</p>
     </div>
     {action}
   </div>

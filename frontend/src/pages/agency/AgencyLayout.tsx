@@ -211,6 +211,15 @@ const AgencyLayout: React.FC = () => {
     });
   }, [refreshBadge, refreshEventBadge]);
 
+  // The workspace runs its own skin: teal primary, warm paper, hairline rules.
+  // The class sits on <html> so dialogs and sheets portalled to <body> inherit
+  // it, and it comes off when the user leaves the workspace.
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.add('agency-theme');
+    return () => root.classList.remove('agency-theme');
+  }, []);
+
   useEffect(() => {
     refreshBadges();
   }, [location.pathname, refreshBadges]);
@@ -404,8 +413,8 @@ const AgencyLayout: React.FC = () => {
         <SidebarRail />
       </Sidebar>
 
-      <SidebarInset className="bg-slate-50 dark:bg-slate-950">
-        <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-slate-200/80 bg-white/90 px-4 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90 md:px-6">
+      <SidebarInset className="bg-agency-canvas">
+        <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-agency-line bg-agency-panel/90 px-4 backdrop-blur md:px-6">
           <SidebarTrigger className="h-9 w-9" />
           <Breadcrumb className="min-w-0">
             <BreadcrumbList className="flex-nowrap gap-1.5 text-[13px] sm:gap-2">

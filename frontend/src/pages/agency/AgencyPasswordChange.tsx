@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { Building2, KeyRound, Loader2, LogOut } from 'lucide-react';
+import { KeyRound, Loader2, LogOut, Mountain, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAgencyAuth } from '@/context/AgencyAuthContext';
@@ -89,7 +88,7 @@ const AgencyPasswordChange: React.FC<AgencyPasswordChangeProps> = ({ forced = fa
             if (error) setError(null);
           }}
           autoComplete="current-password"
-          className="h-11"
+          className="h-11 border-agency-line bg-agency-panel"
         />
       </div>
 
@@ -104,9 +103,9 @@ const AgencyPasswordChange: React.FC<AgencyPasswordChangeProps> = ({ forced = fa
             if (error) setError(null);
           }}
           autoComplete="new-password"
-          className="h-11"
+          className="h-11 border-agency-line bg-agency-panel"
         />
-        <p className="text-xs text-slate-500">At least 6 characters.</p>
+        <p className="text-xs text-agency-muted">At least 6 characters.</p>
       </div>
 
       <div className="space-y-2">
@@ -120,11 +119,15 @@ const AgencyPasswordChange: React.FC<AgencyPasswordChangeProps> = ({ forced = fa
             if (error) setError(null);
           }}
           autoComplete="new-password"
-          className="h-11"
+          className="h-11 border-agency-line bg-agency-panel"
         />
       </div>
 
-      <Button type="submit" className="h-11 w-full" disabled={submitting}>
+      <Button
+        type="submit"
+        className="h-11 w-full rounded-lg bg-agency-accent text-white hover:bg-agency-accent/90"
+        disabled={submitting}
+      >
         {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
         Set new password
       </Button>
@@ -133,57 +136,68 @@ const AgencyPasswordChange: React.FC<AgencyPasswordChangeProps> = ({ forced = fa
 
   if (!forced) {
     return (
-      <Card className="border-slate-200 dark:border-slate-800">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <KeyRound className="h-4 w-4 text-teal-600" />
+      <section className="rounded-2xl border border-agency-line bg-agency-panel p-6">
+        <header className="mb-5 space-y-1">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-agency-ink">
+            <KeyRound className="h-4 w-4 text-agency-accent" />
             Agency password
-          </CardTitle>
-          <CardDescription>
+          </h2>
+          <p className="text-xs leading-5 text-agency-muted">
             This changes only your agency account. Your personal TravelAI
             password stays the same.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>{form}</CardContent>
-      </Card>
+          </p>
+        </header>
+        {form}
+      </section>
     );
   }
 
   return (
-    <div className="grid min-h-screen place-items-center bg-slate-50 px-4 py-10 dark:bg-slate-950">
+    <div className="grid min-h-screen place-items-center bg-agency-canvas px-4 py-10">
       <div className="w-full max-w-md">
-        <div className="mb-8 flex items-center justify-center gap-2.5">
-          <span className="grid h-10 w-10 place-items-center rounded-xl bg-teal-600 text-white shadow-md shadow-teal-600/25">
-            <Building2 className="h-5 w-5" />
+        <div className="mb-7 flex flex-col items-center gap-2.5">
+          <span className="grid h-12 w-12 place-items-center rounded-xl bg-agency-accent text-white shadow-sm">
+            <Mountain className="h-6 w-6" aria-hidden="true" />
           </span>
-          <span className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">
-            {agency?.name ?? 'TravelAI'} <span className="text-teal-600">Agency</span>
+          <span className="font-display text-xl font-semibold tracking-tight text-agency-ink">
+            {agency?.name ?? "TravelAI"}{" "}
+            <span className="text-agency-accent">Agency</span>
           </span>
         </div>
 
-        <Card className="border-slate-200 shadow-sm dark:border-slate-800">
-          <CardHeader className="space-y-2">
-            <CardTitle className="text-2xl">Set your agency password</CardTitle>
-            <CardDescription>
-              {user?.email ? `${user.email} was provisioned with a temporary password. ` : ''}
-              Choose a new password to open the workspace. Your personal account
-              is not affected.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+        <div className="rounded-2xl border border-agency-line bg-agency-panel p-6 shadow-sm sm:p-8">
+          <header className="space-y-1.5">
+            <h1 className="font-display text-3xl font-semibold tracking-tight text-agency-ink">
+              Set your agency password
+            </h1>
+            <p className="text-sm leading-6 text-agency-muted">
+              {user?.email
+                ? `${user.email} was provisioned with a temporary password. `
+                : ""}
+              Choose a new password to open the workspace. Your personal
+              account is not affected.
+            </p>
+          </header>
+
+          <div className="mt-6">
             {form}
             <Button
               type="button"
-              variant="ghost"
-              className="mt-3 w-full"
+              variant="outline"
+              className="mt-3 h-11 w-full rounded-lg border-agency-line text-agency-ink hover:bg-agency-soft"
               onClick={() => void logout()}
               disabled={submitting}
             >
               <LogOut className="mr-2 h-4 w-4" />
               Sign out
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+
+          <p className="mt-5 flex items-center justify-center gap-1.5 border-t border-agency-line pt-5 text-xs text-agency-muted">
+            <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+            Your personal TravelAI password stays the same.
+          </p>
+        </div>
       </div>
     </div>
   );

@@ -28,7 +28,7 @@ export const AgencyStatTile: React.FC<{
   className?: string;
 }> = ({ icon: Icon, label, value, hint, tone = 'slate', to, className }) => {
   const body = (
-    <CardContent className="flex items-start gap-3 p-4">
+    <CardContent className="flex items-start gap-3.5 p-4">
       <span
         aria-hidden
         className={cn(
@@ -39,21 +39,19 @@ export const AgencyStatTile: React.FC<{
         <Icon className="h-5 w-5" />
       </span>
       <div className="min-w-0">
-        <p className="text-2xl font-semibold leading-tight tabular-nums text-slate-900 dark:text-slate-50">
+        <p className="text-[1.75rem] font-semibold leading-none tabular-nums text-agency-ink">
           {value === undefined || value === null ? '—' : value}
         </p>
-        <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{label}</p>
+        <p className="mt-1 text-sm font-medium text-agency-ink">{label}</p>
         {hint ? (
-          <p className="mt-0.5 text-xs leading-5 text-slate-500 dark:text-slate-400">
-            {hint}
-          </p>
+          <p className="mt-0.5 text-xs leading-5 text-agency-muted">{hint}</p>
         ) : null}
       </div>
     </CardContent>
   );
 
   const shell = cn(
-    'rounded-2xl border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900',
+    'rounded-2xl border-agency-line bg-agency-panel shadow-none',
     className
   );
 
@@ -65,12 +63,12 @@ export const AgencyStatTile: React.FC<{
     <Card
       className={cn(
         shell,
-        'transition hover:-translate-y-0.5 hover:shadow-md focus-within:ring-2 focus-within:ring-teal-600 focus-within:ring-offset-2 dark:focus-within:ring-offset-slate-950'
+        'transition-colors hover:border-agency-accent/40 focus-within:ring-2 focus-within:ring-agency-accent focus-within:ring-offset-2 focus-within:ring-offset-agency-canvas'
       )}
     >
       <Link
         to={to}
-        className="block rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950"
+        className="block rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-agency-accent focus-visible:ring-offset-2 focus-visible:ring-offset-agency-canvas"
       >
         {body}
       </Link>

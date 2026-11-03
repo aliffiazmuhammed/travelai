@@ -72,19 +72,30 @@ const errorMessage = (error: unknown, fallback: string): string =>
  * the raw day count never says whether the plan was written. A day counts once
  * it holds something the traveller would actually read.
  */
-function plannedDayCount(data?: ItineraryData | null): number {
+function plannedDays(
+  data?: ItineraryData | null
+): Array<{ day: number; title: string }> {
   const days = data?.day_by_day_itinerary ?? [];
-  return days.filter((day) => {
-    const title = (day.title ?? '').trim();
-    return (
-      (title.length > 0 && title !== `Day ${day.day}`) ||
-      (day.activities?.length ?? 0) > 0 ||
-      (day.stay_recommendations?.length ?? 0) > 0 ||
-      (day.transport?.length ?? 0) > 0 ||
-      (day.food_spots?.length ?? 0) > 0 ||
-      (day.pro_tip?.length ?? 0) > 0
-    );
-  }).length;
+  return days
+    .filter((day) => {
+      const title = (day.title ?? '').trim();
+      return (
+        (title.length > 0 && title !== `Day ${day.day}`) ||
+        (day.activities?.length ?? 0) > 0 ||
+        (day.stay_recommendations?.length ?? 0) > 0 ||
+        (day.transport?.length ?? 0) > 0 ||
+        (day.food_spots?.length ?? 0) > 0 ||
+        (day.pro_tip?.length ?? 0) > 0
+      );
+    })
+    .map((day) => ({
+      day: day.day,
+      title: (day.title ?? '').trim() || `Day ${day.day}`,
+    }));
+}
+
+function plannedDayCount(data?: ItineraryData | null): number {
+  return plannedDays(data).length;
 }
 
 /**
@@ -620,6 +631,7 @@ const AgencyTrips: React.FC = () => {
                 archived={Boolean(selectedTrip.archivedAt)}
                 canEdit={canPlan}
                 canManage={canManage}
+                planDays={plannedDays(selectedTrip.tripDetails)}
               />
             </div>
           ) : null}
@@ -690,7 +702,7 @@ const AgencyTrips: React.FC = () => {
           if (!open) setNewTripMode('choice');
         }}
       >
-        <DialogContent className="rounded-3xl sm:max-w-md">
+        <DialogContent className="rounded-2xl sm:rounded-2xl sm:max-w-md">
           {newTripMode === 'choice' ? (
             <>
               <DialogHeader>
@@ -713,10 +725,10 @@ const AgencyTrips: React.FC = () => {
                     <Sparkles className="h-5 w-5" />
                   </span>
                   <span>
-                    <span className="block text-sm font-bold text-slate-900 dark:text-slate-100">
+                    <span className="block text-sm font-bold text-agency-ink">
                       Plan with AI
                     </span>
-                    <span className="block text-xs text-slate-600 dark:text-slate-400">
+                    <span className="block text-xs text-agency-muted">
                       Answer a few questions and get a full draft itinerary to
                       refine with your team.
                     </span>
@@ -727,14 +739,14 @@ const AgencyTrips: React.FC = () => {
                   onClick={() => setNewTripMode('blank')}
                   className="flex w-full items-center gap-3 rounded-2xl border border-border bg-card p-4 text-left transition hover:border-primary/50 hover:bg-accent/50"
                 >
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-agency-accent-soft text-agency-accent">
                     <CalendarPlus className="h-5 w-5" />
                   </span>
                   <span>
-                    <span className="block text-sm font-bold text-slate-900 dark:text-slate-100">
+                    <span className="block text-sm font-bold text-agency-ink">
                       Start blank
                     </span>
-                    <span className="block text-xs text-slate-600 dark:text-slate-400">
+                    <span className="block text-xs text-agency-muted">
                       Create an empty trip shell and fill in the itinerary
                       manually.
                     </span>
@@ -844,10 +856,10 @@ const AgencyTripBanner: React.FC<AgencyTripBannerProps> = ({
   assigning,
   onAssignmentChange,
 }) => (
-  <Card className="rounded-3xl border-teal-200/70 bg-gradient-to-r from-teal-50 via-white to-sky-50 dark:border-teal-900/60 dark:from-teal-950/40 dark:via-slate-950 dark:to-sky-950/30">
+  <Card className="rounded-2xl border-agency-line bg-agency-panel shadow-none">
     <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-start gap-3">
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-teal-600 text-white">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-agency-accent-soft text-agency-accent">
           <Building2 className="h-5 w-5" />
         </span>
         <div className="space-y-1">
@@ -858,12 +870,11 @@ const AgencyTripBanner: React.FC<AgencyTripBannerProps> = ({
             <Badge className={cn('text-[10px]', agencyRoleBadgeClass(role || 'viewer'))}>
               {agencyRoleLabel(role || 'viewer')}
             </Badge>
-            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">-</span>
           </div>
-          <p className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400">
+          <p className="flex flex-wrap items-center gap-1.5 text-xs text-agency-muted">
             <UserRound className="h-3.5 w-3.5" />
-            Assigned to <strong className="text-slate-800 dark:text-slate-200">{assignedLabel}</strong>
-            <span className="mx-1 text-slate-300">-</span>
+            Assigned to <strong className="font-medium text-agency-ink">{assignedLabel}</strong>
+            <span className="mx-1 text-agency-line">·</span>
             <Link2 className="h-3.5 w-3.5" />
             Client access via the People tab
           </p>

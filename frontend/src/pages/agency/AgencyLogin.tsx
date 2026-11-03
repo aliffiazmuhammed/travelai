@@ -1,8 +1,17 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { AlertCircle, Building2, Loader2, Lock, Mail } from 'lucide-react';
+import {
+  AlertCircle,
+  Briefcase,
+  Building2,
+  Loader2,
+  Lock,
+  Mail,
+  Mountain,
+  UserRound,
+  Users,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAgencyAuth } from '@/context/AgencyAuthContext';
@@ -28,6 +37,46 @@ function rememberWorkspaceHint(workspace: string): void {
     /* localStorage can be unavailable in private modes */
   }
 }
+
+const AgencyBrand = ({ inverted = false }: { inverted?: boolean }) => (
+  <span className="flex items-center gap-2.5">
+    <span
+      className={`grid h-9 w-9 place-items-center rounded-lg ${
+        inverted ? "bg-white text-agency-accent" : "bg-agency-accent text-white"
+      }`}
+    >
+      <Mountain className="h-4 w-4" aria-hidden="true" />
+    </span>
+    <span
+      className={`font-display text-lg font-semibold tracking-tight ${
+        inverted ? "text-white" : "text-agency-ink"
+      }`}
+    >
+      TravelAI{" "}
+      <span className={inverted ? "text-white/70" : "text-agency-accent"}>
+        Agency
+      </span>
+    </span>
+  </span>
+);
+
+const PROMISES = [
+  {
+    icon: UserRound,
+    title: "Separate from your personal account",
+    body: "Keep your agency and personal travel distinct.",
+  },
+  {
+    icon: Users,
+    title: "Invites for every teammate",
+    body: "Work together, with the right access.",
+  },
+  {
+    icon: Briefcase,
+    title: "Your workspace, your clients",
+    body: "Manage enquiries, trips and traveller details in one place.",
+  },
+];
 
 /**
  * `/agency/login?workspace=<slug>` (PA0).
@@ -119,8 +168,8 @@ const AgencyLogin: React.FC = () => {
 
   if (enabled === null || authLoading) {
     return (
-      <div className="grid min-h-screen place-items-center bg-slate-50 dark:bg-slate-950">
-        <div className="flex items-center gap-2 text-sm text-slate-500">
+      <div className="grid min-h-screen place-items-center bg-agency-canvas">
+        <div className="flex items-center gap-2 text-sm text-agency-muted">
           <Loader2 className="h-4 w-4 animate-spin" />
           Checking agency workspace...
         </div>
@@ -130,54 +179,110 @@ const AgencyLogin: React.FC = () => {
 
   if (!enabled) {
     return (
-      <div className="grid min-h-screen place-items-center bg-slate-50 px-4 dark:bg-slate-950">
-        <Card className="w-full max-w-md">
-          <CardContent className="space-y-4 p-8 text-center">
-            <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-slate-100 text-slate-500 dark:bg-slate-900 dark:text-slate-400">
-              <Building2 className="h-6 w-6" />
-            </div>
-            <div className="space-y-1">
-              <h1 className="text-lg font-semibold">Agency workspace is not enabled</h1>
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                This private pilot feature is currently switched off. Your
-                personal trips and messages are unchanged.
-              </p>
-            </div>
-            <Button asChild className="w-full">
-              <Link to="/dashboard">Back to my trips</Link>
-            </Button>
-          </CardContent>
-        </Card>
+      <div className="grid min-h-screen place-items-center bg-agency-canvas px-4">
+        <div className="w-full max-w-md rounded-2xl border border-agency-line bg-agency-panel p-8 text-center shadow-sm">
+          <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-agency-accent-soft text-agency-accent">
+            <Building2 className="h-6 w-6" />
+          </div>
+          <div className="mt-4 space-y-1.5">
+            <h1 className="font-display text-2xl font-semibold tracking-tight text-agency-ink">
+              Agency workspace is not enabled
+            </h1>
+            <p className="text-sm leading-6 text-agency-muted">
+              This private pilot feature is currently switched off. Your
+              personal trips and messages are unchanged.
+            </p>
+          </div>
+          <Button
+            asChild
+            className="mt-6 h-11 w-full rounded-lg bg-agency-accent text-white hover:bg-agency-accent/90"
+          >
+            <Link to="/dashboard">Back to my trips</Link>
+          </Button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="grid min-h-screen place-items-center bg-slate-50 px-4 py-10 dark:bg-slate-950">
-      <div className="w-full max-w-md">
-        <Link to="/" className="mb-8 flex items-center justify-center gap-2.5">
-          <span className="grid h-10 w-10 place-items-center rounded-xl bg-teal-600 text-white shadow-md shadow-teal-600/25">
-            <Building2 className="h-5 w-5" />
-          </span>
-          <span className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">
-            TravelAI <span className="text-teal-600">Agency</span>
-          </span>
+    <div className="min-h-screen bg-agency-canvas text-agency-ink lg:grid lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+      <aside className="relative hidden overflow-hidden bg-agency-accent p-10 text-white lg:flex lg:flex-col lg:justify-between">
+        <svg
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.12]"
+          viewBox="0 0 600 800"
+          fill="none"
+          preserveAspectRatio="xMidYMid slice"
+        >
+          <path d="M-40 120c120-60 240 60 360 0s220-40 320 20" stroke="white" strokeWidth="1" />
+          <path d="M-60 220c140-70 260 70 400 10s240-30 320 40" stroke="white" strokeWidth="1" />
+          <path d="M-30 330c150-80 250 80 410 20s230-20 290 50" stroke="white" strokeWidth="1" />
+          <path d="M-70 450c160-90 270 90 420 30s220-10 310 60" stroke="white" strokeWidth="1" />
+          <path d="M-20 570c140-70 250 70 390 20s240-20 310 40" stroke="white" strokeWidth="1" />
+          <path d="M-50 690c130-60 260 80 420 20s200-10 280 50" stroke="white" strokeWidth="1" />
+        </svg>
+
+        <Link to="/" className="relative w-fit">
+          <AgencyBrand inverted />
         </Link>
 
-        <Card className="border-slate-200 shadow-sm dark:border-slate-800">
-          <CardHeader className="space-y-2">
-            <CardTitle className="text-2xl">Sign in to your agency</CardTitle>
-            <CardDescription>
-              {tenant
-                ? `Continue to ${tenant.name}.`
-                : 'Enter the workspace name your TravelAI account manager gave you.'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form className="space-y-4" onSubmit={handleSubmit}>
+        <div className="relative max-w-md space-y-7">
+          <div className="space-y-3">
+            <h1 className="font-display text-4xl font-semibold leading-[1.08] tracking-tight">
+              Your trips,
+              <br />
+              one calm workspace.
+            </h1>
+            <p className="text-sm leading-6 text-white/75">
+              Sign in to manage enquiries, trips and the travellers you host.
+            </p>
+          </div>
+          <ul className="space-y-5">
+            {PROMISES.map(({ icon: Icon, title, body }) => (
+              <li key={title} className="flex items-start gap-3.5">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-white/25 text-white/90">
+                  <Icon className="h-4 w-4" aria-hidden="true" />
+                </span>
+                <span>
+                  <span className="block text-sm font-semibold">{title}</span>
+                  <span className="mt-0.5 block text-xs leading-5 text-white/60">
+                    {body}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <p className="relative text-[11px] font-medium tracking-[0.2em] text-white/45">
+          TRAVEL FURTHER TOGETHER
+        </p>
+      </aside>
+
+      <main className="flex min-h-screen items-center justify-center px-4 py-10 sm:px-8">
+        <div className="w-full max-w-md">
+          <div className="mb-8 flex justify-center lg:hidden">
+            <Link to="/">
+              <AgencyBrand />
+            </Link>
+          </div>
+
+          <div className="rounded-2xl border border-agency-line bg-agency-panel p-6 shadow-sm sm:p-8">
+            <header className="space-y-1.5">
+              <h2 className="font-display text-3xl font-semibold tracking-tight text-agency-ink">
+                Sign in to your agency
+              </h2>
+              <p className="text-sm leading-6 text-agency-muted">
+                {tenant
+                  ? `Continue to ${tenant.name}.`
+                  : "Enter the workspace name your TravelAI account manager gave you."}
+              </p>
+            </header>
+
+            <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
               {tenant ? (
-                <div className="flex items-center gap-3 rounded-xl border border-teal-200 bg-teal-50 px-3.5 py-3 dark:border-teal-900 dark:bg-teal-950/40">
-                  <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-lg bg-white text-teal-700 dark:bg-slate-900 dark:text-teal-300">
+                <div className="flex items-center gap-3 rounded-xl border border-agency-line bg-agency-accent-soft px-3.5 py-3">
+                  <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-lg bg-agency-accent text-white">
                     {tenant.logoUrl ? (
                       <img
                         src={tenant.logoUrl}
@@ -189,10 +294,10 @@ const AgencyLogin: React.FC = () => {
                     )}
                   </span>
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold text-teal-900 dark:text-teal-100">
+                    <div className="truncate text-sm font-semibold text-agency-ink">
                       {tenant.name}
                     </div>
-                    <div className="truncate text-xs text-teal-700 dark:text-teal-300">
+                    <div className="truncate text-xs text-agency-muted">
                       workspace: {tenant.slug}
                     </div>
                   </div>
@@ -209,7 +314,7 @@ const AgencyLogin: React.FC = () => {
               <div className="space-y-2">
                 <Label htmlFor="workspace">Workspace</Label>
                 <div className="relative">
-                  <Building2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Building2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-agency-muted" />
                   <Input
                     id="workspace"
                     value={workspace}
@@ -221,11 +326,11 @@ const AgencyLogin: React.FC = () => {
                     onBlur={() => void lookupWorkspace(workspace)}
                     placeholder="acme-travel"
                     autoComplete="organization"
-                    className="h-11 pl-9"
+                    className="h-11 border-agency-line bg-agency-panel pl-9"
                     maxLength={40}
                   />
                   {lookingUp ? (
-                    <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-slate-400" />
+                    <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-agency-muted" />
                   ) : null}
                 </div>
               </div>
@@ -233,7 +338,7 @@ const AgencyLogin: React.FC = () => {
               <div className="space-y-2">
                 <Label htmlFor="email">Work email</Label>
                 <div className="relative">
-                  <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-agency-muted" />
                   <Input
                     id="email"
                     type="email"
@@ -244,7 +349,7 @@ const AgencyLogin: React.FC = () => {
                     }}
                     placeholder="you@agency.com"
                     autoComplete="email"
-                    className="h-11 pl-9"
+                    className="h-11 border-agency-line bg-agency-panel pl-9"
                   />
                 </div>
               </div>
@@ -252,7 +357,7 @@ const AgencyLogin: React.FC = () => {
               <div className="space-y-2">
                 <Label htmlFor="password">Agency password</Label>
                 <div className="relative">
-                  <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-agency-muted" />
                   <Input
                     id="password"
                     type="password"
@@ -263,12 +368,16 @@ const AgencyLogin: React.FC = () => {
                     }}
                     placeholder="Your agency password"
                     autoComplete="current-password"
-                    className="h-11 pl-9"
+                    className="h-11 border-agency-line bg-agency-panel pl-9"
                   />
                 </div>
               </div>
 
-              <Button type="submit" className="h-11 w-full" disabled={submitting}>
+              <Button
+                type="submit"
+                className="h-11 w-full rounded-lg bg-agency-accent text-white hover:bg-agency-accent/90"
+                disabled={submitting}
+              >
                 {submitting ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : null}
@@ -276,20 +385,23 @@ const AgencyLogin: React.FC = () => {
               </Button>
             </form>
 
-            <p className="mt-5 text-center text-xs leading-5 text-slate-500 dark:text-slate-400">
+            <p className="mt-5 border-t border-agency-line pt-5 text-center text-xs leading-5 text-agency-muted">
               Agency accounts are separate from personal TravelAI accounts. The
               same email can have both, with different passwords.
             </p>
-          </CardContent>
-        </Card>
+          </div>
 
-        <p className="mt-6 text-center text-sm text-slate-500">
-          Looking for your personal trips?{' '}
-          <Link to="/auth" className="font-semibold text-teal-700 hover:underline dark:text-teal-300">
-            Personal sign in
-          </Link>
-        </p>
-      </div>
+          <p className="mt-6 text-center text-sm text-agency-muted">
+            Looking for your personal trips?{" "}
+            <Link
+              to="/auth"
+              className="font-semibold text-agency-accent hover:underline"
+            >
+              Personal sign in
+            </Link>
+          </p>
+        </div>
+      </main>
     </div>
   );
 };

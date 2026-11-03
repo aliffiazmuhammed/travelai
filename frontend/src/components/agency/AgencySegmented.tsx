@@ -33,7 +33,7 @@ export function AgencySegmented<T extends string>({
       role="group"
       aria-label={ariaLabel}
       className={cn(
-        'inline-flex flex-wrap items-center gap-0.5 rounded-full border border-slate-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900',
+        'inline-flex flex-wrap items-center gap-0.5 rounded-full border border-agency-line bg-agency-panel p-1',
         className
       )}
     >
@@ -46,10 +46,10 @@ export function AgencySegmented<T extends string>({
             aria-pressed={active}
             onClick={() => onChange(option.value)}
             className={cn(
-              'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-slate-900',
+              'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-agency-panel',
               active
-                ? 'bg-teal-600 text-white shadow-sm'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100'
+                ? 'bg-primary text-primary-foreground'
+                : 'text-agency-muted hover:bg-agency-soft hover:text-agency-ink'
             )}
           >
             {option.label}
@@ -57,7 +57,7 @@ export function AgencySegmented<T extends string>({
               <span
                 className={cn(
                   'text-[10px] tabular-nums',
-                  active ? 'text-white/80' : 'text-slate-400 dark:text-slate-500'
+                  active ? 'text-primary-foreground/70' : 'text-agency-muted/70'
                 )}
               >
                 {option.count}

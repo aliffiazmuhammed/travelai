@@ -280,8 +280,8 @@ const AgencyTemplates: React.FC = () => {
 
   if (!activeAgencyId) {
     return (
-      <Card className="rounded-3xl border-border/70">
-        <CardContent className="p-10 text-center text-sm text-muted-foreground">
+      <Card className="rounded-2xl border-agency-line bg-agency-panel shadow-none">
+        <CardContent className="p-10 text-center text-sm text-agency-muted">
           Create or join an agency to manage proposal templates.
         </CardContent>
       </Card>
@@ -301,17 +301,14 @@ const AgencyTemplates: React.FC = () => {
         description="Branded proposal layouts for every trip. Exports pin the template version and quote they used, so later changes never rewrite an existing document."
         actions={
           canManage ? (
-            <Button
-              className="bg-teal-600 hover:bg-teal-700"
-              onClick={() => setUploadChoiceOpen(true)}
-            >
+            <Button onClick={() => setUploadChoiceOpen(true)}>
               <Upload className="mr-1.5 h-4 w-4" />
               Upload template
             </Button>
           ) : (
             <Badge
               variant="outline"
-              className="gap-1 text-[10px] text-slate-500"
+              className="gap-1 text-[10px] text-agency-muted"
             >
               <Lock className="h-3 w-3" />
               Read-only
@@ -359,7 +356,7 @@ const AgencyTemplates: React.FC = () => {
           </Button>
         </div>
       ) : (
-        <div className="flex items-start gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-3 py-2.5 text-xs text-sky-800 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-300">
+        <div className="flex items-start gap-2 rounded-xl border border-agency-line bg-agency-soft/60 px-3 py-2.5 text-xs text-agency-muted">
           <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>
             You can use active client templates in proposal exports. Uploading,
@@ -370,14 +367,14 @@ const AgencyTemplates: React.FC = () => {
       )}
 
       {loading ? (
-        <Card className="rounded-xl border-slate-200 dark:border-slate-800">
-          <CardContent className="flex items-center justify-center gap-2 py-20 text-sm text-slate-500 dark:text-slate-400">
+        <Card className="rounded-2xl border-agency-line bg-agency-panel shadow-none">
+          <CardContent className="flex items-center justify-center gap-2 py-20 text-sm text-agency-muted">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading templates...
           </CardContent>
         </Card>
       ) : error ? (
-        <Card className="rounded-xl border-rose-200 dark:border-rose-900/60">
+        <Card className="rounded-2xl border-rose-200 bg-agency-panel shadow-none dark:border-rose-900/60">
           <CardContent className="space-y-3 py-14 text-center">
             <AlertTriangle className="mx-auto h-6 w-6 text-rose-500" />
             <p className="text-sm text-rose-700 dark:text-rose-300">{error}</p>
@@ -392,15 +389,15 @@ const AgencyTemplates: React.FC = () => {
           </CardContent>
         </Card>
       ) : visibleTemplates.length === 0 ? (
-        <Card className="rounded-xl border-dashed border-slate-300 dark:border-slate-700">
+        <Card className="rounded-2xl border-dashed border-agency-line bg-agency-panel shadow-none">
           <CardContent className="space-y-3 py-16 text-center">
-            <LayoutTemplate className="mx-auto h-7 w-7 text-slate-300 dark:text-slate-700" />
-            <p className="text-sm font-medium">
+            <LayoutTemplate className="mx-auto h-7 w-7 text-agency-muted/40" />
+            <p className="text-sm font-medium text-agency-ink">
               {templates.length === 0
                 ? 'No templates yet'
                 : 'No templates match these filters'}
             </p>
-            <p className="mx-auto max-w-md text-xs text-slate-500 dark:text-slate-400">
+            <p className="mx-auto max-w-md text-xs leading-5 text-agency-muted">
               {templates.length === 0
                 ? canManage
                   ? 'Upload a self-contained HTML template, or keep your own PDF design and map TravelAI data onto it.'
@@ -409,7 +406,6 @@ const AgencyTemplates: React.FC = () => {
             </p>
             {canManage && templates.length === 0 ? (
               <Button
-                className="bg-teal-600 hover:bg-teal-700"
                 size="sm"
                 onClick={() => setUploadChoiceOpen(true)}
               >
@@ -427,16 +423,16 @@ const AgencyTemplates: React.FC = () => {
             return (
               <Card
                 key={template._id}
-                className="flex rounded-xl border-slate-200 dark:border-slate-800"
+                className="flex rounded-2xl border-agency-line bg-agency-panel shadow-none"
               >
                 <CardContent className="flex flex-1 flex-col p-4">
                   <div className="flex items-start gap-3">
                     <span
                       className={cn(
-                        'grid h-10 w-10 shrink-0 place-items-center rounded-2xl',
+                        'grid h-10 w-10 shrink-0 place-items-center rounded-xl',
                         internal
                           ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300'
-                          : 'bg-teal-100 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300'
+                          : 'bg-agency-accent-soft text-agency-accent'
                       )}
                     >
                       {internal ? (
@@ -447,7 +443,7 @@ const AgencyTemplates: React.FC = () => {
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-1.5">
-                        <h2 className="text-sm font-semibold">
+                        <h2 className="text-sm font-semibold text-agency-ink">
                           {template.name}
                         </h2>
                         <Badge
@@ -469,7 +465,7 @@ const AgencyTemplates: React.FC = () => {
                           </Badge>
                         ) : null}
                       </div>
-                      <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
+                      <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-agency-muted">
                         {template.description ||
                           (internal
                             ? 'Desk copy with internal estimates.'
@@ -500,7 +496,7 @@ const AgencyTemplates: React.FC = () => {
                       v{version}
                     </Badge>
                     {template.status === 'active' && template.activeVersion ? (
-                      <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                      <span className="text-[10px] text-agency-muted">
                         active version
                       </span>
                     ) : null}
@@ -534,12 +530,12 @@ const AgencyTemplates: React.FC = () => {
                       </Button>
                     ) : null}
                     {canManage && template.builtinKey ? (
-                      <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                      <span className="text-[10px] text-agency-muted">
                         Managed by TravelAI
                       </span>
                     ) : null}
                     {!canManage ? (
-                      <span className="flex items-center gap-1 text-[10px] text-slate-400 dark:text-slate-500">
+                      <span className="flex items-center gap-1 text-[10px] text-agency-muted">
                         <Lock className="h-3 w-3" />
                         Read-only
                       </span>
@@ -556,7 +552,7 @@ const AgencyTemplates: React.FC = () => {
             total={visibleTemplates.length}
             noun="template"
             onChange={setTemplatePage}
-            className="rounded-xl border border-slate-200 md:col-span-2 xl:col-span-3 dark:border-slate-800"
+            className="rounded-xl border border-agency-line md:col-span-2 xl:col-span-3"
           />
         </div>
       )}
@@ -564,7 +560,7 @@ const AgencyTemplates: React.FC = () => {
       {canManage ? (
         <>
           <Dialog open={uploadChoiceOpen} onOpenChange={setUploadChoiceOpen}>
-            <DialogContent className="rounded-3xl sm:max-w-md">
+            <DialogContent className="rounded-2xl sm:rounded-2xl sm:max-w-md">
               <DialogHeader>
                 <DialogTitle>Upload a template</DialogTitle>
                 <DialogDescription>
@@ -576,16 +572,16 @@ const AgencyTemplates: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => chooseUpload('html')}
-                  className="flex w-full items-center gap-3 rounded-2xl border border-teal-200 bg-teal-50/70 p-4 text-left transition hover:border-teal-400 hover:bg-teal-50 dark:border-teal-900/60 dark:bg-teal-950/30 dark:hover:border-teal-700 dark:hover:bg-teal-950/50"
+                  className="flex w-full items-center gap-3 rounded-xl border border-agency-line bg-agency-soft/60 p-4 text-left transition hover:border-agency-accent hover:bg-agency-soft"
                 >
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-teal-600 text-white">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground">
                     <Code2 className="h-5 w-5" />
                   </span>
                   <span>
-                    <span className="block text-sm font-bold text-slate-900 dark:text-slate-100">
+                    <span className="block text-sm font-semibold text-agency-ink">
                       HTML template
                     </span>
-                    <span className="block text-xs text-slate-600 dark:text-slate-400">
+                    <span className="block text-xs text-agency-muted">
                       A self-contained styled page. Edit the source in-app at
                       any time.
                     </span>
@@ -594,16 +590,16 @@ const AgencyTemplates: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => chooseUpload('pdf')}
-                  className="flex w-full items-center gap-3 rounded-2xl border border-border bg-card p-4 text-left transition hover:border-primary/50 hover:bg-accent/50"
+                  className="flex w-full items-center gap-3 rounded-xl border border-agency-line bg-agency-panel p-4 text-left transition hover:border-agency-accent hover:bg-agency-soft/60"
                 >
                   <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300">
                     <FileType2 className="h-5 w-5" />
                   </span>
                   <span>
-                    <span className="block text-sm font-bold text-slate-900 dark:text-slate-100">
+                    <span className="block text-sm font-semibold text-agency-ink">
                       PDF design
                     </span>
-                    <span className="block text-xs text-slate-600 dark:text-slate-400">
+                    <span className="block text-xs text-agency-muted">
                       Keep the agency's own PDF and map data slots onto it
                       visually.
                     </span>

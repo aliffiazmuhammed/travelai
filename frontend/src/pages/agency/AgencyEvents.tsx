@@ -217,14 +217,14 @@ function statusOf(event: AgencyEvent): { label: string; className: string } {  i
     return {
       label: 'Draft',
       className:
-        'bg-slate-100 text-slate-600 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300',
+        'bg-agency-soft text-agency-muted hover:bg-agency-soft',
     };
   }
   if (event.closedAt) {
     return {
       label: 'Closed',
       className:
-        'bg-slate-200 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300',
+        'bg-agency-soft text-agency-ink/70 hover:bg-agency-soft',
     };
   }
   if (event.endDate && event.endDate < todayIso()) {
@@ -234,7 +234,7 @@ function statusOf(event: AgencyEvent): { label: string; className: string } {  i
         'bg-sky-100 text-sky-700 hover:bg-sky-100 dark:bg-sky-950/60 dark:text-sky-300',
     };
   }
-  return { label: 'Live', className: 'bg-teal-600 text-white hover:bg-teal-600' };
+  return { label: 'Live', className: 'bg-primary text-primary-foreground hover:bg-primary' };
 }
 
 function capacityLine(event: AgencyEvent): string {
@@ -259,7 +259,7 @@ const EventCover: React.FC<{ url: string | null; className?: string }> = ({
     return (
       <span
         className={cn(
-          'grid shrink-0 place-items-center rounded-xl bg-teal-50 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300',
+          'grid shrink-0 place-items-center rounded-xl bg-agency-accent-soft text-agency-accent',
           className
         )}
       >
@@ -311,17 +311,17 @@ const HighlightEditor: React.FC<{
   return (
     <div className="space-y-2">
       <Label htmlFor="event-highlights">What makes it special</Label>
-      <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-800 dark:bg-slate-950">
+      <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-agency-line bg-agency-panel px-2 py-1.5">
         {values.map((value) => (
           <span
             key={value}
-            className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200"
+            className="inline-flex items-center gap-1 rounded-full bg-agency-soft px-2.5 py-1 text-xs font-medium text-agency-ink"
           >
             {value}
             <button
               type="button"
               onClick={() => onChange(values.filter((entry) => entry !== value))}
-              className="rounded-full p-0.5 text-slate-400 transition-colors hover:text-destructive"
+              className="rounded-full p-0.5 text-agency-muted transition-colors hover:text-destructive"
               aria-label={`Remove ${value}`}
             >
               <X className="h-3 w-3" />
@@ -348,11 +348,11 @@ const HighlightEditor: React.FC<{
             if (event.target.value.trim()) add(event.target.value);
           }}
           maxLength={LIST_ITEM_MAX}
-          className="min-w-[8rem] flex-1 bg-transparent px-1 py-0.5 text-sm outline-none placeholder:text-slate-400"
+          className="min-w-[8rem] flex-1 bg-transparent px-1 py-0.5 text-sm outline-none placeholder:text-agency-muted"
           placeholder={values.length ? 'Add another' : 'Sunrise boat ride'}
         />
       </div>
-      <p className="text-[11px] text-slate-500">
+      <p className="text-[11px] text-agency-muted">
         Up to {HIGHLIGHTS_MAX}. Enter or a comma adds a line.
       </p>
     </div>
@@ -762,8 +762,8 @@ const AgencyEvents: React.FC = () => {
 
   if (!activeAgencyId) {
     return (
-      <Card className="rounded-3xl border-border/70">
-        <CardContent className="p-10 text-center text-sm text-muted-foreground">
+      <Card className="rounded-2xl border-agency-line bg-agency-panel shadow-none">
+        <CardContent className="p-10 text-center text-sm text-agency-muted">
           Create or join an agency to host events.
         </CardContent>
       </Card>
@@ -793,7 +793,7 @@ const AgencyEvents: React.FC = () => {
         }
       />
 
-      <Card className="rounded-xl border-slate-200 dark:border-slate-800">
+      <Card className="rounded-2xl border-agency-line bg-agency-panel shadow-none">
         <CardContent className="space-y-4 p-4 sm:p-5">
           {!loading && events.length > 0 ? (
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -806,7 +806,7 @@ const AgencyEvents: React.FC = () => {
                   count: filterCounts[option.value],
                 }))}
               />
-              <span className="text-xs text-slate-500 dark:text-slate-400">
+              <span className="text-xs tabular-nums text-agency-muted">
                 {visibleEvents.length} of {events.length}{' '}
                 {events.length === 1 ? 'event' : 'events'}
               </span>
@@ -814,15 +814,15 @@ const AgencyEvents: React.FC = () => {
           ) : null}
 
           {loading ? (
-            <div className="flex items-center justify-center gap-2 py-16 text-sm text-slate-500">
+            <div className="flex items-center justify-center gap-2 py-16 text-sm text-agency-muted">
               <Loader2 className="h-4 w-4 animate-spin" />
               Loading events...
             </div>
           ) : events.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-200 px-6 py-14 text-center dark:border-slate-800">
-              <CalendarRange className="mx-auto h-8 w-8 text-slate-300 dark:text-slate-700" />
-              <h3 className="mt-3 text-sm font-semibold">No events yet</h3>
-              <p className="mx-auto mt-1 max-w-md text-xs text-slate-500 dark:text-slate-400">
+            <div className="rounded-2xl border border-dashed border-agency-line px-6 py-14 text-center">
+              <CalendarRange className="mx-auto h-8 w-8 text-agency-muted/40" />
+              <h3 className="mt-3 text-sm font-semibold text-agency-ink">No events yet</h3>
+              <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-agency-muted">
                 Give a gathering a date, a place and a headcount. You can save it
                 as a draft and publish when the details settle.
               </p>
@@ -834,10 +834,10 @@ const AgencyEvents: React.FC = () => {
               ) : null}
             </div>
           ) : visibleEvents.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-200 px-6 py-14 text-center dark:border-slate-800">
-              <CalendarRange className="mx-auto h-8 w-8 text-slate-300 dark:text-slate-700" />
-              <h3 className="mt-3 text-sm font-semibold">Nothing in this view</h3>
-              <p className="mx-auto mt-1 max-w-md text-xs text-slate-500 dark:text-slate-400">
+            <div className="rounded-2xl border border-dashed border-agency-line px-6 py-14 text-center">
+              <CalendarRange className="mx-auto h-8 w-8 text-agency-muted/40" />
+              <h3 className="mt-3 text-sm font-semibold text-agency-ink">Nothing in this view</h3>
+              <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-agency-muted">
                 No event is in this state right now. Try another status, or
                 switch back to All.
               </p>
@@ -851,7 +851,7 @@ const AgencyEvents: React.FC = () => {
               </Button>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="divide-y divide-agency-line">
               {pagedEvents.map((event) => {
                 const status = statusOf(event);
                 const totalInterests =
@@ -863,7 +863,7 @@ const AgencyEvents: React.FC = () => {
                 return (
                   <div
                     key={event.id}
-                    className="rounded-2xl border border-slate-200 p-4 dark:border-slate-800"
+                    className="py-4 first:pt-1 last:pb-1"
                   >
                     <div className="flex flex-wrap items-start gap-4">
                       <EventCover
@@ -872,32 +872,35 @@ const AgencyEvents: React.FC = () => {
                       />
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="truncate text-sm font-semibold">
+                          <h3 className="truncate text-[13px] font-semibold text-agency-ink">
                             {event.title || 'Untitled event'}
                           </h3>
                           <Badge className={cn('text-[10px]', status.className)}>
                             {status.label}
                           </Badge>
-                          <Badge variant="outline" className="text-[10px]">
+                          <Badge
+                            variant="outline"
+                            className="border-agency-line text-[10px] text-agency-muted"
+                          >
                             {EVENT_KIND_LABELS[event.kind]}
                           </Badge>
                           {event.interests.pending > 0 ? (
                             <Badge
                               variant="outline"
-                              className="border-teal-300 text-[10px] text-teal-700 dark:border-teal-700 dark:text-teal-300"
+                              className="border-agency-accent/30 bg-agency-accent-soft text-[10px] text-agency-accent"
                             >
                               {event.interests.pending} waiting
                             </Badge>
                           ) : null}
                           {actionBusy ? (
-                            <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
+                            <span className="inline-flex items-center gap-1 text-[11px] text-agency-muted">
                               <Loader2 className="h-3 w-3 animate-spin" />
                               Working...
                             </span>
                           ) : null}
                         </div>
 
-                        <p className="mt-1 text-xs font-medium text-slate-600 dark:text-slate-300">
+                        <p className="mt-1 text-xs font-medium text-agency-ink/80">
                           {event.dateLabel || 'Dates to be set'}
                           {event.destination ? (
                             <span className="inline-flex items-center gap-1">
@@ -908,7 +911,7 @@ const AgencyEvents: React.FC = () => {
                           ) : null}
                         </p>
 
-                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        <p className="mt-1 text-xs text-agency-muted">
                           {priceLine(event)} · {capacityLine(event)}
                           {event.interests.declined > 0
                             ? ` · ${event.interests.declined} declined`
@@ -945,7 +948,7 @@ const AgencyEvents: React.FC = () => {
                             Roster
                             {totalInterests > 0 ? (
                               <span
-                                className="ml-1 text-xs text-slate-500"
+                                className="ml-1 text-xs tabular-nums text-agency-muted"
                                 title={`${totalInterests} ${
                                   totalInterests === 1 ? 'person' : 'people'
                                 } on this roster`}
@@ -1068,14 +1071,14 @@ const AgencyEvents: React.FC = () => {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="text-muted-foreground hover:text-destructive"
+                                className="text-agency-muted hover:text-destructive"
                                 disabled={Boolean(actionBusy)}
                                 aria-label={`Delete ${event.title || 'event'}`}
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                               </Button>
                             </AlertDialogTrigger>
-                            <AlertDialogContent className="rounded-3xl">
+                            <AlertDialogContent className="rounded-2xl sm:rounded-2xl">
                               <AlertDialogHeader>
                                 <AlertDialogTitle>Delete this event?</AlertDialogTitle>
                                 <AlertDialogDescription>
@@ -1110,7 +1113,7 @@ const AgencyEvents: React.FC = () => {
                 total={visibleEvents.length}
                 noun="event"
                 onChange={setEventPage}
-                className="rounded-lg border border-slate-200 dark:border-slate-800"
+                className="border-agency-line"
               />
             </div>
           )}
@@ -1128,7 +1131,7 @@ const AgencyEvents: React.FC = () => {
           }
         }}
       >
-        <DialogContent className="max-h-[90vh] overflow-y-auto rounded-3xl sm:max-w-2xl">
+        <DialogContent className="max-h-[90vh] overflow-y-auto rounded-2xl sm:rounded-2xl sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>{editing ? 'Edit event' : 'New event'}</DialogTitle>
             <DialogDescription>
@@ -1194,7 +1197,7 @@ const AgencyEvents: React.FC = () => {
                 placeholder="Forest walks, river dips and a night of stars, with naturalists who live nearby."
                 maxLength={280}
               />
-              <p className="text-[11px] text-slate-500">
+              <p className="text-[11px] text-agency-muted">
                 One or two lines. This is what a traveller reads on the event
                 card.
               </p>
@@ -1289,7 +1292,7 @@ const AgencyEvents: React.FC = () => {
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="rounded-xl text-xs font-bold text-muted-foreground"
+                    className="rounded-xl text-xs font-bold text-agency-muted"
                     disabled={saving}
                     onClick={() => {
                       setUploadedCover(null);
@@ -1311,7 +1314,7 @@ const AgencyEvents: React.FC = () => {
                   }}
                 />
               </div>
-              <p className="text-[11px] text-slate-500">
+              <p className="text-[11px] text-agency-muted">
                 JPEG, PNG or WebP up to 2 MB. Images come from your agency asset
                 library, so you can reuse them elsewhere.
               </p>
@@ -1348,7 +1351,7 @@ const AgencyEvents: React.FC = () => {
           }
         }}
       >
-        <DialogContent className="max-h-[90vh] overflow-y-auto rounded-3xl sm:max-w-2xl">
+        <DialogContent className="max-h-[90vh] overflow-y-auto rounded-2xl sm:rounded-2xl sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>
               {rosterEvent?.title || 'Event'} · roster
@@ -1375,36 +1378,38 @@ const AgencyEvents: React.FC = () => {
           />
 
           {rosterLoading ? (
-            <div className="flex items-center justify-center gap-2 py-12 text-sm text-slate-500">
+            <div className="flex items-center justify-center gap-2 py-12 text-sm text-agency-muted">
               <Loader2 className="h-4 w-4 animate-spin" />
               Loading the roster...
             </div>
           ) : filteredRoster.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-200 px-6 py-12 text-center dark:border-slate-800">
-              <Users className="mx-auto h-8 w-8 text-slate-300 dark:text-slate-700" />
-              <h3 className="mt-3 text-sm font-semibold">
+            <div className="rounded-2xl border border-dashed border-agency-line px-6 py-12 text-center">
+              <Users className="mx-auto h-8 w-8 text-agency-muted/40" />
+              <h3 className="mt-3 text-sm font-semibold text-agency-ink">
                 {roster.length === 0 ? 'No one on the list yet' : 'Nobody in this view'}
               </h3>
-              <p className="mx-auto mt-1 max-w-md text-xs text-slate-500 dark:text-slate-400">
+              <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-agency-muted">
                 {roster.length === 0
                   ? 'When a traveller raises their hand on the event page, they appear here with their contact details.'
                   : 'Try another filter to see the rest of the list.'}
               </p>
             </div>
           ) : (
-            <div className="divide-y divide-slate-200 rounded-2xl border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
+            <div className="divide-y divide-agency-line rounded-2xl border border-agency-line">
               {filteredRoster.map((interest) => {
                 const deciding = rosterBusyId === interest.id;
                 return (
                   <div key={interest.id} className="space-y-2 px-4 py-3">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-semibold">{interest.name}</span>
+                      <span className="text-sm font-semibold text-agency-ink">
+                        {interest.name}
+                      </span>
                       <Badge
                         variant="outline"
                         className={cn(
                           'text-[10px]',
                           interest.status === 'confirmed'
-                            ? 'border-teal-300 text-teal-700 dark:border-teal-700 dark:text-teal-300'
+                            ? 'border-agency-accent/30 bg-agency-accent-soft text-agency-accent'
                             : interest.status === 'declined'
                               ? 'border-rose-300 text-rose-700 dark:border-rose-800 dark:text-rose-300'
                               : 'border-amber-300 text-amber-800 dark:border-amber-800 dark:text-amber-300'
@@ -1416,18 +1421,18 @@ const AgencyEvents: React.FC = () => {
                             ? 'Declined'
                             : 'Waiting'}
                       </Badge>
-                      <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                      <span className="text-[11px] text-agency-muted">
                         {interest.createdAt
                           ? `Asked ${formatAgencyDate(interest.createdAt)}`
                           : ''}
                       </span>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600 dark:text-slate-300">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-agency-ink/80">
                       {interest.email ? (
                         <a
                           href={`mailto:${interest.email}`}
-                          className="inline-flex items-center gap-1 hover:underline"
+                          className="inline-flex items-center gap-1 hover:text-agency-accent hover:underline"
                         >
                           <Mail className="h-3 w-3" />
                           {interest.email}
@@ -1436,7 +1441,7 @@ const AgencyEvents: React.FC = () => {
                       {interest.phone ? (
                         <a
                           href={`tel:${interest.phone}`}
-                          className="inline-flex items-center gap-1 hover:underline"
+                          className="inline-flex items-center gap-1 hover:text-agency-accent hover:underline"
                         >
                           <Phone className="h-3 w-3" />
                           {interest.phone}
@@ -1445,7 +1450,7 @@ const AgencyEvents: React.FC = () => {
                     </div>
 
                     {interest.note ? (
-                      <p className="rounded-lg bg-slate-50 px-2.5 py-1.5 text-xs text-slate-600 dark:bg-slate-900 dark:text-slate-300">
+                      <p className="rounded-lg bg-agency-soft px-2.5 py-1.5 text-xs text-agency-ink/80">
                         {interest.note}
                       </p>
                     ) : null}
@@ -1479,7 +1484,7 @@ const AgencyEvents: React.FC = () => {
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className="h-7 rounded-lg px-2.5 text-xs text-muted-foreground hover:text-destructive"
+                        className="h-7 rounded-lg px-2.5 text-xs text-agency-muted hover:text-destructive"
                         disabled={deciding || interest.status === 'declined'}
                         onClick={() => void decideInterest(interest, 'declined')}
                       >
@@ -1487,7 +1492,7 @@ const AgencyEvents: React.FC = () => {
                         Decline
                       </Button>
                       {interest.status !== 'pending' && interest.decidedAt ? (
-                        <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                        <span className="text-[11px] text-agency-muted">
                           Decided {formatAgencyDate(interest.decidedAt)}
                         </span>
                       ) : null}

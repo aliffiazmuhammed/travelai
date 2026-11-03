@@ -110,15 +110,15 @@ const UsageBar: React.FC<UsageBarProps> = ({
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between gap-2 text-xs">
-        <span className="flex items-center gap-1.5 font-semibold text-slate-700 dark:text-slate-300">
+        <span className="flex items-center gap-1.5 font-semibold text-agency-ink">
           {icon}
           {label}
         </span>
-        <span className={cn('font-bold', LEVEL_TEXT[level])}>
+        <span className={cn('font-bold tabular-nums', LEVEL_TEXT[level])}>
           {usedText} / {capText}
         </span>
       </div>
-      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+      <div className="h-2 w-full overflow-hidden rounded-full bg-agency-soft">
         <div
           className={cn('h-full rounded-full transition-all', LEVEL_STYLES[level])}
           style={{ width: `${percent}%` }}
@@ -213,8 +213,8 @@ const AgencyOperations: React.FC = () => {
 
   if (!activeAgencyId) {
     return (
-      <Card className="rounded-3xl border-border/70">
-        <CardContent className="p-10 text-center text-sm text-muted-foreground">
+      <Card className="rounded-2xl border-agency-line bg-agency-panel shadow-none">
+        <CardContent className="p-10 text-center text-sm text-agency-muted">
           Create or join an agency to see operations.
         </CardContent>
       </Card>
@@ -261,9 +261,9 @@ const AgencyOperations: React.FC = () => {
         className="space-y-5"
       >
         <div className={cn(section === 'usage' ? undefined : 'hidden')}>
-          <Card className="rounded-xl border-slate-200 dark:border-slate-800">
+          <Card className="rounded-2xl border-agency-line bg-agency-panel shadow-none">
         <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-sm">
+          <CardTitle className="flex items-center gap-2 text-sm font-semibold text-agency-ink">
             <Gauge className="h-4 w-4" />
             Plan usage
             {usage ? (
@@ -272,13 +272,13 @@ const AgencyOperations: React.FC = () => {
               </Badge>
             ) : null}
           </CardTitle>
-          <CardDescription className="text-xs">
+          <CardDescription className="text-xs text-agency-muted">
             Usage is counted by the workspace, not by device.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-5 p-5 pt-0">
           {usageLoading ? (
-            <div className="flex items-center justify-center py-6 text-muted-foreground">
+            <div className="flex items-center justify-center py-6 text-agency-muted">
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Loading usage...
             </div>
@@ -313,7 +313,7 @@ const AgencyOperations: React.FC = () => {
               />
             </>
           ) : (
-            <p className="py-4 text-center text-xs text-muted-foreground">
+            <p className="py-4 text-center text-xs text-agency-muted">
               Usage is unavailable right now.
             </p>
           )}
@@ -322,17 +322,17 @@ const AgencyOperations: React.FC = () => {
         </div>
 
         <div className={cn(section === 'audit' ? undefined : 'hidden')}>
-          <Card className="rounded-xl border-slate-200 dark:border-slate-800">
+          <Card className="rounded-2xl border-agency-line bg-agency-panel shadow-none">
         <CardHeader className="flex-row flex-wrap items-center justify-between gap-3 pb-3">
           <div className="space-y-1">
-            <CardTitle className="flex items-center gap-2 text-sm">
+            <CardTitle className="flex items-center gap-2 text-sm font-semibold text-agency-ink">
               <ScrollText className="h-4 w-4" />
               Audit log
               <Badge variant="outline" className="text-[10px]">
                 {total}
               </Badge>
             </CardTitle>
-            <CardDescription className="text-xs">
+            <CardDescription className="text-xs text-agency-muted">
               Append-only record of who did what in this agency.
             </CardDescription>
           </div>
@@ -350,39 +350,39 @@ const AgencyOperations: React.FC = () => {
         </CardHeader>
         <CardContent className="space-y-3 p-4 pt-0">
           {auditLoading ? (
-            <div className="flex items-center justify-center py-8 text-muted-foreground">
+            <div className="flex items-center justify-center py-8 text-agency-muted">
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Loading audit log...
             </div>
           ) : entries.length === 0 ? (
-            <p className="py-8 text-center text-xs text-muted-foreground">
+            <p className="py-8 text-center text-xs text-agency-muted">
               No audit events yet. Export requests, archive actions and share
               activity will appear here.
             </p>
           ) : (
-            <div className="max-h-[32rem] overflow-auto rounded-lg border border-slate-200 dark:border-slate-800">
+            <div className="max-h-[min(32rem,calc(100dvh-24rem))] overflow-auto rounded-lg border border-agency-line">
               <table className="w-full min-w-[640px] text-left text-xs">
-                <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-900">
-                  <tr className="border-b border-slate-200 text-[11px] font-medium text-slate-500 dark:border-slate-800 dark:text-slate-400">
-                    <th className="py-2.5 pl-3 pr-3 font-medium">Time</th>
-                    <th className="py-2.5 pr-3 font-medium">Actor</th>
-                    <th className="py-2.5 pr-3 font-medium">Action</th>
-                    <th className="py-2.5 pr-3 font-medium">Details</th>
+                <thead className="sticky top-0 z-10 bg-agency-panel">
+                  <tr className="border-b border-agency-line text-[11px] font-semibold uppercase tracking-[0.06em] text-agency-muted">
+                    <th className="py-2.5 pl-3 pr-3 font-semibold">Time</th>
+                    <th className="py-2.5 pr-3 font-semibold">Actor</th>
+                    <th className="py-2.5 pr-3 font-semibold">Action</th>
+                    <th className="py-2.5 pr-3 font-semibold">Details</th>
                   </tr>
                 </thead>
                 <tbody>
                   {entries.map((entry) => (
                     <tr
                       key={entry._id}
-                      className="border-b border-slate-100 align-top last:border-0 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/50"
+                      className="border-b border-agency-line align-top transition-colors last:border-0 hover:bg-agency-soft/60"
                     >
-                      <td className="whitespace-nowrap py-2.5 pl-3 pr-3 text-slate-500 dark:text-slate-400">
+                      <td className="whitespace-nowrap py-2.5 pl-3 pr-3 text-agency-muted">
                         <span className="flex items-center gap-1">
                           <Clock3 className="h-3 w-3 shrink-0" />
                           {formatDateTime(entry.createdAt)}
                         </span>
                       </td>
-                      <td className="py-2.5 pr-3 font-semibold">
+                      <td className="py-2.5 pr-3 font-semibold text-agency-ink">
                         {actorLabel(entry)}
                       </td>
                       <td className="py-2.5 pr-3">
@@ -390,7 +390,7 @@ const AgencyOperations: React.FC = () => {
                           {actionLabel(entry.action)}
                         </Badge>
                       </td>
-                      <td className="max-w-[280px] py-2.5 text-muted-foreground">
+                      <td className="max-w-[280px] break-words py-2.5 text-agency-muted">
                         {detailSnippet(entry) || '—'}
                       </td>
                     </tr>
@@ -408,7 +408,7 @@ const AgencyOperations: React.FC = () => {
               nounPlural="entries"
               loading={auditLoading}
               onChange={setAuditPage}
-              className="rounded-lg border border-slate-200 dark:border-slate-800"
+              className="rounded-lg border border-agency-line"
             />
           ) : null}
         </CardContent>

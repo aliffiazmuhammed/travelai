@@ -19,15 +19,15 @@ export const AgencyPageHeader: React.FC<{
       className
     )}
   >
-    <div className="min-w-0 space-y-1.5">
+    <div className="min-w-0 space-y-2">
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-50">
+        <h1 className="font-display text-[2rem] font-medium leading-[1.12] tracking-[-0.01em] text-agency-ink">
           {title}
         </h1>
         {meta}
       </div>
       {description ? (
-        <p className="max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400">
+        <p className="max-w-2xl text-sm leading-6 text-agency-muted">
           {description}
         </p>
       ) : null}

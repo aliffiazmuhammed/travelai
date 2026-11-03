@@ -5,6 +5,7 @@ import {
   BriefcaseBusiness,
   CalendarDays,
   CheckCircle2,
+  ChevronRight,
   Inbox,
   Loader2,
   Mail,
@@ -180,7 +181,7 @@ const EnquiryDetail: React.FC<EnquiryDetailProps> = ({
   <div className="space-y-5">
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50">
+        <h2 className="text-lg font-semibold text-agency-ink">
           {enquiry.contact.name}
         </h2>
         <Badge
@@ -207,7 +208,7 @@ const EnquiryDetail: React.FC<EnquiryDetailProps> = ({
           </Badge>
         ) : null}
       </div>
-      <p className="text-xs text-slate-500 dark:text-slate-400">
+      <p className="text-xs text-agency-muted">
         {enquiry.createdAt
           ? `Received ${formatAgencyDate(enquiry.createdAt)}`
           : 'Received'}
@@ -218,39 +219,39 @@ const EnquiryDetail: React.FC<EnquiryDetailProps> = ({
       </p>
     </div>
 
-    <div className="grid gap-2 rounded-xl border border-slate-200 p-3 text-xs dark:border-slate-800 sm:grid-cols-2">
+    <div className="grid gap-2 rounded-xl border border-agency-line p-3 text-xs sm:grid-cols-2">
       <a
         href={`mailto:${enquiry.contact.email}`}
-        className="inline-flex items-center gap-1.5 text-slate-700 hover:text-teal-700 dark:text-slate-200 dark:hover:text-teal-300"
+        className="inline-flex items-center gap-1.5 text-agency-ink/80 hover:text-agency-accent"
       >
-        <Mail className="h-3.5 w-3.5 text-slate-400" />
+        <Mail className="h-3.5 w-3.5 text-agency-muted" />
         {enquiry.contact.email}
       </a>
       {enquiry.contact.phone ? (
         <a
           href={`tel:${enquiry.contact.phone}`}
-          className="inline-flex items-center gap-1.5 text-slate-700 hover:text-teal-700 dark:text-slate-200 dark:hover:text-teal-300"
+          className="inline-flex items-center gap-1.5 text-agency-ink/80 hover:text-agency-accent"
         >
-          <Phone className="h-3.5 w-3.5 text-slate-400" />
+          <Phone className="h-3.5 w-3.5 text-agency-muted" />
           {enquiry.contact.phone}
         </a>
       ) : null}
-      <span className="inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-200">
-        <Users className="h-3.5 w-3.5 text-slate-400" />
+      <span className="inline-flex items-center gap-1.5 text-agency-ink/80">
+        <Users className="h-3.5 w-3.5 text-agency-muted" />
         {partyLabel(enquiry)}
       </span>
-      <span className="inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-200">
-        <CalendarDays className="h-3.5 w-3.5 text-slate-400" />
+      <span className="inline-flex items-center gap-1.5 text-agency-ink/80">
+        <CalendarDays className="h-3.5 w-3.5 text-agency-muted" />
         {datesLabel(enquiry)}
       </span>
       {enquiry.budgetBand ? (
-        <span className="inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-200">
-          <Wallet className="h-3.5 w-3.5 text-slate-400" />
+        <span className="inline-flex items-center gap-1.5 text-agency-ink/80">
+          <Wallet className="h-3.5 w-3.5 text-agency-muted" />
           {AGENCY_ENQUIRY_BUDGET_LABELS[enquiry.budgetBand]}
         </span>
       ) : null}
-      <span className="inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-200">
-        <UserCheck className="h-3.5 w-3.5 text-slate-400" />
+      <span className="inline-flex items-center gap-1.5 text-agency-ink/80">
+        <UserCheck className="h-3.5 w-3.5 text-agency-muted" />
         {enquiry.assignee
           ? enquiry.assignee.id === myId
             ? 'Claimed by you'
@@ -261,7 +262,7 @@ const EnquiryDetail: React.FC<EnquiryDetailProps> = ({
 
     <div className="space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500 dark:text-slate-400">
+        <p className="flex items-center gap-1.5 text-[11px] font-medium text-agency-muted">
           <MessageSquare className="h-3.5 w-3.5" />
           Conversation
         </p>
@@ -270,14 +271,14 @@ const EnquiryDetail: React.FC<EnquiryDetailProps> = ({
             {enquiry.unread.agency} unread
           </Badge>
         ) : enquiry.replyCount > 0 ? (
-          <span className="text-[10px] text-slate-500 dark:text-slate-400">
+          <span className="text-[10px] text-agency-muted">
             {enquiry.replyCount} {enquiry.replyCount === 1 ? 'reply' : 'replies'}
           </span>
         ) : null}
       </div>
 
       {detailLoading ? (
-        <div className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 py-10 text-[11px] text-slate-500 dark:border-slate-800 dark:text-slate-400">
+        <div className="flex items-center justify-center gap-2 rounded-xl border border-agency-line py-10 text-[11px] text-agency-muted">
           <Loader2 className="h-4 w-4 animate-spin" />
           Loading the thread…
         </div>
@@ -302,7 +303,7 @@ const EnquiryDetail: React.FC<EnquiryDetailProps> = ({
       )}
 
       {enquiry.conversationExpiresAt ? (
-        <p className="text-[10px] text-slate-500 dark:text-slate-400">
+        <p className="text-[10px] text-agency-muted">
           The traveller's private guest link works until{' '}
           {formatAgencyDate(enquiry.conversationExpiresAt)}.
         </p>
@@ -318,8 +319,8 @@ const EnquiryDetail: React.FC<EnquiryDetailProps> = ({
       </div>
     ) : null}
 
-    <div className="space-y-1 text-[11px] text-slate-500 dark:text-slate-400">
-      <p className="font-medium text-slate-600 dark:text-slate-300">Timeline</p>
+    <div className="space-y-1 text-[11px] text-agency-muted">
+      <p className="font-medium text-agency-ink/80">Timeline</p>
       {enquiry.repliedAt ? <p>Replied {formatAgencyDate(enquiry.repliedAt)}</p> : null}
       {enquiry.convertedAt ? (
         <p>Converted {formatAgencyDate(enquiry.convertedAt)}</p>
@@ -331,7 +332,7 @@ const EnquiryDetail: React.FC<EnquiryDetailProps> = ({
     </div>
 
     {canPlan ? (
-      <div className="space-y-3 rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+      <div className="space-y-3 rounded-xl border border-agency-line p-3" >
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs font-semibold">Status</p>
           <Select
@@ -401,7 +402,7 @@ const EnquiryDetail: React.FC<EnquiryDetailProps> = ({
           ) : null}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 pt-3 dark:border-slate-800">
+        <div className="flex flex-wrap items-center gap-2 border-t border-agency-line pt-3" >
           {enquiry.client ? (
             <Badge
               variant="outline"
@@ -455,7 +456,7 @@ const EnquiryDetail: React.FC<EnquiryDetailProps> = ({
           )}
         </div>
         {!quoteHref ? (
-          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+          <p className="text-[11px] text-agency-muted">
             {enquiry.client
               ? enquiry.package
                 ? 'No client trip is linked to this lead yet. Starting one opens a copy of the package plan with these dates, ready to quote.'
@@ -467,7 +468,7 @@ const EnquiryDetail: React.FC<EnquiryDetailProps> = ({
         ) : null}
       </div>
     ) : (
-      <p className="rounded-xl border border-dashed border-slate-300 p-3 text-[11px] text-slate-500 dark:border-slate-700 dark:text-slate-400">
+      <p className="rounded-xl border border-dashed border-agency-line p-3 text-[11px] text-agency-muted">
         Viewers can read the inbox. Ask an owner, admin or planner to reply,
         claim or quote a lead.
       </p>
@@ -953,7 +954,7 @@ const AgencyEnquiries: React.FC = () => {
     <div className="space-y-5">
       <AgencyPageHeader
         title="Enquiries"
-        description="Leads from your public directory page and package cards. Update status and owner right in the table, open a row for the thread, then quote and convert it into a client — the traveller reads every reply in their own conversation, and the workspace keeps the whole history."
+        description="Every traveller who asked about a trip, and where each conversation stands. Open a row to reply, quote it or make it a client trip."
         actions={
           <>
             {liveMode === 'live' ? (
@@ -985,30 +986,27 @@ const AgencyEnquiries: React.FC = () => {
 
       <section
         aria-label="Enquiry summary"
-        className="grid grid-cols-2 gap-3 sm:grid-cols-4"
+        className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-agency-line bg-agency-line sm:grid-cols-4"
       >
         {summaryCards.map(({ label, value, hint, icon: Icon, iconClass }) => (
-          <div
-            key={label}
-            className="rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900"
-          >
-            <p className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500 dark:text-slate-400">
+          <div key={label} className="bg-agency-panel px-4 py-3.5">
+            <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.06em] text-agency-muted">
               <Icon className={cn('h-3.5 w-3.5', iconClass)} />
               {label}
             </p>
-            <p className="mt-1 text-xl font-semibold tabular-nums text-slate-900 dark:text-slate-50">
+            <p className="mt-1.5 text-2xl font-semibold leading-none tabular-nums text-agency-ink">
               {value}
             </p>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400">{hint}</p>
+            <p className="mt-1 text-[11px] text-agency-muted">{hint}</p>
           </div>
         ))}
       </section>
 
       <section
         aria-label="Enquiry inbox"
-        className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"
+        className="overflow-hidden rounded-2xl border border-agency-line bg-agency-panel"
       >
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-3 py-2.5 dark:border-slate-800">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-agency-line px-3 py-2.5">
           <AgencySegmented
             ariaLabel="Filter enquiries by status"
             value={filter}
@@ -1021,7 +1019,7 @@ const AgencyEnquiries: React.FC = () => {
                   : summary?.byStatus[option.value],
             }))}
           />
-          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+          <p className="text-[11px] tabular-nums text-agency-muted">
             {total} {total === 1 ? 'lead' : 'leads'}
           </p>
         </div>
@@ -1064,19 +1062,20 @@ const AgencyEnquiries: React.FC = () => {
       ) : (
         <>
           <Table
-            className="min-w-[1080px]"
+            className="min-w-[1024px] table-fixed"
             containerClassName="max-h-[min(34rem,calc(100dvh-24rem))] min-h-[16rem] overflow-y-auto"
           >
-            <TableHeader className="sticky top-0 z-10 bg-white dark:bg-slate-900">
+            <TableHeader className="sticky top-0 z-10 bg-agency-panel">
               <TableRow className="hover:bg-transparent">
-                <TableHead className="h-10 text-xs">Lead</TableHead>
-                <TableHead className="h-10 text-xs">Trip</TableHead>
-                <TableHead className="h-10 text-xs">Package</TableHead>
-                <TableHead className="h-10 text-xs">Status</TableHead>
-                <TableHead className="h-10 text-xs">Owner</TableHead>
-                <TableHead className="h-10 text-xs">Proposal</TableHead>
-                <TableHead className="h-10 text-xs">Last activity</TableHead>
-                <TableHead className="h-10 text-right text-xs">Thread</TableHead>
+                <TableHead className="h-10 w-[25%] px-3 text-[11px] font-semibold uppercase tracking-[0.06em] text-agency-muted">Traveller</TableHead>
+                <TableHead className="h-10 w-[27%] px-3 text-[11px] font-semibold uppercase tracking-[0.06em] text-agency-muted">Trip or package</TableHead>
+                <TableHead className="h-10 w-[128px] px-3 text-[11px] font-semibold uppercase tracking-[0.06em] text-agency-muted">Status</TableHead>
+                <TableHead className="h-10 w-[148px] px-3 text-[11px] font-semibold uppercase tracking-[0.06em] text-agency-muted">Owner</TableHead>
+                <TableHead className="h-10 w-[104px] px-3 text-[11px] font-semibold uppercase tracking-[0.06em] text-agency-muted">Proposal</TableHead>
+                <TableHead className="h-10 w-[120px] px-3 text-[11px] font-semibold uppercase tracking-[0.06em] text-agency-muted">Last activity</TableHead>
+                <TableHead className="h-10 w-11 px-2 text-right">
+                  <span className="sr-only">Open</span>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -1099,78 +1098,57 @@ const AgencyEnquiries: React.FC = () => {
                       }
                     }}
                     className={cn(
-                      'cursor-pointer align-top hover:bg-slate-50/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-600 dark:hover:bg-slate-800/40',
+                      'cursor-pointer transition-colors hover:bg-agency-soft/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-agency-accent',
                       active &&
-                        'bg-teal-50/70 hover:bg-teal-50 dark:bg-teal-950/30 dark:hover:bg-teal-950/40'
+                        'bg-agency-accent-soft/70 shadow-[inset_3px_0_0_0_hsl(var(--agency-accent))] hover:bg-agency-accent-soft'
                     )}
                   >
-                    <TableCell className="py-3">
-                      <div className="flex items-start gap-3">
-                        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-teal-50 text-xs font-bold text-teal-700 dark:bg-teal-950/50 dark:text-teal-300">
+                    <TableCell className="px-3 py-3">
+                      <div className="flex items-center gap-2.5">
+                        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-agency-accent-soft text-[11px] font-bold text-agency-accent">
                           {enquiry.contact.name.trim().slice(0, 1).toUpperCase() || 'L'}
                         </span>
-                        <div className="min-w-0 max-w-[15rem]">
+                        <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
                             <span
                               className={cn(
-                                'truncate text-sm',
-                                unread > 0
-                                  ? 'font-semibold text-slate-900 dark:text-slate-50'
-                                  : 'font-medium text-slate-800 dark:text-slate-200'
+                                'truncate text-[13px] text-agency-ink',
+                                unread > 0 ? 'font-semibold' : 'font-medium'
                               )}
                             >
                               {enquiry.contact.name}
                             </span>
                             {unread > 0 ? (
-                              <span className="inline-flex h-4 min-w-[1rem] shrink-0 items-center justify-center rounded-full bg-teal-600 px-1 text-[10px] font-semibold text-white">
+                              <span className="inline-flex h-4 min-w-[1rem] shrink-0 items-center justify-center rounded-full bg-agency-accent px-1 text-[10px] font-semibold text-white">
                                 {unread}
                               </span>
                             ) : null}
                           </div>
-                          <p className="truncate text-[11px] text-slate-500 dark:text-slate-400">
+                          <p className="truncate text-[11px] text-agency-muted">
                             {enquiry.contact.email}
-                          </p>
-                          <p className="mt-0.5 line-clamp-1 text-[11px] text-slate-400 dark:text-slate-500">
-                            {enquiry.message}
                           </p>
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell className="py-3">
-                      <p className="text-xs text-slate-700 dark:text-slate-200">
-                        {partyLabel(enquiry)}
+                    <TableCell className="px-3 py-3">
+                      <p className="truncate text-[13px] font-medium text-agency-ink">
+                        {enquiry.package?.title ?? 'Profile enquiry'}
                       </p>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                        {datesLabel(enquiry)}
+                      <p className="truncate text-[11px] text-agency-muted">
+                        {datesLabel(enquiry)} · {partyLabel(enquiry)}
+                        {enquiry.budgetBand
+                          ? ` · ${AGENCY_ENQUIRY_BUDGET_LABELS[enquiry.budgetBand]}`
+                          : ''}
                       </p>
-                      {enquiry.budgetBand ? (
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                          {AGENCY_ENQUIRY_BUDGET_LABELS[enquiry.budgetBand]}
-                        </p>
-                      ) : null}
-                    </TableCell>
-                    <TableCell className="py-3">
-                      {enquiry.package ? (
-                        <Badge
-                          variant="secondary"
-                          className="max-w-[12rem] truncate text-[10px]"
-                        >
-                          {enquiry.package.title}
-                        </Badge>
-                      ) : (
-                        <span className="text-xs text-slate-500 dark:text-slate-400">
-                          Profile enquiry
-                        </span>
-                      )}
                       {enquiry.client ? (
-                        <p className="mt-1 flex items-center gap-1 text-[11px] font-medium text-teal-700 dark:text-teal-300">
-                          <BriefcaseBusiness className="h-3 w-3" />
+                        <p className="mt-0.5 flex items-center gap-1 truncate text-[11px] font-medium text-agency-accent">
+                          <BriefcaseBusiness className="h-3 w-3 shrink-0" />
                           {enquiry.client.name}
                         </p>
                       ) : null}
                     </TableCell>
                     <TableCell
-                      className="py-3"
+                      className="px-3 py-3"
                       onClick={stopRow}
                       onKeyDown={stopRow}
                     >
@@ -1186,7 +1164,10 @@ const AgencyEnquiries: React.FC = () => {
                           disabled={busy !== null}
                         >
                           <SelectTrigger
-                            className="h-8 w-[124px] text-xs"
+                            className={cn(
+                              'h-8 w-[116px] text-xs font-medium',
+                              agencyEnquiryStatusBadgeClass(enquiry.status)
+                            )}
                             aria-label={`Status for ${enquiry.contact.name}`}
                           >
                             <SelectValue />
@@ -1212,7 +1193,7 @@ const AgencyEnquiries: React.FC = () => {
                       )}
                     </TableCell>
                     <TableCell
-                      className="py-3"
+                      className="px-3 py-3"
                       onClick={stopRow}
                       onKeyDown={stopRow}
                     >
@@ -1223,7 +1204,7 @@ const AgencyEnquiries: React.FC = () => {
                           disabled={busy !== null}
                         >
                           <SelectTrigger
-                            className="h-8 w-[150px] text-xs"
+                            className="h-8 w-[136px] text-xs"
                             aria-label={`Owner for ${enquiry.contact.name}`}
                           >
                             <SelectValue placeholder="Unassigned" />
@@ -1238,7 +1219,7 @@ const AgencyEnquiries: React.FC = () => {
                           </SelectContent>
                         </Select>
                       ) : (
-                        <span className="text-xs text-slate-600 dark:text-slate-300">
+                        <span className="text-xs text-agency-muted">
                           {enquiry.assignee
                             ? enquiry.assignee.id === myId
                               ? 'You'
@@ -1247,7 +1228,7 @@ const AgencyEnquiries: React.FC = () => {
                         </span>
                       )}
                     </TableCell>
-                    <TableCell className="py-3">
+                    <TableCell className="whitespace-nowrap px-3 py-3">
                       {enquiry.proposals?.lastDeclinedAt ? (
                         <Badge
                           variant="outline"
@@ -1265,20 +1246,20 @@ const AgencyEnquiries: React.FC = () => {
                             {enquiry.proposals.count} sent
                           </Badge>
                           {enquiry.proposals.lastAt ? (
-                            <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                            <p className="mt-0.5 text-[11px] text-agency-muted">
                               {formatAgencyDate(enquiry.proposals.lastAt)}
                             </p>
                           ) : null}
                         </>
                       ) : (
-                        <span className="text-xs text-slate-400">—</span>
+                        <span className="text-xs text-agency-muted/70">—</span>
                       )}
                     </TableCell>
-                    <TableCell className="py-3">
-                      <p className="text-xs text-slate-600 dark:text-slate-300">
+                    <TableCell className="whitespace-nowrap px-3 py-3">
+                      <p className="text-xs font-medium text-agency-ink">
                         {stamp ? formatAgencyDate(stamp) : '—'}
                       </p>
-                      <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                      <p className="text-[11px] text-agency-muted">
                         {enquiry.lastMessageAt
                           ? enquiry.lastMessageBy === 'agency'
                             ? 'You replied'
@@ -1287,19 +1268,19 @@ const AgencyEnquiries: React.FC = () => {
                       </p>
                     </TableCell>
                     <TableCell
-                      className="py-3 text-right"
+                      className="px-2 py-3 text-right"
                       onClick={stopRow}
                       onKeyDown={stopRow}
                     >
                       <Button
                         type="button"
                         variant="ghost"
-                        size="sm"
-                        className="gap-1.5 text-xs"
+                        size="icon"
+                        className="h-8 w-8 text-agency-muted hover:text-agency-ink"
                         onClick={() => openEnquiry(enquiry)}
+                        aria-label={`Open the conversation with ${enquiry.contact.name}`}
                       >
-                        Open
-                        <ArrowUpRight className="h-3.5 w-3.5" />
+                        <ChevronRight className="h-4 w-4" />
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -1315,7 +1296,7 @@ const AgencyEnquiries: React.FC = () => {
             noun="lead"
             loading={loading}
             onChange={(page) => changePage(page - 1)}
-            className="border-slate-200 dark:border-slate-800"
+            className="border-agency-line"
           />
         </>
       )}

@@ -240,7 +240,7 @@ const AgencyClients: React.FC = () => {
 
   if (!activeAgencyId) {
     return (
-      <div className="rounded-xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
+      <div className="rounded-2xl border border-agency-line bg-agency-panel p-10 text-center text-sm text-agency-muted">
         Create or join an agency to keep a client directory.
       </div>
     );
@@ -269,22 +269,27 @@ const AgencyClients: React.FC = () => {
         }
       />
 
-      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-        <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 p-3 dark:border-slate-800">
+      <section className="overflow-hidden rounded-2xl border border-agency-line bg-agency-panel">
+        <div className="flex flex-wrap items-center gap-2 border-b border-agency-line px-3 py-2.5">
           <div className="relative min-w-0 flex-1 sm:max-w-sm">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-agency-muted" />
             <Input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search by name, company or email"
-              className="h-9 pl-9"
+              className="h-9 rounded-xl border-agency-line pl-9"
               maxLength={120}
             />
           </div>
-          <Badge variant="outline" className="text-[10px] text-slate-500">
+          <span className="text-[11px] tabular-nums text-agency-muted">
             {clients.length} {clients.length === 1 ? 'client' : 'clients'}
-          </Badge>
-          <Button asChild variant="ghost" size="sm" className="ml-auto text-xs">
+          </span>
+          <Button
+            asChild
+            variant="ghost"
+            size="sm"
+            className="ml-auto text-xs text-agency-muted hover:text-agency-ink"
+          >
             <Link to="/agency/trips">
               <Map className="mr-1.5 h-3.5 w-3.5" />
               Agency trips
@@ -293,7 +298,7 @@ const AgencyClients: React.FC = () => {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center gap-2 py-16 text-sm text-slate-500">
+          <div className="flex items-center justify-center gap-2 py-16 text-xs text-agency-muted">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading clients...
           </div>
@@ -323,41 +328,41 @@ const AgencyClients: React.FC = () => {
               <Table
                 containerClassName="max-h-[min(34rem,calc(100dvh-26rem))] overflow-y-auto"
               >
-                <TableHeader className="sticky top-0 z-10 bg-white dark:bg-slate-900">
+                <TableHeader className="sticky top-0 z-10 bg-agency-panel">
                   <TableRow className="hover:bg-transparent">
-                    <TableHead className="h-10 text-xs">Client</TableHead>
-                    <TableHead className="h-10 text-xs">Contact</TableHead>
-                    <TableHead className="h-10 text-xs">Company</TableHead>
-                    <TableHead className="h-10 text-xs">Added</TableHead>
-                    <TableHead className="h-10 text-right text-xs">Actions</TableHead>
+                    <TableHead className="h-10 text-[11px] font-semibold uppercase tracking-[0.06em] text-agency-muted">Client</TableHead>
+                    <TableHead className="h-10 text-[11px] font-semibold uppercase tracking-[0.06em] text-agency-muted">Contact</TableHead>
+                    <TableHead className="h-10 text-[11px] font-semibold uppercase tracking-[0.06em] text-agency-muted">Company</TableHead>
+                    <TableHead className="h-10 text-[11px] font-semibold uppercase tracking-[0.06em] text-agency-muted">Added</TableHead>
+                    <TableHead className="h-10 text-right text-[11px] font-semibold uppercase tracking-[0.06em] text-agency-muted">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {pageClients.map((client) => (
                     <TableRow
                       key={client._id}
-                      className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40"
+                      className="hover:bg-agency-soft/60"
                     >
                       <TableCell className="py-3">
                         <div className="flex items-center gap-3">
-                          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-teal-50 text-xs font-bold text-teal-700 dark:bg-teal-950/50 dark:text-teal-300">
+                          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-agency-accent-soft text-[11px] font-bold text-agency-accent">
                             {client.name.trim().slice(0, 1).toUpperCase() || 'C'}
                           </span>
                           <div className="min-w-0">
-                            <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">
+                            <p className="truncate text-[13px] font-medium text-agency-ink">
                               {client.name}
                             </p>
                             {client.sourceEnquiryId ? (
                               <Link
                                 to={`/agency/enquiries?enquiry=${client.sourceEnquiryId}`}
-                                className="inline-flex items-center gap-1 text-[11px] font-medium text-teal-700 hover:underline dark:text-teal-300"
+                                className="inline-flex items-center gap-1 text-[11px] font-medium text-agency-accent hover:underline"
                               >
                                 <Inbox className="h-3 w-3" />
                                 Came in through an enquiry
                               </Link>
                             ) : client.notes ? (
                               <p
-                                className="truncate text-[11px] text-slate-500 dark:text-slate-400"
+                                className="max-w-[22rem] truncate text-[11px] text-agency-muted"
                                 title={client.notes}
                               >
                                 {client.notes}
@@ -367,34 +372,34 @@ const AgencyClients: React.FC = () => {
                         </div>
                       </TableCell>
                       <TableCell className="py-3">
-                        <div className="space-y-0.5 text-xs text-slate-600 dark:text-slate-300">
+                        <div className="space-y-0.5 text-xs text-agency-muted">
                           {client.email ? (
                             <a
                               href={`mailto:${client.email}`}
-                              className="flex items-center gap-1.5 hover:text-teal-700 dark:hover:text-teal-300"
+                              className="flex items-center gap-1.5 hover:text-agency-accent"
                             >
-                              <Mail className="h-3 w-3 text-slate-400" />
+                              <Mail className="h-3 w-3" />
                               {client.email}
                             </a>
                           ) : null}
                           {client.phone ? (
                             <a
                               href={`tel:${client.phone}`}
-                              className="flex items-center gap-1.5 hover:text-teal-700 dark:hover:text-teal-300"
+                              className="flex items-center gap-1.5 hover:text-agency-accent"
                             >
-                              <Phone className="h-3 w-3 text-slate-400" />
+                              <Phone className="h-3 w-3" />
                               {client.phone}
                             </a>
                           ) : null}
                           {!client.email && !client.phone ? (
-                            <span className="text-slate-400">—</span>
+                            <span className="text-agency-muted/70">—</span>
                           ) : null}
                         </div>
                       </TableCell>
-                      <TableCell className="py-3 text-xs text-slate-600 dark:text-slate-300">
+                      <TableCell className="py-3 text-xs text-agency-muted">
                         {client.company || '—'}
                       </TableCell>
-                      <TableCell className="py-3 text-xs text-slate-500 dark:text-slate-400">
+                      <TableCell className="py-3 text-xs text-agency-muted">
                         {formatAgencyDate(client.createdAt)}
                       </TableCell>
                       <TableCell className="py-3">
@@ -431,13 +436,13 @@ const AgencyClients: React.FC = () => {
               </Table>
             </div>
 
-            <div className="divide-y divide-slate-200 md:hidden dark:divide-slate-800">
+            <div className="divide-y divide-agency-line md:hidden">
               {pageClients.map((client) => (
                 <div
                   key={client._id}
                   className="flex flex-wrap items-start gap-3 px-4 py-3.5"
                 >
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-teal-50 text-sm font-bold text-teal-700 dark:bg-teal-950/50 dark:text-teal-300">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-agency-accent-soft text-sm font-bold text-agency-accent">
                     {client.name.trim().slice(0, 1).toUpperCase() || 'C'}
                   </span>
                   <div className="min-w-0 flex-1">
@@ -451,7 +456,7 @@ const AgencyClients: React.FC = () => {
                         </Badge>
                       ) : null}
                     </div>
-                    <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+                    <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-agency-muted">
                       {client.email ? (
                         <span className="inline-flex items-center gap-1">
                           <Mail className="h-3 w-3" />
@@ -469,14 +474,14 @@ const AgencyClients: React.FC = () => {
                     {client.sourceEnquiryId ? (
                       <Link
                         to={`/agency/enquiries?enquiry=${client.sourceEnquiryId}`}
-                        className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-teal-700 hover:underline dark:text-teal-300"
+                        className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-agency-accent hover:underline"
                       >
                         <Inbox className="h-3 w-3" />
                         Came in through an enquiry
                       </Link>
                     ) : null}
                     {client.notes ? (
-                      <p className="mt-1 line-clamp-2 text-xs text-slate-500 dark:text-slate-400">
+                      <p className="mt-1 line-clamp-2 text-xs text-agency-muted">
                         {client.notes}
                       </p>
                     ) : null}
@@ -517,14 +522,14 @@ const AgencyClients: React.FC = () => {
               total={clients.length}
               noun="client"
               onChange={setClientPage}
-              className="border-slate-200 dark:border-slate-800"
+              className="border-agency-line"
             />
           </>
         )}
       </section>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="rounded-3xl sm:max-w-lg">
+        <DialogContent className="rounded-2xl sm:rounded-2xl sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{editing ? 'Edit client' : 'Add a client'}</DialogTitle>
             <DialogDescription>

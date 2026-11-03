@@ -167,18 +167,18 @@ const TagField: React.FC<{
   return (
     <div className="space-y-2">
       <Label htmlFor={id}>{label}</Label>
-      <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-800 dark:bg-slate-950">
+      <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-agency-line bg-agency-panel px-2 py-1.5">
         {values.map((value) => (
           <span
             key={value}
-            className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200"
+            className="inline-flex items-center gap-1 rounded-full bg-agency-soft px-2.5 py-1 text-xs font-medium text-agency-ink"
           >
             {value}
             {disabled ? null : (
               <button
                 type="button"
                 onClick={() => onChange(values.filter((entry) => entry !== value))}
-                className="rounded-full p-0.5 text-slate-400 transition-colors hover:text-destructive"
+                className="rounded-full p-0.5 text-agency-muted transition-colors hover:text-destructive"
                 aria-label={`Remove ${value}`}
               >
                 <X className="h-3 w-3" />
@@ -207,12 +207,12 @@ const TagField: React.FC<{
               if (event.target.value.trim()) add(event.target.value);
             }}
             maxLength={LIST_ITEM_MAX}
-            className="min-w-[8rem] flex-1 bg-transparent px-1 py-0.5 text-sm outline-none placeholder:text-slate-400"
+            className="min-w-[8rem] flex-1 bg-transparent px-1 py-0.5 text-sm outline-none placeholder:text-agency-muted"
             placeholder={values.length ? 'Add another' : placeholder}
           />
         )}
       </div>
-      <p className="text-[11px] text-slate-500">{hint}</p>
+      <p className="text-[11px] text-agency-muted">{hint}</p>
     </div>
   );
 };
@@ -377,15 +377,15 @@ const DirectoryProfileEditor: React.FC = () => {
     : null;
 
   return (
-    <Card>
+    <Card className="rounded-2xl border-agency-line bg-agency-panel shadow-none">
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <CardTitle className="flex items-center gap-2 text-base">
+            <CardTitle className="flex items-center gap-2 text-sm font-semibold text-agency-ink">
               <Eye className="h-4 w-4" />
               Public directory profile
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-xs leading-5 text-agency-muted">
               How travellers meet your agency when they browse the directory.
               This is separate from your brand settings above.
             </CardDescription>
@@ -403,7 +403,7 @@ const DirectoryProfileEditor: React.FC = () => {
       </CardHeader>
       <CardContent>
         {loading ? (
-          <div className="flex items-center gap-2 py-6 text-sm text-slate-500">
+          <div className="flex items-center gap-2 py-6 text-sm text-agency-muted">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading your public profile...
           </div>
@@ -418,7 +418,7 @@ const DirectoryProfileEditor: React.FC = () => {
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
             <div className="space-y-5">
               {!canManage ? (
-                <div className="flex items-start gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
+                <div className="flex items-start gap-2 rounded-xl border border-agency-line bg-agency-soft/60 px-3 py-2.5 text-xs text-agency-muted">
                   <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                   Owners and admins publish this page. You can still preview
                   what travellers see.
@@ -441,7 +441,7 @@ const DirectoryProfileEditor: React.FC = () => {
                       'text-[11px] tabular-nums',
                       draft.about.trim().length < ABOUT_MIN
                         ? 'text-amber-600 dark:text-amber-400'
-                        : 'text-slate-500'
+                        : 'text-agency-muted'
                     )}
                   >
                     {draft.about.trim().length}/{ABOUT_MAX}
@@ -456,7 +456,7 @@ const DirectoryProfileEditor: React.FC = () => {
                   disabled={!editable}
                   placeholder="What kind of trips do you plan, for whom, and what makes your agency different?"
                 />
-                <p className="text-[11px] text-slate-500">
+                <p className="text-[11px] text-agency-muted">
                   At least {ABOUT_MIN} characters to publish. Plain text; blank
                   lines separate paragraphs.
                 </p>
@@ -482,7 +482,7 @@ const DirectoryProfileEditor: React.FC = () => {
                     disabled
                     placeholder="Add a website in Profile above"
                   />
-                  <p className="text-[11px] text-slate-500">
+                  <p className="text-[11px] text-agency-muted">
                     Comes from your agency profile.
                   </p>
                 </div>
@@ -523,8 +523,8 @@ const DirectoryProfileEditor: React.FC = () => {
                       className={cn(
                         'flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-colors',
                         draft.services.includes(service.id)
-                          ? 'border-teal-300 bg-teal-50/60 dark:border-teal-800 dark:bg-teal-950/30'
-                          : 'border-slate-200 hover:border-slate-300 dark:border-slate-800',
+                          ? 'border-agency-accent/40 bg-agency-accent-soft text-agency-accent'
+                          : 'border-agency-line hover:bg-agency-soft/60',
                         !editable && 'cursor-default opacity-80'
                       )}
                     >
@@ -569,8 +569,8 @@ const DirectoryProfileEditor: React.FC = () => {
                       className={cn(
                         'flex cursor-pointer items-center gap-2 rounded-xl border px-2.5 py-2 text-sm transition-colors',
                         draft.languages.includes(language.code)
-                          ? 'border-teal-300 bg-teal-50/60 dark:border-teal-800 dark:bg-teal-950/30'
-                          : 'border-slate-200 hover:border-slate-300 dark:border-slate-800',
+                          ? 'border-agency-accent/40 bg-agency-accent-soft text-agency-accent'
+                          : 'border-agency-line hover:bg-agency-soft/60',
                         !editable && 'cursor-default opacity-80'
                       )}
                     >
@@ -596,10 +596,10 @@ const DirectoryProfileEditor: React.FC = () => {
               <div className="space-y-2">
                 <Label>Contact details</Label>
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 px-3 py-2.5 dark:border-slate-800">
+                  <div className="flex items-center justify-between gap-4 rounded-xl border border-agency-line px-3 py-2.5">
                     <div>
                       <div className="text-sm font-medium">Show my phone number</div>
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-agency-muted">
                         {contactPhone
                           ? 'Travellers can call you straight from your listing.'
                           : 'Add a contact phone in Profile above first.'}
@@ -612,10 +612,10 @@ const DirectoryProfileEditor: React.FC = () => {
                       aria-label="Show phone number on the public profile"
                     />
                   </div>
-                  <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 px-3 py-2.5 dark:border-slate-800">
+                  <div className="flex items-center justify-between gap-4 rounded-xl border border-agency-line px-3 py-2.5">
                     <div>
                       <div className="text-sm font-medium">Show my GSTIN</div>
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-agency-muted">
                         {gstin
                           ? 'A tax id can reassure corporate travellers.'
                           : 'Add a GSTIN in Profile above first.'}
@@ -709,7 +709,7 @@ const DirectoryProfileEditor: React.FC = () => {
                     Unsaved changes
                   </span>
                 ) : published ? (
-                  <span className="inline-flex items-center gap-1 text-xs text-teal-600 dark:text-teal-400">
+                  <span className="inline-flex items-center gap-1 text-xs text-agency-accent">
                     <Check className="h-3.5 w-3.5" />
                     Saved changes appear on your public page
                   </span>
@@ -717,19 +717,19 @@ const DirectoryProfileEditor: React.FC = () => {
               </div>
 
               {published && profile?.publishedAt ? (
-                <p className="text-[11px] text-slate-500">
+                <p className="text-[11px] text-agency-muted">
                   Published {formatAgencyDate(profile.publishedAt)}.
                 </p>
               ) : null}
             </div>
 
             <div className="space-y-2 lg:sticky lg:top-6 lg:self-start">
-              <div className="text-xs font-medium text-slate-500">
+              <div className="text-xs font-medium text-agency-muted">
                 What travellers will see
               </div>
               <DirectoryProfilePreview profile={preview} />
               {dirty ? (
-                <p className="text-[11px] text-slate-500">
+                <p className="text-[11px] text-agency-muted">
                   This preview follows your edits. Save to make them public.
                 </p>
               ) : null}

@@ -268,19 +268,19 @@ const AgencyTeam: React.FC = () => {
       />
 
       {!canManage ? (
-        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
+        <div className="rounded-xl border border-agency-line bg-agency-panel px-4 py-3 text-sm text-agency-muted">
           You have read-only access to the team. Owners and admins can invite people
           and change roles.
         </div>
       ) : null}
 
-      <Card>
+      <Card className="rounded-2xl border-agency-line bg-agency-panel shadow-none">
         <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
+          <CardTitle className="flex items-center gap-2 text-sm font-semibold text-agency-ink">
             <Users className="h-4 w-4" />
             Members
           </CardTitle>
-          <CardDescription>
+          <CardDescription className="text-xs leading-5 text-agency-muted">
             {isOwner
               ? 'As an owner you can promote another owner, but the last owner can never be removed or demoted.'
               : 'Admins manage planners and viewers. Only an owner can change another owner.'}
@@ -289,13 +289,13 @@ const AgencyTeam: React.FC = () => {
         <CardContent className="p-0">
           <div className="hidden md:block">
             <Table>
-              <TableHeader>
+              <TableHeader className="bg-agency-panel">
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="h-10 text-xs">Member</TableHead>
-                  <TableHead className="h-10 text-xs">Contact</TableHead>
-                  <TableHead className="h-10 text-xs">Role</TableHead>
-                  <TableHead className="h-10 text-xs">Joined</TableHead>
-                  <TableHead className="h-10 text-right text-xs">Actions</TableHead>
+                  <TableHead className="h-10 text-[11px] font-semibold uppercase tracking-[0.06em] text-agency-muted">Member</TableHead>
+                  <TableHead className="h-10 text-[11px] font-semibold uppercase tracking-[0.06em] text-agency-muted">Contact</TableHead>
+                  <TableHead className="h-10 text-[11px] font-semibold uppercase tracking-[0.06em] text-agency-muted">Role</TableHead>
+                  <TableHead className="h-10 text-[11px] font-semibold uppercase tracking-[0.06em] text-agency-muted">Joined</TableHead>
+                  <TableHead className="h-10 text-right text-[11px] font-semibold uppercase tracking-[0.06em] text-agency-muted">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -311,18 +311,18 @@ const AgencyTeam: React.FC = () => {
                   return (
                     <TableRow
                       key={member.userId}
-                      className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40"
+                      className="hover:bg-agency-soft/60"
                     >
                       <TableCell className="py-3">
                         <div className="flex items-center gap-3">
                           <Avatar className="h-9 w-9">
                             <AvatarImage src={avatarSrc(member.avatarUrl)} alt="" />
-                            <AvatarFallback className="bg-slate-100 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                            <AvatarFallback className="bg-agency-accent-soft text-xs font-semibold text-agency-accent">
                               {initialsFor(member.label)}
                             </AvatarFallback>
                           </Avatar>
                           <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                            <span className="truncate text-sm font-medium">
+                            <span className="truncate text-[13px] font-medium text-agency-ink">
                               {member.label}
                             </span>
                             {member.isYou ? (
@@ -341,7 +341,7 @@ const AgencyTeam: React.FC = () => {
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell className="py-3 text-xs text-slate-600 dark:text-slate-300">
+                      <TableCell className="py-3 text-xs text-agency-muted">
                         {member.email || '—'}
                       </TableCell>
                       <TableCell className="py-3">
@@ -353,7 +353,7 @@ const AgencyTeam: React.FC = () => {
                             }
                             disabled={busy}
                           >
-                            <SelectTrigger className="h-8 w-32">
+                            <SelectTrigger className="h-8 w-32 border-agency-line">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -372,7 +372,7 @@ const AgencyTeam: React.FC = () => {
                           </Badge>
                         )}
                       </TableCell>
-                      <TableCell className="py-3 text-xs text-slate-500 dark:text-slate-400">
+                      <TableCell className="py-3 text-xs text-agency-muted">
                         {formatAgencyDate(member.joinedAt)}
                       </TableCell>
                       <TableCell className="py-3">
@@ -381,7 +381,7 @@ const AgencyTeam: React.FC = () => {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 text-slate-400 hover:text-rose-600"
+                              className="h-8 w-8 text-agency-muted hover:text-rose-600"
                               onClick={() => setRemoveTarget(member)}
                               disabled={busy}
                               title={`Remove ${member.label}`}
@@ -402,7 +402,7 @@ const AgencyTeam: React.FC = () => {
             </Table>
           </div>
 
-          <div className="divide-y divide-slate-100 md:hidden dark:divide-slate-800">
+          <div className="divide-y divide-agency-line md:hidden">
           {members.map((member) => {
             const soleOwner = member.role === 'owner' && ownerCount <= 1;
             const ownerTarget = member.role === 'owner';
@@ -419,13 +419,13 @@ const AgencyTeam: React.FC = () => {
               >
                 <Avatar className="h-10 w-10">
                   <AvatarImage src={avatarSrc(member.avatarUrl)} alt="" />
-                  <AvatarFallback className="bg-slate-100 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                  <AvatarFallback className="bg-agency-accent-soft text-xs font-semibold text-agency-accent">
                     {initialsFor(member.label)}
                   </AvatarFallback>
                 </Avatar>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="truncate text-sm font-medium">{member.label}</span>
+                    <span className="truncate text-sm font-medium text-agency-ink">{member.label}</span>
                     {member.isYou ? (
                       <Badge variant="outline" className="text-[9px]">
                         You
@@ -440,7 +440,7 @@ const AgencyTeam: React.FC = () => {
                       </Badge>
                     ) : null}
                   </div>
-                  <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-agency-muted">
                     {member.email ? (
                       <span className="inline-flex items-center gap-1">
                         <Mail className="h-3 w-3" />
@@ -458,7 +458,7 @@ const AgencyTeam: React.FC = () => {
                       onValueChange={(value) => void changeRole(member, value as AgencyRole)}
                       disabled={busy}
                     >
-                      <SelectTrigger className="h-8 w-32">
+                      <SelectTrigger className="h-8 w-32 border-agency-line">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -481,7 +481,7 @@ const AgencyTeam: React.FC = () => {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 text-slate-400 hover:text-rose-600"
+                      className="h-8 w-8 text-agency-muted hover:text-rose-600"
                       onClick={() => setRemoveTarget(member)}
                       disabled={busy}
                       title={`Remove ${member.label}`}
@@ -502,23 +502,23 @@ const AgencyTeam: React.FC = () => {
       </Card>
 
       {canManage ? (
-        <Card>
+        <Card className="rounded-2xl border-agency-line bg-agency-panel shadow-none">
           <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
+            <CardTitle className="flex items-center gap-2 text-sm font-semibold text-agency-ink">
               <Link2 className="h-4 w-4" />
               Pending invitations
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-xs leading-5 text-agency-muted">
               Tokens are hashed at rest, single-use by default, and revocable here.
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
             {invites.length === 0 ? (
-              <div className="px-4 pb-5 pt-1 text-sm text-slate-500 dark:text-slate-400">
+              <div className="px-4 pb-5 pt-1 text-sm text-agency-muted">
                 No pending invitations. Invite a teammate to get started.
               </div>
             ) : (
-              <div className="divide-y divide-slate-100 dark:divide-slate-800">
+              <div className="divide-y divide-agency-line">
                 {invites.map((invite) => (
                   <div
                     key={invite._id}
@@ -532,13 +532,13 @@ const AgencyTeam: React.FC = () => {
                         >
                           {agencyRoleLabel(invite.role)}
                         </Badge>
-                        <span className="text-xs text-slate-500">
+                        <span className="text-xs text-agency-muted">
                           {invite.kind === 'email'
                             ? invite.email || 'Email invitation'
                             : `Link · ${invite.usedCount}/${invite.maxUses} used`}
                         </span>
                       </div>
-                      <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-agency-muted/80">
                         <span className="font-mono">…{invite.tokenHint}</span>
                         <span className="inline-flex items-center gap-1">
                           <Clock3 className="h-3 w-3" />
@@ -549,7 +549,7 @@ const AgencyTeam: React.FC = () => {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="self-start text-slate-500 hover:text-rose-600"
+                      className="self-start text-agency-muted hover:text-rose-600"
                       onClick={() => void revokeInvite(invite)}
                     >
                       <Trash2 className="mr-1.5 h-3.5 w-3.5" />
@@ -564,7 +564,7 @@ const AgencyTeam: React.FC = () => {
       ) : null}
 
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="rounded-2xl sm:rounded-2xl sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Invite a teammate</DialogTitle>
             <DialogDescription>
@@ -574,7 +574,7 @@ const AgencyTeam: React.FC = () => {
 
           {generatedLink ? (
             <div className="space-y-3">
-              <div className="rounded-xl border border-teal-200 bg-teal-50 p-3 text-sm text-teal-800 dark:border-teal-900 dark:bg-teal-950/40 dark:text-teal-200">
+              <div className="rounded-xl border border-agency-line bg-agency-soft p-3 text-sm text-agency-ink">
                 Invitation ready. Copy this link and send it directly.
               </div>
               <div className="space-y-2">
@@ -681,7 +681,7 @@ const AgencyTeam: React.FC = () => {
                 </div>
               )}
 
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-950/50 dark:text-slate-400">
+              <div className="rounded-lg border border-agency-line bg-agency-soft/60 p-3 text-xs text-agency-muted">
                 <Shield className="mr-1 inline h-3.5 w-3.5" />
                 Invitations never grant ownership. An owner can promote someone later.
               </div>
@@ -706,7 +706,7 @@ const AgencyTeam: React.FC = () => {
           if (!open) setRemoveTarget(null);
         }}
       >
-        <AlertDialogContent>
+        <AlertDialogContent className="rounded-2xl sm:rounded-2xl">
           <AlertDialogHeader>
             <AlertDialogTitle>Remove {removeTarget?.label}?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -730,7 +730,7 @@ const AgencyTeam: React.FC = () => {
 };
 
 const LoadingRow: React.FC<{ label: string }> = ({ label }) => (
-  <div className="flex items-center gap-2 py-16 text-sm text-slate-500">
+  <div className="flex items-center gap-2 py-16 text-sm text-agency-muted">
     <Loader2 className="h-4 w-4 animate-spin" />
     {label}
   </div>

@@ -74,7 +74,7 @@ const AssetThumb: React.FC<{
     return (
       <div
         className={cn(
-          'grid place-items-center bg-slate-100 text-slate-400 dark:bg-slate-800',
+          'grid place-items-center bg-agency-soft text-agency-muted',
           className
         )}
       >
@@ -186,7 +186,7 @@ const AgencySettings: React.FC = () => {
 
   if (loading && !activeAgency) {
     return (
-      <div className="flex items-center gap-2 py-16 text-sm text-slate-500">
+      <div className="flex items-center gap-2 py-16 text-sm text-agency-muted">
         <Loader2 className="h-4 w-4 animate-spin" />
         Loading agency settings...
       </div>
@@ -471,7 +471,7 @@ const AgencySettings: React.FC = () => {
       />
 
       {!canManage ? (
-        <div className="flex items-start gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
+        <div className="flex items-start gap-2 rounded-xl border border-agency-line bg-agency-panel px-4 py-3 text-sm text-agency-muted">
           <Lock className="mt-0.5 h-4 w-4 shrink-0" />
           Only owners and admins can edit the agency profile or upload brand
           assets. You can still view the brand preview and asset library.
@@ -501,13 +501,13 @@ const AgencySettings: React.FC = () => {
 
       <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
         <div className="space-y-5">
-          <Card>
+          <Card className="rounded-2xl border-agency-line bg-agency-panel shadow-none">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
+              <CardTitle className="flex items-center gap-2 text-sm font-semibold text-agency-ink">
                 <Building2 className="h-4 w-4" />
                 Profile
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-xs leading-5 text-agency-muted">
                 Shown to your team and used in client-facing documents.
               </CardDescription>
             </CardHeader>
@@ -533,7 +533,7 @@ const AgencySettings: React.FC = () => {
                   disabled={!canManage}
                   className="font-mono uppercase"
                 />
-                <p className="text-[11px] text-slate-500">
+                <p className="text-[11px] text-agency-muted">
                   Optional. Printed on quotes and invoices in later milestones.
                 </p>
               </div>
@@ -582,20 +582,20 @@ const AgencySettings: React.FC = () => {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="rounded-2xl border-agency-line bg-agency-panel shadow-none">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
+              <CardTitle className="flex items-center gap-2 text-sm font-semibold text-agency-ink">
                 <ImageIcon className="h-4 w-4" />
                 Logo, mascot and images
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-xs leading-5 text-agency-muted">
                 PNG, JPEG or WebP up to {IMAGE_MAX_MB} MB. Uploading a logo or
                 mascot makes it the active one immediately.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
-              <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-slate-200 p-3 dark:border-slate-800">
-                <div className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900">
+              <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-agency-line p-3">
+                <div className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-xl border border-agency-line bg-agency-soft">
                   {logoPreview ? (
                     <img
                       src={logoPreview}
@@ -613,7 +613,7 @@ const AgencySettings: React.FC = () => {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-semibold">Agency logo</div>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-agency-muted">
                     Used in the agency shell and future client documents.
                   </p>
                 </div>
@@ -647,8 +647,8 @@ const AgencySettings: React.FC = () => {
                 ) : null}
               </div>
 
-              <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-slate-200 p-3 dark:border-slate-800">
-                <div className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900">
+              <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-agency-line p-3">
+                <div className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-xl border border-agency-line bg-agency-soft">
                   {mascotPreview ? (
                     <img
                       src={mascotPreview}
@@ -656,12 +656,12 @@ const AgencySettings: React.FC = () => {
                       className="h-full w-full object-contain"
                     />
                   ) : (
-                    <Sparkles className="h-6 w-6 text-slate-400" />
+                    <Sparkles className="h-6 w-6 text-agency-muted/60" />
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-semibold">Mascot</div>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-agency-muted">
                     A friendly character for empty states and client pages.
                   </p>
                 </div>
@@ -699,7 +699,7 @@ const AgencySettings: React.FC = () => {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <div className="text-sm font-semibold">Image library</div>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-agency-muted">
                       Reusable brand photos and textures for later templates.
                     </p>
                   </div>
@@ -721,7 +721,7 @@ const AgencySettings: React.FC = () => {
                 </div>
 
                 {assetsLoading ? (
-                  <div className="flex items-center gap-2 py-4 text-xs text-slate-500">
+                  <div className="flex items-center gap-2 py-4 text-xs text-agency-muted">
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     Loading brand assets...
                   </div>
@@ -730,7 +730,7 @@ const AgencySettings: React.FC = () => {
                     {assetsError}
                   </p>
                 ) : images.length === 0 ? (
-                  <p className="rounded-xl border border-dashed border-slate-200 px-3 py-6 text-center text-xs text-slate-500 dark:border-slate-800">
+                  <p className="rounded-xl border border-dashed border-agency-line px-3 py-6 text-center text-xs text-agency-muted">
                     No images yet. Upload a logo, mascot or reusable image.
                   </p>
                 ) : (
@@ -738,7 +738,7 @@ const AgencySettings: React.FC = () => {
                     {images.map((asset) => (
                       <div
                         key={asset._id}
-                        className="group overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800"
+                        className="group overflow-hidden rounded-xl border border-agency-line bg-agency-panel"
                       >
                         <AssetThumb
                           url={asset.url}
@@ -750,7 +750,7 @@ const AgencySettings: React.FC = () => {
                             <div className="truncate text-[11px] font-medium">
                               {assetKindLabel(asset.kind)}
                             </div>
-                            <div className="text-[10px] text-slate-500">
+                            <div className="text-[10px] text-agency-muted">
                               {formatBytes(asset.bytes)}
                             </div>
                           </div>
@@ -759,7 +759,7 @@ const AgencySettings: React.FC = () => {
                               type="button"
                               onClick={() => void removeAsset(asset)}
                               disabled={busy === asset._id}
-                              className="rounded-md p-1 text-slate-400 transition-colors hover:text-destructive disabled:opacity-50"
+                              className="rounded-md p-1 text-agency-muted transition-colors hover:text-destructive disabled:opacity-50"
                               aria-label={`Remove ${assetKindLabel(asset.kind)}`}
                             >
                               {busy === asset._id ? (
@@ -778,20 +778,20 @@ const AgencySettings: React.FC = () => {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="rounded-2xl border-agency-line bg-agency-panel shadow-none">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
+              <CardTitle className="flex items-center gap-2 text-sm font-semibold text-agency-ink">
                 <Type className="h-4 w-4" />
                 Fonts
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-xs leading-5 text-agency-muted">
                 Upload a licensed WOFF, WOFF2, TTF or OTF file up to {FONT_MAX_MB} MB.
                 The family name and licence note are kept with the asset.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {canManage ? (
-                <div className="grid gap-3 rounded-2xl border border-slate-200 p-3 dark:border-slate-800 sm:grid-cols-2">
+                <div className="grid gap-3 rounded-2xl border border-agency-line bg-agency-soft/40 p-3 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label htmlFor="font-family">Family name</Label>
                     <Input
@@ -837,7 +837,7 @@ const AgencySettings: React.FC = () => {
               ) : null}
 
               {assetsLoading ? null : fonts.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-slate-200 px-3 py-6 text-center text-xs text-slate-500 dark:border-slate-800">
+                <p className="rounded-xl border border-dashed border-agency-line px-3 py-6 text-center text-xs text-agency-muted">
                   No fonts uploaded. Add one to use it in branded exports.
                 </p>
               ) : (
@@ -845,7 +845,7 @@ const AgencySettings: React.FC = () => {
                   {fonts.map((font) => (
                     <div
                       key={font._id}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 px-3 py-2.5 dark:border-slate-800"
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-agency-line px-3 py-2.5"
                     >
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
@@ -859,7 +859,7 @@ const AgencySettings: React.FC = () => {
                             </Badge>
                           ) : null}
                         </div>
-                        <div className="truncate text-[11px] text-slate-500">
+                        <div className="truncate text-[11px] text-agency-muted">
                           {font.originalName || 'Font file'} ·{' '}
                           {formatBytes(font.bytes)} · {font.licenseNote}
                         </div>
@@ -869,7 +869,7 @@ const AgencySettings: React.FC = () => {
                           type="button"
                           onClick={() => void removeAsset(font)}
                           disabled={busy === font._id}
-                          className="rounded-md p-1.5 text-slate-400 transition-colors hover:text-destructive disabled:opacity-50"
+                          className="rounded-md p-1.5 text-agency-muted transition-colors hover:text-destructive disabled:opacity-50"
                           aria-label={`Remove ${font.fontFamily || 'font'}`}
                         >
                           {busy === font._id ? (
@@ -889,13 +889,13 @@ const AgencySettings: React.FC = () => {
 
         <div className="space-y-5">
 
-          <Card>
+          <Card className="rounded-2xl border-agency-line bg-agency-panel shadow-none">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
+              <CardTitle className="flex items-center gap-2 text-sm font-semibold text-agency-ink">
                 <Palette className="h-4 w-4" />
                 Colours and typography
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-xs leading-5 text-agency-muted">
                 Used by the agency shell now and by branded exports later.
               </CardDescription>
             </CardHeader>
@@ -909,7 +909,7 @@ const AgencySettings: React.FC = () => {
                     value={previewPrimary}
                     onChange={(event) => setPrimaryColor(event.target.value)}
                     disabled={!canManage}
-                    className="h-10 w-12 cursor-pointer rounded-md border border-slate-200 bg-white p-1 disabled:cursor-not-allowed dark:border-slate-800 dark:bg-slate-900"
+                    className="h-10 w-12 cursor-pointer rounded-md border border-agency-line bg-agency-panel p-1 disabled:cursor-not-allowed"
                   />
                   <Input
                     value={primaryColor}
@@ -930,7 +930,7 @@ const AgencySettings: React.FC = () => {
                     value={previewAccent}
                     onChange={(event) => setAccentColor(event.target.value)}
                     disabled={!canManage}
-                    className="h-10 w-12 cursor-pointer rounded-md border border-slate-200 bg-white p-1 disabled:cursor-not-allowed dark:border-slate-800 dark:bg-slate-900"
+                    className="h-10 w-12 cursor-pointer rounded-md border border-agency-line bg-agency-panel p-1 disabled:cursor-not-allowed"
                   />
                   <Input
                     value={accentColor}
@@ -972,32 +972,32 @@ const AgencySettings: React.FC = () => {
                   <option key={font._id} value={font.fontFamily} />
                 ))}
               </datalist>
-              <p className="text-[11px] text-slate-500">
+              <p className="text-[11px] text-agency-muted">
                 Pick a family from your uploaded fonts, or type any family name.
               </p>
             </CardContent>
           </Card>
 
 
-          <Card>
+          <Card className="rounded-2xl border-agency-line bg-agency-panel shadow-none">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
+              <CardTitle className="flex items-center gap-2 text-sm font-semibold text-agency-ink">
                 <Sparkles className="h-4 w-4" />
                 Client brand preview
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-xs leading-5 text-agency-muted">
                 A quick check of how the brand reads on a shared client page.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800">
+              <div className="overflow-hidden rounded-2xl border border-agency-line">
                 <div
                   className="h-20"
                   style={{ backgroundColor: previewPrimary }}
                 />
                 <div className="px-4 pb-4">
                   <div className="-mt-8 flex items-end gap-3">
-                    <div className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-2xl border-4 border-white bg-white shadow-sm dark:border-slate-950 dark:bg-slate-900">
+                    <div className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-2xl border-4 border-agency-panel bg-agency-panel shadow-none">
                       {logoPreview ? (
                         <img
                           src={logoPreview}
@@ -1029,7 +1029,7 @@ const AgencySettings: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="mt-4 space-y-2 rounded-xl bg-slate-50 px-3 py-2.5 text-[11px] text-slate-600 dark:bg-slate-900 dark:text-slate-400">
+                  <div className="mt-4 space-y-2 rounded-xl bg-agency-soft px-3 py-2.5 text-[11px] text-agency-ink/80">
                     <div className="flex items-center justify-between gap-3">
                       <span className="truncate">
                         {contactPhone.trim() || 'Phone on client documents'}
@@ -1052,13 +1052,13 @@ const AgencySettings: React.FC = () => {
                   </div>
 
                   {mascotPreview ? (
-                    <div className="mt-3 flex items-center gap-2 rounded-xl border border-dashed border-slate-200 px-3 py-2 dark:border-slate-800">
+                    <div className="mt-3 flex items-center gap-2 rounded-xl border border-dashed border-agency-line px-3 py-2">
                       <img
                         src={mascotPreview}
                         alt=""
                         className="h-8 w-8 object-contain"
                       />
-                      <span className="text-[11px] text-slate-500">
+                      <span className="text-[11px] text-agency-muted">
                         Your mascot appears on empty states and client pages.
                       </span>
                     </div>
@@ -1072,13 +1072,13 @@ const AgencySettings: React.FC = () => {
         </div>
 
         <div className={cn('space-y-5', section === 'quotes' ? undefined : 'hidden')}>
-          <Card>
+          <Card className="rounded-2xl border-agency-line bg-agency-panel shadow-none">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
+              <CardTitle className="flex items-center gap-2 text-sm font-semibold text-agency-ink">
                 <Receipt className="h-4 w-4" />
                 Quote defaults
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-xs leading-5 text-agency-muted">
                 Prefilled into every new trip quote. A quote can override each
                 list without changing these defaults.
               </CardDescription>
@@ -1117,7 +1117,7 @@ const AgencySettings: React.FC = () => {
                   disabled={!canManage}
                 />
               </div>
-              <p className="text-[11px] text-slate-500">
+              <p className="text-[11px] text-agency-muted">
                 One entry per line. Up to 30 lines per list, 300 characters each.
                 Save changes above to apply them.
               </p>
@@ -1126,13 +1126,13 @@ const AgencySettings: React.FC = () => {
         </div>
 
         <div className={cn('space-y-5', section === 'account' ? undefined : 'hidden')}>
-          <Card>
+          <Card className="rounded-2xl border-agency-line bg-agency-panel shadow-none">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <UserRound className="h-4 w-4 text-teal-600" />
+              <CardTitle className="flex items-center gap-2 text-sm font-semibold text-agency-ink">
+                <UserRound className="h-4 w-4 text-agency-accent" />
                 Your account
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-xs leading-5 text-agency-muted">
                 The name your teammates see inside the agency workspace. This
                 account opens {sessionAgency?.name ?? 'this workspace'} only.
               </CardDescription>
