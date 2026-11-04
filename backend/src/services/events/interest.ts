@@ -4,6 +4,7 @@ import AgencyEventInterest, {
   AGENCY_EVENT_INTEREST_LIMITS,
 } from '../../models/AgencyEventInterest.js';
 import { AppError } from '../../utils/AppError.js';
+import { parsePhoneNumber, PHONE_FORMAT_MESSAGE } from '../../utils/phone.js';
 import {
   loadPublicEventHost,
   publicEventDetailClauses,
@@ -70,10 +71,12 @@ function normalizeEmail(value: unknown): string {
 
 function normalizePhone(value: unknown): string {
   const phone = text(value);
-  if (phone.length < 3 || phone.length > AGENCY_EVENT_INTEREST_LIMITS.phone) {
+  if (!phone || phone.length > 20) {
     throw new AppError('Enter a phone number the agency can reach you on.', 400);
   }
-  return phone;
+  const parsed = parsePhoneNumber(phone);
+  if (!parsed) throw new AppError(PHONE_FORMAT_MESSAGE, 400);
+  return parsed.e164;
 }
 
 function normalizeNote(value: unknown): string {

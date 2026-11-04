@@ -7,6 +7,7 @@ import {
   AGENCY_EVENT_INTEREST_LIMITS,
   AGENCY_EVENT_INTEREST_STATUSES,
 } from '../models/AgencyEventInterest.js';
+import { isPhoneNumber, PHONE_FORMAT_MESSAGE } from '../utils/phone.js';
 
 /**
  * Public event listing filters (Milestone 10 E1). Shape only: eligibility,
@@ -55,8 +56,9 @@ export const eventInterestSchema = z
     phone: z
       .string()
       .trim()
-      .min(3, 'Enter a phone number the agency can reach you on.')
-      .max(AGENCY_EVENT_INTEREST_LIMITS.phone),
+      .min(1, 'Enter a phone number the agency can reach you on.')
+      .max(20)
+      .refine(isPhoneNumber, PHONE_FORMAT_MESSAGE),
     note: z
       .string()
       .trim()

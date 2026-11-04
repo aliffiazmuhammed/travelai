@@ -3,6 +3,7 @@ import {
   AGENCY_APPLICATION_LIMITS,
   AGENCY_APPLICATION_STATUSES,
 } from '../models/AgencyApplication.js';
+import { isPhoneNumber, PHONE_FORMAT_MESSAGE } from '../utils/phone.js';
 
 /**
  * Public agency-application walls.
@@ -12,9 +13,8 @@ import {
  * present so a bot can fill it, invisible in the real form, and quietly
  * accepted by the service without writing anything.
  *
- * Phone is a shape check only (length and characters). The service strips
- * formatting before counting digits, so "accept 7–15 digits" is enforced once,
- * in one place.
+ * Phone must be E.164 with a country code the shared phone table knows; the
+ * service canonicalises it before the write.
  */
 export const submitAgencyApplicationSchema = z
   .object({
@@ -30,10 +30,8 @@ export const submitAgencyApplicationSchema = z
       .string()
       .trim()
       .min(1, 'Enter a phone number we can reach you on.')
-      .max(
-        AGENCY_APPLICATION_LIMITS.phone,
-        `Keep the phone number under ${AGENCY_APPLICATION_LIMITS.phone} characters.`
-      ),
+      .max(20)
+      .refine(isPhoneNumber, PHONE_FORMAT_MESSAGE),
     email: z
       .string()
       .trim()

@@ -19,17 +19,18 @@ import {
  * `provisioning.test.ts` — this flow adds no second provisioning path.
  */
 
-test('a phone number is accepted with local formatting and stored as typed', () => {
-  assert.equal(normalizeApplicationPhone('+91 98765 43210'), '+91 98765 43210');
-  assert.equal(normalizeApplicationPhone('(022) 1234-5678'), '(022) 1234-5678');
-  assert.equal(normalizeApplicationPhone('  9876543210  '), '9876543210');
+test('a phone number is accepted with local formatting and stored as E.164', () => {
+  assert.equal(normalizeApplicationPhone('+91 98765 43210'), '+919876543210');
+  assert.equal(normalizeApplicationPhone('+1 (415) 555-2671'), '+14155552671');
+  assert.equal(normalizeApplicationPhone('  +91 98765 43210  '), '+919876543210');
 });
 
-test('a phone number without 7 to 15 digits is refused', () => {
+test('a phone number without a country code or the right national length is refused', () => {
   assert.throws(() => normalizeApplicationPhone(''), /phone number/);
-  assert.throws(() => normalizeApplicationPhone('123456'), /7 to 15 digits/);
-  assert.throws(() => normalizeApplicationPhone('1234567890123456'), /7 to 15 digits/);
-  assert.throws(() => normalizeApplicationPhone('call me'), /digits/);
+  assert.throws(() => normalizeApplicationPhone('9876543210'), /country code/);
+  assert.throws(() => normalizeApplicationPhone('+91 98765 4321'), /country code/);
+  assert.throws(() => normalizeApplicationPhone('+123456789'), /country code/);
+  assert.throws(() => normalizeApplicationPhone('call me'), /country code/);
 });
 
 test('agency names are collapsed and bounded', () => {
@@ -65,7 +66,7 @@ test('the public form rejects unknown keys, bad emails and long notes', () => {
   assert.throws(() =>
     submitAgencyApplicationSchema.parse({
       name: 'Blue Horizon',
-      phone: '9876543210',
+      phone: '+919876543210',
       email: 'ops@agency.in',
       role: 'owner',
     })
@@ -73,14 +74,14 @@ test('the public form rejects unknown keys, bad emails and long notes', () => {
   assert.throws(() =>
     submitAgencyApplicationSchema.parse({
       name: 'Blue Horizon',
-      phone: '9876543210',
+      phone: '+919876543210',
       email: 'not-an-email',
     })
   );
   assert.throws(() =>
     submitAgencyApplicationSchema.parse({
       name: 'Blue Horizon',
-      phone: '9876543210',
+      phone: '+919876543210',
       email: 'ops@agency.in',
       note: 'x'.repeat(601),
     })
@@ -90,7 +91,7 @@ test('the public form rejects unknown keys, bad emails and long notes', () => {
 test('the honeypot is part of the accepted shape so the service can swallow it', () => {
   const parsed = submitAgencyApplicationSchema.parse({
     name: 'Blue Horizon',
-    phone: '9876543210',
+    phone: '+919876543210',
     email: 'ops@agency.in',
     website: 'https://spam.example',
   });

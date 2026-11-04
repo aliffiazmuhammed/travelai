@@ -3,6 +3,7 @@ import AgencyClient from '../../models/AgencyClient.js';
 import AgencyQuote, { IAgencyQuote, QuoteStatus } from '../../models/AgencyQuote.js';
 import Trip from '../../models/Trip.js';
 import { AppError } from '../../utils/AppError.js';
+import { parsePhoneNumber, PHONE_FORMAT_MESSAGE } from '../../utils/phone.js';
 import { agencyCan, type AgencyRole } from './access.js';
 import { assertAgencyClient } from './clients.js';
 import { ensureLiveProposalForQuote, resolveEnquiryForTrip } from './liveProposal.js';
@@ -487,7 +488,13 @@ function normalizeQuoteClient(input: SaveQuoteInput['client']) {
   if (email && (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 160)) {
     throw new AppError('Enter a valid client email address.', 400);
   }
-  const phone = typeof input?.phone === 'string' ? input.phone.trim().slice(0, 40) : '';
+  const phoneInput =
+    typeof input?.phone === 'string' ? input.phone.trim() : '';
+  const parsedPhone = phoneInput ? parsePhoneNumber(phoneInput) : null;
+  if (phoneInput && !parsedPhone) {
+    throw new AppError(PHONE_FORMAT_MESSAGE, 400);
+  }
+  const phone = parsedPhone?.e164 ?? '';
 
   const adults = finiteNumber(input?.adults, 'adult traveller count');
   const children = finiteNumber(input?.children ?? 0, 'child traveller count');

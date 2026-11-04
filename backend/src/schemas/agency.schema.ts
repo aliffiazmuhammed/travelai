@@ -16,6 +16,7 @@ import {
   AGENCY_TERMS_MAX_ITEMS,
   AGENCY_TERMS_MAX_LENGTH,
 } from '../services/agency/agencies.js';
+import { isPhoneNumber, PHONE_FORMAT_MESSAGE } from '../utils/phone.js';
 
 /** Zod schemas for the Agency Workspace A1 endpoints. */
 
@@ -65,9 +66,9 @@ const clearableEmail = clearable(
 );
 
 const clearablePhone = clearable(
-  (value) => value.length >= 3,
-  'Enter a contact phone number.',
-  40
+  isPhoneNumber,
+  PHONE_FORMAT_MESSAGE,
+  20
 );
 
 const clearableColour = clearable(
@@ -229,6 +230,15 @@ const clientEmail = z
     'Enter a valid client email address.'
   );
 
+const clientPhone = z
+  .string()
+  .trim()
+  .max(20)
+  .refine(
+    (value) => value === '' || isPhoneNumber(value),
+    PHONE_FORMAT_MESSAGE
+  );
+
 export const createAgencyClientSchema = z.object({
   name: z
     .string()
@@ -236,7 +246,7 @@ export const createAgencyClientSchema = z.object({
     .min(1, "Enter the client's name.")
     .max(120, 'Client names must be 120 characters or fewer.'),
   email: clientEmail.optional(),
-  phone: z.string().trim().max(40).optional(),
+  phone: clientPhone.optional(),
   company: z.string().trim().max(120).optional(),
   notes: z.string().trim().max(1000).optional(),
 });
@@ -302,7 +312,7 @@ const quoteClientSchema = z
       .min(1, "Enter the client's name for the quote.")
       .max(120, 'Client names must be 120 characters or fewer.'),
     email: clientEmail.optional(),
-    phone: z.string().trim().max(40).optional(),
+    phone: clientPhone.optional(),
     adults: z.number().int().min(1).max(30),
     children: z.number().int().min(0).max(30),
     rooms: z.number().int().min(0).max(30).nullable().optional(),

@@ -196,7 +196,7 @@ test('contact details are normalised before the write', async () => {
     agencyId: AGENCY_A,
     name: 'Meera Nair',
     email: 'meera@example.com',
-    phone: '+91 98450 11111',
+    phone: '+919845011111',
     note: 'Two of us, happy to share a tent.',
     status: 'pending',
   });

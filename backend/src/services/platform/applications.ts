@@ -7,6 +7,7 @@ import AgencyApplication, {
 import User from '../../models/User.js';
 import { AppError } from '../../utils/AppError.js';
 import { escapeRegex } from '../../utils/escapeRegex.js';
+import { parsePhoneNumber, PHONE_FORMAT_MESSAGE } from '../../utils/phone.js';
 import type {
   AgencyApplicationListQuery,
   RejectAgencyApplicationInput,
@@ -89,21 +90,15 @@ function text(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-/** 7–15 digits once formatting is removed; stored exactly as the visitor typed. */
+/** Requires a country code and stores the canonical E.164 value. */
 export function normalizeApplicationPhone(value: unknown): string {
   const phone = text(value);
   if (!phone) throw new AppError('Enter a phone number we can reach you on.', 400);
-  if (!/^\+?[\d\s().-]+$/.test(phone)) {
-    throw new AppError(
-      'Use digits, spaces, dashes, brackets and an optional leading + for the phone number.',
-      400
-    );
+  const parsed = parsePhoneNumber(phone);
+  if (!parsed) {
+    throw new AppError(PHONE_FORMAT_MESSAGE, 400);
   }
-  const digits = phone.replace(/\D/g, '');
-  if (digits.length < 7 || digits.length > 15) {
-    throw new AppError('Enter a phone number with 7 to 15 digits.', 400);
-  }
-  return phone;
+  return parsed.e164;
 }
 
 export function normalizeApplicationName(value: unknown): string {

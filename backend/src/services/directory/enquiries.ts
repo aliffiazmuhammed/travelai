@@ -14,6 +14,7 @@ import AgencyQuote from '../../models/AgencyQuote.js';
 import Trip from '../../models/Trip.js';
 import User from '../../models/User.js';
 import { AppError } from '../../utils/AppError.js';
+import { parsePhoneNumber, PHONE_FORMAT_MESSAGE } from '../../utils/phone.js';
 import { agencyCan, type AgencyRole } from '../agency/access.js';
 import { recordAgencyAudit } from '../agency/audit.js';
 import {
@@ -274,13 +275,12 @@ function normalizeEmail(value: unknown): string {
 function normalizePhone(value: unknown): string | null {
   const phone = text(value);
   if (!phone) return null;
-  if (phone.length > AGENCY_ENQUIRY_LIMITS.phone) {
-    throw new AppError(
-      `Keep your phone number under ${AGENCY_ENQUIRY_LIMITS.phone} characters.`,
-      400
-    );
+  if (phone.length > 20) {
+    throw new AppError(PHONE_FORMAT_MESSAGE, 400);
   }
-  return phone;
+  const parsed = parsePhoneNumber(phone);
+  if (!parsed) throw new AppError(PHONE_FORMAT_MESSAGE, 400);
+  return parsed.e164;
 }
 
 function normalizeCount(value: unknown, min: number, max: number, label: string): number {

@@ -5,6 +5,7 @@ import {
   AGENCY_ENQUIRY_STATUSES,
   AGENCY_ENQUIRY_THREAD_LIMITS,
 } from '../models/AgencyEnquiry.js';
+import { isPhoneNumber, PHONE_FORMAT_MESSAGE } from '../utils/phone.js';
 
 /**
  * Public enquiry walls (Milestone 9 D5).
@@ -40,9 +41,10 @@ export const createAgencyEnquirySchema = z
     phone: z
       .string()
       .trim()
-      .max(
-        AGENCY_ENQUIRY_LIMITS.phone,
-        `Keep your phone number under ${AGENCY_ENQUIRY_LIMITS.phone} characters.`
+      .max(20)
+      .refine(
+        (value) => value === '' || isPhoneNumber(value),
+        PHONE_FORMAT_MESSAGE
       )
       .optional(),
     adults: z.coerce

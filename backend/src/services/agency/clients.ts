@@ -3,6 +3,7 @@ import AgencyClient, { IAgencyClient } from '../../models/AgencyClient.js';
 import Trip from '../../models/Trip.js';
 import { AppError } from '../../utils/AppError.js';
 import { escapeRegex } from '../../utils/escapeRegex.js';
+import { parsePhoneNumber, PHONE_FORMAT_MESSAGE } from '../../utils/phone.js';
 
 /**
  * Agency client directory (A4).
@@ -107,6 +108,18 @@ function normalizeEmail(value: unknown): string | undefined {
   return email;
 }
 
+function normalizePhone(value: unknown): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'string') {
+    throw new AppError(PHONE_FORMAT_MESSAGE, 400);
+  }
+  const phone = value.trim();
+  if (!phone) return undefined;
+  const parsed = parsePhoneNumber(phone);
+  if (!parsed) throw new AppError(PHONE_FORMAT_MESSAGE, 400);
+  return parsed.e164;
+}
+
 export interface CreateAgencyClientInput {
   agencyId: string;
   createdBy: string;
@@ -121,7 +134,7 @@ export async function createAgencyClient(
   input: CreateAgencyClientInput
 ): Promise<AgencyClientSummary> {
   const email = normalizeEmail(input.email);
-  const phone = normalizeOptional(input.phone, 'phone number', 40);
+  const phone = normalizePhone(input.phone);
   const company = normalizeOptional(input.company, 'company', 120);
   const notes = normalizeOptional(input.notes, 'note', 1000);
 
@@ -161,11 +174,13 @@ export function buildAgencyClientUpdate(input: UpdateAgencyClientInput): {
     const normalized =
       key === 'email'
         ? normalizeEmail(input[key])
-        : normalizeOptional(
-            input[key],
-            key === 'phone' ? 'phone number' : key,
-            key === 'notes' ? 1000 : key === 'company' ? 120 : 40
-          );
+        : key === 'phone'
+          ? normalizePhone(input[key])
+          : normalizeOptional(
+              input[key],
+              key,
+              key === 'notes' ? 1000 : 120
+            );
     if (normalized) $set[key] = normalized;
     else $unset[key] = 1;
   }
