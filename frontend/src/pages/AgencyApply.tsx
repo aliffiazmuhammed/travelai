@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import Navbar from "@/components/Navbar";
+import PhoneField from "@/components/PhoneField";
 import { TravellerBreadcrumbs } from "@/components/traveller/TravellerBreadcrumbs";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -9,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { api, ApiError } from "@/services/api";
 import { applyPageMeta } from "@/lib/meta";
+import { DEFAULT_PHONE_COUNTRY, toE164, validatePhone } from "@/lib/phone";
 import { tripCoverUrl } from "@/lib/tripCover";
 import { usePlatformEnabled } from "@/hooks/usePlatformEnabled";
 import {
@@ -66,6 +68,7 @@ const AgencyApply = () => {
     note: "",
     website: "",
   });
+  const [phoneCountry, setPhoneCountry] = useState(DEFAULT_PHONE_COUNTRY);
   const [consent, setConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -94,6 +97,12 @@ const AgencyApply = () => {
       setFormError("We need your agency name, a phone number and an email to reply to.");
       return;
     }
+    const phone = toE164(phoneCountry, form.phone);
+    const phoneError = validatePhone(phoneCountry, form.phone);
+    if (!phone || phoneError) {
+      setFormError(phoneError ?? "Enter a valid phone number with its country code.");
+      return;
+    }
     if (!consent) {
       setFormError("Please agree to the community guidelines before you send this.");
       return;
@@ -103,7 +112,7 @@ const AgencyApply = () => {
     try {
       await api.submitAgencyApplication({
         name: form.name,
-        phone: form.phone,
+        phone,
         email: form.email,
         note: form.note || undefined,
         website: form.website || undefined,
@@ -213,7 +222,8 @@ const AgencyApply = () => {
                   <p className="text-xs leading-5 text-muted-foreground">
                     Thanks, {form.name.trim() || "there"}. A real person reads every
                     application. If it's a fit, we'll set up your workspace and get
-                    in touch on {form.phone.trim() || "the number you gave us"} or{" "}
+                    in touch on{" "}
+                    {toE164(phoneCountry, form.phone) || "the number you gave us"} or{" "}
                     {form.email.trim() || "your email"} with your sign-in details.
                   </p>
                 </div>
@@ -289,16 +299,18 @@ const AgencyApply = () => {
                   <Label htmlFor="apply-phone" className="text-[11px] font-bold">
                     Phone
                   </Label>
-                  <Input
+                  <PhoneField
                     id="apply-phone"
-                    type="tel"
                     value={form.phone}
-                    onChange={update("phone")}
-                    maxLength={40}
-                    autoComplete="tel"
-                    placeholder="Where we can reach you"
+                    countryIso={phoneCountry}
+                    onValueChange={(value) =>
+                      setForm((previous) => ({ ...previous, phone: value }))
+                    }
+                    onCountryChange={setPhoneCountry}
+                    maxLength={20}
                     disabled={submitting}
-                    className="h-11 rounded-xl text-sm"
+                    inputClassName="h-11 rounded-xl text-sm"
+                    selectClassName="h-11 w-[6.5rem] shrink-0 rounded-xl border border-input bg-background px-2 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                   />
                 </div>
 

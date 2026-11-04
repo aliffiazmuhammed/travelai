@@ -23,6 +23,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import PhoneField from '@/components/PhoneField';
 import { AgencySectionTabs } from '@/components/agency/AgencySectionTabs';
 import { AgencyPageHeader } from '@/components/agency/AgencyPageHeader';
 import { api } from '@/services/api';
@@ -30,6 +31,12 @@ import { useAgency } from '@/context/AgencyContext';
 import { useAgencyAuth } from '@/context/AgencyAuthContext';
 import { useAgencyAssetUrl } from '@/hooks/useAgencyAssetUrl';
 import { agencyRoleBadgeClass, agencyRoleLabel } from '@/lib/agency';
+import {
+  DEFAULT_PHONE_COUNTRY,
+  splitPhone,
+  toE164,
+  validatePhone,
+} from '@/lib/phone';
 import type { AgencyAsset, AgencyAssetKind, AgencyBranding } from '@/types';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -101,6 +108,9 @@ const AgencySettings: React.FC = () => {
   const [website, setWebsite] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [contactPhone, setContactPhone] = useState('');
+  const [contactPhoneCountry, setContactPhoneCountry] = useState(
+    DEFAULT_PHONE_COUNTRY
+  );
   const [address, setAddress] = useState('');
   const [primaryColor, setPrimaryColor] = useState(DEFAULT_PRIMARY);
   const [accentColor, setAccentColor] = useState(DEFAULT_ACCENT);
@@ -146,7 +156,9 @@ const AgencySettings: React.FC = () => {
     setGstin(activeAgency.gstin ?? '');
     setWebsite(activeAgency.branding.website ?? '');
     setContactEmail(activeAgency.branding.contactEmail ?? '');
-    setContactPhone(activeAgency.branding.contactPhone ?? '');
+    const phone = splitPhone(activeAgency.branding.contactPhone);
+    setContactPhone(phone.national);
+    setContactPhoneCountry(phone.countryIso);
     setAddress(activeAgency.branding.address ?? '');
     setPrimaryColor(activeAgency.branding.primaryColor ?? DEFAULT_PRIMARY);
     setAccentColor(activeAgency.branding.accentColor ?? DEFAULT_ACCENT);
@@ -344,6 +356,13 @@ const AgencySettings: React.FC = () => {
       toast.error('Agency name must be at least 2 characters.');
       return;
     }
+    const phoneError = validatePhone(contactPhoneCountry, contactPhone, {
+      required: false,
+    });
+    if (phoneError) {
+      toast.error(phoneError);
+      return;
+    }
 
     setSaving(true);
     try {
@@ -356,7 +375,8 @@ const AgencySettings: React.FC = () => {
         fontBody: fontBody.trim(),
         website: website.trim(),
         contactEmail: contactEmail.trim(),
-        contactPhone: contactPhone.trim(),
+        contactPhone:
+          toE164(contactPhoneCountry, contactPhone) ?? '',
         address: address.trim(),
       };
 
@@ -376,7 +396,9 @@ const AgencySettings: React.FC = () => {
       setGstin(result.agency.gstin ?? '');
       setWebsite(result.agency.branding.website ?? '');
       setContactEmail(result.agency.branding.contactEmail ?? '');
-      setContactPhone(result.agency.branding.contactPhone ?? '');
+      const savedPhone = splitPhone(result.agency.branding.contactPhone);
+      setContactPhone(savedPhone.national);
+      setContactPhoneCountry(savedPhone.countryIso);
       setAddress(result.agency.branding.address ?? '');
       setPrimaryColor(result.agency.branding.primaryColor ?? DEFAULT_PRIMARY);
       setAccentColor(result.agency.branding.accentColor ?? DEFAULT_ACCENT);
@@ -560,12 +582,15 @@ const AgencySettings: React.FC = () => {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="settings-phone">Contact phone</Label>
-                <Input
+                <PhoneField
                   id="settings-phone"
                   value={contactPhone}
-                  onChange={(event) => setContactPhone(event.target.value)}
-                  placeholder="+91 ..."
+                  countryIso={contactPhoneCountry}
+                  onValueChange={setContactPhone}
+                  onCountryChange={setContactPhoneCountry}
+                  maxLength={20}
                   disabled={!canManage}
+                  selectClassName="h-10 w-[6rem] shrink-0 rounded-lg border border-agency-line bg-agency-panel px-2 text-sm text-agency-ink focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-agency-accent disabled:cursor-not-allowed disabled:opacity-50"
                 />
               </div>
               <div className="space-y-2 sm:col-span-2">
@@ -1032,7 +1057,9 @@ const AgencySettings: React.FC = () => {
                   <div className="mt-4 space-y-2 rounded-xl bg-agency-soft px-3 py-2.5 text-[11px] text-agency-ink/80">
                     <div className="flex items-center justify-between gap-3">
                       <span className="truncate">
-                        {contactPhone.trim() || 'Phone on client documents'}
+                        {toE164(contactPhoneCountry, contactPhone) ||
+                          contactPhone.trim() ||
+                          'Phone on client documents'}
                       </span>
                       <span
                         className="font-semibold"

@@ -9,6 +9,7 @@ import {
   Send,
   ShieldCheck,
 } from "lucide-react";
+import PhoneField from "@/components/PhoneField";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -24,6 +25,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/context/UserContext";
 import { AGENCY_ENQUIRY_BUDGET_LABELS } from "@/lib/agency";
+import { DEFAULT_PHONE_COUNTRY, toE164, validatePhone } from "@/lib/phone";
 import { api, ApiError } from "@/services/api";
 import type {
   AgencyEnquiryAcknowledgement,
@@ -90,6 +92,7 @@ const AgencyEnquiryDialog: React.FC<AgencyEnquiryDialogProps> = ({
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [phoneCountry, setPhoneCountry] = useState(DEFAULT_PHONE_COUNTRY);
   const [adults, setAdults] = useState("2");
   const [children, setChildren] = useState("0");
   const [startDate, setStartDate] = useState("");
@@ -112,6 +115,7 @@ const AgencyEnquiryDialog: React.FC<AgencyEnquiryDialogProps> = ({
     setName(user?.name?.trim() || nameFromEmail(user?.email));
     setEmail(user?.email ?? "");
     setPhone("");
+    setPhoneCountry(DEFAULT_PHONE_COUNTRY);
     setAdults("2");
     setChildren("0");
     setStartDate("");
@@ -139,6 +143,8 @@ const AgencyEnquiryDialog: React.FC<AgencyEnquiryDialogProps> = ({
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       return "Enter an email address the agency can reply to.";
     }
+    const phoneError = validatePhone(phoneCountry, phone, { required: false });
+    if (phoneError) return phoneError;
     const adultCount = Number(adults);
     if (!Number.isInteger(adultCount) || adultCount < 1 || adultCount > 20) {
       return "Choose between 1 and 20 adults.";
@@ -179,13 +185,15 @@ const AgencyEnquiryDialog: React.FC<AgencyEnquiryDialogProps> = ({
       return;
     }
 
+    const phoneE164 = toE164(phoneCountry, phone);
+
     setSending(true);
     setError(null);
     try {
       const payload: AgencyEnquiryInput = {
         name: name.trim(),
         email: email.trim(),
-        ...(phone.trim() ? { phone: phone.trim() } : {}),
+        ...(phoneE164 ? { phone: phoneE164 } : {}),
         adults: Number(adults),
         children: Number(children),
         ...(flexible ? { flexible: true } : {}),
@@ -369,13 +377,15 @@ const AgencyEnquiryDialog: React.FC<AgencyEnquiryDialogProps> = ({
                 <Label htmlFor="enquiry-phone" className="text-xs font-bold">
                   Phone <span className="font-normal text-muted-foreground">(optional)</span>
                 </Label>
-                <Input
+                <PhoneField
                   id="enquiry-phone"
                   value={phone}
-                  onChange={(event) => setPhone(event.target.value)}
-                  maxLength={24}
-                  autoComplete="tel"
-                  className="rounded-xl"
+                  countryIso={phoneCountry}
+                  onValueChange={setPhone}
+                  onCountryChange={setPhoneCountry}
+                  maxLength={20}
+                  inputClassName="rounded-xl"
+                  selectClassName="h-10 w-[5rem] shrink-0 rounded-xl border border-input bg-background px-1.5 text-xs text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                 />
               </div>
               <div className="space-y-1.5">

@@ -16,6 +16,7 @@ import {
   Users,
   XCircle,
 } from 'lucide-react';
+import PhoneField from '@/components/PhoneField';
 import ProposalPreviewDialog from '@/components/directory/ProposalPreviewDialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -34,6 +35,12 @@ import { useAgency } from '@/context/AgencyContext';
 import { useAgencyAuth } from '@/context/AgencyAuthContext';
 import { formatAgencyDate } from '@/lib/agency';
 import { formatDateOnly } from '@/lib/date';
+import {
+  DEFAULT_PHONE_COUNTRY,
+  splitPhone,
+  toE164,
+  validatePhone,
+} from '@/lib/phone';
 import { cn } from '@/lib/utils';
 import { api } from '@/services/api';
 import type {
@@ -88,6 +95,7 @@ type QuoteFormState = {
   clientName: string;
   clientEmail: string;
   clientPhone: string;
+  clientPhoneCountry: string;
   adults: string;
   children: string;
   rooms: string;
@@ -167,6 +175,7 @@ function emptyEditor(defaults?: AgencyTerms | null, preparedBy?: string): QuoteF
     clientName: '',
     clientEmail: '',
     clientPhone: '',
+    clientPhoneCountry: DEFAULT_PHONE_COUNTRY,
     adults: '2',
     children: '0',
     rooms: '',
@@ -184,11 +193,13 @@ function emptyEditor(defaults?: AgencyTerms | null, preparedBy?: string): QuoteF
 }
 
 function editorFromQuote(quote: AgencyQuote): QuoteFormState {
+  const phone = splitPhone(quote.client.phone);
   return {
     clientId: quote.clientId ?? '',
     clientName: quote.client.name,
     clientEmail: quote.client.email ?? '',
-    clientPhone: quote.client.phone ?? '',
+    clientPhone: phone.national,
+    clientPhoneCountry: phone.countryIso,
     adults: String(quote.client.adults),
     children: String(quote.client.children),
     rooms:
@@ -273,6 +284,7 @@ function editorPreview(form: QuoteFormState, quoteNumber: string): QuotePreviewD
   const taxMinor = Math.round((taxableMinor * taxPct) / 100);
   const totalMinor = taxableMinor + taxMinor;
   const travelers = Math.max(1, Math.round(adults + children));
+  const clientPhone = toE164(form.clientPhoneCountry, form.clientPhone);
 
   return {
     number: quoteNumber,
@@ -280,7 +292,7 @@ function editorPreview(form: QuoteFormState, quoteNumber: string): QuotePreviewD
     client: {
       name: form.clientName.trim(),
       ...(form.clientEmail.trim() ? { email: form.clientEmail.trim().toLowerCase() } : {}),
-      ...(form.clientPhone.trim() ? { phone: form.clientPhone.trim() } : {}),
+      ...(clientPhone ? { phone: clientPhone } : {}),
       adults: Number.isFinite(adults) ? adults : 1,
       children: Number.isFinite(children) ? children : 0,
       ...(form.rooms.trim() && Number.isFinite(numberOr(form.rooms))
@@ -332,6 +344,10 @@ function validateEditor(form: QuoteFormState): string | null {
   if (form.clientEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.clientEmail.trim())) {
     return 'Enter a valid client email address.';
   }
+  const phoneError = validatePhone(form.clientPhoneCountry, form.clientPhone, {
+    required: false,
+  });
+  if (phoneError) return phoneError;
   const adults = numberOr(form.adults);
   const children = numberOr(form.children, 0);
   if (!Number.isInteger(adults) || adults < 1 || adults > 30) {
@@ -532,12 +548,14 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
     if (!client) return;
     setPrefillApplied(true);
     if (quote) return;
+    const phone = splitPhone(client.phone);
     setEditor((prev) => ({
       ...prev,
       clientId: client._id,
       clientName: client.name,
       clientEmail: client.email ?? '',
-      clientPhone: client.phone ?? '',
+      clientPhone: phone.national,
+      clientPhoneCountry: phone.countryIso,
       adults: String(prefillParty?.adults ?? prev.adults),
       children: String(prefillParty?.children ?? prev.children),
     }));
@@ -561,6 +579,7 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
       toast.error(problem);
       return null;
     }
+    const clientPhone = toE164(editor.clientPhoneCountry, editor.clientPhone);
     return {
       ...(editor.clientId ? { clientId: editor.clientId } : {}),
       client: {
@@ -568,9 +587,7 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
         ...(editor.clientEmail.trim()
           ? { email: editor.clientEmail.trim() }
           : {}),
-        ...(editor.clientPhone.trim()
-          ? { phone: editor.clientPhone.trim() }
-          : {}),
+        ...(clientPhone ? { phone: clientPhone } : {}),
         adults: numberOr(editor.adults),
         children: numberOr(editor.children, 0),
         ...(editor.rooms.trim() ? { rooms: numberOr(editor.rooms) } : {}),
@@ -612,10 +629,11 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
       );
       if (existing) return existing._id;
     }
+    const clientPhone = toE164(editor.clientPhoneCountry, editor.clientPhone);
     const created = await api.createAgencyClient(agencyId, {
       name,
       ...(email ? { email } : {}),
-      ...(editor.clientPhone.trim() ? { phone: editor.clientPhone.trim() } : {}),
+      ...(clientPhone ? { phone: clientPhone } : {}),
     });
     setClients((prev) => [...prev, created.client]);
     return created.client._id;
@@ -757,12 +775,14 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
       return;
     }
     const client = clients.find((entry) => entry._id === value);
+    const phone = splitPhone(client?.phone);
     setEditor((prev) => ({
       ...prev,
       clientId: value,
       clientName: client?.name ?? prev.clientName,
       clientEmail: client?.email ?? '',
-      clientPhone: client?.phone ?? '',
+      clientPhone: phone.national,
+      clientPhoneCountry: phone.countryIso,
     }));
   };
 
@@ -1395,12 +1415,15 @@ const QuoteEditor: React.FC<QuoteEditorProps> = ({
             </div>
             <div className="space-y-2">
               <Label htmlFor="quote-client-phone">Client phone</Label>
-              <Input
+              <PhoneField
                 id="quote-client-phone"
                 value={form.clientPhone}
-                onChange={(event) => update({ clientPhone: event.target.value })}
-                placeholder="+91 ..."
-                maxLength={40}
+                countryIso={form.clientPhoneCountry}
+                onValueChange={(value) => update({ clientPhone: value })}
+                onCountryChange={(iso) =>
+                  update({ clientPhoneCountry: iso })
+                }
+                maxLength={20}
               />
             </div>
             <div className="space-y-2">

@@ -15,6 +15,7 @@ import {
 import { AgencyEmptyState } from '@/components/agency/AgencyEmptyState';
 import { AdminPagination } from '@/components/admin/AdminPagination';
 import { AgencyPageHeader } from '@/components/agency/AgencyPageHeader';
+import PhoneField from '@/components/PhoneField';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -38,6 +39,12 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { useAgency } from '@/context/AgencyContext';
 import { agencyRoleBadgeClass, agencyRoleLabel, formatAgencyDate } from '@/lib/agency';
+import {
+  DEFAULT_PHONE_COUNTRY,
+  splitPhone,
+  toE164,
+  validatePhone,
+} from '@/lib/phone';
 import { cn } from '@/lib/utils';
 import { api } from '@/services/api';
 import type { AgencyClient } from '@/types';
@@ -53,6 +60,7 @@ type ClientForm = {
   company: string;
   email: string;
   phone: string;
+  phoneCountry: string;
   notes: string;
 };
 
@@ -61,6 +69,7 @@ const emptyForm: ClientForm = {
   company: '',
   email: '',
   phone: '',
+  phoneCountry: DEFAULT_PHONE_COUNTRY,
   notes: '',
 };
 
@@ -149,12 +158,14 @@ const AgencyClients: React.FC = () => {
   };
 
   const openEdit = (client: AgencyClient) => {
+    const phone = splitPhone(client.phone);
     setEditing(client);
     setForm({
       name: client.name,
       company: client.company ?? '',
       email: client.email ?? '',
-      phone: client.phone ?? '',
+      phone: phone.national,
+      phoneCountry: phone.countryIso,
       notes: client.notes ?? '',
     });
     setDialogOpen(true);
@@ -176,6 +187,13 @@ const AgencyClients: React.FC = () => {
       toast.error('Enter the client name first.');
       return;
     }
+    const phoneError = validatePhone(form.phoneCountry, form.phone, {
+      required: false,
+    });
+    if (phoneError) {
+      toast.error(phoneError);
+      return;
+    }
 
     setSaving(true);
     try {
@@ -183,7 +201,7 @@ const AgencyClients: React.FC = () => {
         name: form.name.trim(),
         company: form.company.trim(),
         email: form.email.trim(),
-        phone: form.phone.trim(),
+        phone: toE164(form.phoneCountry, form.phone) ?? '',
         notes: form.notes.trim(),
       };
       if (editing) {
@@ -578,14 +596,17 @@ const AgencyClients: React.FC = () => {
             </div>
             <div className="space-y-2">
               <Label htmlFor="client-phone">Phone</Label>
-              <Input
+              <PhoneField
                 id="client-phone"
                 value={form.phone}
-                onChange={(event) =>
-                  setForm((prev) => ({ ...prev, phone: event.target.value }))
+                countryIso={form.phoneCountry}
+                onValueChange={(value) =>
+                  setForm((prev) => ({ ...prev, phone: value }))
                 }
-                placeholder="+91 ..."
-                maxLength={40}
+                onCountryChange={(iso) =>
+                  setForm((prev) => ({ ...prev, phoneCountry: iso }))
+                }
+                maxLength={20}
               />
             </div>
             <div className="space-y-2 sm:col-span-2">

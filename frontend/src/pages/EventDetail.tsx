@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Navbar from '@/components/Navbar';
+import PhoneField from '@/components/PhoneField';
 import { AgencyLogoTile } from '@/components/directory/AgencyLogoTile';
 import { TravellerBreadcrumbs } from '@/components/traveller/TravellerBreadcrumbs';
 import { Button } from '@/components/ui/button';
@@ -9,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { EVENT_KIND_LABELS, eventPriceLabel, spotsLabel } from '@/lib/events';
 import { applyPageMeta } from '@/lib/meta';
+import { DEFAULT_PHONE_COUNTRY, toE164, validatePhone } from '@/lib/phone';
 import { tripCoverUrl } from '@/lib/tripCover';
 import { api, ApiError } from '@/services/api';
 import { cn } from '@/lib/utils';
@@ -88,6 +90,7 @@ const EventDetail = () => {
   const [coverFailed, setCoverFailed] = useState(false);
   const [partySize, setPartySize] = useState<string>('1');
   const [form, setForm] = useState({ name: '', email: '', phone: '', note: '', website: '' });
+  const [phoneCountry, setPhoneCountry] = useState(DEFAULT_PHONE_COUNTRY);
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState<SubmitState>({ kind: 'idle' });
@@ -206,7 +209,8 @@ const EventDetail = () => {
 
     const name = form.name.trim();
     const email = form.email.trim().toLowerCase();
-    const phone = form.phone.trim();
+    const phoneError = validatePhone(phoneCountry, form.phone);
+    const phone = toE164(phoneCountry, form.phone);
     const note = form.note.trim();
 
     if (name.length < 2) {
@@ -217,8 +221,8 @@ const EventDetail = () => {
       setFormError('Enter a valid email address.');
       return;
     }
-    if (phone.length < 3) {
-      setFormError('Enter a phone number the agency can reach you on.');
+    if (!phone || phoneError) {
+      setFormError(phoneError ?? 'Enter a phone number the agency can reach you on.');
       return;
     }
 
@@ -582,15 +586,16 @@ const EventDetail = () => {
                     <Label htmlFor="event-interest-phone" className="text-[11px] font-bold">
                       Phone
                     </Label>
-                    <Input
+                    <PhoneField
                       id="event-interest-phone"
-                      type="tel"
                       value={form.phone}
-                      onChange={(input) => setForm((prev) => ({ ...prev, phone: input.target.value }))}
-                      maxLength={40}
-                      autoComplete="tel"
+                      countryIso={phoneCountry}
+                      onValueChange={(value) => setForm((prev) => ({ ...prev, phone: value }))}
+                      onCountryChange={setPhoneCountry}
+                      maxLength={20}
                       disabled={submitting}
-                      className="h-10 rounded-xl text-xs"
+                      inputClassName="h-10 rounded-xl text-xs"
+                      selectClassName="h-10 w-[6rem] shrink-0 rounded-xl border border-input bg-background px-2 text-xs text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                     />
                   </div>
 
