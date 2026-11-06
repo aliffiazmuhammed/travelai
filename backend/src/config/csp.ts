@@ -10,7 +10,7 @@
  * - **Styles:** inline style attributes are unavoidable — Recharts and
  *   Leaflet position elements with `style="..."` — so `style-src` keeps
  *   `'unsafe-inline'`. The only remote stylesheet is the Google Fonts CSS
- *   (Fraunces + Inter) linked from `index.html`.
+ *   (Newsreader + Manrope) linked from `index.html`.
  * - **Images:** same-origin uploads, inline data/blob previews, Unsplash trip
  *   covers, Cloudinary avatars/receipts, and the two map tile providers.
  * - **Connections:** same-origin API/SSE plus Nominatim geocoding, which the
@@ -33,7 +33,7 @@ export const CSP_IMAGE_ORIGINS = [
   'https://server.arcgisonline.com',
 ] as const;
 
-/** Origins the SPA loads fonts and font CSS from (Fraunces + Inter). */
+/** Origins the SPA loads fonts and font CSS from (Newsreader + Manrope). */
 export const CSP_FONT_ORIGINS = ['https://fonts.gstatic.com'] as const;
 export const CSP_STYLE_ORIGINS = ['https://fonts.googleapis.com'] as const;
 
