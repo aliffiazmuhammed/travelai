@@ -1,6 +1,5 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import mongoose from 'mongoose';
 import Trip from '../../models/Trip.js';
 import User from '../../models/User.js';
 import {
@@ -14,9 +13,9 @@ import {
  * Milestone 8 G3 — the public gallery listing and trip page.
  *
  * `projection.test.ts` already pins *what* a public payload may contain. These
- * tests pin *which* rows may appear at all (published, personal, live, not
- * deleted), how the filters and the `(publishedAt, _id)` cursor are built, and
- * that both read paths leave through the projection.
+ * tests pin *which* rows may appear at all (published, personal, live/past,
+ * not deleted), how the filters and the two tab orderings are built, and that
+ * both read paths leave through the projection.
  */
 
 const USER_A = '64b0000000000000000000a1';
@@ -26,7 +25,7 @@ const TRIP_2 = '64b000000000000000000102';
 
 let tripQuery: any = null;
 let countQuery: any = null;
-let tripLimit: number | null = null;
+let lastPipeline: any[] | null = null;
 let currentRows: any[] = [];
 let currentTotal = 0;
 let currentUsers: any[] = [];
@@ -36,6 +35,7 @@ const originals = {
   find: Trip.find,
   findOne: Trip.findOne,
   countDocuments: Trip.countDocuments,
+  aggregate: Trip.aggregate,
   userFind: User.find,
 };
 
@@ -44,13 +44,16 @@ const originals = {
   const chain: any = {
     select: () => chain,
     sort: () => chain,
-    limit: (value: number) => {
-      tripLimit = value;
-      return chain;
-    },
+    limit: () => chain,
     lean: async () => currentRows,
   };
   return chain;
+};
+
+(Trip as any).aggregate = async (pipeline: any[]) => {
+  lastPipeline = pipeline;
+  tripQuery = pipeline[0]?.$match ?? null;
+  return currentRows;
 };
 
 (Trip as any).findOne = (filter: any) => {
@@ -77,6 +80,7 @@ test.after(() => {
   (Trip as any).find = originals.find;
   (Trip as any).findOne = originals.findOne;
   (Trip as any).countDocuments = originals.countDocuments;
+  (Trip as any).aggregate = originals.aggregate;
   (User as any).find = originals.userFind;
 });
 
@@ -131,11 +135,15 @@ function trip(overrides: Record<string, unknown> = {}): any {
 function reset(): void {
   tripQuery = null;
   countQuery = null;
-  tripLimit = null;
+  lastPipeline = null;
   currentRows = [];
   currentTotal = 0;
   currentUsers = [publisher()];
   findOneResult = trip();
+}
+
+function pipelineStage(name: string): any {
+  return lastPipeline?.find((stage) => Object.prototype.hasOwnProperty.call(stage, name)) ?? null;
 }
 
 function clauses(filter: any): any[] {
@@ -275,35 +283,59 @@ test('filters are omitted when the query is empty', () => {
   assert.equal(clauses(filter).find((clause) => 'gallery.tags' in clause), undefined);
 });
 
-/* -------------------------------------------------------------------------- */
-/*  Cursor                                                                     */
-/* -------------------------------------------------------------------------- */
+test('the past tab keeps finished trips only and drops the live window', () => {
+  const filter = buildExploreFilter({ when: 'past' });
+  const flat = clauses(filter);
 
-function makeCursor(publishedAt: string, id: string): string {
-  return Buffer.from(JSON.stringify({ p: publishedAt, i: id })).toString('base64url');
-}
-
-test('the cursor narrows on (publishedAt, _id), never on _id alone', () => {
-  const publishedAt = '2026-10-01T00:00:00.000Z';
-  const filter = buildExploreFilter({ cursor: makeCursor(publishedAt, TRIP_1) });
-  const cursor = orClauseStartingWith(filter, 'publishedAt');
-
-  assert.ok(cursor, 'cursor clause must exist');
-  assert.deepEqual(cursor.$or[0], { publishedAt: { $lt: new Date(publishedAt) } });
-  assert.equal(cursor.$or[1].publishedAt.toISOString(), publishedAt);
-  assert.ok(cursor.$or[1]._id.$lt instanceof mongoose.Types.ObjectId);
-  assert.equal(cursor.$or[1]._id.$lt.toHexString(), TRIP_1);
+  assert.equal(
+    flat.some((clause) => Array.isArray(clause.$or) && clause.$or[0]?.startDate?.$gte),
+    false,
+    'the live window must not survive on the past tab'
+  );
+  const past = flat.find((clause) => clause.startDate?.$lt instanceof Date);
+  assert.ok(past, 'past rows must start before today');
+  assert.equal(past.startDate.$lt.getUTCHours(), 0);
 });
 
-test('a malformed or padded cursor is a 400 instead of a query', () => {
-  for (const cursor of [
-    'not-a-cursor',
-    makeCursor('not-a-date', TRIP_1),
-    makeCursor('2026-10-01T00:00:00.000Z', 'nope'),
-    Buffer.from(JSON.stringify({ p: '2026-10-01T00:00:00.000Z', i: TRIP_1, x: 1 })).toString('base64url'),
-  ]) {
-    assert.throws(() => buildExploreFilter({ cursor }), /page cursor is not valid/);
-  }
+/* -------------------------------------------------------------------------- */
+/*  Ordering and paging                                                        */
+/* -------------------------------------------------------------------------- */
+
+test('the live listing leads with the soonest departure', async () => {
+  reset();
+  await listGalleryTrips({ limit: 12 });
+
+  const added = pipelineStage('$addFields');
+  assert.ok(added, 'the live sort needs a computed departure key');
+  assert.deepEqual(added.$addFields.__sortStart, {
+    $ifNull: ['$startDate', new Date('9999-12-31T00:00:00.000Z')],
+  });
+  assert.deepEqual(pipelineStage('$sort'), {
+    $sort: { __sortStart: 1, publishedAt: -1, _id: -1 },
+  });
+});
+
+test('the past listing leads with the most recent trip', async () => {
+  reset();
+  await listGalleryTrips({ when: 'past', limit: 12 });
+
+  assert.equal(pipelineStage('$addFields'), null, 'past rows all have a start date');
+  assert.deepEqual(pipelineStage('$sort'), {
+    $sort: { startDate: -1, publishedAt: -1, _id: -1 },
+  });
+});
+
+test('a page number becomes a skip and the page size becomes the limit', async () => {
+  reset();
+  currentRows = [trip(), trip({ _id: TRIP_2, publishedAt: new Date('2026-09-01T00:00:00.000Z') })];
+  const page = await listGalleryTrips({ page: 3, limit: 6 });
+
+  assert.deepEqual(pipelineStage('$skip'), { $skip: 12 });
+  assert.deepEqual(pipelineStage('$limit'), { $limit: 7 });
+  assert.equal(page.page, 3);
+  assert.equal(page.pageSize, 6);
+  assert.equal(page.trips.length, 2);
+  assert.equal(page.hasMore, false);
 });
 
 /* -------------------------------------------------------------------------- */
@@ -317,15 +349,13 @@ test('the listing fetches one extra row to detect another page', async () => {
 
   const page = await listGalleryTrips({ limit: 1 });
 
-  assert.equal(tripLimit, 2);
+  assert.deepEqual(pipelineStage('$limit'), { $limit: 2 });
   assert.equal(page.trips.length, 1);
   assert.equal(page.hasMore, true);
-  assert.ok(page.nextCursor);
-  const decoded = JSON.parse(Buffer.from(page.nextCursor!, 'base64url').toString('utf8'));
-  assert.deepEqual(decoded, { p: '2026-10-01T00:00:00.000Z', i: TRIP_1 });
+  assert.equal(page.page, 1);
 });
 
-test('the last page has no cursor', async () => {
+test('the last page does not claim another page', async () => {
   reset();
   currentRows = [trip()];
 
@@ -333,7 +363,6 @@ test('the last page has no cursor', async () => {
 
   assert.equal(page.trips.length, 1);
   assert.equal(page.hasMore, false);
-  assert.equal(page.nextCursor, null);
 });
 
 test('total counts the whole filter, not just the page', async () => {
@@ -341,12 +370,11 @@ test('total counts the whole filter, not just the page', async () => {
   currentRows = [trip()];
   currentTotal = 37;
 
-  const page = await listGalleryTrips({ q: 'hills', limit: 1, cursor: makeCursor('2026-10-01T00:00:00.000Z', TRIP_1) });
+  const page = await listGalleryTrips({ q: 'hills', limit: 1, page: 3 });
 
   assert.equal(page.total, 37);
   assert.ok(orClauseStartingWith(tripQuery, 'title'), 'page query keeps the search');
   assert.ok(orClauseStartingWith(countQuery, 'title'), 'count keeps the search');
-  assert.equal(orClauseStartingWith(countQuery, 'publishedAt'), undefined, 'count ignores the cursor');
 });
 
 test('a publisher without a handle drops the row instead of inventing one', async () => {

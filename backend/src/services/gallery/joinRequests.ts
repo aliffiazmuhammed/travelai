@@ -8,7 +8,7 @@ import Trip from '../../models/Trip.js';
 import User from '../../models/User.js';
 import { AppError } from '../../utils/AppError.js';
 import { env } from '../../config/env.js';
-import { publicTripClauses } from './explore.js';
+import { isTripLive, publicTripClauses } from './explore.js';
 import { emitTripUpdated } from '../collab/presence.js';
 
 /**
@@ -22,6 +22,8 @@ import { emitTripUpdated } from '../collab/presence.js';
  *   that still passes `publicTripClauses()` (published, live, personal,
  *   upcoming). Unpublishing a trip therefore closes it to new requests without
  *   touching rows already queued — the owner can still clean those up.
+ *   Reading the caller's state is different: it also loads a finished trip so
+ *   the page can say so and offer a copy, with `joinable: false`.
  *
  * Blocks are one-way and silent: the blocked account is never told, and their
  * pending requests on the blocker's trips are declined when the block lands.
@@ -50,6 +52,8 @@ export interface JoinRequestState {
   request: JoinRequestView | null;
   isMember: boolean;
   isOwner: boolean;
+  /** False once the start date has passed; the page stays viewable and copyable. */
+  joinable: boolean;
 }
 
 export interface BlockView {
@@ -93,6 +97,24 @@ async function loadJoinableTrip(
   const ownerId = ownerIdOf(trip);
   if (!ownerId) throw new AppError('Trip not found.', 404);
   return { trip, ownerId };
+}
+
+/**
+ * Loads any public trip, including one that has already started. State reads
+ * use this so the page can still show ownership/membership after the window
+ * closes; the write path above keeps the stricter live-only loader.
+ */
+async function loadPublicTripForState(tripId: string): Promise<any> {
+  if (!isObjectId(tripId)) throw new AppError('Trip not found.', 404);
+
+  const trip = await Trip.findOne({
+    _id: tripId,
+    $and: publicTripClauses({ includePast: true }),
+  })
+    .select('members startDate')
+    .lean();
+  if (!trip) throw new AppError('Trip not found.', 404);
+  return trip;
 }
 
 /** Projects one row; `requester` is filled only for owner-facing responses. */
@@ -212,7 +234,9 @@ export async function getJoinRequestState(
   tripId: string,
   requesterId: string
 ): Promise<JoinRequestState> {
-  const { trip, ownerId } = await loadJoinableTrip(tripId);
+  const trip = await loadPublicTripForState(tripId);
+  const ownerId = ownerIdOf(trip);
+  if (!ownerId) throw new AppError('Trip not found.', 404);
 
   const request = await TripJoinRequest.findOne({
     tripId,
@@ -223,6 +247,7 @@ export async function getJoinRequestState(
     request: request ? projectRequest(request) : null,
     isMember: isMemberOf(trip, requesterId),
     isOwner: ownerId === requesterId,
+    joinable: isTripLive(trip),
   };
 }
 

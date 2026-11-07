@@ -31,7 +31,13 @@ export const exploreQuerySchema = z.object({
     .max(40, 'Group type can be 40 characters or fewer.')
     .optional(),
   tags: z.union([z.string().max(200), z.array(z.string().max(200))]).optional(),
-  cursor: z.string().max(400, 'That page cursor is too long.').optional(),
+  when: z.enum(['live', 'past']).optional(),
+  page: z.coerce
+    .number()
+    .int('Choose a whole page number.')
+    .min(1, 'Pages start at one.')
+    .max(200, 'That page is too deep.')
+    .optional(),
   limit: z.coerce
     .number()
     .int('Choose a whole number of results.')

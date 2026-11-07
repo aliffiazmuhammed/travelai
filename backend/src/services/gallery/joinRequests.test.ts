@@ -282,10 +282,30 @@ test('join state reports my latest request and membership flags', async () => {
   assert.equal(state.request?.status, 'pending');
   assert.equal(state.isMember, false);
   assert.equal(state.isOwner, false);
+  assert.equal(state.joinable, true, 'a date-flexible trip stays joinable');
 
   const owner = await getJoinRequestState(TRIP_ID, OWNER_ID);
   assert.equal(owner.isOwner, true);
   assert.equal(owner.isMember, true);
+  assert.equal(owner.joinable, true);
+});
+
+test('join state still loads a finished trip, but reports it as closed', async () => {
+  reset();
+  tripRow = {
+    ...tripRow,
+    startDate: new Date('2020-01-01T00:00:00.000Z'),
+  };
+
+  const state = await getJoinRequestState(TRIP_ID, REQUESTER_ID);
+
+  assert.equal(state.joinable, false);
+  const clauses = lastTripFilter.$and as any[];
+  assert.equal(
+    clauses.some((clause) => Array.isArray(clause.$or)),
+    false,
+    'the state read must not apply the upcoming date window'
+  );
 });
 
 test('withdrawing only works against the caller’s own pending request', async () => {

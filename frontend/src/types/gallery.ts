@@ -137,22 +137,27 @@ export interface GalleryTravelerProfile {
 /** Duration buckets understood by `GET /api/explore`. */
 export type GalleryDuration = 'short' | 'week' | 'fortnight' | 'long';
 
+export type ExploreWhen = 'live' | 'past';
+
 export interface ExploreFilters {
   q?: string;
   duration?: GalleryDuration;
   groupType?: string;
   /** A single tag; the server also accepts a comma-separated list. */
   tag?: string;
-  cursor?: string;
+  /** Live trips are joinable; past trips are copy-only. Defaults to live. */
+  when?: ExploreWhen;
+  page?: number;
   limit?: number;
 }
 
-/** One public cursor page. `total` ignores the cursor. */
+/** One public page. `total` is the size of the whole filtered set. */
 export interface ExplorePage {
   trips: GalleryTripSummary[];
-  nextCursor: string | null;
   hasMore: boolean;
   total: number;
+  page: number;
+  pageSize: number;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -226,6 +231,8 @@ export interface JoinRequestState {
   request: TripJoinRequest | null;
   isMember: boolean;
   isOwner: boolean;
+  /** False once the trip has started; the plan can still be copied. */
+  joinable: boolean;
 }
 
 export interface BlockedAccount {

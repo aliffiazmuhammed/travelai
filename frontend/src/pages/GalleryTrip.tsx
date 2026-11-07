@@ -28,6 +28,7 @@ import {
   Compass,
   Copy,
   Flag,
+  History,
   Leaf,
   Loader2,
   Lock,
@@ -281,6 +282,19 @@ const GalleryTrip = () => {
     () => (trip ? withItineraryDefaults(trip.itinerary) : null),
     [trip]
   );
+
+  // A trip is finished once its start date is before today. Hidden dates stay
+  // unknown to a signed-out visitor, so the join state below is the fallback
+  // that tells a signed-in visitor the window has closed.
+  const tripHasStarted = useMemo(() => {
+    if (!trip?.dates.exact || !trip.dates.startDate) return false;
+    const start = new Date(trip.dates.startDate);
+    if (Number.isNaN(start.getTime())) return false;
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    return start < today;
+  }, [trip]);
+  const joinClosed = tripHasStarted || joinState?.joinable === false;
 
   // G5: ask the server whether I already have a request / membership. A failure
   // here is non-fatal — the page still renders and the CTA simply shows the
@@ -592,6 +606,12 @@ const GalleryTrip = () => {
                     />
                     {formatGalleryDates(trip.dates)}
                   </span>
+                  {tripHasStarted && (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-muted/60 px-2.5 py-0.5 text-[10px] font-bold text-muted-foreground">
+                      <History className="h-3 w-3" aria-hidden="true" />
+                      Finished
+                    </span>
+                  )}
                 </div>
 
                 {trip.summary && (
@@ -650,7 +670,7 @@ const GalleryTrip = () => {
                         You're in — open the trip
                       </Link>
                     </Button>
-                  ) : joinState?.request?.status === "pending" ? (
+                  ) : joinState?.request?.status === "pending" && !joinClosed ? (
                     <div className="flex w-full flex-col gap-1.5 sm:w-auto">
                       <Button
                         type="button"
@@ -671,6 +691,10 @@ const GalleryTrip = () => {
                       >
                         {joinBusy ? "Withdrawing…" : "Withdraw request"}
                       </Button>
+                    </div>
+                  ) : joinClosed ? (
+                    <div className="w-full rounded-2xl border border-border/70 bg-muted/40 px-3 py-2.5 text-center text-[11px] font-semibold text-muted-foreground sm:w-auto">
+                      This trip has already happened — joining is closed.
                     </div>
                   ) : (
                     <Button
@@ -730,10 +754,9 @@ const GalleryTrip = () => {
                 </div>
 
                 <p className="max-w-sm text-[10px] leading-relaxed text-muted-foreground lg:text-right">
-                  Your copy is private and yours to change however you like —
-                  the original stays as it is. Asking to join sends a note to
-                  the owner; if they say yes, you can follow the trip and
-                  comment.
+                  {joinClosed
+                    ? "This trip has already happened. Take a copy and change the dates, stays and routes however you like — the original stays as it is."
+                    : "Your copy is private and yours to change however you like — the original stays as it is. Asking to join sends a note to the owner; if they say yes, you can follow the trip and comment."}
                 </p>
               </div>
             </div>
@@ -1123,9 +1146,11 @@ const GalleryTrip = () => {
                 </dl>
 
                 <p className="mt-3 border-t border-border/60 pt-4 text-[11px] leading-relaxed text-muted-foreground">
-                  {joinState?.isOwner
-                    ? "You're the host — join requests arrive in your dashboard."
-                    : `${hostName} reviews join requests so the trip stays a good fit for everyone.`}
+                  {joinClosed
+                    ? "This trip has already happened, so join requests are closed. The plan stays here to copy."
+                    : joinState?.isOwner
+                      ? "You're the host — join requests arrive in your dashboard."
+                      : `${hostName} reviews join requests so the trip stays a good fit for everyone.`}
                 </p>
                 <p className="mt-2 flex items-start gap-1.5 text-[11px] leading-relaxed text-muted-foreground">
                   <Lock

@@ -6,6 +6,11 @@ import { TripCover } from "@/components/gallery/TripCover";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { api, ApiError } from "@/services/api";
 import { avatarSrc, initialsFor } from "@/lib/avatar";
 import { DURATION_LABELS, formatGalleryDates } from "@/lib/galleryFormat";
@@ -15,10 +20,13 @@ import {
   AlertCircle,
   ArrowRight,
   CalendarDays,
+  Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock3,
   Compass,
+  History,
   Loader2,
   MapPin,
   Search,
@@ -26,6 +34,7 @@ import {
   X,
 } from "lucide-react";
 import type {
+  ExploreWhen,
   GalleryDuration,
   GalleryTripSummary,
 } from "@/types/gallery";
@@ -35,14 +44,16 @@ import type { PublicEventSummary } from "@/types/events";
  * Public gallery index (Milestone 8 G3) and the events strip (M10 E1).
  *
  * Anonymous: no session is read and both payloads are public projections, so
- * this page can be linked from anywhere. Trip filters live in the URL (`?q=&
- * duration=&groupType=&tag=`) so a filtered view is shareable; the cursor stays
- * in memory because a shared link should always start at the newest page.
+ * this page can be linked from anywhere. Trip filters and the live/past
+ * switch live in the URL (`?view=&q=&duration=&groupType=&tag=`) so a
+ * filtered view is shareable; the page number stays in memory because a
+ * shared link should start at the top.
  *
- * Paging is Previous/Next over a cursor stack rather than an append-only
- * "load more": the API has no offset, so remembering the cursors already used
- * is what makes going back possible. Upcoming events are a browse affordance
- * rather than search results, so they appear only when no trip filter is active.
+ * Paging is Previous/Next over fixed pages rather than an append-only "load
+ * more". The live tab is ordered by departure, so the client asks by page
+ * number instead of carrying a sort cursor. Upcoming events are a browse
+ * affordance rather than search results, so they appear in the live tab only
+ * when no trip filter is active.
  */
 
 const PAGE_SIZE = 12;
@@ -69,44 +80,121 @@ function isDuration(value: string | null): value is GalleryDuration {
   return value === "short" || value === "week" || value === "fortnight" || value === "long";
 }
 
-const FilterChip = ({
+const DURATION_MENU = [
+  { value: "", label: "Any length" },
+  ...DURATION_OPTIONS.map((option) => ({ value: option.value, label: option.label })),
+];
+
+const GROUP_MENU = GROUP_OPTIONS.map((option) => ({ value: option, label: option }));
+
+/**
+ * One filter in the compact toolbar. The trigger shows the chosen value so a
+ * filtered view is readable without opening the menu, and the list only takes
+ * space while it is open.
+ */
+const FilterMenu = ({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  /** Empty string means "no choice", which is what "Any length" selects. */
+  value: string;
+  options: { value: string; label: string }[];
+  onChange: (value: string) => void;
+}) => {
+  const selected = value
+    ? options.find((option) => option.value === value)
+    : undefined;
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label={`${label}: ${selected ? selected.label : "any"}`}
+          className={cn(
+            "inline-flex h-10 items-center gap-1.5 rounded-xl border px-3.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1",
+            selected
+              ? "border-primary/40 bg-primary/5 text-primary"
+              : "border-border/80 bg-card text-foreground/80 hover:border-primary/30 hover:text-foreground"
+          )}
+        >
+          {selected ? selected.label : label}
+          <ChevronDown className="h-3.5 w-3.5 opacity-60" aria-hidden="true" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-48 rounded-xl border-border/70 p-1">
+        {options.map((option) => {
+          const active = option.value === value;
+          return (
+            <button
+              key={option.value || "any"}
+              type="button"
+              aria-pressed={active}
+              onClick={() => onChange(active ? "" : option.value)}
+              className={cn(
+                "flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs font-semibold transition-colors",
+                active
+                  ? "bg-primary/5 text-primary"
+                  : "text-foreground/80 hover:bg-muted hover:text-foreground"
+              )}
+            >
+              {option.label}
+              {active && <Check className="h-3.5 w-3.5" aria-hidden="true" />}
+            </button>
+          );
+        })}
+      </PopoverContent>
+    </Popover>
+  );
+};
+
+const StatusCard = ({
   active,
+  icon,
+  title,
+  hint,
   onClick,
-  children,
 }: {
   active: boolean;
+  icon: ReactNode;
+  title: string;
+  hint: string;
   onClick: () => void;
-  children: ReactNode;
 }) => (
   <button
     type="button"
-    onClick={onClick}
     aria-pressed={active}
+    onClick={onClick}
     className={cn(
-      "inline-flex min-h-[32px] items-center rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-colors",
+      "flex items-center gap-3 rounded-2xl border p-4 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
       active
-        ? "border-primary/40 bg-primary/10 text-primary"
-        : "border-border/80 bg-card text-foreground/75 hover:border-primary/30 hover:text-foreground"
+        ? "border-primary/40 bg-card shadow-sm"
+        : "border-transparent bg-transparent hover:bg-card/60"
     )}
   >
-    {children}
+    <span
+      className={cn(
+        "flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
+        active ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+      )}
+    >
+      {icon}
+    </span>
+    <span className="min-w-0">
+      <span className="block font-display text-lg font-semibold leading-tight tracking-tight text-foreground">
+        {title}
+      </span>
+      <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">
+        {hint}
+      </span>
+    </span>
   </button>
 );
 
-const FilterGroup = ({
-  label,
-  children,
-}: {
-  label: string;
-  children: ReactNode;
-}) => (
-  <div className="flex flex-wrap items-center justify-center gap-2">
-    <span className="text-[11px] font-semibold text-muted-foreground">{label}</span>
-    {children}
-  </div>
-);
-
-const ExploreCard = ({ trip }: { trip: GalleryTripSummary }) => (
+const ExploreCard = ({ trip, past }: { trip: GalleryTripSummary; past?: boolean }) => (
   <article className="group overflow-hidden rounded-3xl border border-border/70 bg-card shadow-xs transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md">
     <Link to={`/explore/${trip._id}`} className="block" aria-label={`Open ${trip.title}`}>
       <TripCover destination={trip.destination} title={trip.title}>
@@ -114,6 +202,12 @@ const ExploreCard = ({ trip }: { trip: GalleryTripSummary }) => (
           <Clock3 className="h-3 w-3" aria-hidden="true" />
           {trip.durationDays} {trip.durationDays === 1 ? "day" : "days"}
         </span>
+        {past && (
+          <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-background/90 px-2.5 py-1 text-[10px] font-bold text-muted-foreground shadow-xs backdrop-blur">
+            <History className="h-3 w-3" aria-hidden="true" />
+            Finished
+          </span>
+        )}
       </TripCover>
     </Link>
 
@@ -170,14 +264,13 @@ interface PageResult {
   key: string;
   trips: GalleryTripSummary[];
   total: number;
-  nextCursor: string | null;
+  page: number;
+  hasMore: boolean;
 }
 
 interface PagePosition {
   key: string;
-  /** `cursors[0]` is the first page; each entry starts one page. */
-  cursors: (string | undefined)[];
-  index: number;
+  page: number;
 }
 
 const Explore = () => {
@@ -186,6 +279,7 @@ const Explore = () => {
   const resultsRef = useRef<HTMLDivElement>(null);
 
   const q = searchParams.get("q") ?? "";
+  const view: ExploreWhen = searchParams.get("view") === "past" ? "past" : "live";
   const duration = isDuration(searchParams.get("duration"))
     ? (searchParams.get("duration") as GalleryDuration)
     : undefined;
@@ -199,41 +293,40 @@ const Explore = () => {
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
-  // A new filter set always starts at page one, even before state catches up.
-  const filterKey = [q, duration ?? "", groupType, tag].join("|");
+  // A new filter set or tab always starts at page one, even before state
+  // catches up. The page stays in memory so a shared link starts at the top.
+  const filterKey = [view, q, duration ?? "", groupType, tag].join("|");
   const [position, setPosition] = useState<PagePosition>({
     key: filterKey,
-    cursors: [undefined],
-    index: 0,
+    page: 1,
   });
   const positionForFilters =
-    position.key === filterKey
-      ? position
-      : { key: filterKey, cursors: [undefined], index: 0 };
-  const cursor = positionForFilters.cursors[positionForFilters.index];
-  const pageKey = `${filterKey}::${cursor ?? ""}`;
+    position.key === filterKey ? position : { key: filterKey, page: 1 };
+  const page = positionForFilters.page;
+  const pageKey = `${filterKey}::${page}`;
 
-  // Results are tagged with the page they belong to, so a filter change never
-  // shows the previous filter's trips while the new page loads.
+  // Results are tagged with the page they belong to, so a tab or filter change
+  // never shows the previous page's trips while the new one loads.
   const current = result?.key === pageKey ? result : null;
   const trips = current?.trips ?? [];
   const total = current?.total ?? 0;
-  const nextCursor = current?.nextCursor ?? null;
+  const hasMore = current?.hasMore ?? false;
 
   const hasFilters = Boolean(q || duration || groupType || tag);
+  const isPast = view === "past";
 
   useEffect(() => {
     return applyPageMeta({
       title: "Explore trips to join · TravelAI",
       description:
-        "Real trips people have planned and shared on TravelAI, plus camps and retreats agencies are running. Find one you fancy, ask to join, or take a copy and make it your own.",
+        "Real trips people have planned and shared on TravelAI, plus camps and retreats agencies are running. Ask to join a live trip, or take a copy of a finished one and make it your own.",
       ogType: "website",
     });
   }, []);
 
   /**
-   * Writes filters into the URL. Any change other than the cursor restarts
-   * paging, because a cursor is only valid for the filter set that produced it.
+   * Writes filters into the URL. Any change restarts paging, because page N is
+   * only meaningful for the tab and filter set that produced it.
    */
   const applyFilters = useCallback(
     (changes: Record<string, string | null>) => {
@@ -246,6 +339,9 @@ const Explore = () => {
     },
     [searchParams, setSearchParams]
   );
+
+  const setView = (next: ExploreWhen) =>
+    applyFilters({ view: next === "past" ? "past" : null });
 
   // Search is debounced so a fast typist does not fire a request per keystroke.
   useEffect(() => {
@@ -300,16 +396,18 @@ const Explore = () => {
         duration,
         groupType: groupType || undefined,
         tag: tag || undefined,
-        cursor,
+        when: view,
+        page,
         limit: PAGE_SIZE,
       })
-      .then((page) => {
+      .then((pageResult) => {
         if (cancelled) return;
         setResult({
           key: pageKey,
-          trips: page.trips,
-          total: page.total,
-          nextCursor: page.nextCursor,
+          trips: pageResult.trips,
+          total: pageResult.total,
+          page: pageResult.page,
+          hasMore: pageResult.hasMore,
         });
       })
       .catch((err) => {
@@ -329,24 +427,17 @@ const Explore = () => {
     return () => {
       cancelled = true;
     };
-  }, [q, duration, groupType, tag, cursor, pageKey, reloadKey]);
+  }, [q, duration, groupType, tag, view, page, pageKey, reloadKey]);
 
   const goToNext = () => {
-    if (!nextCursor) return;
-    setPosition({
-      key: filterKey,
-      cursors: [
-        ...positionForFilters.cursors.slice(0, positionForFilters.index + 1),
-        nextCursor,
-      ],
-      index: positionForFilters.index + 1,
-    });
+    if (!hasMore) return;
+    setPosition({ key: filterKey, page: page + 1 });
     resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const goToPrevious = () => {
-    if (positionForFilters.index === 0) return;
-    setPosition({ ...positionForFilters, index: positionForFilters.index - 1 });
+    if (page <= 1) return;
+    setPosition({ key: filterKey, page: page - 1 });
     resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
@@ -363,7 +454,7 @@ const Explore = () => {
     [groupType]
   );
 
-  const startIndex = positionForFilters.index * PAGE_SIZE + 1;
+  const startIndex = (page - 1) * PAGE_SIZE + 1;
   const endIndex = startIndex + trips.length - 1;
 
   return (
@@ -376,10 +467,30 @@ const Explore = () => {
             Find a trip you'd like to join
           </h1>
           <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-            Real trips, shared by the people who planned them. Scroll until one
-            catches your eye — then ask the owner to come along, or take a copy
-            that's yours to change.
+            Real trips, shared by the people who planned them. Ask to join one
+            that's still ahead, or borrow the plan from a trip that's already
+            happened — the copy is yours to change.
           </p>
+          <div
+            role="group"
+            aria-label="Trip status"
+            className="mx-auto mt-7 grid max-w-3xl gap-1.5 rounded-3xl border border-border/60 bg-secondary/40 p-1.5 sm:grid-cols-2"
+          >
+            <StatusCard
+              active={view === "live"}
+              icon={<Compass className="h-5 w-5" aria-hidden="true" />}
+              title="Live trips"
+              hint="Happening soon — ask to join"
+              onClick={() => setView("live")}
+            />
+            <StatusCard
+              active={isPast}
+              icon={<History className="h-5 w-5" aria-hidden="true" />}
+              title="Copy a plan"
+              hint="Finished trips — take the plan"
+              onClick={() => setView("past")}
+            />
+          </div>
         </header>
 
         <div className="mx-auto mt-8 max-w-2xl">
@@ -408,68 +519,33 @@ const Explore = () => {
           </div>
         </div>
 
-        <div className="mt-7 flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
-          <FilterGroup label="Duration">
-            <FilterChip
-              active={!duration}
-              onClick={() => applyFilters({ duration: null })}
-            >
-              Any length
-            </FilterChip>
-            {DURATION_OPTIONS.map((option) => (
-              <FilterChip
-                key={option.value}
-                active={duration === option.value}
-                onClick={() =>
-                  applyFilters({
-                    duration: duration === option.value ? null : option.value,
-                  })
-                }
-              >
-                {option.label}
-              </FilterChip>
-            ))}
-          </FilterGroup>
-
-          <span className="hidden h-6 w-px bg-border/70 sm:block" aria-hidden="true" />
-
-          <FilterGroup label="Group">
-            {GROUP_OPTIONS.map((option) => (
-              <FilterChip
-                key={option}
-                active={activeGroupType === option}
-                onClick={() =>
-                  applyFilters({
-                    groupType: activeGroupType === option ? null : option,
-                  })
-                }
-              >
-                {option}
-              </FilterChip>
-            ))}
-          </FilterGroup>
-
-          <span className="hidden h-6 w-px bg-border/70 sm:block" aria-hidden="true" />
-
-          <FilterGroup label="Tags">
-            {TAG_OPTIONS.map((option) => (
-              <FilterChip
-                key={option.value}
-                active={tag === option.value}
-                onClick={() =>
-                  applyFilters({ tag: tag === option.value ? null : option.value })
-                }
-              >
-                {option.label}
-              </FilterChip>
-            ))}
-          </FilterGroup>
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+          <FilterMenu
+            label="Duration"
+            value={duration ?? ""}
+            options={DURATION_MENU}
+            onChange={(next) =>
+              applyFilters({ duration: isDuration(next) ? next : null })
+            }
+          />
+          <FilterMenu
+            label="Group type"
+            value={activeGroupType}
+            options={GROUP_MENU}
+            onChange={(next) => applyFilters({ groupType: next || null })}
+          />
+          <FilterMenu
+            label="Tags"
+            value={tag}
+            options={TAG_OPTIONS}
+            onChange={(next) => applyFilters({ tag: next || null })}
+          />
 
           {hasFilters && (
             <button
               type="button"
               onClick={clearFilters}
-              className="text-[11px] font-bold text-muted-foreground underline-offset-2 transition-colors hover:text-foreground hover:underline"
+              className="ml-1 text-[11px] font-bold text-muted-foreground underline-offset-2 transition-colors hover:text-foreground hover:underline"
             >
               Clear all
             </button>
@@ -520,12 +596,16 @@ const Explore = () => {
               <p className="text-sm font-bold text-foreground">
                 {hasFilters
                   ? "Nothing matches those filters yet"
-                  : "No trips have been shared yet"}
+                  : isPast
+                    ? "No finished trips to copy yet"
+                    : "No trips have been shared yet"}
               </p>
               <p className="mx-auto max-w-md text-xs text-muted-foreground">
                 {hasFilters
                   ? "Maybe try a wider search, a different trip length, or clear them?"
-                  : "Be the first — plan a trip, then share it once you're happy with it."}
+                  : isPast
+                    ? "Once a shared trip wraps up, its plan stays here so you can borrow it."
+                    : "Be the first — plan a trip, then share it once you're happy with it."}
               </p>
               {hasFilters ? (
                 <Button
@@ -536,6 +616,17 @@ const Explore = () => {
                   onClick={clearFilters}
                 >
                   Clear filters
+                </Button>
+              ) : isPast ? (
+                <Button
+                  type="button"
+                  variant="hero"
+                  size="sm"
+                  className="gap-1.5 rounded-xl text-xs font-bold"
+                  onClick={() => setView("live")}
+                >
+                  <Compass className="h-3.5 w-3.5" />
+                  See live trips
                 </Button>
               ) : (
                 <Button
@@ -553,9 +644,16 @@ const Explore = () => {
             </div>
           ) : (
             <>
+              {isPast && (
+                <p className="rounded-2xl border border-border/70 bg-muted/40 px-4 py-3 text-xs leading-relaxed text-muted-foreground">
+                  These trips have already happened, so joining is closed — but
+                  the plan is still yours to borrow. Open one and take a copy.
+                </p>
+              )}
+
               <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
                 {trips.map((trip) => (
-                  <ExploreCard key={trip._id} trip={trip} />
+                  <ExploreCard key={trip._id} trip={trip} past={isPast} />
                 ))}
               </div>
 
@@ -570,7 +668,7 @@ const Explore = () => {
                     variant="outline"
                     size="sm"
                     onClick={goToPrevious}
-                    disabled={positionForFilters.index === 0}
+                    disabled={page <= 1}
                     className="h-10 gap-1.5 rounded-xl px-4 text-xs font-bold"
                   >
                     <ChevronLeft className="h-4 w-4" />
@@ -581,7 +679,7 @@ const Explore = () => {
                     variant="outline"
                     size="sm"
                     onClick={goToNext}
-                    disabled={!nextCursor}
+                    disabled={!hasMore}
                     className="h-10 gap-1.5 rounded-xl border-primary/40 px-4 text-xs font-bold text-primary hover:bg-primary/5 disabled:border-border disabled:text-muted-foreground"
                   >
                     Next
@@ -593,7 +691,7 @@ const Explore = () => {
           )}
         </div>
 
-        {!hasFilters && events.length > 0 && (
+        {view === "live" && !hasFilters && events.length > 0 && (
           <section
             id="events"
             aria-labelledby="explore-events-heading"

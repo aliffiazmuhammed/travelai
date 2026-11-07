@@ -2298,7 +2298,8 @@ class ApiClient {
   /**
    * Milestone 8 G3 — anonymous gallery listing. Filters map 1:1 to the server
    * schema; `total` is the size of the whole filtered set (not the page), which
-   * is what the nav threshold in `useGalleryEnabled` reads.
+   * is what the nav threshold in `useGalleryEnabled` reads. `when` splits the
+   * joinable trips from the copy-only ones.
    */
   async getExplore(
     filters: ExploreFilters = {}
@@ -2308,7 +2309,8 @@ class ApiClient {
     if (filters.duration) query.append('duration', filters.duration);
     if (filters.groupType?.trim()) query.append('groupType', filters.groupType.trim());
     if (filters.tag?.trim()) query.append('tags', filters.tag.trim());
-    if (filters.cursor) query.append('cursor', filters.cursor);
+    if (filters.when) query.append('when', filters.when);
+    if (filters.page) query.append('page', String(filters.page));
     if (filters.limit) query.append('limit', String(filters.limit));
     const suffix = query.toString() ? `?${query.toString()}` : '';
     return this.request(`/api/explore${suffix}`);
