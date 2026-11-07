@@ -36,8 +36,12 @@ export const PDF_RENDER_TIMEOUT_MS = 45_000;
 
 /** Free hosts cold-start in tens of seconds; the render itself is CPU-bound. */
 const DEFAULT_REMOTE_TIMEOUT_MS = 120_000;
-/** One retry absorbs a 502/503 while a sleeping renderer spins back up. */
-const REMOTE_RETRY_DELAY_MS = 1_000;
+/**
+ * A sleeping free-tier renderer keeps answering 502/503 (or refusing the
+ * connection) until its proxy finishes booting, which takes ~50-60s. Retrying
+ * quickly just burns the second attempt, so wait out most of that boot.
+ */
+const DEFAULT_REMOTE_RETRY_DELAY_MS = 25_000;
 
 export type PdfRendererMode = 'remote' | 'chrome' | 'none';
 
@@ -124,6 +128,15 @@ export function remoteRendererTimeoutMs(): number {
   return Number.isFinite(configured) && configured >= 5_000
     ? configured
     : DEFAULT_REMOTE_TIMEOUT_MS;
+}
+
+export function remoteRendererRetryDelayMs(): number {
+  const raw = (process.env.AGENCY_PDF_RENDERER_RETRY_DELAY_MS ?? '').trim();
+  if (!raw) return DEFAULT_REMOTE_RETRY_DELAY_MS;
+  const configured = Number(raw);
+  return Number.isFinite(configured) && configured >= 0
+    ? configured
+    : DEFAULT_REMOTE_RETRY_DELAY_MS;
 }
 
 /**
@@ -235,7 +248,7 @@ async function renderWithRemote(
       if (response.status === 502 || response.status === 503) {
         lastError = new Error(`renderer returned ${response.status}`);
         if (attempt === 1) {
-          await delay(REMOTE_RETRY_DELAY_MS);
+          await delay(remoteRendererRetryDelayMs());
           continue;
         }
         break;
@@ -274,7 +287,7 @@ async function renderWithRemote(
       // A timeout already spent the whole budget; only a refused or spun-down
       // connection is worth a second attempt.
       if (attempt === 1 && !isTimeoutError(error)) {
-        await delay(REMOTE_RETRY_DELAY_MS);
+        await delay(remoteRendererRetryDelayMs());
         continue;
       }
       break;

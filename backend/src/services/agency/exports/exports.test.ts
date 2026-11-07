@@ -16,7 +16,12 @@ import {
   safeFontFamily,
   safeHexColour,
 } from './render.js';
-import { countPdfPages, remotePdfRenderer, renderHtmlToPdf } from './pdf.js';
+import {
+  countPdfPages,
+  remotePdfRenderer,
+  remoteRendererRetryDelayMs,
+  renderHtmlToPdf,
+} from './pdf.js';
 import {
   agencyExportFilePath,
   buildAgencyExportStorageKey,
@@ -547,6 +552,7 @@ const RENDERER_ENV_KEYS = [
   'AGENCY_PDF_RENDERER_USERNAME',
   'AGENCY_PDF_RENDERER_PASSWORD',
   'AGENCY_PDF_RENDERER_TIMEOUT_MS',
+  'AGENCY_PDF_RENDERER_RETRY_DELAY_MS',
 ] as const;
 
 function clearRendererEnv(): void {
@@ -641,13 +647,34 @@ test('remote renderer retries a cold-start 503 once', async () => {
     },
     async (url) => {
       process.env.AGENCY_PDF_RENDERER_URL = url;
+      // The production delay waits out a free-tier cold start; keep the test fast.
+      process.env.AGENCY_PDF_RENDERER_RETRY_DELAY_MS = '150';
 
+      const startedAt = Date.now();
       const pdf = await renderHtmlToPdf('<section class="page">Retry</section>');
 
       assert.equal(calls, 2);
+      assert.ok(
+        Date.now() - startedAt >= 150,
+        'the retry should wait out the configured cold-start delay'
+      );
       assert.equal(pdf.subarray(0, 5).toString('latin1'), '%PDF-');
     }
   );
+});
+
+test('cold-start retry delay waits 25s by default and is env-tunable', () => {
+  try {
+    assert.equal(remoteRendererRetryDelayMs(), 25_000);
+    process.env.AGENCY_PDF_RENDERER_RETRY_DELAY_MS = '0';
+    assert.equal(remoteRendererRetryDelayMs(), 0);
+    process.env.AGENCY_PDF_RENDERER_RETRY_DELAY_MS = '';
+    assert.equal(remoteRendererRetryDelayMs(), 25_000);
+    process.env.AGENCY_PDF_RENDERER_RETRY_DELAY_MS = 'not-a-number';
+    assert.equal(remoteRendererRetryDelayMs(), 25_000);
+  } finally {
+    clearRendererEnv();
+  }
 });
 
 test('remote renderer surfaces auth failures as retryable 503s without retrying', async () => {

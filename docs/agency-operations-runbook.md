@@ -67,6 +67,7 @@ and restore the pre-migration backup as described in
 | `AGENCY_PDF_RENDERER_URL` | *(unset)* | Base URL of a Gotenberg renderer. When set, exports POST the document to `/forms/chromium/convert/html` and no local browser is needed. Development and CI keep using local Chrome. |
 | `AGENCY_PDF_RENDERER_USERNAME` / `AGENCY_PDF_RENDERER_PASSWORD` | *(unset)* | HTTP basic auth for the renderer. Set both or neither; a publicly reachable renderer must set both. |
 | `AGENCY_PDF_RENDERER_TIMEOUT_MS` | `120000` | Per-attempt render timeout. One automatic retry absorbs a 502/503 while a sleeping renderer starts. |
+| `AGENCY_PDF_RENDERER_RETRY_DELAY_MS` | `25000` | How long to wait before the single 502/503 retry. A sleeping free-tier renderer boots in ~50–60s, so a short retry just burns the second attempt. `0` disables the wait (tests). |
 | `AGENCY_STORAGE_PROVIDER` | auto (Cloudinary when Cloudinary credentials exist, else local) | Where agency tenant bytes (brand assets, template sources/snapshots, export PDFs) live. `local` forces the file roots below even when Cloudinary is configured; `cloudinary` forces Cloudinary even without credentials (writes then fail loudly). |
 | `AGENCY_ASSET_DIR` | `backend/agency-assets` | Local fallback store for brand assets (A3). |
 | `AGENCY_TEMPLATE_DIR` | `backend/agency-templates` | Local fallback store for uploaded template sources, PDF design backgrounds and asset snapshots (A6/A6f). |
@@ -99,16 +100,53 @@ it:
    `none`. `none` means every export will 503 until this is fixed; the job stays
    retryable.
 
-Free-tier caveats: 512 MB / 0.1 CPU, the service sleeps after 15 idle minutes
-(the first render of the day pays a cold start inside the 120s budget), and
-multiple free services share 750 instance hours per month. If a photo-heavy
-template exceeds the budget, upgrade the renderer only to a paid Starter
+Free-tier caveats: 512 MB / 0.1 CPU, the service sleeps after 15 idle minutes,
+and multiple free services share 750 instance hours per month. The first render
+of the day waits 25s, retries, then has a fresh 120s attempt — so a normal cold
+start converts into one slow export instead of an error. If a photo-heavy
+template still exceeds the budget, upgrade the renderer only to a paid Starter
 instance — the URL and credentials stay the same.
 
 Render jobs run inside the API process. Interrupted jobs (redeploy, spin-down)
 are recovered on boot and on the next export-history read: they become `failed`
 with "The render was interrupted. Please retry the export." instead of hanging
 in `rendering`.
+
+### 2B. Pilot operations on the free tier
+
+Free instance hours are shared per workspace and only count while a service is
+running: **750/month against ~744 hours in a 31-day month**. Keeping both
+services awake around the clock (~1,490 h) exceeds the quota and Render suspends
+them, so keep only the app awake, and only during pilot hours.
+
+**Keep the app awake.** Create a free HTTP monitor at cron-job.org pointing at
+`https://<app>.onrender.com/api/health`, every 10 minutes, restricted to the
+pilot window — e.g. `*/10 8-19 * * 1-6` in the job's configured timezone.
+Twelve hours a day is ~372 h/month, which leaves room for the renderer and
+redeploys. UptimeRobot's free plan also polls every 5 minutes but cannot limit
+the window, so use it for alert contacts rather than for wake-ups. Never
+self-ping: the app cannot keep itself up.
+
+**Warm the renderer by hand before a demo or a first export.** Do not add the
+renderer to the monitor — it is Chromium on 0.1 CPU / 512 MB and should stay
+asleep between exports. Two to three minutes ahead, from any shell:
+
+```bash
+curl -fsS -o /dev/null -w '%{http_code}\n' https://<app>.onrender.com/api/health
+curl -u "$AGENCY_PDF_RENDERER_USERNAME:$AGENCY_PDF_RENDERER_PASSWORD" \
+  -fsS -o /dev/null -w '%{http_code}\n' https://<renderer>.onrender.com/health
+```
+
+Both should print `200`. A warmed app also means the first visitor never sees
+Render's "SERVICE WAKING UP" interstitial.
+
+**Confirm the renderer is locked down.** Without credentials the health route
+must answer `401`; a `200` means `API_ENABLE_BASIC_AUTH` was not actually
+applied:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' https://<renderer>.onrender.com/health
+```
 
 ---
 
