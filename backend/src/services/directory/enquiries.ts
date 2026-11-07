@@ -37,6 +37,7 @@ import {
   emitEnquiryRead,
   emitEnquiryUpdated,
 } from '../realtime/enquiryEvents.js';
+import { notifyAgencyNewEnquiry } from '../mail/notify.js';
 import { loadPublicAgencyRecord } from './profile.js';
 
 /**
@@ -425,6 +426,10 @@ export async function submitAgencyEnquiry(input: {
   });
 
   emitEnquiryCreated(enquiry);
+
+  // Fire and forget: the traveller's receipt is the service's contract, and a
+  // mail problem must never turn a saved enquiry into a 500.
+  void notifyAgencyNewEnquiry(enquiry);
 
   return {
     id: String(enquiry._id),

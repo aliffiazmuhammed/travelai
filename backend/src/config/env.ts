@@ -184,6 +184,25 @@ const envSchema = z.object({
   // Cloudinary credentials exist) or 'local'. Consumed by
   // services/agency/cloudStorage.ts.
   AGENCY_STORAGE_PROVIDER: z.enum(['cloudinary', 'local']).optional(),
+  // Transactional email (P0). Dark by default: with the flag off, or without a
+  // provider key, every notify helper is a no-op and no outbox row is written.
+  // Resend is the provider (HTTP API, no SMTP); see services/mail/.
+  EMAIL_ENABLED: z
+    .string()
+    .optional()
+    .transform((value) => parseBooleanFlag(value)),
+  RESEND_API_KEY: z.string().optional(),
+  EMAIL_FROM: z.string().default('TravelAI <onboarding@resend.dev>'),
+  EMAIL_REPLY_TO: z.string().optional(),
+  // How often the in-process dispatcher drains the outbox (Render free has no
+  // cron, so delivery piggybacks on the web process).
+  EMAIL_OUTBOX_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
+  EMAIL_MAX_ATTEMPTS: z.coerce.number().int().positive().default(4),
+  // P2 lifecycle sweeps (event reminders, renewals, weekly digest). Also no
+  // cron: the boot pass catches whatever a sleeping instance missed.
+  EMAIL_LIFECYCLE_INTERVAL_MS: z.coerce.number().int().positive().default(3_600_000),
+  EMAIL_EVENT_REMINDER_HOURS: z.coerce.number().int().positive().default(48),
+  EMAIL_RENEWAL_REMINDER_DAYS: z.coerce.number().int().positive().default(14),
 });
 
 const parsed = envSchema.safeParse(process.env);

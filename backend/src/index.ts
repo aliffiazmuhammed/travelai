@@ -32,6 +32,14 @@ import { isCloudinaryConfigured, uploadDir } from './services/finance/receipt.js
 import { agencyStorageProvider } from './services/agency/cloudStorage.js';
 import { recoverStaleAgencyExports } from './services/agency/exports/exports.js';
 import {
+  startEmailDispatcher,
+  stopEmailDispatcher,
+} from './services/mail/outbox.js';
+import {
+  startEmailLifecycle,
+  stopEmailLifecycle,
+} from './services/mail/lifecycle.js';
+import {
   pdfRenderDeadlineMs,
   pdfRendererMode,
 } from './services/agency/exports/pdf.js';
@@ -54,6 +62,14 @@ await connectDB();
 await recoverStaleAgencyExports().catch((error) => {
   console.warn('Could not recover interrupted agency exports:', error);
 });
+
+// Transactional email (P0). Delivery piggybacks on this process because free
+// hosts have no cron; it is a no-op unless EMAIL_ENABLED and a provider key
+// are both present.
+startEmailDispatcher();
+// P2 lifecycle sweeps share the same constraint: no cron, so reminders and the
+// digest ride the web process and catch up on the boot sweep.
+startEmailLifecycle();
 
 // Resolved once at boot; the health payload reports which PDF engine is wired.
 const pdfRenderer = await pdfRendererMode();
@@ -347,6 +363,8 @@ if (env.NODE_ENV !== 'production' || env.SERVE_STATIC === 'true' || !process.env
 // Graceful shutdown handling
 const gracefulShutdown = async (signal: string) => {
   console.log(`\n🛑 Received ${signal}. Starting graceful shutdown...`);
+  stopEmailDispatcher();
+  stopEmailLifecycle();
   if (server) {
     server.close(() => {
       console.log('🔒 HTTP server closed.');

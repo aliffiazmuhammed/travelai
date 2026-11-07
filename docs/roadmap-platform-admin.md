@@ -451,8 +451,11 @@ Credential handoff:
 - Show the agency login URL with the workspace slug, the email, and the
   temporary password once.
 - Explicitly state that the personal login is separate and unchanged.
-- Never email or log the password in v1; no mail provider is configured.
-- Audit `agency.created` and `agency.owner_assigned` without secrets.
+- Also email the same handoff once to the owner (P1, 2026-11-04). The mail is
+  queued through the transactional outbox and stays dark while
+  `EMAIL_ENABLED` is off or no Resend key is configured.
+- Never log the password; audit `agency.created` and `agency.owner_assigned`
+  without secrets.
 
 Remove the self-service agency route and UI. `/agency/onboarding` redirects to
 the agency login or shows a contact-admin message. The existing
@@ -969,6 +972,11 @@ login without touching any personal account.
   the existing `agency.status !== 'active'` check in
   `services/agency/proposals.ts` (generic `404`). Personal accounts and other
   tenants are unaffected.
+- Lifecycle mail (P2, 2026-11-04): suspending or reactivating a tenant mails
+  its owners through the transactional outbox, and a plan change mails the
+  billing contact (the owners when no contact is named). Both stay dark while
+  `EMAIL_ENABLED` is off; the dedupe key carries the change time so a later
+  suspend/reactivate cycle still sends while a repeated click does not.
 - Access operations reuse the tenant rules (`services/agency/access.ts`,
   `members.ts`, `invites.ts`) with `actorRole: 'owner'` instead of fabricating a
   platform membership: invites accept admin/planner/viewer only, role changes
@@ -1347,7 +1355,7 @@ left untouched (see the note above), and the run warns when one exists.
 | Admin panel overexposes customer data | High | Metadata-only projections; no tenant content; audit |
 | Slug collision or rename breaks login links | Medium | Unique generation; immutable after creation |
 | Suspended tenant public links remain live | Medium | Fail closed; test proposal route |
-| No email provider for credential handoff | Medium | Show-once admin dialog; document manual handoff |
+| Credential email bounces or is missed | Medium | Show-once admin dialog stays; an operator can reissue from the account page |
 | Multiple tenant accounts confuse users | Medium | Tenant-specific login URL on every handoff; explicit no-switcher UX |
 | Platform admin bootstrap is mishandled | High | CLI-only creation, forced password change, last-admin guard, audit |
 

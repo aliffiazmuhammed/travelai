@@ -14,6 +14,7 @@ import { planLimitsFor } from '../agency/plan.js';
 import { recordAgencyAudit } from '../agency/audit.js';
 import { generateTemporaryPassword } from './accounts.js';
 import { recordPlatformAudit } from './audit.js';
+import { notifyAgencyOwnerCredentials } from '../mail/notify.js';
 
 /**
  * Platform-side agency provisioning (PA3).
@@ -528,6 +529,17 @@ export async function provisionAgency(
     warnings: preview.warnings,
     client: input.client,
   });
+
+  if (temporaryPassword) {
+    void notifyAgencyOwnerCredentials({
+      accountId: String(owner._id),
+      email: String(owner.email),
+      name: owner.name ? String(owner.name) : undefined,
+      agencyName: String(agency.name),
+      workspace: String(agency.slug),
+      temporaryPassword,
+    });
+  }
 
   return result;
 }

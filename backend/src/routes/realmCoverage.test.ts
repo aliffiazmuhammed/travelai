@@ -48,7 +48,16 @@ function guarded(layer: Layer): boolean {
 }
 
 test('every non-public personal auth route uses protectPersonal', () => {
-  const PUBLIC = new Set(['/signup', '/signin', '/logout', '/csrf']);
+  // P1 adds the two anonymous reset routes; the token in the body is the
+  // credential, so `protectPersonal` must not run on them.
+  const PUBLIC = new Set([
+    '/signup',
+    '/signin',
+    '/logout',
+    '/csrf',
+    '/forgot-password',
+    '/reset-password',
+  ]);
   const layers = routeLayers(authRouter);
 
   for (const path of PUBLIC) {

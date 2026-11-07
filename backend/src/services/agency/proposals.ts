@@ -26,6 +26,10 @@ import {
   markEnquiryQuotedByProposal,
   markEnquiryWonByAcceptance,
 } from '../directory/enquiries.js';
+import {
+  notifyAgencyProposalAnswer,
+  notifyProposalShared,
+} from '../mail/notify.js';
 import { renderPinnedAgencyExport } from './exports/exports.js';
 import type { ExportDocument } from './exports/document.js';
 import { readAgencyExportFile } from './exports/storage.js';
@@ -798,6 +802,13 @@ async function acceptLink(
     );
   }
 
+  void notifyAgencyProposalAnswer({
+    agencyId: String(link.agencyId),
+    quote: accepted,
+    linkId: String(link._id),
+    answer: 'accepted',
+  });
+
   return {
     status: 'accepted',
     acceptedAt: accepted.acceptedAt!,
@@ -889,6 +900,13 @@ export async function declineAgencyProposalForUser(
     enquiryId: link.enquiryId,
     linkId: link._id,
     declinedAt: declined.declinedAt,
+  });
+
+  void notifyAgencyProposalAnswer({
+    agencyId: String(link.agencyId),
+    quote,
+    linkId: String(link._id),
+    answer: 'declined',
   });
 
   return { status: 'declined', declinedAt: declined.declinedAt! };
@@ -1034,9 +1052,19 @@ export async function createAgencyProposalLink(
     });
   }
 
+  const url = agencyProposalLinkFor(rawToken, input.linkOrigins);
+  void notifyProposalShared({
+    agencyId: input.agencyId,
+    quote,
+    enquiryId: enquiryId ? String(enquiryId) : null,
+    linkId: String(link._id),
+    url,
+    expiresAt: link.expiresAt,
+  });
+
   return {
     link: projectAgencyProposalLink(link),
-    url: agencyProposalLinkFor(rawToken, input.linkOrigins),
+    url,
   };
 }
 

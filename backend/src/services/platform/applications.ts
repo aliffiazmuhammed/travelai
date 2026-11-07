@@ -19,6 +19,11 @@ import {
   type ProvisionAgencyInput,
   type ProvisionAgencyResult,
 } from './provisioning.js';
+import {
+  notifyAgencyApplicationApproved,
+  notifyAgencyApplicationReceived,
+  notifyAgencyApplicationRejected,
+} from '../mail/notify.js';
 
 /**
  * Public agency applications and their review (PA6).
@@ -145,8 +150,15 @@ export async function submitAgencyApplication(
     );
   }
 
+  let application: IAgencyApplication;
   try {
-    await AgencyApplication.create({ name, phone, email, note, status: 'pending' });
+    application = await AgencyApplication.create({
+      name,
+      phone,
+      email,
+      note,
+      status: 'pending',
+    });
   } catch (error: any) {
     if (error?.code === 11000) {
       throw new AppError(
@@ -157,6 +169,7 @@ export async function submitAgencyApplication(
     throw error;
   }
 
+  void notifyAgencyApplicationReceived({ application });
   return { submitted: true };
 }
 
@@ -330,6 +343,14 @@ export async function approveAgencyApplication(
     ...client,
   });
 
+  void notifyAgencyApplicationApproved({
+    applicationId,
+    agencyName: String(application.name),
+    workspace: String(provision.agency.slug),
+    email: String(application.email),
+    credentialsIssued: Boolean(provision.temporaryPassword),
+  });
+
   const decided = updated ?? application;
 
   return {
@@ -386,6 +407,12 @@ export async function rejectAgencyApplication(
       ...(decisionNote ? { note: decisionNote } : {}),
     },
     ...client,
+  });
+
+  void notifyAgencyApplicationRejected({
+    applicationId,
+    agencyName: String(updated.name),
+    email: String(updated.email),
   });
 
   return projectApplication(updated);

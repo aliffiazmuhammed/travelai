@@ -6,6 +6,7 @@ import { env } from '../../config/env.js';
 import { ROLE_RANK, can, invitableRoleSchema, type TripRole } from './access.js';
 import { emitTripUpdated } from './presence.js';
 import User from '../../models/User.js';
+import { notifyTripInvite } from '../mail/notify.js';
 
 /**
  * Invitation mechanics (Milestone 6 §3.5, sprint E2).
@@ -172,7 +173,9 @@ export async function createTripInvite(input: CreateInviteInput): Promise<Create
     acceptedBy: [],
   });
 
-  return { invite, link: inviteLinkFor(rawToken, input.linkOrigins) };
+  const link = inviteLinkFor(rawToken, input.linkOrigins);
+  void notifyTripInvite({ invite, link });
+  return { invite, link };
 }
 
 /** Owner-facing projection — no raw token ever makes it back out. */

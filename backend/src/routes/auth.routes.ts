@@ -7,10 +7,19 @@ import {
   updateProfile,
   uploadAvatar,
 } from '../controllers/profile.controller.js';
+import {
+  forgotPassword,
+  resetPassword,
+} from '../controllers/passwordReset.controller.js';
 import { protectPersonal } from '../middleware/auth.middleware.js';
 import { issueCsrfCookie } from '../middleware/csrf.middleware.js';
 import { validate } from '../middleware/validate.middleware.js';
-import { signupSchema, signinSchema } from '../schemas/auth.schema.js';
+import {
+  forgotPasswordSchema,
+  resetPasswordSchema,
+  signupSchema,
+  signinSchema,
+} from '../schemas/auth.schema.js';
 import { publishChatKeySchema } from '../schemas/chatKey.schema.js';
 import { changePasswordSchema, updateProfileSchema } from '../schemas/profile.schema.js';
 import { handleAvatarUpload } from '../middleware/upload.middleware.js';
@@ -24,6 +33,10 @@ const router = Router();
 
 router.post('/signup', authLimiter, validate(signupSchema), signup);
 router.post('/signin', authLimiter, validate(signinSchema), signin);
+// Personal self-service reset. The request endpoint never reveals whether the
+// address exists; the reset endpoint consumes a single-use hashed token.
+router.post('/forgot-password', authLimiter, validate(forgotPasswordSchema), forgotPassword);
+router.post('/reset-password', authLimiter, validate(resetPasswordSchema), resetPassword);
 router.post('/logout', logout);
 // CSRF bootstrap: hands the token to cross-origin SPAs in the body, because a
 // cross-site client cannot read the `csrf` cookie set on this origin. The

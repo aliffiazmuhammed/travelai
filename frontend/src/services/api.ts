@@ -446,6 +446,22 @@ class ApiClient {
     });
   }
 
+  /** Always answers the same generic message, whether or not the account exists. */
+  async requestPasswordReset(email: string): Promise<{ success: boolean; message: string }> {
+    return this.request('/api/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email: email.trim().toLowerCase() }),
+    });
+  }
+
+  /** Redeems a reset link; the response also signs the personal realm in. */
+  async resetPassword(token: string, password: string): Promise<{ user: User; message: string }> {
+    return this.request('/api/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ token, password }),
+    });
+  }
+
   // Profile (Milestone 7, F14; Milestone 8 G2 adds handle + bio)
   /** Saves only the fields present in `input`; empty strings clear them. */
   async updateProfile(input: ProfileUpdateInput): Promise<{ user: User }> {

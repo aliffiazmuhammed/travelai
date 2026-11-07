@@ -15,6 +15,7 @@ import { escapeRegex } from '../../utils/escapeRegex.js';
 import type { AccountListQuery } from '../../schemas/platformAccounts.schema.js';
 import { recordAgencyAudit } from '../agency/audit.js';
 import { recordPlatformAudit } from './audit.js';
+import { notifyAgencyPasswordReset } from '../mail/notify.js';
 
 /**
  * Platform account directory and account management (PA2).
@@ -502,13 +503,14 @@ export async function resetAgencyPassword(input: {
     : null;
 
   const temporaryPassword = generateTemporaryPassword();
+  const issuedAt = new Date();
   await User.updateOne(
     { _id: account._id },
     {
       $set: {
         password: await bcrypt.hash(temporaryPassword, 12),
         mustChangePassword: true,
-        passwordChangedAt: new Date(),
+        passwordChangedAt: issuedAt,
       },
       $inc: { tokenVersion: 1 },
     }
@@ -544,6 +546,16 @@ export async function resetAgencyPassword(input: {
       },
     });
   }
+
+  void notifyAgencyPasswordReset({
+    accountId: String(account._id),
+    email: String(account.email),
+    name: account.name ? String(account.name) : undefined,
+    agencyName: agency ? String(agency.name) : 'your workspace',
+    workspace: agency ? String(agency.slug) : '',
+    temporaryPassword,
+    issuedAt: issuedAt.getTime(),
+  });
 
   return {
     temporaryPassword,

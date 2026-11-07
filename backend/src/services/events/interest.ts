@@ -10,6 +10,7 @@ import {
   publicEventDetailClauses,
   startOfTodayUtc,
 } from './publicEvents.js';
+import { notifyAgencyEventInterest } from '../mail/notify.js';
 
 /**
  * "I'm interested" on a public event (Milestone 10 E2).
@@ -116,7 +117,7 @@ export async function submitEventInterest(input: {
     _id: input.eventId,
     $and: publicEventDetailClauses(),
   })
-    .select('agencyId capacity closedAt startDate endDate')
+    .select('agencyId title capacity closedAt startDate endDate')
     .lean()) as any;
   if (!event) throw new AppError('Event not found.', 404);
 
@@ -166,6 +167,12 @@ export async function submitEventInterest(input: {
     }
     throw error;
   }
+
+  void notifyAgencyEventInterest({
+    agencyId: String(event.agencyId),
+    event,
+    interest,
+  });
 
   return {
     id: String(interest._id),

@@ -14,6 +14,7 @@ import { recordAgencyAudit } from '../agency/audit.js';
 import { agencyAssetContentUrl } from '../agency/assetStorage.js';
 import { resolveCoverAsset } from '../directory/packages.js';
 import { normalizeTextList } from '../directory/taxonomy.js';
+import { notifyTravellerEventDecision } from '../mail/notify.js';
 import { eventDateLabel, eventHasEnded } from './projection.js';
 
 /**
@@ -799,6 +800,14 @@ export async function decideEventInterest(input: {
         interestId: String(interest._id),
         name: interest.name,
       },
+    });
+
+    // Only a real change mails the guest; re-saving the same answer is silent.
+    void notifyTravellerEventDecision({
+      agencyId: input.agencyId,
+      event,
+      interest,
+      status: input.status,
     });
   }
 

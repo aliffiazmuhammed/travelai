@@ -13,6 +13,8 @@ import { queryClient } from "./lib/queryClient";
 // Lazy-loaded route pages for production code-splitting
 const Landing = lazy(() => import("./pages/Landing"));
 const Auth = lazy(() => import("./pages/Auth"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const TripPlanner = lazy(() => import("./pages/TripPlanner"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const SharedTrip = lazy(() => import("./pages/SharedTrip"));
@@ -79,6 +81,10 @@ const App = () => (
               <Routes>
                 <Route path="/" element={<Landing />} />
                 <Route path="/auth" element={<Auth />} />
+                {/* P1: self-service personal reset. Agency and platform
+                    accounts are reset by their owner or an operator. */}
+                <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/reset-password/:token" element={<ResetPassword />} />
                 <Route
                   path="/plan"
                   element={

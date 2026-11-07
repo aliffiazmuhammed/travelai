@@ -23,6 +23,11 @@ import {
   emitEnquiryMessage,
   emitEnquiryRead,
 } from '../realtime/enquiryEvents.js';
+import {
+  latestMessageBody,
+  notifyAgencyTravellerReply,
+  notifyTravellerAgencyReply,
+} from '../mail/notify.js';
 
 /**
  * The two-way enquiry thread (Milestone 9 D8).
@@ -579,6 +584,10 @@ export async function appendGuestMessage(
     authorName: text(row.contact?.name) || 'Traveller',
     body,
   });
+  void notifyAgencyTravellerReply({
+    enquiry: updated,
+    messageBody: latestMessageBody(updated),
+  });
   return withConversationView(updated, {
     expiresAt: row.conversationTokenExpiresAt,
   });
@@ -600,6 +609,10 @@ export async function appendOwnMessage(input: {
     authorId: input.userId,
     authorName: userLabel(user) || text(row.contact?.name) || 'Traveller',
     body: input.body,
+  });
+  void notifyAgencyTravellerReply({
+    enquiry: updated,
+    messageBody: latestMessageBody(updated),
   });
   return withConversationView(updated);
 }
@@ -637,6 +650,11 @@ export async function appendAgencyMessage(input: {
       messageId: String(updated.messages[updated.messages.length - 1]?._id ?? ''),
       status: updated.status,
     },
+  });
+
+  void notifyTravellerAgencyReply({
+    enquiry: updated,
+    messageBody: latestMessageBody(updated),
   });
 
   return withConversationView(updated);

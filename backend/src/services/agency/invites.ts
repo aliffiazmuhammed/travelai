@@ -23,6 +23,7 @@ import {
 import { publicTenantLogo, type AgencySession } from './auth.js';
 import { signSessionForAccount } from '../auth/realm.js';
 import { assertSeatAvailable } from './plan.js';
+import { notifyAgencyInvite } from '../mail/notify.js';
 
 /**
  * Agency invitation mechanics (Agency Workspace A1).
@@ -142,10 +143,9 @@ export async function createAgencyInvite(
     acceptedBy: [],
   });
 
-  return {
-    invite,
-    link: agencyInviteLinkFor(rawToken, input.linkOrigins),
-  };
+  const link = agencyInviteLinkFor(rawToken, input.linkOrigins);
+  void notifyAgencyInvite({ invite, link });
+  return { invite, link };
 }
 
 /** Pending (unrevoked, unexpired, not exhausted) invitations for the team screen. */

@@ -42,6 +42,10 @@ import {
 import { resetAgencyPassword, type ClientContext } from './accounts.js';
 import { recordPlatformAudit } from './audit.js';
 import {
+  notifyAgencyPlanChanged,
+  notifyAgencyStatusChanged,
+} from '../mail/notify.js';
+import {
   loadDirectoryAdminView,
   type DirectoryAdminView,
 } from './directoryAdmin.js';
@@ -631,6 +635,16 @@ export async function setAgencyStatus(input: {
     metadata,
   });
 
+  // Owners hear about a pause or a return even though their sessions were
+  // revoked on the way in; mail is the one channel suspension cannot close.
+  void notifyAgencyStatusChanged({
+    agencyId: String(agency._id),
+    agencyName: agency.name,
+    workspace: agency.slug,
+    status: input.status === 'suspended' ? 'suspended' : 'reactivated',
+    occurredAt: new Date(),
+  });
+
   return { agency: await getAgencyDetail(input.agencyId), changed: true };
 }
 
@@ -661,6 +675,20 @@ export async function changeAgencyPlanAsAdmin(input: {
       limits: result.limits,
     },
     ...input.client,
+  });
+
+  void notifyAgencyPlanChanged({
+    agencyId: String(result.agency._id),
+    agencyName: result.agency.name,
+    workspace: result.agency.slug,
+    previousTierId: result.previous.tierId,
+    tierId: result.limits.tierId,
+    seats: result.limits.seats,
+    monthlyExports: result.limits.monthlyExports,
+    storageMb: result.limits.storageMb,
+    billing: result.agency.billing,
+    fallbackEmail: result.agency.branding?.contactEmail ?? null,
+    occurredAt: new Date(),
   });
 
   return {

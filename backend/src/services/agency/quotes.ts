@@ -11,6 +11,7 @@ import {
   markEnquiryQuotedByProposal,
   markEnquiryWonByAcceptance,
 } from '../directory/enquiries.js';
+import { notifyQuoteSent } from '../mail/notify.js';
 import {
   AGENCY_TERMS_MAX_ITEMS,
   AGENCY_TERMS_MAX_LENGTH,
@@ -793,7 +794,18 @@ export async function sendQuote(input: {
 
   if (latest.status === 'sent') {
     // A retry heals a send whose mint failed; the mint itself is idempotent.
-    return { quote: latest, proposal: await mintLiveProposal(latest, input) };
+    const proposal = await mintLiveProposal(latest, input);
+    const existingEnquiryId = await resolveEnquiryForTrip({
+      agencyId: input.agencyId,
+      tripId: input.tripId,
+      clientId: latest.clientId ?? null,
+    });
+    void notifyQuoteSent({
+      agencyId: input.agencyId,
+      quote: latest,
+      enquiryId: existingEnquiryId ? String(existingEnquiryId) : null,
+    });
+    return { quote: latest, proposal };
   }
   if (latest.status === 'accepted') {
     throw new AppError('This quote was already accepted.', 409);
@@ -835,7 +847,13 @@ export async function sendQuote(input: {
 
   // Sending is the share (M9 R9): the traveller's thread gets the quote plus
   // the itinerary as it stands now. No export, no PDF, no quota.
-  return { quote: sent, proposal: await mintLiveProposal(sent, input) };
+  const proposal = await mintLiveProposal(sent, input);
+  void notifyQuoteSent({
+    agencyId: input.agencyId,
+    quote: sent,
+    enquiryId: enquiryId ? String(enquiryId) : null,
+  });
+  return { quote: sent, proposal };
 }
 
 export async function acceptQuote(input: {

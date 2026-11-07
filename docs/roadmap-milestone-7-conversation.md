@@ -419,7 +419,7 @@ The scope was confirmed with the user first: **change the password in the app** 
 
 **Deliberately not in this increment / honest limits:**
 
-- **No emailed "forgot password".** There is no mail provider in this deployment; the flow offered is "change it while signed in". A locked-out user still has no self-service path, and adding one means a provider plus token storage, not a form.
+- **No emailed "forgot password".** There is no mail provider in this deployment; the flow offered is "change it while signed in". A locked-out user still has no self-service path, and adding one means a provider plus token storage, not a form. *(Superseded 2026-11-04 by P1: `/forgot-password` and `/reset-password/:token` now issue a hashed, single-use, 60-minute link through the transactional mail outbox; agency and platform accounts still reset through their owner or an operator.)*
 - **A password change does not revoke other sessions.** The JWT is stateless and `protect` deliberately does no database read, so a token issued before the change stays valid until it expires (7 days). Revoking everywhere needs a per-request version check (or a session store) — a real cost traded away here, and stated in the UI.
 - **The email is read-only.** It is the sign-in identity and there is no verification mail path; letting a typo change it would lock the account out silently. A verified email-change flow is a separate increment.
 - **No image cropping/rotation UI.** The server face-crops for the chat sizes; the user picks a file.
