@@ -1,4 +1,4 @@
-# ✈️ TravelAI — Intelligent AI Travel Companion & Itinerary Generator
+# TravelAI
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React_18-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://reactjs.org/)
@@ -9,641 +9,783 @@
 [![Google Gemini](https://img.shields.io/badge/Google_Gemini_2.5-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/)
 [![Groq](https://img.shields.io/badge/Groq_Fallback-F55036?style=for-the-badge)](https://groq.com/)
 
-> **TravelAI** is a modern, full-stack web platform that synthesizes bespoke, day-by-day travel itineraries in seconds. By pairing Google Gemini 2.5 Flash and high-speed Groq fallbacks with interactive maps, financial analytics, and multi-night stay deduplication, TravelAI transforms travel planning from hours of frustrating research into an effortless, personalized experience.
+TravelAI is a full-stack travel platform with three separate audiences: travellers who want to find real trips, plan together and keep their money straight; travel agencies that need a public profile, packages, enquiries, quotes and branded documents; and platform operators who provision and moderate the whole thing.
+
+AI planning is still here, but it is no longer the centre of the product. The centre is discovery and the traveller-to-agency loop: browse what other people and agencies are actually running, ask to join or copy it, send an enquiry, get a quote, accept a proposal. The AI is supporting cast - it turns a short wizard into a day-by-day itinerary, proposes weather-safe alternatives, and answers questions inside a trip conversation.
 
 ---
 
-## 📌 Table of Contents
-- [What Problem Does TravelAI Solve?](#-what-problem-does-travelai-solve)
-- [Key Features](#-key-features)
-- [System Architecture](#-system-architecture)
-- [Monorepo Directory Structure](#-monorepo-directory-structure)
-- [Tech Stack](#-tech-stack)
-- [Getting Started](#-getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Environment Configuration](#environment-configuration)
-  - [Installation & Running Dev Server](#installation--running-dev-server)
-- [API Reference](#-api-reference)
-- [Responsive & Cross-Device Support](#-responsive--cross-device-support)
-- [Deployment](#-deployment)
-- [Security & Best Practices](#-security--best-practices)
+## Table of contents
+
+- [Who uses TravelAI](#who-uses-travelai)
+- [Why the product exists](#why-the-product-exists)
+- [Traveller features](#traveller-features)
+- [Agency features](#agency-features)
+- [Platform administration](#platform-administration)
+- [How the application works](#how-the-application-works)
+- [Architecture](#architecture)
+- [Repository layout](#repository-layout)
+- [Tech stack](#tech-stack)
+- [Getting started](#getting-started)
+- [Environment variables](#environment-variables)
+- [Commands](#commands)
+- [API reference](#api-reference)
+- [Data model](#data-model)
+- [Testing and verification](#testing-and-verification)
+- [Deployment](#deployment)
+- [Security and privacy](#security-and-privacy)
+- [Responsive and accessibility](#responsive-and-accessibility)
+- [Known limits and deliberate exclusions](#known-limits-and-deliberate-exclusions)
+- [Documentation map](#documentation-map)
 
 ---
 
-## 💡 What Problem Does TravelAI Solve?
+## Who uses TravelAI
 
-Traditional trip planning involves juggling dozen of browser tabs: reading conflicting travel blogs, estimating taxi fares, looking up weather advisories, checking permit requirements, and calculating budgets in spreadsheets. Furthermore, basic LLM prompts often generate flawed itineraries that suffer from:
-1. **Unrealistic Pacing & Logistics**: Packing 10 far-apart attractions into a single afternoon without travel time.
-2. **Hotel Hopping Fatigue**: Changing accommodations every single night instead of scheduling continuous stays.
-3. **Hallucinated or Absent Map Coordinates**: Generic lists with no spatial context or geographic centering.
-4. **Unrealistic Budgets**: Overlooking local transit, buffer reserves, permit fees, or regional payment realities (e.g. offline cash vs UPI in remote hill stations).
-5. **API Quota Brittleness**: Application crashes when a single AI provider experiences rate limits or downtime.
+| Audience | Entry point | What they get |
+|---|---|---|
+| Traveller | `/` (`/dashboard` once signed in) | Discovery, AI planning, collaborative editing, maps, money tracking, sharing |
+| Agency | `/agency/login` | A tenant workspace: trips, clients, enquiries, quotes, proposals, exports, events, team |
+| Platform operator | `/admin/login` | Provisioning, moderation, reports, audit, plan overrides |
+| Anonymous visitor | public routes | Explore trips, agency directory, agency and traveller profiles, events, shared trips, guest proposal pages and guest enquiry threads |
 
-**TravelAI solves all of these challenges with a production-grade, fault-tolerant travel intelligence engine.**
-
----
-
-## ✨ Key Features
-
-### 🧠 Dual-Provider AI Streaming Pipeline
-- **Primary Model**: Powered by Google's latest **Gemini 2.5 Flash** for rapid reasoning and multimodal world knowledge.
-- **Instant Fallback**: Automatic failover to ultra-low-latency **Groq (`openai/gpt-oss-120b` / `qwen/qwen3.8-27b`)** upon rate limits (429) or API disruptions.
-- **Live SSE Streaming**: Multi-stage progress indicators keeping users engaged while the itinerary synthesizes in real time.
-
-### 🧭 6-Step Visual Trip Wizard
-- **Destination Discovery**: Search bar with auto-suggestions and trending Indian hotspots (Goa, Manali, Wayanad, Jaipur, Ladakh, etc.).
-- **Smart Calendar**: Departure/return pickers with duration presets (Weekend Getaway, 5-Day Recharge, 1-Week Vacation).
-- **Group Presets & Custom Pacing**: Solo, Couple, Family, and Friends modes with independent adult and child count adjusters.
-- **Dynamic Budget Allocator**: Per-person and total group budget sliders with automatic category allocation.
-- **Vibe & Style Filters**: Adventure, Culture, Relaxation, Culinary, Nature, Photography, Nightlife, and Shopping.
-- **Pace, Diet & Language**: Set a travel pace, dietary preferences and the itinerary's output language right in the wizard.
-
-### 🗺️ Interactive OpenStreetMap & Leaflet Visualization
-- **80+ Curated Travel Hub Coordinates**: Pre-mapped coordinates covering hill stations, beaches, and cultural centers across India.
-- **Dynamic Nominatim Geocoding**: Automatically geocodes custom or unlisted destinations if not found in the local coordinate cache.
-- **Day-by-Day Route Polylines**: Connects scheduled daily activities with color-coded travel routes.
-- **Distance & Travel-Time Insights**: Per-leg distances and estimated drive times are shown between consecutive activities, with a per-day total on both the timeline and the map — computed instantly on the client and refined by the backend routing endpoint when available.
-- **User-Drawn Custom Routes**: Click-to-draw your own paths on the map (detours, treks, alternate drives), name them, tag a trip day, pick a colour and travel mode, and see the length instantly. Saved per trip with edit/delete, and recomputed server-side on save.
-- **Per-Day Weather Advisories**: Each day shows a live forecast chip (temperatures, rainfall, wind) colour-coded by travel risk — `clear` → `light rain` → `showers` → `rough weather` — with concrete advisories for hill-road landslides, extreme heat, cold nights and high winds. Forecasts come from Open-Meteo and degrade to a seasonal outlook for dates beyond the ~16-day window.
-- **Suggest an Indoor Alternative**: On a risky day, ask the AI to rework just that day around the conditions (museums, cafés, covered markets…). The proposal is shown for review and only replaces the day when you accept it — through the normal edit path, so version history still works.
-- **Nearby Places Search**: Find real restaurants, cafés, attractions, ATMs, pharmacies and fuel stops around any day, sorted by distance with addresses and opening hours. Results appear as amber map markers and can be added to the day as an activity in one click. Up to three independent place providers are chained — Geoapify (when an API key is configured), then Overpass, then Nominatim — so one overloaded instance never breaks search. If every provider is down it says so honestly, with a retry, rather than pretending nothing is nearby.
-- **Weather-Aware Plan Check**: A map-tab panel cross-references the forecast with your actual travel legs — it flags every leg running through rough weather, then proposes concrete fixes: swap a rainy day's plan onto a dry day, rebuild a high-risk day indoors, or pad the travel time. Every suggestion is an explicit action; nothing is applied silently.
-- **Interactive Pins**: Custom numbered activity markers and distinctive hotel icons with detailed popups.
-
-### 🏨 Smart Multi-Day Stay Deduplication
-- Automatically detects and merges multi-night reservations at the same property across consecutive days into consolidated cards (e.g. `Stay Duration: Days 1 – 4 (4 Nights)`), eliminating repetitive cards.
-
-### ✏️ Inline Trip Editing & Version History
-- **Activity Editor Modal**: Edit any activity's title, time slot, approximate cost, location, description, and GPS coordinates.
-- **Drag-and-Drop Reordering**: Reorder activities within a day (drag handle or accessible up/down controls) and move entire days with automatic day renumbering.
-- **Background Autosave**: Local edits autosave automatically, while fine-grained activity edits and reorders persist instantly via dedicated endpoints.
-- **Version Snapshots & Restore**: Every itinerary save creates a restorable snapshot (last 20 per trip kept). Roll back to any version from the **History** tab — the pre-restore state is auto-backed up, so you can move forward again.
-
-### 🌏 Personalized AI Prompt Engine
-- **Multi-Language Output**: Generate the full itinerary in English, Hindi, Tamil, Bengali, Telugu, Marathi, Kannada, Malayalam, or Gujarati (JSON keys stay stable so the UI always renders correctly).
-- **Interest Weighting**: Selected travel styles are converted into activity weights, so focused selections concentrate the itinerary around what you actually love.
-- **Seasonal Adaptation**: Weather advisories, packing hints and activity picks automatically adapt to the travel month (Winter, Summer/Pre-Monsoon, Monsoon, Post-Monsoon).
-- **Traveller Preferences**: Choose a travel pace (relaxed / balanced / action-packed) and dietary preferences that flow directly into every food and activity recommendation.
-- **Returning-Traveller Personalization**: Past trips, preferred budgets, group types and positively-rated highlights are summarized into the prompt so repeat plans keep improving.
-- **Quality Scoring**: Every generated itinerary is heuristically scored (completeness, consistency, richness, map accuracy) and the score is shown to the user as an "AI confidence" hint.
-- **Prompt Caching & A/B Variants**: Identical prompts are served from a TTL cache to cut latency and cost, and prompts are deterministically A/B split per user for ongoing experimentation.
-
-### 👍 Feedback Loop & Insights
-- **Thumbs Up/Down Rating**: Rate any generated itinerary; ratings feed straight back into future personalization.
-- **Analytics Endpoint**: Aggregated quality scores, feedback counts, variant performance and top destinations are exposed via `/api/itinerary/insights`.
-
-### 📊 Expense Tracking & Settlement
-- **Real Expense Tracking**: Log actual spend during the trip (description, category, amount, date, day) into a per-trip ledger.
-- **Planned vs Actual**: A grouped bar chart plus planned / spent / remaining / variance cards compare your logged expenses against the AI's planned budget per category.
-- **Group Travellers**: Add companions so each expense can record who paid and be split equally (foundation for settlement).
-- **Multi-Currency Logging & Conversion**: Log expenses in any of 30 ECB-quoted currencies; rates come from Frankfurter (12-hour cache), are snapshotted onto the trip, and every amount is stored converted into the trip's base currency. Switch the base currency at any time and the whole ledger re-converts.
-- **Bill Splitting & Settle Up**: Choose not-split, equal, or custom per-person shares, then see each traveller's paid/share/net balance plus the fewest transfers needed to settle up.
-- **Receipt Attachments**: Attach a photo or PDF receipt to any expense (JPEG/PNG/WebP/PDF, ≤ `MAX_UPLOAD_MB`, default 5 MB), preview it before saving, open it from the ledger, and remove it again. Nothing is stored unless the file's actual bytes match its declared type.
-
-### 📤 Seamless Sharing, Export & Print
-- **Public Read-Only Web Links**: Unique share tokens allowing friends or family to explore the itinerary without needing an account.
-- **Instant Messenger Text Export**: Formatted, emoji-rich summary ready for WhatsApp, Telegram, or Email.
-- **JSON Data Backup**: Full raw data export.
-- **Dedicated Print Stylesheet**: Browser print-to-PDF styles that hide navigation bars and reformat cards for clean physical paper printing.
-
-### 🏢 Agency Workspace, Public Directory & Enquiries
-- **Agency Workspace**: A separate agency realm for travel businesses — team members and roles, branding and assets, trip planning, clients, quotes, PDF exports and plan limits. It never mixes with personal trips or accounts.
-- **Public Directory**: Agencies publish a profile (about, base city, destinations, specialties, services, languages, optional phone/GSTIN, logo) and appear on `/agencies` with cursor pagination, search and facet filters for city, destination, specialty and language. Publishing is a readiness check, not a toggle: no description, city, destination, service or logo, no listing.
-- **Package Cards**: A trip can be published as a snapshot package — title, nights, highlights, inclusions, a cover image and an optional per-person price. The card never reads the source trip again, so editing or deleting the trip cannot break a public listing. Unpriced packages show "on request", and "from ₹…" on the listing is always the cheapest live package.
-- **Guest Enquiries**: Travellers can send an enquiry from a profile or package with consent, dates, party size, budget band and a message. The agency gets it in an in-app inbox (no email dependency) with claim/assign, status transitions (`new → replied → quoted → won/lost`), and one-click conversion into a client with a prefilled quote.
-- **Two-Way Conversations**: Every enquiry is a thread. Signed-in travellers read and reply from `/profile` or `/enquiry/:id`; guests get a private 90-day link that works without an account. The agency replies from the inbox, unread counts are per side, and the first reply stamps the "replies in ~X h" signal. Raw tokens are never stored — only a sha256 hash, a short hint and an expiry.
-- **Live Enquiries**: new leads, replies and read receipts land without a refresh on the agency inbox and the traveller's `/enquiries` list, through a per-account stream discovered from `/api/health`. With the live tier off, both fall back to a 20-second visible-tab poll; private guest links keep plain reads.
-- **Proposal Comparison**: `/proposals` puts every live proposal that answers a traveller's own enquiries side by side — total and per-person price, validity, inclusions and exclusions. A proposal can be opened as the exact pinned document or PDF, and "Ask about this" sends a question to the thread it answers. Nothing is merged and no trip is created.
-- **Trust Signals**: A human-reviewed verification badge, and "Usually replies in ~X h" computed from the median of recent replies — hidden until the agency has answered at least five enquiries, so a new listing never over-promises.
-- **Ops Moderation**: Platform admins can verify/unverify and hide/restore profiles or individual packages from the admin console. A takedown is effective on the listing, facets, direct URLs, logos, covers and enquiry forms, keeps the agency's own draft/published choice, and is audited on both the platform and tenant trails. A read-only launch gate (`scripts/launch-gate-m9.mts`) checks the announcement bar: ≥5 verified live profiles, a priced package on each, and at least one answered test enquiry.
-
-### 📱 Mobile-First Responsive Design
-- Optimized for all screen sizes from ultra-compact smartphones (320px iPhone SE) and tablets to 4K desktop displays.
-- Touch-friendly 44px min-height targets, scrollable pill selectors, and mobile drawer navigation.
+The three signed-in realms are deliberately isolated. A personal session never opens the agency workspace, an agency session never opens the admin console, and the same email address may legitimately exist in more than one realm or tenant. See [Account realms](#account-realms).
 
 ---
 
-## 🏗️ System Architecture
+## Why the product exists
+
+A raw LLM itinerary is useful but brittle. Left alone it packs ten far-apart sights into an afternoon, changes hotels every night, invents map coordinates, and ignores local transit, permits and payment reality. Earlier versions of this product wrapped a prompt; the current application wraps the *trip*.
+
+Every generated plan is normalised, scored and rendered against real geography. Travel legs get distances and travel times. Stays on consecutive nights at the same property collapse into one card. Weather is checked per day, and when a day looks rough the app proposes a concrete indoor alternative instead of silently keeping it. A budget is split into categories, then compared with what was actually logged and spent.
+
+The rest of the product exists because a plan is rarely a solo artefact:
+
+- Other people need to see it, comment on it, vote on it and edit it.
+- Some trips already happened, and are worth copying rather than inventing.
+- Some people want a professional to run the trip, which means agencies need a credible public shopfront and a private workspace.
+- An agency needs an accountable trail: who claimed the lead, who sent the quote, which template version produced the PDF.
+- An operator needs a way to review, suspend and audit tenants without reading their data.
+
+The result is a product that starts from real trips and real agencies, then uses AI to remove the blank page.
+
+---
+
+## Traveller features
+
+### Discover trips and agencies
+
+- **Explore gallery** (`/explore`) is split into two doors:
+  - **Live trips** - published trips that have not started yet, sorted by soonest departure. A traveller can ask to join, or open the owner's profile.
+  - **Copy a plan** - finished trips, sorted by most recent. They are read-only references: the join action is replaced by a "Finished" state and a copy action.
+  - Filters live in compact dropdowns rather than long inline rows: duration, group type and tags. Filters are URL-backed, so a filtered view can be shared or reloaded. Results paginate with Previous/Next.
+- **Gallery trip page** (`/explore/:tripId`) shows the itinerary projection only: day plan, stays, food, practical notes and cover. It never shows money, expenses, members, versions or generation metadata. Exact dates can be hidden by the owner, in which case the page shows month and duration instead.
+- **Copy a published trip** creates an editable draft in the visitor's own account. The original owner is never modified.
+- **Ask to join** is available only on live trips. A request is queued for the owner; approval grants commenter access, not edit rights.
+- **Traveler profiles** (`/travelers/:handle`) show a handle, bio and that person's published trips, including finished ones. Handles are unique and availability-checked while typing.
+- **Agency directory** (`/agencies`) lists published agency profiles with cursor pagination, search and facets for base city, destination, specialty and language. The navigation entry appears only once at least five agencies have published a profile; the pages stay reachable by URL.
+- **Agency profile** (`/agencies/:slug`) shows the agency's story, base city, destinations, specialties, services, languages, trust signals, upcoming events, package cards and an enquiry form.
+- **Events** (`/explore/events/:eventId`) are dated camps, group trips and retreats run by agencies. The public page shows dates, venue, capacity, price, highlights and a cover, plus an "I'm interested" form with duplicate and capacity guards.
+- **Report and block** are part of discovery, not an afterthought. A signed-in traveller can report a trip or profile, and can block another account one-way. Three distinct open reports auto-hide a gallery trip pending review. Reporting never exposes the reporter on any public payload.
+- **Guidelines** (`/guidelines`) describe the community rules in plain language.
+
+### Plan with AI
+
+- **Six-step wizard**: destination, dates, group, budget, vibe/pace and review. The wizard keeps its state when moving back and can prefill from the last trip.
+- **Destination discovery**: 80+ curated Indian travel hubs with coordinates, plus Nominatim geocoding for unlisted places.
+- **Group and budget**: solo, couple, family and friends presets; separate adult and child counts; per-person and total budget sliders with category allocation.
+- **Preferences**: eight interest tags, travel pace (relaxed, balanced, action-packed), dietary notes and output language. Preferences are converted into activity weights and prompt constraints rather than decorative labels.
+- **Dual-provider generation**: Gemini 2.5 Flash is the primary model; Groq (`openai/gpt-oss-120b`) is the automatic fallback on rate limits or provider failures. Generation streams over server-sent events with staged progress.
+- **Prompt quality work**: seasonal adaptation (winter, summer/pre-monsoon, monsoon, post-monsoon), returning-traveller personalisation from past trips and positive feedback, stable JSON keys across nine languages, a TTL prompt cache, deterministic per-user A/B prompt variants, and a heuristic quality score shown as "AI confidence".
+- **Feedback**: thumbs up/down on a generated plan feeds future personalisation. Aggregated quality, feedback, variant and destination counts are available from the insights endpoint.
+
+### Edit, map and adapt
+
+- **Day-by-day itinerary**: activities, stays, food spots, transport and practical tips, with multi-night stays merged into one card.
+- **Inline editing**: change any activity's title, time slot, approximate cost, location, description and GPS coordinates.
+- **Reordering**: drag activities within a day, or move whole days with automatic renumbering. Accessible up/down controls mirror every drag interaction.
+- **Autosave and versions**: local edits autosave; structured edits and reorders persist immediately. Every itinerary save writes a restorable snapshot (30 by default), and restoring backs up the pre-restore state first.
+- **Trash and restore**: deleting a trip is soft; restore is available until a permanent purge, which is restricted.
+- **Leaflet map**: numbered activity pins, hotel markers, popups and per-day route polylines on OpenStreetMap. Distances and travel times are computed on the client instantly, then refined by the backend routing endpoint when it is available.
+- **Drawn routes**: click-to-draw a detour, trek or alternate drive, then name it, tag a day, choose a colour and travel mode. Length is shown live and recomputed server-side on save.
+- **Weather advisories**: each day gets an Open-Meteo forecast chip with temperature, rainfall and wind, risk-coloured from clear through light rain, showers and rough weather. The advice is concrete (hill-road landslides, heat, cold nights, high winds). Dates beyond the forecast window fall back to a seasonal outlook.
+- **Indoor alternative**: on a risky day, ask the AI to rework just that day around the conditions. The proposal is shown for review and only replaces the day when accepted - through the normal edit path, so version history still works.
+- **Nearby places**: find restaurants, cafes, attractions, ATMs, pharmacies and fuel stops around a day, sorted by distance with addresses and opening hours. Providers are chained Geoapify then Overpass then Nominatim, so one overloaded service does not break search. Results become amber map markers and can be added to a day in one click.
+- **Weather-aware plan check**: cross-references the forecast with actual travel legs, flags every leg running through rough weather, and offers explicit fixes - swap a rainy day onto a dry day, rebuild a high-risk day indoors, or pad the travel time. Nothing is applied silently.
+- **Personal PDF**: a purpose-built jsPDF export renders a clean A4 document from itinerary data (no screen capture), alongside a print stylesheet for browser printing.
+
+### Plan together
+
+- **Roles**: owner, editor, commenter and viewer.
+- **Invites**: link or email invites with expiry, use limits and a per-trip member cap. Tokens are hashed at rest.
+- **Comments**: paginated and rate-limited, with XSS-safe rendering by construction.
+- **Polls**: multiple-choice decisions inside a trip. Poll payloads are sealed on the client; the server stores opaque ciphertext.
+- **Decisions**: a record of what the group settled on, separate from the chat scroll.
+- **Trip chat**: a floating drawer with typing indicators, unread badges and end-to-end encryption. The server cannot read message bodies and therefore cannot export them.
+- **@TravelAI assistant**: an answer-only participant. It receives the trip facts the server already holds plus a bounded, visibly disclosed set of decrypted recent messages from the asker's browser. The reply returns to that browser, is encrypted with the trip key, and is stored as a normal comment flagged as a bot message.
+- **Presence and live updates**: SSE streams with heartbeat when the live tier is on; a 20-second visible-tab poll when it is off. The SPA discovers the tier from `/api/health`.
+- **Shared version history**: agency staff and trip members see the same version trail, so a hand-off does not fork the plan.
+
+### Track money
+
+- **Expense ledger**: description, category, amount, date and day, per trip.
+- **Planned vs actual**: category chart plus planned, spent, remaining and variance cards.
+- **Travellers**: add companions and record who paid each expense.
+- **Multi-currency**: 30 ECB-quoted currencies via Frankfurter, cached for 12 hours and snapshotted onto the trip. Amounts are stored converted into the trip's base currency; changing the base re-converts the ledger.
+- **Splitting**: not split, equal, or custom per-person shares.
+- **Settle up**: per-traveller paid, share and net balances, plus the fewest transfers needed to settle.
+- **Receipts**: attach a JPEG, PNG, WebP or PDF receipt, preview it, open it from the ledger, and remove it. Files are size-capped, MIME-checked and verified against magic bytes before storage. Cloudinary is used when configured; local disk is the development fallback.
+
+### Share and export
+
+- **Unlisted share links**: a token-based read-only page (`/shared/:shareId`) for people without accounts.
+- **Messenger text**: a formatted summary ready for WhatsApp, Telegram or email.
+- **JSON backup**: the full raw trip document.
+- **PDF and print**: a real PDF export plus a print stylesheet that hides navigation and reformats cards.
+- **Publish to the gallery**: a separate decision from the unlisted share link. Publishing exposes only the public projection, never money or identities. Publishing can be undone without breaking the unlisted link.
+
+### Account and safety
+
+- **Personal password reset**: self-service forgot/reset flow with a one-time hashed token. Agency and platform accounts are reset by their owner or an operator instead.
+- **Country-aware phone numbers**: every entry form uses a country picker, validates the national number per country, and sends/stores E.164.
+- **One-way blocks** and **daily-limited reports**, both scoped to the personal realm.
+
+---
+
+## Agency features
+
+An agency is a tenant, not a personal account with extra buttons. Its workspace has its own login, session, roles, data boundaries and audit trail.
+
+### Workspace and team
+
+- **Separate sign-in** at `/agency/login?workspace=<slug>` with email and password.
+- **Onboarding**: first-run setup for brand and team, plus a forced password change on a one-time temporary credential.
+- **Workspace shell**: grouped sidebar navigation, breadcrumbs, a command palette and live counters. Pages: Overview, Trips, Events, Clients, Enquiries, Templates, Team, Operations, Settings.
+- **Overview**: today's work - new enquiries, trips in flight, events, invites and plan usage.
+- **Trips library**: search and filter by status, destination, assigned staff and client. Trips are archived and restored rather than destructively deleted.
+- **Workspace trip planner**: the same AI engine, map and editing surface as the traveller product, within the tenant.
+- **Client access**: clients are invited through trip membership and never receive staff access.
+- **Team**: owner, admin, planner and viewer roles; invite, role change, removal, owner transfer and last-owner protection.
+
+### Public presence and packages
+
+- **Directory profile**: about, base city, destinations, specialties, services, languages, optional phone and GSTIN, and a logo.
+- **Readiness-gated publishing**: publishing is a check, not a toggle. No description, city, destination, service or logo means no listing.
+- **Package cards**: publish a trip as a snapshot - title, nights, highlights, inclusions, cover image and an optional per-person price. The card never re-reads the source trip, so editing or deleting the trip cannot break a public listing. The published itinerary is price-free; only the agency-authored package price is shown.
+- **Pricing display**: unpriced packages say "price on request"; the "from" price on the directory is always the cheapest live package.
+- **Trust signals**: a human-reviewed verification badge, and "usually replies in ~X h" computed from the median of recent replies. The reply-time signal stays hidden until at least five enquiries have been answered, so a new listing never over-promises.
+
+### Enquiries and conversations
+
+- **Public enquiry form** on the profile and on package cards. The traveller must be signed in; the form carries consent, dates, party size, budget band and a message.
+- **Inbox**: split-view inbox with claim/assign, unread counts per side, status transitions (`new -> replied -> quoted -> won/lost`) and one-click conversion into a client with a prefilled quote.
+- **Two-way threads**: the agency replies from the inbox; the traveller replies from `/enquiries` or `/enquiry/:id`. Guests receive a private 90-day link that works without an account. Raw tokens are never stored - only a sha256 hash, a short hint and an expiry.
+- **Live refresh**: new leads, replies and read receipts arrive through a per-account SSE stream discovered from `/api/health`. With the live tier off, both sides fall back to a 20-second visible-tab poll; guest links keep plain reads.
+- **Proposal comparison** (`/proposals`): every live proposal answering the traveller's own enquiries, side by side - total and per-person price, validity, inclusions and exclusions. A proposal can be opened as the pinned document or PDF, and "Ask about this" sends a question into the thread it answers.
+
+### Quotes and proposals
+
+- **Versioned quotes**: draft, sent, accepted, cancelled. A sent quote is frozen; editing creates a new version. Quote numbers are unique per agency.
+- **Server-computed totals**: line items, markup, tax, discount, total and per-person are calculated on the server; the browser never submits the final total.
+- **Client-safe projection**: internal cost, markup, expenses and preparer identity are stripped from every client-facing view.
+- **Default terms**: agency-level inclusions, exclusions, things to carry, cancellation and payment terms, reusable on every quote.
+- **Proposal share links**: minted from a ready client export or from a live sent quote. The link pins the quote and (when present) the export, is stored as a sha256 hash, expires (30 days by default, capped at 90), and is revocable.
+- **Public proposal page** (`/proposal/:token`): branded document, client-only quote summary, PDF download, and acceptance without an account.
+- **Atomic acceptance**: an idempotent `sent -> accepted` transition, audited on both the platform and tenant trails. A second accepted quote for the same trip is refused; a decline is written back to the enquiry and shown to the agency.
+
+### Templates, exports and brand
+
+- **Built-in HTML templates**: a client brochure and an internal summary, designed for variable day counts and long text.
+- **Custom HTML templates**: validated against a versioned contract with no arbitrary JavaScript or remote assets. The in-app source editor saves a new immutable version and carries assets forward.
+- **Uploaded PDF designs**: sanitised to a passive vector background, mapped to named slots, and rendered with one repeat page per itinerary day using `pdf-lib`.
+- **Preview and activation**: preview against a real trip; activation refuses an unpinned version.
+- **Immutable versions**: old exports stay pinned to the template version they were rendered with. One default per audience is enforced in service logic and tests. Templates can be archived and restored.
+- **Brand assets**: logo, mascot, fonts, colours and images, private and tenant-scoped, MIME- and size-checked. A template pins the assets it was activated with.
+- **PDF export pipeline**: queued jobs rendered two at a time, with retry and interrupted-job recovery at boot. The engine is a locally installed Chrome in development, or a basic-auth-protected Gotenberg service in deployment. Downloads use short-lived HMAC-signed URLs, never public object URLs.
+- **History, rate limits and quota**: per-agency export history with status and retry, per-user and per-agency rate limits, and a monthly plan quota.
+
+### Events
+
+- **Event library**: draft, published and closed lifecycle with status filters and soonest-first ordering.
+- **Public event pages**: dates, venue, capacity, price, highlights and cover; listed on Explore and the agency profile.
+- **Interest**: guest interest with per-event caps, duplicate guards and a confirmation flow.
+- **Roster**: pending-first roster with confirmation and decline counts. Drafts offer no roster action; ended events cannot be published; closed events cannot be republished until reopened.
+
+### Plans, limits and audit
+
+- **Plan tiers**: `starter` (3 seats, 10 exports/month, 100 MB) and `pro` (15 seats, 100 exports, 1 GB), configurable by environment.
+- **Server-side enforcement**: seat checks on invite; export and storage checks on write; clear `409` responses naming the current limit. Exhausted exports recover when the month rolls over.
+- **Usage reporting**: live seat, export and storage usage in Operations.
+- **Per-agency overrides**: the admin console can override any limit; blank fields inherit the tier.
+- **Audit trail**: append-only and tenant-scoped, covering members, templates, quotes, exports, trips and plan changes. Metadata never contains secrets.
+
+---
+
+## Platform administration
+
+The console lives at `/admin/login` and is a third, fully separate realm.
+
+- **Overview**: accounts, agencies, applications and shortcuts.
+- **Account directory**: every realm as separate rows; same-email accounts are never silently merged.
+- **Agency provisioning**: name, slug, plan, billing contacts and owner email, created as one compensatable operation (agency + owner account + owner membership).
+- **Public application queue**: approve (which provisions the tenant) or reject with a note. Applications are anonymous, rate-limited, honeypot-protected and create no account until approved.
+- **Tenant lifecycle**: suspend (invalidates sessions, blocks login, fails public links closed) and reactivate.
+- **Password reset**: one-time password with forced change; personal accounts are untouched.
+- **Plan and billing metadata**: tier change, overrides, renewal date, contact and notes.
+- **Directory moderation**: verify/unverify and hide/restore profiles or individual packages with a reason. A takedown is effective on the listing, facets, direct URLs, logos, covers and enquiry forms, while preserving the agency's own publishing choice.
+- **Reported content**: gallery report queue with automatic hiding at three distinct reports; agency pages are reviewed manually.
+- **Platform audit**: filters by action, target, actor, date and free text, paginated with facets.
+- **Platform admins**: create, reset and disable, with last-active-admin protection.
+- **Bootstrap**: `bootstrap:platform-admin` creates the first super-admin without opening public registration.
+
+The namespace is dark unless `PLATFORM_ADMIN_ENABLED` is explicitly true. When it is off, `/api/admin/*` answers 404 and the SPA presents `/admin` as unavailable.
+
+---
+
+## How the application works
+
+### Request pipeline
+
+1. Express trusts one reverse proxy hop so HTTPS and client IPs are correct behind Render.
+2. Helmet sets a self-only script CSP with explicit map, image and font origins.
+3. CORS is an exact-origin allow-list. Same-origin requests (single-service deployment) skip CORS entirely. Suffix wildcards were removed on purpose: anyone can deploy under `*.onrender.com`.
+4. JSON bodies are capped at 1 MB.
+5. A double-submit CSRF cookie is issued on any request; non-GET requests must echo it in `X-CSRF-Token`. Bootstrap auth paths are exempt.
+6. Zod validates every route payload.
+7. Realm middleware proves the caller before a handler runs. Tenant routes always carry the agency id; cross-tenant ids return 404 rather than 403, so existence is not leaked.
+8. Rate limiters cover auth, AI generation, collaboration writes, enquiries, applications, public interest and platform writes.
+9. One error handler produces the JSON error envelope. In production, the SPA fallback serves `index.html` for non-API GETs and returns JSON 404 for unknown API routes.
+
+`GET /api/health` reports database state, uptime, feature tiers, storage provider, PDF renderer mode and memory. It answers `503` when the process is alive but the database is not, so a bad instance is replaced instead of being reported ready.
+
+### Account realms
+
+| Realm | Session | Routes | Isolation rule |
+|---|---|---|---|
+| Personal | Personal JWT cookie | `/api/auth`, `/api/itinerary`, `/api/invites`, `/api/blocks`, `/api/reports`, `/api/enquiries`, `/api/proposals` | Agency and platform sessions are refused by the personal guard |
+| Agency | Separate agency JWT | `/api/agency/auth`, `/api/agency/*` | Every tenant route requires an agency session and a tenant id |
+| Platform | Separate platform JWT | `/api/admin/auth`, `/api/admin/*` | The whole namespace sits behind `requirePlatformAdmin` |
+
+Public namespaces (`/api/travelers`, `/api/explore`, `/api/events`, `/api/agencies`, `/api/agency-applications`, `/api/conversations`) never accept a session as authorisation. They return projections only.
+
+### Visibility and publishing rules
+
+- A trip has two independent visibility decisions: an **unlisted share token** and **gallery publication**. Revoking one does not break the other.
+- Gallery eligibility is computed on the server: published, not agency-owned, and matching the requested temporal bucket.
+- Every public trip response leaves through an allow-list projection. Sessions, members, expenses, finance, generation metadata and versions are structurally absent, not merely filtered.
+- Exact dates can be hidden per trip; the public page then shows month and duration.
+- Agency directory publication is readiness-gated, and operations moderation can hide a profile or a single package regardless of the agency's preference.
+
+### Live versus finished trips
+
+| Bucket | Definition | Sort | Join | Primary action |
+|---|---|---|---|---|
+| Live | Published, not agency-owned, `startDate` in the future (or absent) | Soonest departure first | Request, then owner approval grants commenter access | Ask to join |
+| Finished | Published and `startDate` before today (UTC) | Most recent first | Closed | Copy the plan |
+
+The write path for join requests remains upcoming-only. The read path exposes `joinable: false` on a finished trip so the UI can explain why the action disappeared instead of offering a button that fails.
+
+### Enquiry lifecycle
+
+1. A signed-in traveller sends an enquiry from a profile or package with consent.
+2. The agency sees it in the inbox and can claim or assign it.
+3. Status moves through `new -> replied -> quoted -> won/lost`. Conversion creates a directory client and hands off to a prefilled quote; it does not force `won`.
+4. Replies are two-way. Signed-in travellers use `/enquiries`; guests use a 90-day private token link.
+5. Sending a quote and sending a proposal both write back to the enquiry, so the traveller's thread and comparison page stay truthful.
+6. Accepting or declining a proposal is reflected on the enquiry, and a decline is explicitly surfaced to the agency.
+
+### Proposal lifecycle
+
+1. A quote is composed with server-computed totals.
+2. A proposal is shared either from a ready export (pinning quote + document) or from a live sent quote (pinning the quote and its snapshot).
+3. The raw token is shown once and stored only as a hash; the link expires and can be revoked.
+4. The public page renders the client-safe quote and, when present, the branded PDF.
+5. Acceptance is idempotent and audited; a second accepted quote for the same trip is refused.
+
+### Export pipeline
+
+Exports are queued rather than synchronously rendered. Two jobs run at a time. Each job is pinned to an immutable template version and its asset snapshot. A job stranded in `rendering` by a restart is recovered at boot and turned into a retryable failure. A completed export is downloaded through a short-lived HMAC-signed URL.
+
+### Live updates and fallbacks
+
+- Trip collaboration and enquiries each have an SSE tier, discovered from `/api/health`.
+- With a tier off, the corresponding routes answer 404 rather than opening an empty stream, and the SPA falls back to a 20-second poll that only runs while the tab is visible.
+- Enquiry streams are capped per channel; the oldest stream is closed past the cap so a runaway tab cannot pin unbounded memory.
+
+### Transactional email
+
+Delivery is a Resend HTTP adapter behind an outbox and a dark-by-default flag. With `EMAIL_ENABLED` off, or without a provider key, every notification helper is a no-op and no outbox row is written. Because free hosting has no cron, the dispatcher and lifecycle sweeps ride the web process: the outbox drains on an interval, and a boot pass catches whatever a sleeping instance missed. Lifecycle sweeps cover event reminders, renewal reminders and the weekly agency digest.
+
+### Phone numbers
+
+Every phone input is country-aware on the client, then validated again on the server per country and stored in E.164. The form never sends an unchecked international-looking string into the database.
+
+---
+
+## Architecture
 
 ```mermaid
 flowchart TD
-    User["Traveler (Browser / Mobile)"]
+    Traveller["Traveller (browser / mobile)"]
+    AgencyUser["Agency staff"]
+    Operator["Platform operator"]
 
-    subgraph Frontend ["Frontend (Vite + React 18 + TypeScript)"]
-        UI["shadcn/ui + Tailwind CSS"]
-        Wizard["6-Step Trip Wizard"]
-        Dashboard["Itinerary Dashboard"]
-        Leaflet["Leaflet Map Engine"]
-        Charts["Recharts Analytics"]
-        AuthContext["UserContext & API Client"]
+    subgraph SPA["Frontend - Vite + React 18 + TypeScript"]
+        Discovery["Explore, directory, profiles, events"]
+        Wizard["Six-step AI planner"]
+        Workspace["Trip workspace: map, weather, money, collaboration"]
+        AgencyApp["Agency workspace"]
+        AdminApp["Platform console"]
+        Client["API client, auth contexts, SSE + poll hooks"]
     end
 
-    subgraph Backend ["Backend API (Express 5 + TypeScript)"]
-        Router["Express Router (/api/auth, /api/itinerary, /api/geo)"]
-        Security["Helmet + Rate Limiting + CORS"]
-        Zod["Zod Input Validation"]
-        AIService["AI Orchestrator with Fallback"]
-        Cache["TTL Generation Cache"]
-        Quality["Quality Scorer"]
-        Geo["Geo Service (distance / routing)"]
-        Finance["Finance Service (FX rates / settlement)"]
-        Gemini["Primary: Gemini 2.5 Flash"]
-        Groq["Fallback: Groq SDK"]
-        Mongo["MongoDB / Mongoose"]
+    subgraph API["Backend - Express 5 + TypeScript"]
+        Security["Helmet, exact CORS, CSRF, rate limits, Zod"]
+        Realms["Personal / agency / platform realm guards"]
+        Collab["Collab: members, comments, polls, decisions, chat keys, presence"]
+        Gallery["Gallery + directory projections"]
+        Enquiries["Enquiries, conversations, quotes, proposals"]
+        Exports["Templates, export queue, signed downloads"]
+        AI["AI orchestrator, cache, quality, assistant"]
+        Geo["Geo: distance, routing, weather, nearby, plan check"]
+        Money["Finance: expenses, splits, settlement, FX, receipts"]
+        Mail["Mail outbox + lifecycle sweeps"]
     end
 
-    User <-->|HTTPS / HTTP-only Cookies| UI
-    UI --> Wizard
-    UI --> Dashboard
-    Dashboard --> Leaflet
-    Dashboard --> Charts
-    Wizard --> AuthContext
-    Dashboard --> AuthContext
+    subgraph Ext["External services"]
+        Gemini["Google Gemini 2.5 Flash"]
+        Groq["Groq fallback"]
+        Mongo[("MongoDB Atlas")]
+        Cloudinary["Cloudinary storage"]
+        Gotenberg["Gotenberg PDF renderer"]
+        GeoAPIs["Open-Meteo, Geoapify / Overpass / Nominatim, OSRM, Frankfurter"]
+        Resend["Resend email"]
+    end
 
-    AuthContext <-->|REST & SSE Streaming| Router
-    Router --> Security --> Zod
-    Zod --> AIService
-    Router --> Geo
-    Router --> Finance
-    Geo -.->|Optional OSRM| Router
-    Finance -.->|Frankfurter FX (12h cache)| Router
-    AIService -->|1st Attempt| Gemini
-    AIService -.->|On 429 / Error| Groq
-    AIService <-->|Cache hit / store| Cache
-    AIService -->|Score generated plan| Quality
-    Router <-->|Trips, users, expenses, routes & FX cache| Mongo
+    Traveller --> SPA
+    AgencyUser --> AgencyApp
+    Operator --> AdminApp
+    Discovery --> Client
+    Wizard --> Client
+    Workspace --> Client
+    AgencyApp --> Client
+    AdminApp --> Client
+
+    Client -->|HTTPS + HttpOnly cookies| Security
+    Security --> Realms
+    Realms --> Collab
+    Realms --> Gallery
+    Realms --> Enquiries
+    Realms --> Exports
+    Realms --> AI
+    Realms --> Geo
+    Realms --> Money
+    Realms --> Mail
+
+    AI --> Gemini
+    AI -.->|429 or failure| Groq
+    Geo -.-> GeoAPIs
+    Money -.-> GeoAPIs
+    Mail --> Resend
+    Exports --> Gotenberg
+    Gallery --> Mongo
+    Collab --> Mongo
+    Enquiries --> Mongo
+    Exports --> Mongo
+    Money --> Mongo
+    Realms --> Mongo
+    Exports -.->|tenant-private bytes| Cloudinary
+    Money -.->|receipts| Cloudinary
 ```
 
 ---
 
-## 📁 Monorepo Directory Structure
+## Repository layout
 
 ```text
 travelai/
-├── package.json               # Root monorepo runner (concurrently backend + frontend)
-├── .gitignore                 # Root gitignore (strictly excludes secrets and builds)
-├── README.md                  # Comprehensive system documentation
+├── package.json                 # Workspaces + dev/build/verify/start scripts
+├── render.yaml                  # Single-service Render blueprint
+├── README.md
+├── docs/                        # Roadmaps, test plans, ADRs, runbooks
 │
-├── backend/                   # Node.js + Express 5 + TypeScript REST API
-│   ├── .env.example           # Environment template
-│   ├── package.json
-│   ├── tsconfig.json
-│   ├── vercel.json            # Vercel serverless deployment configuration
-│   └── src/
-│       ├── index.ts           # Server entry point & middleware pipeline
-│       ├── db.ts              # MongoDB Mongoose connection
-│       ├── config/
-│       │   └── env.ts         # Zod-validated environment config
-│       ├── controllers/
-│       │   ├── auth.controller.ts       # Signup, Signin, Logout, Me
-│       │   ├── itinerary.controller.ts  # Generation, CRUD, Sharing, Streaming
-│       │   ├── expense.controller.ts    # Expense ledger, travellers, split derivation
-│       │   └── geo.controller.ts        # Distance / travel-time routing
-│       ├── middleware/
-│       │   ├── auth.middleware.ts       # JWT cookie authorization
-│       │   ├── error.middleware.ts      # Global centralized error handler
-│       │   ├── rateLimiter.middleware.ts# Rate limiting (auth & AI generation)
-│       │   └── validate.middleware.ts   # Zod schema request validator
-│       ├── models/
-│       │   ├── Trip.ts        # Itinerary schema with sharing tokens, versions & expenses
-│       │   └── User.ts        # User credentials schema
-│       ├── routes/
-│       │   ├── auth.routes.ts
-│       │   ├── itinerary.routes.ts
-│       │   └── geo.routes.ts
-│       ├── schemas/           # Zod validation schemas
-│       ├── services/
-│       │   ├── auth.service.ts
-│       │   ├── itinerary/
-│       │   │   ├── editing.ts           # Pure day/activity reorder & edit helpers
-│       │   │   ├── editing.test.ts      # Unit tests (node:test) for editing helpers
-│       │   │   └── context.ts           # Trip-history summarizer for personalization
-│       │   ├── geo/
-│       │   │   ├── distance.ts          # Pure haversine / travel-time helpers
-│       │   │   ├── distance.test.ts     # Geo math unit tests
-│       │   │   ├── route.ts             # Route provider (haversine + optional OSRM)
-│       │   │   ├── route.test.ts        # Route assembly unit tests
-│       │   │   ├── customRoute.ts       # Drawn-route point validation & distance
-│       │   │   ├── customRoute.test.ts  # Drawn-route unit tests
-│       │   │   ├── weather.ts           # Per-day advisories (Open-Meteo + seasonal fallback)
-│       │   │   ├── weather.test.ts      # Risk mapping & advisory unit tests
-│       │   │   ├── nearby.ts            # Nearby POI search (Overpass proxy + normalization)
-│       │   │   ├── nearby.test.ts       # Overpass/Geoapify/Nominatim parsing, radius, failover tests
-│       │   │   ├── weatherRouting.ts    # Weather-aware routing analysis (exposed legs + fixes)
-│       │   │   └── weatherRouting.test.ts # Routing-analysis unit tests
-│       │   ├── finance/
-│       │   │   ├── expenses.ts          # Amount conversion, equal splits, planned vs actual
-│       │   │   ├── expenses.test.ts     # Budget maths unit tests
-│       │   │   ├── currency.ts          # FX rates (Frankfurter) + conversion helpers
-│       │   │   ├── currency.test.ts     # Conversion & cache unit tests
-│       │   │   ├── settlement.ts        # Balances + minimal-transfer settlement
-│       │   │   ├── settlement.test.ts   # Bill-splitting unit tests
-│       │   │   ├── receipt.ts           # Receipt storage helpers (validation, sniffing, files)
-│       │   │   └── receipt.test.ts      # Upload validation & MIME-sniffing unit tests
-│       │   └── ai/
-│       │       ├── ai.interface.ts      # AIService abstraction
-│       │       ├── gemini.service.ts    # Google Gemini 2.5 Flash implementation
-│       │       ├── groq.service.ts      # Groq high-speed fallback implementation
-│       │       ├── prompt.ts            # Multi-language, weighted & seasonal prompt builder
-│       │       ├── prompt.test.ts       # Prompt builder unit tests
-│       │       ├── quality.ts           # Heuristic itinerary quality scorer
-│       │       ├── quality.test.ts      # Quality scorer unit tests
-│       │       ├── cache.ts             # TTL cache for identical generations
-│       │       ├── cache.test.ts        # Cache unit tests
-│       │       └── index.ts             # Orchestrator with fallback + caching
-│       └── types/             # Shared backend TypeScript types
+├── backend/
+│   ├── .env.example
+│   ├── package.json             # Start/dev/build/test + seed/migrate scripts
+│   ├── ensure-frontend.js       # Static bundle discovery helper
+│   ├── src/
+│   │   ├── index.ts             # Middleware pipeline, route mounts, health, static serving
+│   │   ├── config/              # Zod env parsing, CSP, feature flags
+│   │   ├── controllers/         # HTTP adapters
+│   │   ├── middleware/          # Realm guards, CSRF, rate limits, validation, errors
+│   │   ├── models/              # 31 Mongoose models across trips, agencies and platform
+│   │   ├── routes/              # 18 route namespaces
+│   │   ├── schemas/             # Zod request and response contracts
+│   │   ├── services/
+│   │   │   ├── ai/              # Prompt, generation, fallback, cache, quality, normalise
+│   │   │   ├── auth/            # Realms, migration, password reset
+│   │   │   ├── itinerary/       # Generation orchestration, editing, history context
+│   │   │   ├── collab/          # Membership, invites, comments, polls, decisions, chat, presence, assistant
+│   │   │   ├── realtime/        # SSE hubs and frame contracts
+│   │   │   ├── gallery/         # Publish, projections, explore, clone, join requests, reports
+│   │   │   ├── directory/       # Agency profile, listing, packages, enquiries, conversations
+│   │   │   ├── agency/          # Tenancy, clients, quotes, proposals, templates, exports, events, plan
+│   │   │   ├── platform/        # Accounts, provisioning, applications, moderation, audit
+│   │   │   ├── geo/             # Distance, routing, weather, nearby, weather-aware plan check
+│   │   │   ├── finance/         # Expenses, settlement, FX, receipts
+│   │   │   ├── events/          # Public events and interest
+│   │   │   ├── mail/            # Outbox, Resend adapter, templates, recipients, lifecycle
+│   │   │   └── user/            # Profiles and handles
+│   │   └── utils/               # Health, phone, escaping, AppError
+│   └── scripts/                 # Seeds, migrations, bootstrap, smoke and launch-gate scripts
 │
-└── frontend/                  # React 18 + Vite + TypeScript Client
-    ├── index.html             # HTML5 entry with mobile viewport & theme initialization
-    ├── package.json
-    ├── vite.config.ts
-    ├── tailwind.config.ts
+└── frontend/
+    ├── vite.config.ts           # Port 8080, /api and /uploads proxy to :5000
     └── src/
-        ├── App.tsx            # Main routes & QueryClient setup
-        ├── config.ts          # API Base URL resolver
-        ├── components/
-        │   ├── Navbar.tsx     # Responsive navbar with mobile sheet drawer & dark mode
-        │   ├── Hero.tsx       # Auth-aware responsive hero section
-        │   ├── FeatureCard.tsx
-        │   ├── ErrorBoundary.tsx
-        │   ├── ItineraryDisplay.tsx # Multi-tab coordinator
-        │   ├── dashboard/
-        │   │   ├── TripHeader.tsx       # Visual cover, quick stats & export triggers
-        │   │   ├── DayTimeline.tsx      # Vertical timeline with editable, reorderable activities & leg distances
-        │   │   ├── ActivityEditor.tsx   # Modal to edit an activity's full details
-        │   │   ├── TripVersions.tsx     # Version history list with one-click restore
-        │   │   ├── TripFeedback.tsx     # Thumbs up/down rating & AI confidence hint
-        │   │   ├── ExpenseTracker.tsx   # Ledger, planned-vs-actual, currency settings, settle-up
-        │   │   ├── ExpenseEditor.tsx    # Modal to log / edit an expense (currency, splits, receipt)
-        │   │   ├── WeatherAdvisory.tsx  # Per-day risk badges & advisory panels
-        │   │   ├── WeatherRoutingCard.tsx# Weather-aware plan check with one-click fixes
-        │   │   ├── DayAlternativeDialog.tsx # Review an AI-proposed weather-safe day
-        │   │   ├── NearbyExplorer.tsx   # Nearby POI search with add-to-day actions
-        │   │   ├── RouteEditor.tsx      # Modal to name / colour / tag a drawn route
-        │   │   ├── TripMap.tsx          # Leaflet map with 80+ destinations, drawn routes & distances
-        │   │   ├── StayAndCuisine.tsx   # Consolidated stay cards & dining hotspots
-        │   │   ├── TravelGuideSafety.tsx# Climate, packing checklist & etiquette
-        │   │   ├── ShareExportModal.tsx # Public link, WhatsApp text & PDF print
-        │   │   └── MyTripsView.tsx      # Library view with search, filter & duplicates
-        │   └── wizard/
-        │       ├── WizardProgress.tsx   # 6-step progress bar with mobile scaling
-        │       ├── StepWhere.tsx        # Destination search & popular hotspots
-        │       ├── StepWhen.tsx         # Date range pickers & duration presets
-        │       ├── StepWho.tsx          # Group type selector & traveler counters
-        │       ├── StepBudget.tsx       # Interactive budget slider & INR tiers
-        │       ├── StepStyle.tsx        # Travel vibe & interest selectors
-        │       ├── StepReview.tsx       # Pre-submission review & validation
-        │       └── GenerationOverlay.tsx# Live streaming generation animation
-        ├── pages/
-        │   ├── Landing.tsx    # Marketing homepage
-        │   ├── TripPlanner.tsx# Full wizard journey
-        │   ├── Dashboard.tsx  # User itinerary view & trip library
-        │   ├── SharedTrip.tsx # Public read-only trip viewer
-        │   ├── Auth.tsx       # Login & signup
-        │   └── NotFound.tsx
-        ├── services/
-        │   └── api.ts         # Type-safe API client with SSE stream reader
-        ├── lib/
-        │   ├── geo.ts         # Client-side haversine / travel-time helpers
-        │   ├── routeStyle.ts  # Colours & travel-mode metadata for drawn routes
-        │   ├── currency.ts    # Supported currencies, FX conversion & money formatting
-        │   ├── settlement.ts  # Mirror of the bill-splitting / settle-up maths
-        │   ├── weather.ts     # Weather risk metadata, day/date + forecast zipping
-        │   ├── weatherRouting.ts # Client helpers for applying weather-routing fixes
-        │   ├── receipt.ts     # Receipt validation, preview & URL helpers
-        │   └── budget.ts      # Expense categories & planned-vs-actual helpers
-        └── types/
-            └── trip.ts        # Comprehensive itinerary data contract
+        ├── App.tsx              # Route table for all three realms
+        ├── pages/               # Traveller, agency, admin and public pages
+        ├── components/          # Dashboard, wizard, directory and UI primitives
+        ├── context/             # User, agency and platform auth providers
+        ├── hooks/               # Feature discovery, SSE/poll, access, encryption
+        ├── services/api.ts      # Typed API client and stream reader
+        ├── lib/                 # Geo, weather, currency, settlement, PDF, phone, covers
+        └── types/               # Trip, gallery, directory and enquiry contracts
 ```
+
+Generated or local-only directories (`backend/public`, `backend/dist`, `backend/uploads`, `backend/agency-*`, `backend/node_modules`, `frontend/dist`) are not source and are ignored by git.
 
 ---
 
-## 🛠️ Tech Stack
+## Tech stack
 
 | Layer | Technologies |
 |---|---|
-| **Frontend** | React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui, Lucide Icons |
-| **Mapping & Visuals** | Leaflet, React-Leaflet, OpenStreetMap, Recharts |
-| **Travel Data APIs** | Open-Meteo (weather advisories), Geoapify + Overpass + Nominatim (nearby search, chained failover), OSRM (optional routing), Frankfurter/ECB (FX rates) |
-| **File Uploads** | Multer (in-memory, magic-byte verified) + Cloudinary CDN (or local disk fallback) |
-| **Backend** | Node.js (v20+), Express 5, TypeScript, tsx |
-| **Database** | MongoDB, Mongoose ODM |
-| **Artificial Intelligence** | Google Generative AI SDK (`gemini-2.5-flash`), Groq SDK |
-| **Security & Validation** | Zod, Helmet, express-rate-limit, bcryptjs, jsonwebtoken, cookie-parser |
-| **Deployment** | Vercel (Serverless Backend + Static Frontend), Docker-ready |
+| Frontend | React 18, TypeScript, Vite 5, React Router 6, TanStack Query, Tailwind CSS, shadcn/ui + Radix, Lucide |
+| Typography | Newsreader (display) and Manrope (body) |
+| Maps and visuals | Leaflet, React-Leaflet, OpenStreetMap, Recharts |
+| Documents | jsPDF (personal itinerary), pdf-lib + pdfjs-dist (agency templates), Mustache + parse5 (HTML templates) |
+| Backend | Node.js 20+, Express 5, TypeScript, tsx, Zod, Multer |
+| Database | MongoDB, Mongoose |
+| AI | Google Generative AI (`gemini-2.5-flash`), Groq SDK |
+| Security | Helmet, exact-origin CORS, double-submit CSRF, express-rate-limit, bcryptjs, jsonwebtoken |
+| External data | Open-Meteo, Geoapify / Overpass / Nominatim, OSRM (optional), Frankfurter (ECB FX) |
+| Storage | Cloudinary (receipts and tenant bytes), local disk fallback |
+| PDF rendering | Local Chrome or remote Gotenberg |
+| Email | Resend via an outbox, dark by default |
+| Deployment | Render single free web service; Vercel config retained but not the maintained path |
 
 ---
 
-## 🚀 Getting Started
+## Getting started
 
 ### Prerequisites
-- [Node.js](https://nodejs.org/) (v20.x or later recommended)
-- [MongoDB](https://www.mongodb.com/) (Local instance or MongoDB Atlas cluster URI)
-- [Google AI Studio API Key](https://aistudio.google.com/) for Gemini
-- [Groq API Key](https://console.groq.com/) (Optional, recommended for fallback resilience)
 
-### Environment Configuration
+- Node.js 20 or later (Node 24 is used in development)
+- A MongoDB database (local or Atlas)
+- A Gemini API key
+- Optional: Groq key, Cloudinary account, Gotenberg service, Resend key
 
-Create a `.env` file in the `backend/` directory (you can copy `backend/.env.example`):
+### Install and run
 
 ```bash
+# From the repository root - installs root, backend and frontend workspaces
+npm install
+
+# Copy the environment template and fill in the required values
 cp backend/.env.example backend/.env
+
+# Start API on :5000 and Vite on :8080
+npm run dev
 ```
 
-Populate the required credentials:
+Open `http://localhost:8080`. Vite proxies `/api` and `/uploads` to `http://localhost:5000`, so the frontend uses same-origin paths in development.
+
+Run one side only:
+
+```bash
+npm run dev:backend
+npm run dev:frontend
+```
+
+Production-style run:
+
+```bash
+npm run build      # compiles backend, builds frontend, syncs frontend/dist -> backend/public
+npm start          # Express serves API + SPA on PORT (default 5000)
+```
+
+### Minimum environment
 
 ```env
-# Server Port
 PORT=5000
 NODE_ENV=development
-
-# Database Connection
-MONGODB_URI=mongodb+srv://<user>:<password>@cluster.mongodb.net/travelai?retryWrites=true&w=majority
-
-# JWT Authentication Secret
-JWT_SECRET=super_secret_jwt_passphrase_change_me_in_production
-
-# AI Provider API Keys
-GEMINI_API_KEY=AIzaSy...your_gemini_api_key_here
-GROQ_API_KEY=gsk_...your_groq_api_key_here
-
-# Frontend URL (for CORS allowance — exact origins, comma-separated for multiple)
-# Milestone 6 note: wildcard suffixes (*.vercel.app / *.onrender.com) are no longer
-# accepted. List every deployment (including Vercel previews) explicitly.
+MONGODB_URI=mongodb+srv://user:pass@cluster/travelai
+JWT_SECRET=replace-with-a-long-random-secret
+GEMINI_API_KEY=your-gemini-key
+GROQ_API_KEY=optional-groq-key
 FRONTEND_URL=http://localhost:8080
-# Optional: extra exact origins beyond FRONTEND_URL
-ALLOWED_EXTRA_ORIGINS=
-# Same-origin requests (SERVE_STATIC=true) are always allowed and need no entry.
-
-# Collaboration (Milestone 6, sprint E2)
-TRIP_MAX_MEMBERS=25            # hard cap on members per trip (incl. the owner)
-INVITE_TTL_HOURS=168           # default invite lifetime (168h = 1 week); max 720h
-INVITE_DEFAULT_MAX_USES=1      # default uses per link invite (email invites are always 1)
-
-# Live tier (Milestone 6, sprint E4 — optional locally, ON in render.yaml)
-ENABLE_TRIP_SSE=false          # true enables the SSE presence stream (+ heartbeat route)
-PRESENCE_TTL_MS=30000          # presence entry TTL — clients heartbeat at ≥2x this rate
-# When SSE is off, the SPA polls comments/polls/decisions every 20s. Render's
-# blueprint sets ENABLE_TRIP_SSE=true; check GET /api/health → collab.sse.
-
-# Enquiry live tier (Milestone 9 — optional locally, ON in render.yaml)
-ENABLE_ENQUIRY_SSE=false       # true enables /api/enquiries/events and /api/agency/enquiries/events
-ENQUIRY_SSE_MAX_STREAMS=25     # concurrent streams per channel; past it the oldest is closed
-# Off means both stream routes answer 404 (not "empty") and the lists fall back
-# to a 20s visible-tab poll. Render's blueprint sets ENABLE_ENQUIRY_SSE=true;
-# check GET /api/health → enquiries.sse.
-
-# Version history (Milestone 6, sprint E5 / flaw F13)
-VERSIONS_MAX=30                # version snapshots retained per trip (each stores a full itinerary)
-
-# Comments (Milestone 6, sprint F6a)
-COMMENT_MAX_LEN=2000           # per-comment body cap (chars, zod-enforced)
-COMMENT_MAX_PER_TRIP=200       # max live (non-deleted) comments per trip; POST 409s above it
-COMMENT_CREATE_PER_15MIN=60    # per-user POST limiter (keyed user-or-IP, F18 pattern)
-COMMENTS_PAGE_SIZE=50          # server max comments per page regardless of a larger `limit`
-
-# AI Generation Cache (optional)
-AI_CACHE_TTL_MS=21600000   # 6 hours
-AI_CACHE_MAX=200
-
-# Geo Routing (optional) — `haversine` (default) or `osrm`
-GEO_ROUTING_PROVIDER=haversine
-OSRM_BASE_URL=https://router.project-osrm.org
-
-# Currency Rates (optional) — Frankfurter by default (no API key required)
-CURRENCY_RATES_PROVIDER=frankfurter
-CURRENCY_CACHE_TTL_MS=43200000   # 12 hours
-
-# Weather Advisories (optional) — Open-Meteo by default (no API key required)
-# Forecasts cover ~16 days; further-out dates fall back to seasonal normals.
-OPEN_METEO_BASE=https://api.open-meteo.com/v1/forecast
-WEATHER_CACHE_TTL_MS=2700000     # 45 minutes
-
-# Nearby Search (optional) — three providers are chained, first success wins:
-#   1. Geoapify  — used when GEOAPIFY_API_KEY is set. Reliable, covers every category
-#                  uniformly, 3,000 free requests/day, no credit card required:
-#                  https://myprojects.geoapify.com
-#   2. Overpass  — keyless OpenStreetMap. Richest tags, but volunteer-run and often
-#                  overloaded, so several endpoints are tried within a shared budget.
-#   3. Nominatim — keyless OpenStreetMap last resort (thin coverage for some categories,
-#                  governed by a 1 request/second policy).
-# When every provider fails the API returns `available: false` instead of an empty list.
-GEOAPIFY_API_KEY=                # optional; when set, Geoapify is tried first
-GEOAPIFY_TIMEOUT_MS=8000
-# OVERPASS_ENDPOINTS=https://overpass-api.de/api/interpreter,https://overpass.private.coffee/api/interpreter
-OVERPASS_TIMEOUT_MS=6000         # per-endpoint attempt cap
-OVERPASS_BUDGET_MS=10000         # total budget across all Overpass endpoints
-NOMINATIM_BASE=https://nominatim.openstreetmap.org/search
-NOMINATIM_TIMEOUT_MS=10000
-NOMINATIM_MIN_INTERVAL_MS=1100   # honours Nominatim's 1 request/second policy
-NEARBY_BUDGET_MS=15000           # ceiling across the whole provider chain
-NEARBY_CACHE_TTL_MS=86400000     # 24 hours
-NEARBY_RETRY_AFTER_MS=60000      # backoff after a failed lookup
-
-# Receipt Uploads (Milestone 5)
-# Option A: Cloudinary CDN (Recommended for production: Render / Vercel / Railway)
-CLOUDINARY_URL=                     # e.g. cloudinary://<api_key>:<api_secret>@<cloud_name>
-CLOUDINARY_CLOUD_NAME=              # or individual keys
-CLOUDINARY_API_KEY=
-CLOUDINARY_API_SECRET=
-CLOUDINARY_FOLDER=travelai/receipts # Cloudinary folder for uploaded receipts
-
-# Option B: Local disk storage (automatic fallback when Cloudinary is unset)
-UPLOAD_DIR=backend/uploads       # defaults to <backend>/uploads when unset
-MAX_UPLOAD_MB=5                  # per-file cap; JPEG/PNG/WebP/PDF only
 ```
 
-> **Note**: Both the root and subfolder `.gitignore` files strictly ignore `.env` files. Secrets are never tracked or committed to version control.
+`MONGODB_URI`, `JWT_SECRET` and `GEMINI_API_KEY` are mandatory; the process exits at boot if any is missing. Everything else has a safe default or is optional.
 
-### Installation & Running Dev Server
+---
 
-You can install and run both backend and frontend concurrently with a single command from the project root:
+## Environment variables
+
+The server validates its environment with Zod at boot. Feature tiers are dark by default unless explicitly enabled.
+
+### Core
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `PORT` | `5000` | HTTP port |
+| `NODE_ENV` | `development` | Runtime mode |
+| `MONGODB_URI` | required | MongoDB connection string |
+| `JWT_SECRET` | required | Signs every realm's session token |
+| `FRONTEND_URL` | unset | Exact CORS origin for a split deployment |
+| `ALLOWED_EXTRA_ORIGINS` | unset | Extra exact origins, comma-separated; no suffix wildcards |
+| `SERVE_STATIC` | unset | Force serving the SPA bundle from the backend |
+
+### AI
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `GEMINI_API_KEY` | required | Primary provider |
+| `GEMINI_MODEL` | `gemini-2.5-flash` | Primary model |
+| `GROQ_API_KEY` | unset | Optional fallback |
+| `GROQ_MODEL` | `openai/gpt-oss-120b` | Fallback model |
+| `AI_CACHE_TTL_MS` | service default | Prompt cache lifetime |
+| `AI_CACHE_MAX` | service default | Prompt cache entry cap |
+
+### Feature tiers
+
+| Variable | Default | Effect when off |
+|---|---|---|
+| `ENABLE_TRIP_SSE` | off | Presence, comments, polls and decisions fall back to a 20s visible-tab poll |
+| `ENABLE_ENQUIRY_SSE` | off | Enquiry streams answer 404; both inboxes fall back to polling |
+| `ENQUIRY_SSE_MAX_STREAMS` | `25` | Concurrent streams per channel before the oldest is closed |
+| `AGENCY_WORKSPACE_ENABLED` | off | `/api/agency/*` answers 404; no agency navigation |
+| `PLATFORM_ADMIN_ENABLED` | off | `/api/admin/*` answers 404; `/admin` renders unavailable |
+| `EMAIL_ENABLED` | off | No outbox rows and no delivery |
+| `AGENCY_PROPOSAL_TTL_DAYS` | `30` | Proposal link lifetime (capped at 90) |
+| `AGENCY_PLAN_TIERS` | starter/pro defaults | JSON tier overrides |
+| `AGENCY_PLAN_DEFAULT` | `starter` | Tier for agencies without an override |
+| `AGENCY_OPS_KEY` | unset | Secret required for ops plan changes; unset means API changes are impossible |
+
+### Collaboration
+
+`TRIP_MAX_MEMBERS` (25), `INVITE_TTL_HOURS` (168), `INVITE_DEFAULT_MAX_USES` (1), `VERSIONS_MAX` (30), `COMMENT_MAX_LEN` (2000), `COMMENT_MAX_PER_TRIP` (200), `COMMENT_CREATE_PER_15MIN` (60), `COMMENTS_PAGE_SIZE` (50), `DECISION_MAX_PER_TRIP` (50), `POLL_MAX_PER_TRIP` (30), `BOT_DAILY_LIMIT` (20), `PRESENCE_TTL_MS` (30000).
+
+### Geography, weather and nearby search
+
+`GEO_ROUTING_PROVIDER` (`haversine` or `osrm`), `OSRM_BASE_URL`, `OPEN_METEO_BASE`, `WEATHER_CACHE_TTL_MS`, `OVERPASS_ENDPOINTS`, `OVERPASS_TIMEOUT_MS`, `OVERPASS_BUDGET_MS`, `GEOAPIFY_API_KEY`, `GEOAPIFY_TIMEOUT_MS`, `NOMINATIM_BASE`, `NOMINATIM_TIMEOUT_MS`, `NOMINATIM_MIN_INTERVAL_MS`, `NEARBY_CACHE_TTL_MS`, `NEARBY_RETRY_AFTER_MS`, `NEARBY_BUDGET_MS`.
+
+Provider order for nearby places: Geoapify (when a key is set), Overpass, Nominatim. When all three fail, the API returns `available: false` rather than an empty list.
+
+### Money and storage
+
+`CURRENCY_RATES_PROVIDER` (Frankfurter), `CURRENCY_CACHE_TTL_MS` (12 hours), `UPLOAD_DIR`, `MAX_UPLOAD_MB` (5), `CLOUDINARY_URL` or the individual Cloudinary keys, `CLOUDINARY_FOLDER`, `AGENCY_STORAGE_PROVIDER` (`cloudinary` or `local`).
+
+Without Cloudinary, uploads live on local disk. That is fine in development and ephemeral on Render: receipts, avatars, agency assets and export PDFs disappear on redeploy.
+
+### PDF rendering
+
+`AGENCY_PDF_RENDERER_URL`, `AGENCY_PDF_RENDERER_USERNAME`, `AGENCY_PDF_RENDERER_PASSWORD`. When the URL is unset, a locally installed Chrome is used. `GET /api/health` reports which engine is active.
+
+### Email
+
+`RESEND_API_KEY`, `EMAIL_FROM`, `EMAIL_REPLY_TO`, `EMAIL_OUTBOX_INTERVAL_MS` (60s), `EMAIL_MAX_ATTEMPTS` (4), `EMAIL_LIFECYCLE_INTERVAL_MS` (1h), `EMAIL_EVENT_REMINDER_HOURS` (48), `EMAIL_RENEWAL_REMINDER_DAYS` (14).
+
+### Event interest limits
+
+`EVENT_INTEREST_IP_DAILY_LIMIT` (12), `EVENT_INTEREST_EVENT_IP_DAILY_LIMIT` (4), `EVENT_INTEREST_EMAIL_DAILY_LIMIT` (3), `EVENT_INTEREST_EVENT_DAILY_LIMIT` (50).
+
+`backend/.env` is gitignored at every level. Never commit real keys.
+
+---
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `npm run dev` | Backend (`tsx watch`, :5000) and Vite (:8080) together |
+| `npm run dev:backend` | Backend only |
+| `npm run dev:frontend` | Frontend only |
+| `npm run build` | Backend `tsc` + frontend production build + sync into `backend/public` |
+| `npm run build:backend` | Backend compile only |
+| `npm run build:frontend` | Frontend build and static sync |
+| `npm start` | Production server (API + SPA) |
+| `npm test` | Backend test suite (Node test runner through `tsx`) |
+| `npm run verify` | Tests + backend build + frontend typecheck + frontend build |
+| `npm run lint:frontend` | ESLint on the frontend |
+
+A release check is `npm run verify`. It is the same sequence used before each milestone was accepted.
+
+### Seeds, migrations and operations scripts
+
+Run from `backend/`:
+
+| Script | Purpose |
+|---|---|
+| `npm run bootstrap:platform-admin` | Create the first platform super-admin |
+| `npm run seed:gallery` | Seed synthetic published trips for Explore |
+| `npm run seed:directory` | Seed synthetic agency directory fixtures |
+| `npm run migrate:members` | Backfill trip members |
+| `npm run migrate:account-realms` | Migrate legacy accounts into the three-realm model |
+| `npm run migrate:trip-visibility` | Migrate `isPublic` to the current visibility model |
+
+Additional operational scripts live in `backend/scripts/`: `smoke-a5` through `smoke-a9`, `smoke-m8-g6`, collaboration smokes (`smoke-e2`, `e5`, `e6`, `f8`, `f9`, `f10`, `f12a`, `f13`, `f14`), `load-a9`, `db-audit`, and `launch-gate-m9`.
+
+`launch-gate-m9.mts` is read-only and checks the announcement gate: at least five verified live agency profiles, a priced package on each, and at least one answered test enquiry.
+
+Seeds and smokes write to whatever database `MONGODB_URI` points at. Use a disposable or synthetic database, and clean up fixtures afterwards.
+
+---
+
+## API reference
+
+All routes are JSON and return a consistent `{ success, ... }` envelope.
+
+| Namespace | Realm | Purpose |
+|---|---|---|
+| `GET /api/health` | public | Database, feature tiers, storage, PDF engine, memory |
+| `/api/auth` | personal | Signup, signin, logout, current user |
+| `/api/itinerary` | personal | Generate, stream, CRUD, versions, sharing, feedback, insights |
+| `/api/invites` | personal | Trip invite preview and acceptance |
+| `/api/geo` | personal | Distance/routing, weather, nearby, plan check |
+| `/api/travelers` | public | Traveler profile projection |
+| `/api/explore` | public | Live and finished trip listing, gallery trip projection |
+| `/api/events` | public | Public events and guest interest |
+| `/api/agencies` | public | Directory listing, profile, packages, public enquiry write |
+| `/api/agency-applications` | public | Anonymous "join as an agency" application |
+| `/api/blocks` | personal | One-way block list |
+| `/api/reports` | personal | Content reports |
+| `/api/enquiries` | personal | A traveller's own enquiries and threads |
+| `/api/conversations` | public capability | Guest enquiry thread resolved by its private token |
+| `/api/proposals` | personal | A traveller's proposal comparison and actions |
+| `/api/agency/auth` | agency | Context, CSRF, signin, logout, password setup |
+| `/api/agency/*` | agency | Trips, clients, enquiries, quotes, proposals, templates, exports, events, team, operations, settings |
+| `/api/admin/auth` | platform | Platform signin, logout, current admin |
+| `/api/admin/*` | platform | Accounts, agencies, applications, reports, audit, platform admins |
+| `/uploads/*` | public but unlisted | Locally stored receipt and avatar files; generated names include random bytes |
+
+Public responses are projections. A public endpoint never returns a raw trip or agency document.
+
+---
+
+## Data model
+
+MongoDB collections fall into five groups:
+
+- **Personal and planning**: `User`, `Trip` (itinerary, members, versions, expenses, finance, visibility), `TripInvite`, `TripJoinRequest`, `TripComment`, `TripPoll`, `TripDecision`, `TripChatKey`, `TripReadState`, `TripReport`, `UserBlock`.
+- **Gallery and discovery**: public projections are computed, not stored, except publish state on `Trip` and the traveler handle on `User`.
+- **Agency tenant**: `Agency`, `AgencyMember`, `AgencyInvite`, `AgencyClient`, `AgencyQuote`, `AgencyProposalLink`, `AgencyTemplate`, `AgencyTemplateVersion`, `AgencyAsset`, `AgencyExport`, `AgencyAudit`, `AgencyEvent`, `AgencyEventInterest`.
+- **Public agency surface**: `AgencyProfile`, `AgencyPackage`, `AgencyEnquiry`, plus interest rows for events.
+- **Platform and operations**: `AgencyApplication`, `PlatformAudit`, `PasswordResetToken`, `EmailOutbox`.
+
+Two rules matter more than the names:
+
+1. **Tenant id on every agency query.** Cross-tenant ids behave as missing.
+2. **Hash what is a capability.** Invite, guest-thread and proposal tokens are stored as hashes with expiry and a short hint, never as raw values.
+
+---
+
+## Testing and verification
+
+Backend tests use Node's built-in runner through `tsx` and are registered explicitly in `backend/package.json`. The suite covers pure rules (editing, geo maths, expenses, settlement, currency, weather risk, nearby failover, projections, template validation, plan limits), service glue (gallery explore, join requests, enquiries, proposals, exports, mail), middleware and security (realm isolation, CSRF, trip access, platform admin, event interest limits), and router coverage tests that walk the Express stack and fail if a trip-scoped route is missing a guard.
 
 ```bash
-# 1. Install all dependencies across root, backend, and frontend
-npm run install:all
-
-# 2. Run backend (Port 5000) and frontend (Port 8080) simultaneously
-npm run dev
+npm test          # backend suite
+npm run verify    # suite + backend build + frontend typecheck + frontend build
 ```
 
-Visit **`http://localhost:8080`** in your browser.
+Manual and scripted verification used during development:
 
-#### Running Individually
+- Headless Chrome/CDP browser passes for desktop and light/dark layouts.
+- Synthetic-data smokes for agency A5-A9, templates, exports, proposals and the full traveller -> enquiry -> quote -> proposal loop.
+- Read-only `launch-gate-m9` before a pilot announcement.
 
-**Backend only:**
-```bash
-cd backend
-npm install
-npm run dev
-```
-
-**Frontend only:**
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-### Running Tests
-
-Backend unit tests for the itinerary editing helpers, the prompt builder, the quality scorer and the generation cache run with Node's built-in test runner via `tsx`:
-
-```bash
-# From the project root
-npm test
-```
-
-> The test suite covers: activity/day reorder & edit helpers, multi-language and personalized prompt construction, seasonal adaptation, interest weighting, itinerary quality scoring, and the TTL cache.
+When adding a backend test file, register it in `backend/package.json`; the runner does not discover files automatically.
 
 ---
 
-## 📡 API Reference
+## Deployment
 
-### Authentication Endpoints (`/api/auth`)
-| Method | Endpoint | Description | Auth Required |
-|---|---|---|---|
-| `POST` | `/api/auth/signup` | Create account & set HTTP-only cookie | No |
-| `POST` | `/api/auth/signin` | Sign in & set HTTP-only cookie | No |
-| `POST` | `/api/auth/logout` | Clear auth cookie | Yes |
-| `GET` | `/api/auth/me` | Fetch authenticated user profile | Yes |
+The maintained deployment is the single-service Render blueprint in [`render.yaml`](render.yaml):
 
-### Itinerary Endpoints (`/api/itinerary`)
-| Method | Endpoint | Description | Auth Required |
-|---|---|---|---|
-| `POST` | `/api/itinerary/generate` | Generate complete itinerary JSON | Yes |
-| `POST` | `/api/itinerary/generate-stream` | Generate itinerary with Server-Sent Events (SSE) | Yes |
-| `GET` | `/api/itinerary` | Retrieve all saved trips for current user | Yes |
-| `GET` | `/api/itinerary/:id` | Fetch specific trip details by ID | Yes |
-| `PUT` | `/api/itinerary/:id` | Update itinerary details or status | Yes |
-| `DELETE`| `/api/itinerary/:id` | Delete trip from library | Yes |
-| `POST` | `/api/itinerary/:id/duplicate`| Clone trip into a new editable draft | Yes |
-| `POST` | `/api/itinerary/:id/share` | Generate public read-only share token | Yes |
-| `GET` | `/api/itinerary/shared/:shareId`| Fetch public read-only trip (unauthenticated) | No |
-| `PUT` | `/api/itinerary/:id/activities` | Update a single activity within a day | Yes |
-| `PUT` | `/api/itinerary/:id/activities/reorder` | Reorder activities within a day | Yes |
-| `PUT` | `/api/itinerary/:id/days/reorder` | Move a whole day and renumber the rest | Yes |
-| `GET` | `/api/itinerary/:id/versions` | List version history (lightweight summaries) | Yes |
-| `GET` | `/api/itinerary/:id/versions/:version` | Fetch one version's full itinerary details | Yes |
-| `POST` | `/api/itinerary/:id/versions/:version/restore` | Restore the trip to a previous version | Yes |
-| `POST` | `/api/itinerary/:id/feedback` | Submit a thumbs up/down rating for a trip | Yes |
-| `GET` | `/api/itinerary/insights` | Aggregated quality, feedback & variant analytics | Yes |
-| `GET` | `/api/itinerary/:id/expenses` | List the trip's expense ledger, travellers & finance settings | Yes |
-| `POST` | `/api/itinerary/:id/expenses` | Log a new expense (base-currency amount derived server-side) | Yes |
-| `PUT` | `/api/itinerary/:id/expenses/:expenseId` | Update an existing expense | Yes |
-| `DELETE`| `/api/itinerary/:id/expenses/:expenseId` | Remove an expense | Yes |
-| `PUT` | `/api/itinerary/:id/participants` | Replace the traveller list (re-derives equal splits) | Yes |
-| `PUT` | `/api/itinerary/:id/finance` | Change the base currency and/or refresh the trip's FX rate snapshot | Yes |
-| `POST` | `/api/itinerary/:id/routes` | Save a user-drawn route (distance recomputed server-side) | Yes |
-| `PUT` | `/api/itinerary/:id/routes/:routeId` | Update a saved route (name, day, colour, mode, points) | Yes |
-| `DELETE`| `/api/itinerary/:id/routes/:routeId` | Delete a saved route | Yes |
-| `POST` | `/api/itinerary/:id/days/:day/indoor-alternative` | AI-proposed weather-safe replacement for one day (proposal only, not persisted) | Yes |
-| `GET` | `/api/itinerary/:id/weather-routing` | Weather-aware routing analysis: exposed legs, risky days & suggested fixes (advisory only) | Yes |
-| `POST` | `/api/itinerary/:id/expenses/:expenseId/receipt` | Upload/replace an expense receipt (multipart `receipt`; JPEG/PNG/WebP/PDF, ≤ `MAX_UPLOAD_MB`) | Yes |
-| `DELETE`| `/api/itinerary/:id/expenses/:expenseId/receipt` | Remove an expense receipt (and its stored file) | Yes |
+- One free `travelai-app` web service running `npm install --include=dev && npm run build`, started with `npm start`.
+- Express serves both `/api` and the built SPA from `backend/public`, so auth cookies are first-party and CORS is not involved.
+- Health check: `/api/health`.
+- The blueprint enables the agency workspace and both SSE tiers. It does **not** enable platform admin or email; set `PLATFORM_ADMIN_ENABLED=true` and `EMAIL_ENABLED=true` (plus a Resend key) when those are needed.
+- `JWT_SECRET` is generated by Render. `MONGODB_URI`, `GEMINI_API_KEY`, `GROQ_API_KEY`, Cloudinary and renderer credentials are supplied in the dashboard.
+- PDF exports use a separate Gotenberg service (`AGENCY_PDF_RENDERER_URL`), because the free Node runtime has no browser.
+- Cloudinary is strongly recommended. Without it, uploads and export PDFs live on ephemeral disk and vanish on redeploy.
 
-### Geo Endpoints (`/api/geo`)
+Operational notes for the pilot:
 
-| Method | Endpoint | Description | Auth Required |
-|---|---|---|---|
-| `POST` | `/api/geo/route` | Compute per-leg distance & travel time for 2–50 coordinates (haversine or OSRM) | Yes |
-| `GET` | `/api/geo/currency/rates?base=INR&symbols=USD,EUR` | Base-per-unit FX rates (12-hour cache) for currency conversion | Yes |
-| `GET` | `/api/geo/weather?lat&lng&start&end` | Per-day forecast with risk level (`none`/`low`/`moderate`/`high`) + travel advisories (45-minute cache) | Yes |
-| `GET` | `/api/geo/nearby?lat&lng&category&radius` | Named POIs sorted by distance — categories `restaurant`, `cafe`, `attraction`, `atm`, `pharmacy`, `fuel`. Providers chained Geoapify → Overpass → Nominatim (24-hour cache); returns `available: false` + `note` instead of an empty list when all are down | Yes |
+- Free instances sleep. The first request after a sleep is slow, and the external renderer may sleep too. Export jobs are recovered and retried rather than left spinning forever.
+- There is no cron. Email delivery and lifecycle sweeps run inside the web process and catch up at boot.
+- The pilot is not a production SLA. A paid instance and a durable renderer are the next infrastructure step.
+
+`backend/vercel.json` remains from an earlier deployment path, but the documented and tested deployment is Render.
 
 ---
 
-## 📱 Responsive & Cross-Device Support
+## Security and privacy
 
-TravelAI has been designed and tested across multiple device categories:
-- **Mobile Phones (320px – 480px)**: Compact step indicators, full-width touch actions, stackable budget switches, scrollable day pills, and safe modal height scrolling (`max-h-[92vh] overflow-y-auto`).
-- **Tablets & iPads (768px – 1024px)**: 2-column card layouts, responsive Leaflet map controls, and flexible header stats.
-- **Desktops & Laptops (1024px+)**: Full multi-column dashboard, 3-column cuisine grids, and side-by-side Recharts visualizations.
-
----
-
-## 🚢 Deployment
-
-### Option 1: Render Single Web Service (Recommended ⭐)
-Deploy both the Express API and the Vite React frontend on a **single Render Web Service**. This uses only **1 free tier slot**, completely eliminates CORS cross-origin complexities, and ensures 100% reliable same-origin cookie authentication across all web browsers.
-
-1. Go to your [Render Dashboard](https://dashboard.render.com/) and click **New +** → **Web Service**.
-2. Connect your GitHub repository (`travelai`).
-3. Set the following fields in the Render dashboard:
-   - **Name**: `travelai` (or any name you prefer)
-   - **Region**: Nearest to your users (e.g., *Singapore*, *Frankfurt*, *Oregon*)
-   - **Branch**: `main`
-   - **Root Directory**: *(Leave blank / empty)*
-   - **Runtime**: `Node`
-   - **Build Command**: `npm install --include=dev && npm run build`
-   - **Start Command**: `npm start`
-   - **Instance Type**: `Free`
-4. Add the following **Environment Variables**:
-   | Variable | Value | Notes |
-   |---|---|---|
-   | `NODE_ENV` | `production` | Enables production optimizations |
-   | `PORT` | `10000` | Default Render port |
-   | `MONGODB_URI` | `mongodb+srv://...` | Your MongoDB Atlas connection string |
-   | `JWT_SECRET` | *(Generate a 32+ character random string)* | Secret for auth tokens |
-   | `GEMINI_API_KEY` | *(Your Gemini API Key)* | From Google AI Studio |
-   | `GEMINI_MODEL` | `gemini-2.5-flash` | Fast, cost-efficient model |
-   | `GROQ_API_KEY` | *(Optional)* | For automatic failover |
-   | `SERVE_STATIC` | `true` | *(Optional, auto-detected when built)* |
-5. Click **Create Web Service**. Render will automatically build the backend with `tsc`, compile the frontend with `vite build`, and serve both seamlessly from your single Render URL (`https://your-service.onrender.com`)!
-
-> **Why Single Service?**
-> - **Zero CORS Issues**: Because the frontend and backend share the exact same domain and port, there are no CORS headers or preflight requests needed.
-> - **Bulletproof Auth Cookies**: Authentication cookies are treated as first-party (same-site), avoiding third-party cookie restrictions in Safari, Chrome, and Firefox.
-> - **100% Free Tier Friendly**: Uses only 1 Render free service instance.
+- **Three isolated realms** with separate passwords, cookies, JWTs and guards. A session from one realm is never accepted by another.
+- **Tenant-scoped sign-in and data access.** Every agency query carries the tenant id; cross-tenant ids return 404.
+- **Per-tenant email uniqueness.** One email can legitimately exist in several realms or tenants; accounts are never silently merged.
+- **CSRF double-submit** on all writes, with bootstrap auth paths exempt.
+- **Exact-origin CORS.** Suffix wildcards are rejected on purpose.
+- **Helmet CSP** with a self-only script policy and explicit map, image, font and style origins.
+- **Zod validation** on every route and **rate limits** on auth, generation, collaboration, enquiries, applications, event interest and platform writes.
+- **Upload verification** by size, MIME allow-list and magic bytes.
+- **Capability tokens hashed at rest** with expiry: invites, guest threads, proposals.
+- **Public projections by allow-list.** Money, sessions, members, versions and generation metadata cannot leak through a forgotten field.
+- **End-to-end encrypted chat and sealed polls.** The server stores ciphertext and cannot read or export conversations.
+- **Auditable operations.** Platform and tenant audit trails are append-only and never contain secrets.
+- **Kill switches.** Agency and platform namespaces answer 404 when disabled, preserving data.
+- **No secrets in git.** `.env` files are ignored at every level; the repository only ships `.env.example`.
 
 ---
 
-### Option 2: Split Render Services (Blueprint / render.yaml)
-If you prefer decoupling the frontend as a Render Static Site and the backend as an Express Web Service, use Render's Blueprint feature with the provided [`render.yaml`](file:///d:/Projects/travelai/render.yaml).
+## Responsive and accessibility
+
+- Layouts are tested from 320 px phones through tablets and 4K desktops.
+- Interactive controls meet a 44 px minimum touch target.
+- Mobile navigation uses a drawer; split-view inboxes collapse to one pane with a back action.
+- Focus rings are visible, list rows are keyboard-activatable, and the workspace has a command palette.
+- Light and dark themes are both supported, with per-component dark styles.
+- Long lists and tables use fixed-height scroll areas with Previous/Next pagination rather than unbounded "load more".
 
 ---
 
-### Option 3: Monorepo Vercel Deployment
-The repository includes pre-configured [`backend/vercel.json`](file:///d:/Projects/travelai/backend/vercel.json) settings for deploying the API to Vercel Serverless Functions:
-1. Connect the GitHub repository to [Vercel](https://vercel.com).
-2. Configure Environment Variables in the Vercel dashboard (`MONGODB_URI`, `JWT_SECRET`, `GEMINI_API_KEY`, `GROQ_API_KEY`, `NODE_ENV=production`).
-3. Deploy!
+## Known limits and deliberate exclusions
 
-### Production Build Verification
-To verify the full production build locally from the monorepo root:
-
-```bash
-# Builds both backend (tsc) and frontend (vite build)
-npm run build
-```
-
----
-
-## 🚀 Deploy checklist (Milestone 6+)
-
-Run this **once right after the first deploy** against every new MongoDB database — including each environment (local / staging / production) of the same cluster:
-
-```bash
-npm run migrate:members
-```
-
-It backfills legacy trips with their owner `members[]` row and `rev` for Milestone 6 access control. It is idempotent and additive — re-running is always safe. **New trips no longer need it:** since 2026-10-20 a schema `pre('validate')` hook seeds the creator as `owner` on every newly created document (generate, stream, duplicate, seeds, scripts). The script remains for rows created before that fix.
-
-> **Why it is required for legacy rows:** since sprint E4, authorization reads `members[]` only (the pre-backfill creator fallback was removed for security reasons — a left/transferred owner would otherwise keep access). A trip without member rows appears in list results but answers 404 on open until backfilled. The read-only audit tool `backend/scripts/db-audit.mts` lists every database on the cluster with its `trips` and `legacyNoMembers` counts (0 remaining = done):
-> ```bash
-> $env:AUDIT_URI='<database-uri>'; npx tsx scripts/db-audit.mts   # from backend/
-> ```
+- **No payments, checkout or subscriptions.** Plan limits are enforced, but nothing is charged and no GST invoice is generated.
+- **No self-serve agency signup.** An agency either applies for review or is provisioned by a platform operator.
+- **Email is dark by default.** In-app inboxes and copy-link flows are the primary paths; Resend delivery must be explicitly enabled.
+- **No booking or inventory.** The product sells proposals, not seats, rooms or deposits.
+- **No reviews, ratings, likes, follows or DMs.** Discovery is intentionally not a social network.
+- **No DOCX/XLSX export.** PDF is the delivered artefact; HTML and uploaded PDF designs cover the design need.
+- **No visual drag-and-drop theme editor, and no automatic Canva/Figma/InDesign ingestion.** A design is uploaded and mapped once, then reused.
+- **No AI-authored prices, legal terms or cancellation policy.** Commercial and legal copy stays agency-owned.
+- **No server-side chat export.** Chat is end-to-end encrypted, so the server cannot read it.
+- **The @TravelAI assistant is answer-only.** It does not edit the itinerary, send messages as a member, or act autonomously.
+- **The events nav badge updates on route change**, not live; the pending count is refreshed when navigating.
+- **Free-tier hosting is a pilot environment.** Instances sleep, the renderer cold-starts, and there is no SLA.
+- **Vercel configuration is stale.** Render is the maintained deployment.
 
 ---
 
-## 🔒 Security & Best Practices
-- **No Secret Leaks**: Strict `.gitignore` configurations ensure zero `.env` or sensitive credentials enter git history.
-- **HTTP-Only Cookies**: Authentication tokens are stored in `httpOnly`, `secure`, `sameSite: none` cookies to mitigate XSS attacks.
-- **Input Validation**: All incoming API payloads are parsed and validated with strict [Zod](https://zod.dev/) schemas before processing.
-- **Security Headers & Rate Limiting**: `helmet` sends a Content-Security-Policy allow-list (self-only scripts, explicit map/Cloudinary/Unsplash image origins, same-origin API plus Nominatim) and `express-rate-limit` brakes auth, generation, day rebuilds and collaboration writes. `/api/auth/me` returns a narrow profile projection, never the user document.
-- **Untrusted Uploads**: Receipt uploads are size-capped (`MAX_UPLOAD_MB`), MIME-allow-listed, **magic-byte verified** (a renamed executable is rejected), stored under server-generated filenames, and served with `X-Content-Type-Options: nosniff`. Deleting an expense or its receipt removes the stored file.
+## Documentation map
 
----
+`docs/` holds the working record behind the code:
 
-## 📄 License
-This project is open source and available under the [MIT License](LICENSE).
+- `roadmap-milestones-4-5.md`, `roadmap-milestone-6-collaboration.md`, `roadmap-milestone-7-conversation.md`, `roadmap-milestone-8-gallery.md`, `roadmap-milestone-9-agency-directory.md`, `roadmap-agency-workspace.md`, `roadmap-platform-admin.md` - milestone decisions and acceptance criteria.
+- Per-milestone test plans (`agency-a0`, `a1`, `a2`, `a4`-`a9`, `milestone-8`, `milestone-9`, `platform-admin`) and `m10-qa-tickets.md` - test plans and QA records.
+- `agency-operations-runbook.md` - agency handover, plan limits and recovery procedures.
+- `agency-template-contract.md`, `agency-a8-design.md` - template contract and A8 design.
+- `agency-identity-migration.md` - realm migration and rollback.
+- `adr/` - architecture decision records.
