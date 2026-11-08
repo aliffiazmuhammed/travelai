@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   ArrowRight,
@@ -23,6 +23,7 @@ import { useLandingDiscovery } from "@/hooks/useLandingDiscovery";
 import { useAgencyDirectoryEnabled } from "@/hooks/useAgencyDirectoryEnabled";
 import { avatarSrc, initialsFor } from "@/lib/avatar";
 import { formatGalleryDates } from "@/lib/galleryFormat";
+import { cn } from "@/lib/utils";
 import type { GalleryTripSummary } from "@/types/gallery";
 import groupCamp from "@/assets/landing-group-camp.jpg";
 import agencyTeam from "@/assets/landing-agency-team.jpg";
@@ -135,10 +136,83 @@ const TextLink = ({ to, children, light = false }: { to: string; children: React
   </Link>
 );
 
+/**
+ * Discovery cards read best stacked, but on a phone three stacked cards push
+ * the rest of the page far down. Below md they become a one-per-swipe rail
+ * with dot markers; from md they stay a grid, exactly as before.
+ */
+const DiscoveryRail = ({
+  label,
+  count,
+  children,
+}: {
+  label: string;
+  count: number;
+  children: React.ReactNode;
+}) => {
+  const railRef = useRef<HTMLDivElement>(null);
+  const [active, setActive] = useState(0);
+  const lastIndex = Math.max(0, count - 1);
+
+  const handleScroll = () => {
+    const rail = railRef.current;
+    if (!rail) return;
+    const max = rail.scrollWidth - rail.clientWidth;
+    setActive(max > 0 ? Math.round((rail.scrollLeft / max) * lastIndex) : 0);
+  };
+
+  const goTo = (index: number) => {
+    const rail = railRef.current;
+    if (!rail || lastIndex === 0) return;
+    const max = rail.scrollWidth - rail.clientWidth;
+    rail.scrollTo({ left: (max * index) / lastIndex, behavior: "smooth" });
+  };
+
+  return (
+    <div>
+      <div
+        ref={railRef}
+        onScroll={handleScroll}
+        role="region"
+        aria-roledescription="carousel"
+        aria-label={label}
+        className="no-scrollbar -mx-4 flex snap-x snap-mandatory scroll-pl-4 gap-4 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:scroll-pl-6 sm:px-6 md:mx-0 md:grid md:grid-cols-2 md:gap-5 md:overflow-visible md:px-0 md:pb-0 md:scroll-pl-0 lg:grid-cols-3"
+      >
+        {children}
+      </div>
+      {count > 1 && (
+        <div className="-ml-1.5 mt-3 flex items-center md:hidden" aria-label={`${label} slides`}>
+          {Array.from({ length: count }).map((_, index) => (
+            <button
+              key={index}
+              type="button"
+              onClick={() => goTo(index)}
+              aria-label={`Go to slide ${index + 1} of ${count}`}
+              aria-current={active === index ? "true" : undefined}
+              className="group flex h-8 items-center px-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <span
+                className={cn(
+                  "h-1.5 rounded-full transition-all duration-300",
+                  active === index
+                    ? "w-5 bg-primary"
+                    : "w-1.5 bg-border group-hover:bg-muted-foreground/40"
+                )}
+              />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const RAIL_ITEM = "w-[85%] max-w-[360px] shrink-0 snap-start md:w-auto md:max-w-none md:shrink";
+
 const LiveTripCard = ({ trip }: { trip: GalleryTripSummary }) => (
   <Link
     to={`/explore/${trip._id}`}
-    className="group flex flex-col overflow-hidden rounded-3xl border border-border/70 bg-card/60 shadow-xs transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md"
+    className="group flex h-full flex-col overflow-hidden rounded-3xl border border-border/70 bg-card/60 shadow-xs transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md"
   >
     <div className="relative h-[230px] overflow-hidden">
       <TripCover
@@ -255,11 +329,13 @@ const Landing = () => {
                 {[0, 1, 2].map((item) => <TripSkeleton key={item} />)}
               </div>
             ) : discovery.trips.length > 0 ? (
-              <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+              <DiscoveryRail label="Live trips" count={Math.min(discovery.trips.length, 3)}>
                 {discovery.trips.slice(0, 3).map((trip) => (
-                  <LiveTripCard key={trip._id} trip={trip} />
+                  <div key={trip._id} className={RAIL_ITEM}>
+                    <LiveTripCard trip={trip} />
+                  </div>
                 ))}
-              </div>
+              </DiscoveryRail>
             ) : (
               <div className="rounded-3xl border border-dashed border-border bg-card/50 px-6 py-12 text-center">
                 <h3 className="font-display text-2xl font-medium text-foreground">The trail is wide open.</h3>
@@ -297,10 +373,14 @@ const Landing = () => {
             </div>
 
             {discovery.events.length > 0 && (
-              <div className="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-                {discovery.events.slice(0, 3).map((event) => (
-                  <PublicEventCard key={event._id} event={event} showAgency />
-                ))}
+              <div className="mt-8">
+                <DiscoveryRail label="Upcoming events" count={Math.min(discovery.events.length, 3)}>
+                  {discovery.events.slice(0, 3).map((event) => (
+                    <div key={event._id} className={RAIL_ITEM}>
+                      <PublicEventCard event={event} showAgency className="h-full" />
+                    </div>
+                  ))}
+                </DiscoveryRail>
               </div>
             )}
           </div>
