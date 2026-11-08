@@ -2967,7 +2967,7 @@ class ApiClient {
    * envelope-wraps it into the bubble and a human applies it through the
    * normal save path.
    */
-  async askTravelAI(
+  async askAssistant(
     tripId: string,
     payload: { prompt: string; context?: Array<{ label: string; text: string }>; day?: number }
   ): Promise<{

@@ -400,7 +400,7 @@ const AgencyLayout: React.FC = () => {
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => navigate('/')}>
                 <Home className="mr-2 h-4 w-4" />
-                TravelAI home
+                waytowalk home
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={() => void handleLogout()}>
@@ -468,7 +468,7 @@ const AgencyLayout: React.FC = () => {
             >
               <Link to="/">
                 <Home className="mr-1.5 h-4 w-4" aria-hidden />
-                TravelAI home
+                waytowalk home
               </Link>
             </Button>
           </div>

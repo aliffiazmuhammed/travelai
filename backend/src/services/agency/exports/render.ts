@@ -457,7 +457,7 @@ function practicalPage(
     </section>
     <footer class="page-footer">
       <span>${contactFooter}</span>
-      <span>${escapeHtml(doc.agency.name)} · Prepared with TravelAI</span>
+      <span>${escapeHtml(doc.agency.name)} · Prepared with waytowalk</span>
     </footer>
   </section>`;
 }

@@ -77,9 +77,9 @@ const AgencyApply = () => {
 
   useEffect(() => {
     return applyPageMeta({
-      title: "Join as a travel agency · TravelAI",
+      title: "Join as a travel agency · waytowalk",
       description:
-        "Bring your trips to TravelAI: a public profile, one inbox for enquiries, and proposals that travel well. Apply to join and we'll get back to you.",
+        "Bring your trips to waytowalk: a public profile, one inbox for enquiries, and proposals that travel well. Apply to join and we'll get back to you.",
       ogType: "website",
     });
   }, []);
@@ -154,7 +154,7 @@ const AgencyApply = () => {
               You plan the trips. We'll bring the travellers.
             </h1>
             <p className="max-w-xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-              Join the TravelAI directory and get discovered by travellers who
+              Join the waytowalk directory and get discovered by travellers who
               are looking for real experiences, not just itineraries.
             </p>
           </div>

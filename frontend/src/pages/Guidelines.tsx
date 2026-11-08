@@ -114,9 +114,9 @@ const Guidelines = () => {
 
   useEffect(() => {
     applyPageMeta({
-      title: "Community guidelines · TravelAI",
+      title: "Community guidelines · waytowalk",
       description:
-        "What belongs in the TravelAI public gallery, how reporting works, and how we keep travellers safe.",
+        "What belongs in the waytowalk public gallery, how reporting works, and how we keep travellers safe.",
       ogType: "website",
     });
   }, []);
@@ -249,7 +249,7 @@ const Guidelines = () => {
               <SectionCard id="never-send-money" icon={Wallet} title="Never send money">
                 <p className={BODY}>
                   A join request is not a booking. No owner should ask you for a
-                  deposit, and TravelAI never handles payments between travellers.
+                  deposit, and waytowalk never handles payments between travellers.
                 </p>
                 <p className={BODY}>
                   A request to send money, gift cards or bank details off the
@@ -259,7 +259,7 @@ const Guidelines = () => {
                   <Lock className="mt-0.5 h-4 w-4 shrink-0 text-accent" aria-hidden="true" />
                   <div className="min-w-0 space-y-0.5">
                     <p className="text-xs font-semibold leading-relaxed text-foreground">
-                      TravelAI has no in-app payments between travellers.
+                      waytowalk has no in-app payments between travellers.
                     </p>
                     <p className="text-xs leading-relaxed text-foreground/80">
                       No deposit is ever part of joining a trip. If someone asks

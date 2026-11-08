@@ -354,7 +354,7 @@ const AgencyProfile = () => {
 
     if (profile) {
       return applyPageMeta({
-        title: `${profile.name} · Travel agency · TravelAI`,
+        title: `${profile.name} · Travel agency · waytowalk`,
         description:
           profile.about.trim().slice(0, 160) ||
           `${profile.name} plans trips from ${profile.baseCity || "India"}.`,
@@ -364,7 +364,7 @@ const AgencyProfile = () => {
 
     if (notFound) {
       return applyPageMeta({
-        title: "Agency not found · TravelAI",
+        title: "Agency not found · waytowalk",
         description:
           "This agency page is not available. It may have been unpublished, or the agency may no longer be listed.",
         ogType: "website",

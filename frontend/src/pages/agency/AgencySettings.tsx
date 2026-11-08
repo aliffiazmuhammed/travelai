@@ -1065,7 +1065,7 @@ const AgencySettings: React.FC = () => {
                         className="font-semibold"
                         style={{ color: previewAccent }}
                       >
-                        Powered by TravelAI
+                        Powered by waytowalk
                       </span>
                     </div>
                     <div className="truncate">

@@ -400,7 +400,7 @@ const AgencyTemplates: React.FC = () => {
             <p className="mx-auto max-w-md text-xs leading-5 text-agency-muted">
               {templates.length === 0
                 ? canManage
-                  ? 'Upload a self-contained HTML template, or keep your own PDF design and map TravelAI data onto it.'
+                  ? 'Upload a self-contained HTML template, or keep your own PDF design and map waytowalk data onto it.'
                   : 'Built-in and custom templates will appear here once an admin makes them active.'
                 : 'Try another status or audience filter.'}
             </p>
@@ -531,7 +531,7 @@ const AgencyTemplates: React.FC = () => {
                     ) : null}
                     {canManage && template.builtinKey ? (
                       <span className="text-[10px] text-agency-muted">
-                        Managed by TravelAI
+                        Managed by waytowalk
                       </span>
                     ) : null}
                     {!canManage ? (
@@ -564,7 +564,7 @@ const AgencyTemplates: React.FC = () => {
               <DialogHeader>
                 <DialogTitle>Upload a template</DialogTitle>
                 <DialogDescription>
-                  Bring your own design and map TravelAI data onto it. Both
+                  Bring your own design and map waytowalk data onto it. Both
                   kinds export as proposal documents.
                 </DialogDescription>
               </DialogHeader>
@@ -639,7 +639,7 @@ const AgencyTemplates: React.FC = () => {
               saving={pdfSaving}
               saveLabel="Save template"
               title={`Map data slots · ${pdfDraft.name}`}
-              description="Add text and image boxes over the agency design, bind each one to a TravelAI field, and mark the page that should repeat for each itinerary day."
+              description="Add text and image boxes over the agency design, bind each one to a waytowalk field, and mark the page that should repeat for each itinerary day."
               onSave={savePdfTemplate}
             />
           ) : null}

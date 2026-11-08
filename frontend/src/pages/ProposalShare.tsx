@@ -250,10 +250,11 @@ const ProposalShare: React.FC = () => {
         <div className="mx-auto flex w-full max-w-4xl items-center justify-between gap-4 px-4 py-3.5">
           <Link
             to="/"
-            aria-label="TravelAI home"
-            className="font-display text-xl font-semibold tracking-tight text-foreground"
+            aria-label="waytowalk home"
+            className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            Travel<span className="text-primary">AI</span>
+            <img src="/brand/waytowalk-logo-name.svg" alt="waytowalk" width="140" height="28" className="h-7 w-[140px] dark:hidden" />
+            <img src="/brand/waytowalk-logo-reverse.svg" alt="waytowalk" width="140" height="28" className="hidden h-7 w-[140px] dark:block" />
           </Link>
           <p className="truncate text-[11px] text-muted-foreground">
             Prepared by{" "}

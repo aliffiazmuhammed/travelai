@@ -94,6 +94,6 @@ test('plan changes without the ops secret answer 403 before any DB call', async 
     }),
     (error: any) =>
       error?.statusCode === 403 &&
-      error.message === 'Plan changes require TravelAI ops access.'
+      error.message === 'Plan changes require waytowalk ops access.'
   );
 });

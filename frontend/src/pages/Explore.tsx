@@ -317,9 +317,9 @@ const Explore = () => {
 
   useEffect(() => {
     return applyPageMeta({
-      title: "Explore trips to join · TravelAI",
+      title: "Explore trips to join · waytowalk",
       description:
-        "Real trips people have planned and shared on TravelAI, plus camps and retreats agencies are running. Ask to join a live trip, or take a copy of a finished one and make it your own.",
+        "Real trips people have planned and shared on waytowalk, plus camps and retreats agencies are running. Ask to join a live trip, or take a copy of a finished one and make it your own.",
       ogType: "website",
     });
   }, []);

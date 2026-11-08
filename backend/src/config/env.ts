@@ -131,7 +131,7 @@ const envSchema = z.object({
   // F13a polls. Sealed payloads are opaque to the server; the cap only bounds
   // how many cards a trip can accumulate (closed polls still count).
   POLL_MAX_PER_TRIP: z.coerce.number().positive().default(30),
-  // F12a @TravelAI assistant. Per-user-per-trip ask budget per calendar day —
+  // F12a @waytowalk assistant. Per-user-per-trip ask budget per calendar day —
   // the burst brake is the mention gate itself; this stops runaway spend.
   BOT_DAILY_LIMIT: z.coerce.number().int().positive().default(20),
   // M10 QA-13: the anonymous "I'm interested" buckets. The plain IP ceiling is
@@ -192,7 +192,7 @@ const envSchema = z.object({
     .optional()
     .transform((value) => parseBooleanFlag(value)),
   RESEND_API_KEY: z.string().optional(),
-  EMAIL_FROM: z.string().default('TravelAI <onboarding@resend.dev>'),
+  EMAIL_FROM: z.string().default('waytowalk <onboarding@resend.dev>'),
   EMAIL_REPLY_TO: z.string().optional(),
   // How often the in-process dispatcher drains the outbox (Render free has no
   // cron, so delivery piggybacks on the web process).

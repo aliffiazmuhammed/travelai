@@ -79,7 +79,7 @@ interface CommentsTabProps {
    */
   variant?: "feed" | "chat";
   /**
-   * F12b: composes a TravelAI proposal into the open ItineraryData snapshot
+   * F12b: composes a waytowalk proposal into the open ItineraryData snapshot
    * and saves it through the SAME path manual editing uses (required baseRev,
    * versioned). Absent for read-only viewers — their cards render the
    * suggestion without the Apply controls.
@@ -95,8 +95,8 @@ interface CommentsTabProps {
 
 const COMMENT_MAX_LEN = 2000; // mirrors COMMENT_MAX_LEN (server default)
 
-/** F12a: the mention token that turns a message into a TravelAI ask. */
-const BOT_MENTION_RE = /@travelai/i;
+/** F12a: the mention token that turns a message into a waytowalk ask. */
+const BOT_MENTION_RE = /@(?:waytowalk|travelai)/i;
 
 /**
  * F12c: mirrors the server's task detector — a summary ask feeds the bot the
@@ -108,14 +108,14 @@ const BOT_SUMMARY_RE =
   /(summari[sz]e|recap|catch (me|us) up|what (did|have) we (decide[ds]?|agree[ds]?|settle[ds]?)|bring (me|us) up to speed)/i;
 
 /** F15: the literal the Ask chip and the mention menu insert. */
-const BOT_MENTION_TOKEN = "@TravelAI";
+const BOT_MENTION_TOKEN = "@waytowalk";
 
 /** F15: the one-time composer tip is dismissed per browser, never per trip. */
 const AI_HINT_KEY = "travelai.aiHintDismissed";
 
 /**
  * F15: the active "@partial" token ending at the caret, if (and only if) the
- * partial is still a prefix of "travelai". Offering it only while the mention
+ * partial is still a prefix of "waytowalk". Offering it only while the mention
  * is being spelled keeps normal prose alone — an email address or an "@" plus
  * someone's name never opens the menu — and the full token hides it again so
  * Enter still means "send".
@@ -128,13 +128,13 @@ function mentionTokenAt(
   const match = /(^|\s)@([a-zA-Z]{0,12})$/.exec(before);
   if (!match) return null;
   const query = match[2].toLowerCase();
-  if (query.length >= "travelai".length) return null;
-  if (!"travelai".startsWith(query)) return null;
+  if (query.length >= "waytowalk".length) return null;
+  if (!"waytowalk".startsWith(query)) return null;
   return { start: caret - query.length - 1, query };
 }
 
 /**
- * F12b/F12d: parse a TravelAI proposal envelope out of a decrypted bot row. The
+ * F12b/F12d: parse a waytowalk proposal envelope out of a decrypted bot row. The
  * envelope is written by our own ask flow; this parses defensively because a
  * malicious client can flag any of its own rows `bot: true` — anything that
  * does not validate renders as plain text and stays harmless.
@@ -299,7 +299,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
   const actionsOpenedAtRef = useRef(0);
   // F9: which decision card is mid-unmark (one at a time, like row removals).
   const [busyDecisionId, setBusyDecisionId] = useState<string | null>(null);
-  // F12a: a @TravelAI ask is in flight — "TravelAI is typing…" placeholder.
+  // F12a: a @waytowalk ask is in flight — "waytowalk is typing…" placeholder.
   const [botThinking, setBotThinking] = useState(false);
   // F12b: per-row local decision state for proposal cards (the row itself is
   // immutable ciphertext — "applied"/"dismissed" survive only this visit).
@@ -438,7 +438,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
   }, [isChat, chronological.length, state.status, decisions.length]);
 
   /**
-   * F12a: a @TravelAI ask is live while the draft mentions the bot (any
+   * F12a: a @waytowalk ask is live while the draft mentions the bot (any
    * casing — the server re-checks the gate authoritatively).
    */
   const botAskActive = canWrite && BOT_MENTION_RE.test(draft);
@@ -499,7 +499,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
     // F15: the Ask chip makes a bare mention one tap away — never post it.
     // The server would reject the ask anyway; catch it before a stray message.
     if (botAsk && !plain.replace(BOT_MENTION_RE, "").trim()) {
-      toast.error("Add your question after @TravelAI.");
+      toast.error("Add your question after @waytowalk.");
       composerRef.current?.focus();
       return;
     }
@@ -527,7 +527,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
       const context = buildBotContext(summarize);
       setBotThinking(true);
       try {
-        const answer = await api.askTravelAI(tripId, {
+        const answer = await api.askAssistant(tripId, {
           prompt: plain,
           context,
           day: anchorDay ?? undefined,
@@ -547,14 +547,14 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
           anchorDay ?? undefined,
           replyPayload.e2ee,
           bubble, // optimistic bubble carries the envelope too — no card flash
-          true // bot flag → renders as the TravelAI participant
+          true // bot flag → renders as the waytowalk participant
         );
         if (replyRow && replyPayload.e2ee) {
           cryptoApi.rememberPlaintext(replyRow._id, bubble);
         }
       } catch (err: any) {
         toast.error(
-          err?.message || "TravelAI could not answer right now — try again in a moment."
+          err?.message || "waytowalk could not answer right now — try again in a moment."
         );
       } finally {
         setBotThinking(false);
@@ -848,13 +848,13 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
   const botThinkingLine = botThinking ? (
     <div className="flex items-center gap-2 px-1 text-[11px] font-semibold text-violet-600 dark:text-violet-400">
       <Bot className="h-3.5 w-3.5 shrink-0" />
-      <span>TravelAI is thinking…</span>
+      <span>waytowalk is thinking…</span>
     </div>
   ) : null;
 
   /**
    * F12a disclosure (user-confirmed design): while the draft mentions
-   * @TravelAI, the composer states exactly what will leave the group's
+   * @waytowalk, the composer states exactly what will leave the group's
    * end-to-end envelope — THIS message plus the N most recent readable ones.
    * Everyone else's rows never leave the trip unencrypted, and the answer
    * comes back encrypted into the thread like any other message.
@@ -864,7 +864,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
       <div className="flex items-start gap-1.5 rounded-xl border border-violet-300/50 bg-violet-500/5 px-2.5 py-1.5 text-[11px] font-semibold leading-snug text-violet-700 dark:border-violet-500/30 dark:text-violet-300">
         <Sparkles className="mt-px h-3.5 w-3.5 shrink-0" />
         <span>
-          Asking TravelAI{anchorDay ? ` about Day ${anchorDay}` : ""}
+          Asking waytowalk{anchorDay ? ` about Day ${anchorDay}` : ""}
           {BOT_SUMMARY_RE.test(draft) ? " for a recap" : ""} — sends this message plus{" "}
           {botContextCount === 0 ? "no" : botContextCount} recent chat message
           {botContextCount === 1 ? "" : "s"}
@@ -942,7 +942,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
     mentionOpen && canWrite ? (
       <div
         role="listbox"
-        aria-label="Mention TravelAI"
+        aria-label="Mention waytowalk"
         className="absolute bottom-full left-0 right-0 z-30 mb-1.5 overflow-hidden rounded-2xl border border-violet-300/60 bg-popover p-1 shadow-lg dark:border-violet-500/30"
       >
         <button
@@ -962,7 +962,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
             <Sparkles className="h-3.5 w-3.5" />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-xs font-bold text-foreground">TravelAI</span>
+            <span className="block text-xs font-bold text-foreground">waytowalk</span>
             <span className="block truncate text-[11px] text-muted-foreground">
               Answers from the recent messages here
             </span>
@@ -987,11 +987,11 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
           type="button"
           onClick={() => insertMention("chip")}
           disabled={state.submitting}
-          title="Ask TravelAI about this trip"
+          title="Ask waytowalk about this trip"
           className="inline-flex items-center gap-1.5 rounded-full border border-violet-300/60 bg-violet-500/5 px-2.5 py-1 text-[11px] font-bold text-violet-700 transition-colors hover:bg-violet-500/10 disabled:opacity-50 dark:border-violet-500/30 dark:text-violet-300"
         >
           <Sparkles className="h-3.5 w-3.5" />
-          Ask TravelAI
+          Ask waytowalk
         </button>
         {!aiHintDismissed && (
           <span className="inline-flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground">
@@ -999,7 +999,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
             <button
               type="button"
               onClick={dismissAiHint}
-              aria-label="Dismiss TravelAI tip"
+              aria-label="Dismiss waytowalk tip"
               className="rounded-full p-0.5 hover:bg-muted hover:text-foreground"
             >
               <X className="h-3 w-3" />
@@ -1776,7 +1776,7 @@ const CommentRow: React.FC<CommentRowProps> = ({
     );
   }
 
-  // F12a: a bot row ALWAYS renders as the TravelAI participant — even for the
+  // F12a: a bot row ALWAYS renders as the waytowalk participant — even for the
   // asker who technically posted it. The persona is the product, not the
   // authorship; that's why it sits on the incoming side with the AI avatar.
   const isBot = Boolean(row.bot);
@@ -1840,7 +1840,7 @@ const CommentRow: React.FC<CommentRowProps> = ({
                 isBot && "text-violet-600 dark:text-violet-300"
               )}
             >
-              {isBot ? "TravelAI" : row.label}
+              {isBot ? "waytowalk" : row.label}
             </span>
             {isBot && (
               <Badge

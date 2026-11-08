@@ -47,7 +47,7 @@ const AdminApp: React.FC = () => {
               </h1>
               <p className="text-sm leading-6 text-muted-foreground">
                 The internal operations console is switched off. Nothing else on
-                TravelAI is affected.
+                waytowalk is affected.
               </p>
             </div>
           </CardContent>

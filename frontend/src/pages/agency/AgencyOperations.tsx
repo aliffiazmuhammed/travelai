@@ -69,7 +69,7 @@ function formatMb(bytes: number): string {
 function actorLabel(entry: AgencyAuditEntry): string {
   if (entry.actor) return entry.actor;
   if (entry.action.startsWith('share.')) return 'Client (link)';
-  if (entry.action === 'plan.changed') return 'TravelAI ops';
+  if (entry.action === 'plan.changed') return 'waytowalk ops';
   return 'System';
 }
 

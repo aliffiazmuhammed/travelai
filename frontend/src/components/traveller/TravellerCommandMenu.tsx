@@ -117,7 +117,7 @@ const TravellerCommandMenu: React.FC<TravellerCommandMenuProps> = ({
           ) : null}
           <CommandItem value="travelai home landing" onSelect={() => go('/')}>
             <Plane className="mr-2 h-4 w-4 text-muted-foreground" aria-hidden />
-            TravelAI home
+            waytowalk home
           </CommandItem>
           {isAuthenticated ? (
             <CommandItem
@@ -136,7 +136,7 @@ const TravellerCommandMenu: React.FC<TravellerCommandMenuProps> = ({
       <div className="flex items-center justify-between gap-3 border-t border-border/70 px-3 py-2 text-[11px] text-muted-foreground">
         <span className="inline-flex items-center gap-1.5">
           <Map className="h-3 w-3" aria-hidden />
-          TravelAI
+          waytowalk
         </span>
         <span className="inline-flex items-center gap-1">
           <kbd className="rounded border border-border bg-muted px-1 py-0.5 font-sans text-[10px]">

@@ -49,7 +49,7 @@ test('curators are unique, addressable and safe to publish under', () => {
 
     assert.ok(curator.name.trim().length > 0);
     assert.ok(curator.bio.trim().length <= 280);
-    assert.match(curator.bio, /Curated by the TravelAI team/);
+    assert.match(curator.bio, /Curated by the waytowalk team/);
   }
 });
 

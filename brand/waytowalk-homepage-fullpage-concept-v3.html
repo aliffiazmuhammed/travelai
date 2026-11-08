@@ -1,0 +1,497 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>waytowalk — homepage design concept</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --forest: #173f35;
+      --deep: #102d26;
+      --coral: #e87656;
+      --ivory: #f7f3ea;
+      --sage: #9dbcb4;
+      --pale: #eaf0eb;
+      --ink: #1d2925;
+      --muted: #52665f;
+      --line: #d9e1dc;
+      --white: #ffffff;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; background: var(--ivory); color: var(--ink); font-family: "Manrope", sans-serif; -webkit-font-smoothing: antialiased; }
+    a { color: inherit; text-decoration: none; }
+    img { display: block; max-width: 100%; }
+    button { font: inherit; }
+    .wrap { width: min(1280px, calc(100% - 112px)); margin: 0 auto; }
+    .serif { font-family: "Newsreader", Georgia, serif; }
+    .eyebrow { display: flex; align-items: center; gap: 10px; margin: 0 0 20px; color: var(--forest); font-size: 11px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; }
+    .eyebrow::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--coral); flex: 0 0 auto; }
+    .eyebrow.light { color: rgba(247,243,234,.72); }
+    h1, h2, h3, p { margin-top: 0; }
+    h1, h2, h3 { color: var(--forest); }
+    h2 { margin-bottom: 20px; font: 500 50px/1.04 "Newsreader", Georgia, serif; letter-spacing: -.035em; }
+    .section-copy { color: var(--muted); font-size: 16px; line-height: 1.8; }
+    .button-row { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+    .button { min-height: 52px; display: inline-flex; align-items: center; justify-content: center; gap: 18px; padding: 0 25px; border: 1px solid var(--forest); border-radius: 999px; background: var(--forest); color: white; font-size: 13px; font-weight: 700; }
+    .button.secondary { background: transparent; color: var(--forest); }
+    .button.ivory { border-color: var(--ivory); background: var(--ivory); color: var(--forest); }
+    .button.ghost-light { border-color: rgba(255,255,255,.42); background: transparent; color: white; }
+    .text-link { display: inline-flex; align-items: center; gap: 9px; color: var(--forest); font-size: 13px; font-weight: 700; }
+    .nav { height: 90px; border-bottom: 1px solid rgba(23,63,53,.1); background: rgba(247,243,234,.96); }
+    .nav .wrap { height: 100%; display: flex; align-items: center; justify-content: space-between; }
+    .logo { width: 164px; }
+    .nav-links { display: flex; align-items: center; gap: 38px; margin-left: 80px; font-size: 13px; font-weight: 600; }
+    .nav-actions { display: flex; align-items: center; gap: 25px; font-size: 13px; font-weight: 700; }
+    .nav .button { min-height: 44px; padding: 0 22px; gap: 10px; }
+    .hero { position: relative; padding: 66px 0 0; overflow: hidden; }
+    .hero-copy { position: relative; z-index: 2; max-width: 900px; }
+    .hero h1 { margin: 0 0 25px; font: 500 82px/.94 "Newsreader", Georgia, serif; letter-spacing: -.045em; }
+    .hero h1 span { display: block; }
+    .hero-intro { max-width: 650px; margin-bottom: 27px; color: var(--muted); font-size: 17px; line-height: 1.75; }
+    .hero .button-row { margin-bottom: 18px; }
+    .micro { display: flex; align-items: center; gap: 22px; margin: 0; color: var(--muted); font-size: 11px; font-weight: 600; }
+    .micro span { display: inline-flex; align-items: center; gap: 7px; }
+    .micro span::before { content: ""; width: 4px; height: 4px; border-radius: 50%; background: var(--sage); }
+    .hero-aside { position: absolute; right: 0; top: 120px; width: 230px; padding-left: 24px; border-left: 1px solid var(--line); }
+    .hero-aside strong { display: block; margin-bottom: 9px; color: var(--forest); font: 500 25px/1.1 "Newsreader", Georgia, serif; }
+    .hero-aside p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.7; }
+    .hero-media { position: relative; height: 430px; margin-top: 54px; border-radius: 30px; background: var(--forest); }
+    .hero-media > img { width: 100%; height: 100%; border-radius: inherit; object-fit: cover; object-position: 50% 47%; }
+    .hero-media::after { content: ""; position: absolute; inset: 55% 0 0; border-radius: 0 0 30px 30px; background: linear-gradient(transparent, rgba(16,45,38,.45)); }
+    .photo-note { position: absolute; z-index: 3; left: 24px; bottom: 24px; padding: 14px 18px; border-radius: 14px; background: var(--ivory); color: var(--forest); font-size: 10px; font-weight: 700; letter-spacing: .12em; }
+    .route { position: absolute; z-index: 2; right: 19%; top: 55px; width: 160px; height: 270px; }
+    .route path { fill: none; stroke: var(--coral); stroke-width: 5; stroke-linecap: round; }
+    .discovery-switch { position: absolute; z-index: 4; right: 24px; bottom: 24px; width: 590px; min-height: 76px; display: grid; grid-template-columns: 1fr 1fr 1fr 54px; align-items: center; border: 1px solid rgba(255,255,255,.5); border-radius: 20px; background: rgba(247,243,234,.97); box-shadow: 0 14px 40px rgba(16,45,38,.15); }
+    .discovery-switch a { position: relative; display: flex; align-items: center; justify-content: center; gap: 9px; min-height: 42px; border-right: 1px solid var(--line); color: var(--forest); font-size: 12px; font-weight: 700; }
+    .discovery-switch a:first-child { color: var(--forest); }
+    .discovery-switch a:first-child::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--coral); }
+    .discovery-switch .switch-arrow { width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; justify-self: center; border-right: 0; border-radius: 50%; background: var(--forest); color: white; font-size: 20px; }
+    .fresh { padding: 108px 0 112px; }
+    .section-head { display: flex; align-items: end; justify-content: space-between; gap: 40px; margin-bottom: 40px; }
+    .section-head h2 { margin-bottom: 12px; }
+    .section-head p { max-width: 570px; margin-bottom: 0; }
+    .section-head .text-link { margin-bottom: 9px; white-space: nowrap; }
+    .trip-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+    .trip-card { overflow: hidden; border: 1px solid var(--line); border-radius: 24px; background: rgba(255,255,255,.6); }
+    .trip-photo { position: relative; height: 230px; overflow: hidden; }
+    .trip-photo img { width: 100%; height: 100%; object-fit: cover; }
+    .trip-days { position: absolute; top: 16px; right: 16px; padding: 8px 11px; border-radius: 999px; background: rgba(247,243,234,.95); color: var(--forest); font-size: 10px; font-weight: 700; }
+    .trip-body { padding: 23px 23px 20px; }
+    .place { margin-bottom: 10px; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+    .trip-body h3 { min-height: 57px; margin-bottom: 10px; font: 500 27px/1.08 "Newsreader", Georgia, serif; letter-spacing: -.02em; }
+    .trip-body > p { min-height: 44px; margin-bottom: 20px; color: var(--muted); font-size: 12px; line-height: 1.65; }
+    .trip-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 10px; }
+    .host { display: flex; align-items: center; gap: 8px; color: var(--ink); font-weight: 700; }
+    .avatar { width: 27px; height: 27px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--pale); color: var(--forest); font-size: 9px; }
+    .event-section { padding: 0 0 112px; }
+    .event-layout { display: grid; grid-template-columns: 1.08fr .92fr; min-height: 430px; overflow: hidden; border-radius: 28px; background: var(--pale); }
+    .event-layout > img { width: 100%; height: 100%; object-fit: cover; }
+    .event-copy { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; padding: 55px 60px; }
+    .event-copy h2 { font-size: 45px; }
+    .event-copy .section-copy { margin-bottom: 26px; }
+    .how { padding: 108px 0 115px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .how .section-head { align-items: start; }
+    .how .section-head > p { max-width: 370px; margin-top: 35px; }
+    .steps { position: relative; display: grid; grid-template-columns: repeat(3, 1fr); gap: 70px; margin-top: 60px; }
+    .steps::before { content: ""; position: absolute; top: 27px; left: 9%; right: 9%; height: 1px; background: var(--sage); }
+    .step { position: relative; padding-top: 82px; }
+    .step-number { position: absolute; z-index: 1; top: 0; left: 0; width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--sage); border-radius: 50%; background: var(--ivory); color: var(--forest); font: 500 22px "Newsreader", Georgia, serif; }
+    .step h3 { margin-bottom: 12px; font: 500 29px/1.1 "Newsreader", Georgia, serif; }
+    .step p { margin-bottom: 0; color: var(--muted); font-size: 13px; line-height: 1.75; }
+    .agency { padding: 112px 0; }
+    .agency-layout { display: grid; grid-template-columns: 1.08fr .92fr; min-height: 530px; overflow: hidden; border-radius: 30px; background: var(--forest); }
+    .agency-layout > img { width: 100%; height: 100%; object-fit: cover; }
+    .agency-copy { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; padding: 58px 60px; color: rgba(247,243,234,.78); }
+    .agency-copy h2 { color: var(--ivory); font-size: 47px; }
+    .agency-copy > p { font-size: 15px; line-height: 1.8; }
+    .agency-list { display: grid; gap: 12px; margin: 8px 0 28px; padding: 0; list-style: none; color: var(--ivory); font-size: 12px; }
+    .agency-list li { display: flex; align-items: center; gap: 10px; }
+    .agency-list li::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--coral); }
+    .agency-copy .text-link { margin-top: 20px; color: rgba(247,243,234,.75); font-size: 11px; }
+    .ai { padding: 110px 0; background: var(--pale); }
+    .ai-layout { display: grid; grid-template-columns: .9fr 1.1fr; align-items: center; gap: 90px; }
+    .ai-copy h2 { font-size: 48px; }
+    .ai-copy .section-copy { margin-bottom: 24px; }
+    .ai-points { display: grid; gap: 11px; margin: 0 0 28px; padding: 0; list-style: none; color: var(--forest); font-size: 12px; font-weight: 600; }
+    .ai-points li { display: flex; align-items: center; gap: 10px; }
+    .ai-points li::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--coral); }
+    .chat { overflow: hidden; border: 1px solid var(--line); border-radius: 26px; background: white; box-shadow: 0 20px 50px rgba(23,63,53,.08); }
+    .chat-head { display: flex; align-items: center; gap: 12px; padding: 19px 23px; border-bottom: 1px solid var(--line); }
+    .chat-mark { width: 32px; height: 32px; }
+    .chat-head strong { display: block; color: var(--forest); font-size: 12px; }
+    .chat-head span { display: block; margin-top: 3px; color: var(--muted); font-size: 9px; }
+    .chat-body { padding: 26px; }
+    .message { max-width: 85%; margin-bottom: 18px; padding: 16px 18px; border-radius: 16px 16px 16px 4px; background: var(--pale); color: var(--ink); font-size: 12px; line-height: 1.7; }
+    .message.user { margin-left: auto; border-radius: 16px 16px 4px 16px; background: var(--forest); color: white; }
+    .message-label { margin-bottom: 7px; color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+    .day-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 13px; }
+    .day { padding: 11px; border: 1px solid var(--line); border-radius: 10px; color: var(--forest); font-size: 9px; font-weight: 700; }
+    .tools { padding: 112px 0; background: var(--deep); color: rgba(247,243,234,.74); }
+    .tools-layout { display: grid; grid-template-columns: .78fr 1.22fr; gap: 90px; }
+    .tools h2 { color: var(--ivory); font-size: 52px; }
+    .tools-intro > p { max-width: 400px; font-size: 15px; line-height: 1.8; }
+    .tool-grid { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid rgba(247,243,234,.18); border-left: 1px solid rgba(247,243,234,.18); }
+    .tool { min-height: 220px; padding: 30px; border-right: 1px solid rgba(247,243,234,.18); border-bottom: 1px solid rgba(247,243,234,.18); }
+    .tool-index { display: block; margin-bottom: 38px; color: var(--coral); font: 500 18px "Newsreader", Georgia, serif; }
+    .tool h3 { margin-bottom: 11px; color: var(--ivory); font: 500 26px/1.1 "Newsreader", Georgia, serif; }
+    .tool p { margin: 0; font-size: 12px; line-height: 1.75; }
+    .trust { padding: 110px 0; }
+    .trust-head { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: end; margin-bottom: 55px; }
+    .trust-head h2 { margin: 0; }
+    .trust-head > p { max-width: 480px; margin: 0; }
+    .trust-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border-top: 1px solid var(--line); }
+    .trust-item { padding: 32px 40px 0 0; }
+    .trust-item + .trust-item { padding-left: 40px; border-left: 1px solid var(--line); }
+    .trust-icon { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; margin-bottom: 25px; border-radius: 50%; background: var(--pale); color: var(--forest); font: 600 17px "Newsreader", Georgia, serif; }
+    .trust-item h3 { margin-bottom: 12px; font: 500 27px "Newsreader", Georgia, serif; }
+    .trust-item p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.75; }
+    .faq { padding: 110px 0; background: var(--pale); }
+    .faq-layout { display: grid; grid-template-columns: .75fr 1.25fr; gap: 100px; }
+    .faq-intro h2 { font-size: 46px; }
+    .faq-intro > p { max-width: 340px; }
+    .faq-list { border-top: 1px solid #cbd8d0; }
+    .faq-item { padding: 23px 0; border-bottom: 1px solid #cbd8d0; }
+    .faq-question { display: flex; align-items: center; justify-content: space-between; gap: 20px; color: var(--forest); font-size: 13px; font-weight: 700; }
+    .faq-question span:last-child { font-size: 20px; font-weight: 400; }
+    .faq-answer { max-width: 620px; margin: 15px 35px 0 0; color: var(--muted); font-size: 12px; line-height: 1.8; }
+    .closing { padding: 110px 0; }
+    .closing-box { position: relative; min-height: 430px; display: flex; align-items: center; overflow: hidden; border-radius: 30px; background: var(--forest); }
+    .closing-copy { position: relative; z-index: 2; width: 66%; padding: 60px; }
+    .closing-copy h2 { max-width: 660px; color: var(--ivory); font-size: 52px; }
+    .closing-copy > p { max-width: 550px; margin-bottom: 27px; color: rgba(247,243,234,.75); font-size: 14px; line-height: 1.8; }
+    .closing-copy .micro { margin-top: 19px; color: rgba(247,243,234,.6); }
+    .closing-photo { position: absolute; inset: 0 0 0 67%; }
+    .closing-photo img { width: 100%; height: 100%; object-fit: cover; }
+    .closing-photo::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, var(--forest), transparent 50%); }
+    .footer { padding: 65px 0 28px; border-top: 1px solid var(--line); }
+    .footer-grid { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr; gap: 55px; }
+    .footer-brand .logo { margin-bottom: 20px; }
+    .footer-tag { color: var(--forest); font: 500 23px "Newsreader", Georgia, serif; }
+    .footer-brand > p:last-child { max-width: 320px; margin-top: 16px; color: var(--muted); font-size: 11px; line-height: 1.8; }
+    .footer-col h3 { margin-bottom: 18px; font: 700 10px "Manrope", sans-serif; letter-spacing: .12em; text-transform: uppercase; }
+    .footer-col a { display: block; margin-bottom: 12px; color: var(--muted); font-size: 11px; }
+    .footer-bottom { display: flex; align-items: center; justify-content: space-between; margin-top: 50px; padding-top: 24px; border-top: 1px solid var(--line); color: var(--muted); font-size: 10px; }
+    @media (max-width: 900px) {
+      .wrap { width: min(100% - 36px, 680px); }
+      .nav { height: 72px; }
+      .nav-links, .nav-actions > a:first-child { display: none; }
+      .logo { width: 145px; }
+      .nav .button { min-height: 40px; padding: 0 17px; font-size: 11px; }
+      .hero { padding-top: 45px; }
+      .hero h1 { font-size: 52px; }
+      .hero-aside { display: none; }
+      .hero-intro { font-size: 15px; }
+      .hero .button-row { align-items: stretch; flex-direction: column; }
+      .hero .button { width: 100%; }
+      .micro { flex-wrap: wrap; gap: 10px 16px; }
+      .hero-media { height: 420px; margin-top: 40px; }
+      .hero-media > img { object-position: 42% 50%; }
+      .photo-note { left: 14px; bottom: 98px; }
+      .discovery-switch { left: 14px; right: 14px; bottom: 14px; width: auto; grid-template-columns: 1fr 1fr 1fr; }
+      .discovery-switch a { font-size: 10px; }
+      .switch-arrow { display: none; }
+      .fresh, .agency, .ai, .tools, .trust, .faq, .closing { padding: 75px 0; }
+      h2 { font-size: 38px; }
+      .section-head { align-items: start; flex-direction: column; gap: 15px; }
+      .trip-grid, .steps, .trust-grid { grid-template-columns: 1fr; }
+      .trip-body h3, .trip-body > p { min-height: 0; }
+      .event-layout, .agency-layout, .ai-layout, .tools-layout, .faq-layout { grid-template-columns: 1fr; }
+      .event-layout > img, .agency-layout > img { height: 330px; }
+      .event-copy, .agency-copy { padding: 38px 28px; }
+      .steps { gap: 40px; }
+      .steps::before { display: none; }
+      .step { padding: 0 0 0 75px; }
+      .ai-layout, .tools-layout, .faq-layout { gap: 45px; }
+      .tool-grid { grid-template-columns: 1fr; }
+      .trust-head { grid-template-columns: 1fr; gap: 20px; }
+      .trust-item, .trust-item + .trust-item { padding: 28px 0; border-left: 0; border-bottom: 1px solid var(--line); }
+      .closing-copy { width: 100%; padding: 42px 28px; }
+      .closing-photo { display: none; }
+      .closing-copy h2 { font-size: 40px; }
+      .footer-grid { grid-template-columns: 1fr 1fr; }
+      .footer-brand { grid-column: 1 / -1; }
+      .footer-bottom { align-items: start; flex-direction: column; gap: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <div class="wrap">
+      <img class="logo" src="assets/waytowalk-logo-name.svg" alt="waytowalk">
+      <div class="nav-links">
+        <a href="#trips">Explore</a>
+        <a href="#agencies">Agencies</a>
+        <a href="#how">How it works</a>
+      </div>
+      <div class="nav-actions">
+        <a href="#">Sign in</a>
+        <a class="button" href="#ai">Plan a trip <span>→</span></a>
+      </div>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div class="wrap">
+      <div class="hero-copy">
+        <p class="eyebrow">Real trips. Real people.</p>
+        <h1>Find a journey.<span>Walk it your way.</span></h1>
+        <p class="hero-intro">Join a trip, find your people, or shape a route of your own. Keep the map, costs and conversations together from first idea to final day.</p>
+        <div class="button-row">
+          <a class="button" href="#trips">Explore real trips <span>→</span></a>
+          <a class="button secondary" href="#ai">Start planning</a>
+        </div>
+        <p class="micro"><span>Free to start</span><span>No card needed</span><span>You choose who comes</span></p>
+      </div>
+      <div class="hero-aside">
+        <strong>Start with something real.</strong>
+        <p>Trips shared by travellers and agencies, ready to join or make your own.</p>
+      </div>
+      <div class="hero-media">
+        <img src="presentation-assets/group-hike.jpg" alt="Travellers walking together on a mountain trail">
+        <svg class="route" viewBox="0 0 160 270" aria-hidden="true"><path d="M121 6 C159 27 54 42 78 68 C100 91 29 93 46 124 C66 157 127 135 112 172 C98 207 18 198 29 259"/></svg>
+        <span class="photo-note">GO FURTHER, TOGETHER</span>
+        <div class="discovery-switch">
+          <a href="#trips">Trips to join</a>
+          <a href="#events">Events</a>
+          <a href="#agencies">Agencies</a>
+          <a class="switch-arrow" href="#trips" aria-label="Explore">→</a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="fresh" id="trips">
+      <div class="wrap">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Live discovery</p>
+            <h2>Fresh from the trail.</h2>
+            <p class="section-copy">Real plans from people you can actually talk to. Read the route, meet the host, then ask to join or take a copy.</p>
+          </div>
+          <a class="text-link" href="#">See all 6 trips <span>→</span></a>
+        </div>
+        <div class="trip-grid">
+          <article class="trip-card">
+            <div class="trip-photo">
+              <img src="https://images.unsplash.com/photo-1477587458883-47145ed94245?auto=format&fit=crop&w=900&q=80" alt="Jaipur architecture">
+              <span class="trip-days">8 days</span>
+            </div>
+            <div class="trip-body">
+              <p class="place">Jaipur, Jodhpur & Jaisalmer</p>
+              <h3>Rajasthan forts and desert nights</h3>
+              <p>Three fort cities by road, ending with a night beneath the Thar desert sky.</p>
+              <div class="trip-meta"><span class="host"><span class="avatar">RM</span>Rohan Mehta</span><span>Jan 2027 · Friends</span></div>
+            </div>
+          </article>
+          <article class="trip-card">
+            <div class="trip-photo">
+              <img src="https://images.unsplash.com/photo-1585208798174-6cedd86e019a?auto=format&fit=crop&w=900&q=80" alt="Lisbon street and tram">
+              <span class="trip-days">6 days</span>
+            </div>
+            <div class="trip-body">
+              <p class="place">Lisbon, Portugal</p>
+              <h3>Lisbon in six slow days</h3>
+              <p>Tiled streets, river light and a Sintra day trip, with time left to wander.</p>
+              <div class="trip-meta"><span class="host"><span class="avatar">MR</span>Maya Rao</span><span>Apr 2027 · Couple</span></div>
+            </div>
+          </article>
+          <article class="trip-card">
+            <div class="trip-photo">
+              <img src="https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&w=900&q=80" alt="Bali rice terraces">
+              <span class="trip-days">7 days</span>
+            </div>
+            <div class="trip-body">
+              <p class="place">Ubud & Uluwatu, Bali</p>
+              <h3>First time in Bali, done slowly</h3>
+              <p>Rice terraces and a surf beach. Two bases, no rushing, time to relax.</p>
+              <div class="trip-meta"><span class="host"><span class="avatar">SM</span>Sofia Marchetti</span><span>Jun 2027 · Solo</span></div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="event-section" id="events">
+      <div class="wrap">
+        <div class="event-layout">
+          <img src="presentation-assets/group-camp.jpg" alt="A group gathered around a mountain campfire">
+          <div class="event-copy">
+            <p class="eyebrow">On the calendar</p>
+            <h2>Some journeys already have a date.</h2>
+            <p class="section-copy">Discover agency-led camps, retreats and group departures. Ask about a place without building a trip of your own first.</p>
+            <a class="button" href="#">Explore events <span>→</span></a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="how" id="how">
+      <div class="wrap">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">How it works</p>
+            <h2>Someone's idea.<br>Your way forward.</h2>
+          </div>
+          <p class="section-copy">The owner keeps the final say. You get a real starting point and a clear way to take part.</p>
+        </div>
+        <div class="steps">
+          <article class="step">
+            <span class="step-number">01</span>
+            <h3>Find your starting point</h3>
+            <p>Browse a traveller's shared trip or an agency event. When one feels right, send a short note to the host.</p>
+          </article>
+          <article class="step">
+            <span class="step-number">02</span>
+            <h3>Get the yes, then talk</h3>
+            <p>Follow the plan, ask questions and join the private trip chat. Approval never hands over editing rights.</p>
+          </article>
+          <article class="step">
+            <span class="step-number">03</span>
+            <h3>Make the route yours</h3>
+            <p>Take a copy and adapt any day, or start fresh. The map, costs and group decisions stay together.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="agency" id="agencies">
+      <div class="wrap">
+        <div class="agency-layout">
+          <img src="presentation-assets/agency-team.jpg" alt="A travel agency team working together">
+          <div class="agency-copy">
+            <p class="eyebrow light">Travel agencies</p>
+            <h2>Prefer a professional to shape it?</h2>
+            <p>Find an agency, ask a question, and receive a branded proposal you can review with your group.</p>
+            <ul class="agency-list">
+              <li>Compare detailed directory profiles</li>
+              <li>Talk directly before you decide</li>
+              <li>Review quotes and proposals in one place</li>
+            </ul>
+            <a class="button ivory" href="#">Meet travel agencies <span>→</span></a>
+            <a class="text-link" href="#">For agencies: apply to join <span>→</span></a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="ai" id="ai">
+      <div class="wrap ai-layout">
+        <div class="ai-copy">
+          <p class="eyebrow">When nothing fits</p>
+          <h2>Start with a blank page. Leave with a plan.</h2>
+          <p class="section-copy">Say where you're going, who's coming and what you like. AI creates the first route; you and your group shape what happens next.</p>
+          <ul class="ai-points">
+            <li>A day-by-day route from one message</li>
+            <li>Maps, timings and estimated costs together</li>
+            <li>Change anything without starting over</li>
+          </ul>
+          <div class="button-row">
+            <a class="button" href="#">Plan with AI <span>→</span></a>
+            <a class="button secondary" href="#trips">See what others planned</a>
+          </div>
+        </div>
+        <div class="chat">
+          <div class="chat-head">
+            <img class="chat-mark" src="assets/waytowalk-symbol.svg" alt="">
+            <div><strong>Trip planning with waytowalk</strong><span>Your route, ready to make your own</span></div>
+          </div>
+          <div class="chat-body">
+            <div class="message user">Four of us want a quiet week in Kerala with good food, short drives and time outdoors.</div>
+            <div class="message">
+              <div class="message-label">waytowalk</div>
+              Start in Kochi, take one scenic drive to Munnar, then slow down by the backwaters. Here's a balanced first route.
+              <div class="day-row"><span class="day">Days 1–2 · Kochi</span><span class="day">Days 3–4 · Munnar</span><span class="day">Days 5–7 · Alleppey</span></div>
+            </div>
+            <div class="message user">Can we swap one Munnar day for a cooking class?</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="tools">
+      <div class="wrap tools-layout">
+        <div class="tools-intro">
+          <p class="eyebrow light">One shared plan</p>
+          <h2>The admin stays out of the adventure.</h2>
+          <p>When something feels like deciding, do it together. When it feels like admin, waytowalk keeps it quietly organised.</p>
+        </div>
+        <div class="tool-grid">
+          <article class="tool"><span class="tool-index">01</span><h3>A map everyone can read</h3><p>Every stop in order, realistic distances and weather where it matters.</p></article>
+          <article class="tool"><span class="tool-index">02</span><h3>Money without the maths</h3><p>Planned versus actual spend, shared expenses and who owes whom.</p></article>
+          <article class="tool"><span class="tool-index">03</span><h3>Decisions without scrolling</h3><p>Vote in chat and pin the final choice so the group stays in step.</p></article>
+          <article class="tool"><span class="tool-index">04</span><h3>Share it beyond the app</h3><p>A clean PDF, a WhatsApp summary or a link anyone can open.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="trust">
+      <div class="wrap">
+        <div class="trust-head">
+          <div><p class="eyebrow">In plain words</p><h2>Your trip stays yours.</h2></div>
+          <p class="section-copy">Publishing a route doesn't expose the parts you kept private. Joining someone else's trip doesn't hand over your own.</p>
+        </div>
+        <div class="trust-grid">
+          <article class="trust-item"><span class="trust-icon">01</span><h3>Private conversations</h3><p>Trip messages are end-to-end encrypted. Only people on your trip can read them.</p></article>
+          <article class="trust-item"><span class="trust-icon">02</span><h3>You control who comes</h3><p>Only the owner approves requests. Approval never gives away edit rights.</p></article>
+          <article class="trust-item"><span class="trust-icon">03</span><h3>You control what's public</h3><p>Budgets, expenses and private chat never become part of a published trip.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="faq">
+      <div class="wrap faq-layout">
+        <div class="faq-intro">
+          <p class="eyebrow">Before you ask</p>
+          <h2>Good questions, straight answers.</h2>
+          <p class="section-copy">The essentials about joining, publishing and planning with other people.</p>
+          <a class="text-link" href="#">Read the community guidelines <span>→</span></a>
+        </div>
+        <div class="faq-list">
+          <div class="faq-item"><div class="faq-question"><span>Is it free to join a trip?</span><span>−</span></div><p class="faq-answer">Yes. Browsing and joining don't cost anything. An agency sets its own price for a proposal; waytowalk never takes payments between travellers.</p></div>
+          <div class="faq-item"><div class="faq-question"><span>Who can see my trip?</span><span>+</span></div></div>
+          <div class="faq-item"><div class="faq-question"><span>What happens when I ask to join?</span><span>+</span></div></div>
+          <div class="faq-item"><div class="faq-question"><span>Can I take a copy of a shared trip?</span><span>+</span></div></div>
+          <div class="faq-item"><div class="faq-question"><span>What if no trip fits?</span><span>+</span></div></div>
+          <div class="faq-item"><div class="faq-question"><span>How do agency events work?</span><span>+</span></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="closing">
+      <div class="wrap">
+        <div class="closing-box">
+          <div class="closing-copy">
+            <p class="eyebrow light">Real journeys. Your way.</p>
+            <h2>Your next trip could start with someone else's plan.</h2>
+            <p>Take a look at what's already going. If nothing fits, plan it yourself—it still only takes one message.</p>
+            <div class="button-row"><a class="button ivory" href="#trips">Browse trips <span>→</span></a><a class="button ghost-light" href="#ai">Plan with AI</a></div>
+            <p class="micro"><span>Free to start</span><span>No card needed</span></p>
+          </div>
+          <div class="closing-photo"><img src="presentation-assets/solo-traveller.jpg" alt="A traveller walking beside a desert stream"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <img class="logo" src="assets/waytowalk-logo-name.svg" alt="waytowalk">
+          <p class="footer-tag">Real journeys. Your way.</p>
+          <p>Find a trip worth joining, meet the people going, and keep the plan, map and chat in one place.</p>
+        </div>
+        <div class="footer-col"><h3>Discover</h3><a href="#">Explore trips</a><a href="#">Events</a><a href="#">Agencies</a><a href="#">Community guidelines</a></div>
+        <div class="footer-col"><h3>Plan</h3><a href="#">Plan a trip</a><a href="#">Create an account</a><a href="#">Sign in</a></div>
+        <div class="footer-col"><h3>For agencies</h3><a href="#">Agency sign in</a><a href="#">Apply to join</a><a href="#">Directory profiles</a></div>
+      </div>
+      <div class="footer-bottom"><span>© 2026 waytowalk. Built with care for travellers.</span><span>Shared on purpose, private by default.</span></div>
+    </div>
+  </footer>
+</body>
+</html>

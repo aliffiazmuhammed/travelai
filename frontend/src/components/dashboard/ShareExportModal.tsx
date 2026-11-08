@@ -379,7 +379,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
       `• Local Transport: ₹${data.budget_breakdown.local_transport.toLocaleString("en-IN")}`,
       `• Emergency Buffer: ₹${data.budget_breakdown.miscellaneous_buffer.toLocaleString("en-IN")}`,
       "",
-      publicUrl ? `🔗 View interactive itinerary online: ${publicUrl}` : `Crafted with TravelAI`,
+      publicUrl ? `🔗 View interactive itinerary online: ${publicUrl}` : `Crafted with waytowalk`,
     ];
 
     const formatted = textLines.join("\n");

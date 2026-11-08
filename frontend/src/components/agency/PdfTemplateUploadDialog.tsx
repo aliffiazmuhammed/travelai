@@ -159,7 +159,7 @@ const PdfTemplateUploadDialog: React.FC<PdfTemplateUploadDialogProps> = ({
         <DialogHeader>
           <DialogTitle>Upload a PDF design</DialogTitle>
           <DialogDescription>
-            Keep the agency’s own layout and let TravelAI fill it with trip,
+            Keep the agency’s own layout and let waytowalk fill it with trip,
             client and quote data. The design is sanitised, then you place data
             boxes on it before anything is saved.
           </DialogDescription>

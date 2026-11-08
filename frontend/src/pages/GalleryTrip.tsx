@@ -260,7 +260,7 @@ const GalleryTrip = () => {
 
     if (trip) {
       return applyPageMeta({
-        title: `${trip.title} · ${trip.destination || "TravelAI"}`,
+        title: `${trip.title} · ${trip.destination || "waytowalk"}`,
         description:
           trip.summary ||
           `A ${trip.durationDays}-day itinerary in ${trip.destination || "the gallery"}, shared by ${trip.publisher.name}.`,
@@ -270,7 +270,7 @@ const GalleryTrip = () => {
 
     if (notFound) {
       return applyPageMeta({
-        title: "Trip not found · TravelAI",
+        title: "Trip not found · waytowalk",
         description:
           "This shared trip is no longer public. It may have been unshared, or its travel dates have passed.",
         ogType: "website",
@@ -446,7 +446,7 @@ const GalleryTrip = () => {
       setJoinState((previous) =>
         previous
           ? { ...previous, request: result.request }
-          : { request: result.request, isMember: false, isOwner: false }
+          : { request: result.request, isMember: false, isOwner: false, joinable: true }
       );
       toast.success("Your request was withdrawn.");
     } catch (err) {
@@ -466,7 +466,7 @@ const GalleryTrip = () => {
       setJoinState((previous) =>
         previous
           ? { ...previous, request }
-          : { request, isMember: false, isOwner: false }
+          : { request, isMember: false, isOwner: false, joinable: true }
       );
     },
     []
@@ -518,7 +518,7 @@ const GalleryTrip = () => {
                 </Link>
               </Button>
               <Button asChild variant="outline" className="rounded-2xl h-11 px-6 text-xs font-bold">
-                <Link to="/">Back to TravelAI</Link>
+                <Link to="/">Back to waytowalk</Link>
               </Button>
             </div>
           </div>

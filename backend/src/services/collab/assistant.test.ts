@@ -22,7 +22,7 @@ import { AppError } from '../../utils/AppError.js';
 import { env } from '../../config/env.js';
 
 /**
- * Pure-rule tests for the @TravelAI assistant (F12a). The provider spend is
+ * Pure-rule tests for the @waytowalk assistant (F12a). The provider spend is
  * the thing protected: mention gating (the primary brake), tight context
  * caps, the wire budget, the bubble-sized reply clamp, and the per user ×
  * trip × day quota. The AI + DB paths ride the live `smoke-f12a.mts` run.
@@ -33,8 +33,8 @@ const statusOf = (error: unknown): number =>
 
 /* ------------------------------- the mention gate ------------------------- */
 
-test('assertAssistantInputs: any casing of @TravelAI gates the ask', () => {
-  for (const prompt of ['@TravelAI eat where?', '@travelai eat where?', 'so... @TravelAI should we rent scooters?']) {
+test('assertAssistantInputs: any casing of @waytowalk gates the ask', () => {
+  for (const prompt of ['@waytowalk eat where?', '@travelai eat where?', 'so... @waytowalk should we rent scooters?']) {
     const { prompt: cleaned } = assertAssistantInputs(prompt, []);
     assert.ok(!MENTION_RE.test(cleaned), 'mention is stripped from the composed question');
     assert.ok(cleaned.length > 0);
@@ -48,11 +48,11 @@ test('assertAssistantInputs: a missing mention is a 400 (primary cost brake)', (
 test('assertAssistantInputs: empty and over-cap prompts are 400s', () => {
   assert.equal(statusOf(rewrite(() => assertAssistantInputs('', []))), 400);
   assert.equal(
-    statusOf(rewrite(() => assertAssistantInputs(`@TravelAI ${'x'.repeat(500)}`, []))),
+    statusOf(rewrite(() => assertAssistantInputs(`@waytowalk ${'x'.repeat(500)}`, []))),
     400
   );
   assert.doesNotThrow(() =>
-    assertAssistantInputs(`@TravelAI ${'x'.repeat(490)}`, [])
+    assertAssistantInputs(`@waytowalk ${'x'.repeat(489)}`, [])
   );
 });
 
@@ -60,11 +60,11 @@ test('assertAssistantInputs: empty and over-cap prompts are 400s', () => {
 
 test('assertAssistantInputs: over the 8-line context cap is a 400', () => {
   const nine = Array.from({ length: 9 }, (_, i) => ({ label: `m${i}`, text: 'hi' }));
-  assert.equal(statusOf(rewrite(() => assertAssistantInputs('@TravelAI q', nine))), 400);
+  assert.equal(statusOf(rewrite(() => assertAssistantInputs('@waytowalk q', nine))), 400);
 });
 
 test('assertAssistantInputs: junk context lines are dropped, not rejected', () => {
-  const { context } = assertAssistantInputs('@TravelAI q', [
+  const { context } = assertAssistantInputs('@waytowalk q', [
     { label: '', text: 'no label — dropped' },
     { label: 'alice', text: '' }, // dropped
     { label: 'alice', text: 'I love seafood' },
@@ -75,7 +75,7 @@ test('assertAssistantInputs: junk context lines are dropped, not rejected', () =
 });
 
 test('assertAssistantInputs: labels and texts clamp to their caps', () => {
-  const { context } = assertAssistantInputs('@TravelAI q', [
+  const { context } = assertAssistantInputs('@waytowalk q', [
     { label: 'L'.repeat(64), text: 'T'.repeat(900) },
   ]);
   assert.equal(context[0].label.length, ASSISTANT_RULES.CONTEXT_LABEL_MAX);
@@ -89,15 +89,15 @@ test('assertAssistantInputs: the wire budget rejects runaway payloads (bypassing
     label: 'L'.repeat(32),
     text: 'T'.repeat(900),
   }));
-  assert.equal(statusOf(rewrite(() => assertAssistantInputs('@TravelAI q', hostile))), 400);
+  assert.equal(statusOf(rewrite(() => assertAssistantInputs('@waytowalk q', hostile))), 400);
   // The zod-legal maximum (8 × 532 + prompt ≤ 500) must always fit.
   const legal = Array.from({ length: 8 }, () => ({ label: 'l'.repeat(32), text: 't'.repeat(500) }));
-  assert.doesNotThrow(() => assertAssistantInputs(`@TravelAI ${'q'.repeat(420)}`, legal));
+  assert.doesNotThrow(() => assertAssistantInputs(`@waytowalk ${'q'.repeat(420)}`, legal));
 });
 
 test('assertAssistantInputs: spoofed labels fall out when member labels provided', () => {
   const { context } = assertAssistantInputs(
-    '@TravelAI q',
+    '@waytowalk q',
     [
       { label: 'alice', text: 'real member line' },
       { label: 'stranger', text: 'not a member' },
@@ -485,7 +485,7 @@ test('labelMatches: prefix, case and quote tolerant — but never empty', () => 
 test('assistantTaskFrom: summarize-family asks route to the summary task', () => {
   for (const askText of [
     'summarize what we have decided so far',
-    'Summarize the plan, TravelAI', // mention already stripped server-side
+    'Summarize the plan, waytowalk', // mention already stripped server-side
     'can you recap the discussion?',
     'catch us up on what we agreed',
     'what did we decide about day 2?',

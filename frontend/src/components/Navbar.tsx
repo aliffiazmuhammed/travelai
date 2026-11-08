@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Menu, Sun, Moon, LogOut, UserCircle2, Globe2, FileText, Search, Home, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -198,12 +198,16 @@ const Navbar = () => {
           {/* Wordmark */}
           <Link
             to="/"
-            className="flex shrink-0 items-center select-none"
-            aria-label="TravelAI home"
+            className="flex shrink-0 items-center rounded-md select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            aria-label="waytowalk home"
           >
-            <span className="font-display text-2xl font-semibold tracking-tight text-foreground">
-              Travel<span className="text-primary">AI</span>
-            </span>
+            <img
+              src={isDark ? "/brand/waytowalk-logo-reverse.svg" : "/brand/waytowalk-logo-name.svg"}
+              alt=""
+              width="148"
+              height="30"
+              className="h-[30px] w-[148px]"
+            />
           </Link>
 
           {/* Plain links with an active underline */}
@@ -253,7 +257,7 @@ const Navbar = () => {
               {isDark ? (
                 <Sun className="h-4 w-4 text-amber-400" />
               ) : (
-                <Moon className="h-4 w-4 text-indigo-500" />
+                <Moon className="h-4 w-4 text-foreground/70" />
               )}
             </Button>
 
@@ -340,10 +344,18 @@ const Navbar = () => {
                   </Button>
                 </SheetTrigger>
                 <SheetContent side="right" className="w-[300px] space-y-6 p-6">
+                  <SheetTitle className="sr-only">Navigation</SheetTitle>
+                  <SheetDescription className="sr-only">
+                    Explore waytowalk, plan a trip, or open your account.
+                  </SheetDescription>
                   <div className="pt-2">
-                    <span className="font-display text-xl font-semibold tracking-tight text-foreground">
-                      Travel<span className="text-primary">AI</span>
-                    </span>
+                    <img
+                      src={isDark ? "/brand/waytowalk-logo-reverse.svg" : "/brand/waytowalk-logo-name.svg"}
+                      alt="waytowalk"
+                      width="148"
+                      height="30"
+                      className="h-[30px] w-[148px]"
+                    />
                   </div>
 
                   <button

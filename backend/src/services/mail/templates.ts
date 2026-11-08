@@ -33,7 +33,7 @@ interface LayoutInput {
 }
 
 const BODY_FONT =
-  "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+  "Manrope,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
 
 /** The SPA origin server-triggered mail should link to. */
 export function appUrl(path: string): string {
@@ -110,13 +110,13 @@ function factRows(facts: EmailFact[] | undefined): string {
     .filter((fact) => fact.value)
     .map(
       (fact) => `<tr>
-        <td style="padding:9px 15px;font-size:12px;color:#6b7280;border-bottom:1px solid #eef1f4;">${escapeHtml(fact.label)}</td>
-        <td style="padding:9px 15px;font-size:13px;font-weight:600;color:#111827;text-align:right;border-bottom:1px solid #eef1f4;">${escapeHtml(fact.value)}</td>
+        <td style="padding:9px 15px;font-size:12px;color:#52665f;border-bottom:1px solid #d9e1dc;">${escapeHtml(fact.label)}</td>
+        <td style="padding:9px 15px;font-size:13px;font-weight:600;color:#173f35;text-align:right;border-bottom:1px solid #d9e1dc;">${escapeHtml(fact.value)}</td>
       </tr>`
     )
     .join('');
   if (!rows) return '';
-  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:18px 0 20px;background:#f8fafc;border:1px solid #eef1f4;border-radius:12px;border-collapse:separate;overflow:hidden;">${rows}</table>`;
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:18px 0 20px;background:#f7f3ea;border:1px solid #d9e1dc;border-radius:12px;border-collapse:separate;overflow:hidden;">${rows}</table>`;
 }
 
 function layout(input: LayoutInput): string {
@@ -124,32 +124,32 @@ function layout(input: LayoutInput): string {
     .filter(Boolean)
     .map(
       (paragraph) =>
-        `<p style="margin:0 0 13px;font-size:14px;line-height:1.65;color:#374151;">${escapeHtml(paragraph)}</p>`
+        `<p style="margin:0 0 13px;font-size:14px;line-height:1.65;color:#1d2925;">${escapeHtml(paragraph)}</p>`
     )
     .join('');
 
   const quote = input.quote
-    ? `<div style="margin:4px 0 18px;padding:12px 16px;border-left:3px solid #bae6fd;background:#f0f9ff;border-radius:0 10px 10px 0;font-size:13px;line-height:1.6;color:#334155;">${escapeHtml(input.quote)}</div>`
+    ? `<div style="margin:4px 0 18px;padding:12px 16px;border-left:3px solid #9dbcb4;background:#edf3ef;border-radius:0 10px 10px 0;font-size:13px;line-height:1.6;color:#1d2925;">${escapeHtml(input.quote)}</div>`
     : '';
 
   const cta = input.cta
-    ? `<div style="margin:22px 0 4px;"><a href="${escapeHtml(input.cta.url)}" style="display:inline-block;background:#0284c7;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 20px;border-radius:10px;">${escapeHtml(input.cta.label)}</a></div>`
+    ? `<div style="margin:22px 0 4px;"><a href="${escapeHtml(input.cta.url)}" style="display:inline-block;background:#173f35;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 20px;border-radius:10px;">${escapeHtml(input.cta.label)}</a></div>`
     : '';
 
   const footnote = input.footnote
-    ? `<p style="margin:22px 0 0;font-size:11px;line-height:1.6;color:#9ca3af;">${escapeHtml(input.footnote)}</p>`
+    ? `<p style="margin:22px 0 0;font-size:11px;line-height:1.6;color:#52665f;">${escapeHtml(input.footnote)}</p>`
     : '';
 
   return `<!doctype html>
-<html><body style="margin:0;padding:0;background:#f4f6f8;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f8;padding:26px 12px;">
+<html><body style="margin:0;padding:0;background:#f7f3ea;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f7f3ea;padding:26px 12px;">
   <tr><td align="center">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #e6e8eb;border-radius:16px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #d9e1dc;border-radius:16px;">
       <tr><td style="padding:22px 28px 0;">
-        <div style="font-family:${BODY_FONT};font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#0284c7;">TravelAI</div>
+        <div style="font-family:${BODY_FONT};font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:lowercase;color:#173f35;">waytowalk</div>
       </td></tr>
       <tr><td style="padding:16px 28px 30px;font-family:${BODY_FONT};">
-        <h1 style="margin:0 0 14px;font-size:20px;line-height:1.35;font-weight:650;color:#111827;">${escapeHtml(input.heading)}</h1>
+        <h1 style="margin:0 0 14px;font-size:20px;line-height:1.35;font-weight:650;color:#173f35;">${escapeHtml(input.heading)}</h1>
         ${paragraphs}
         ${quote}
         ${factRows(input.facts)}
@@ -157,7 +157,7 @@ function layout(input: LayoutInput): string {
         ${footnote}
       </td></tr>
     </table>
-    <p style="max-width:560px;margin:16px auto 0;font-family:${BODY_FONT};font-size:11px;line-height:1.6;color:#9ca3af;text-align:center;">TravelAI · Find people to travel with, and agencies who plan it well.</p>
+    <p style="max-width:560px;margin:16px auto 0;font-family:${BODY_FONT};font-size:11px;line-height:1.6;color:#52665f;text-align:center;">waytowalk · Real journeys. Your way.</p>
   </td></tr>
 </table>
 </body></html>`;
@@ -173,7 +173,7 @@ function textBody(input: LayoutInput): string {
   if (input.facts?.length) lines.push('');
   if (input.cta) lines.push(input.cta.label, input.cta.url, '');
   if (input.footnote) lines.push(input.footnote, '');
-  lines.push('—', 'TravelAI');
+  lines.push('—', 'waytowalk');
   return `${lines.join('\n').trim()}\n`;
 }
 
@@ -210,12 +210,12 @@ export function renderAgencyNewEnquiry(data: AgencyNewEnquiryData): RenderedEmai
     {
       heading: `${data.travellerName} sent you an enquiry`,
       paragraphs: [
-        `${data.travellerName} found ${data.agencyName} in the TravelAI directory and wrote to you directly. A reply while it is fresh is what usually turns an enquiry into a trip.`,
+        `${data.travellerName} found ${data.agencyName} in the waytowalk directory and wrote to you directly. A reply while it is fresh is what usually turns an enquiry into a trip.`,
       ],
       quote: data.message,
       facts,
       cta: { label: 'Open the enquiry', url: data.inboxUrl },
-      footnote: `You are getting this because you are on the ${data.agencyName} team in TravelAI.`,
+      footnote: `You are getting this because you are on the ${data.agencyName} team in waytowalk.`,
     },
     `New enquiry from ${data.travellerName}`
   );
@@ -233,11 +233,11 @@ export function renderTravellerAgencyReply(data: TravellerAgencyReplyData): Rend
     {
       heading: `${data.agencyName} replied to you`,
       paragraphs: [
-        `${data.agencyName} answered your enquiry. You can read the whole thread and reply from your TravelAI inbox.`,
+        `${data.agencyName} answered your enquiry. You can read the whole thread and reply from your waytowalk inbox.`,
       ],
       quote: data.message,
       cta: { label: 'Read the reply', url: data.threadUrl },
-      footnote: 'You are getting this because you sent an enquiry through TravelAI.',
+      footnote: 'You are getting this because you sent an enquiry through waytowalk.',
     },
     `${data.agencyName} replied to your enquiry`
   );
@@ -259,7 +259,7 @@ export function renderAgencyTravellerReply(data: AgencyTravellerReplyData): Rend
       ],
       quote: data.message,
       cta: { label: 'Open the thread', url: data.inboxUrl },
-      footnote: `You are getting this because you are on the ${data.agencyName} team in TravelAI.`,
+      footnote: `You are getting this because you are on the ${data.agencyName} team in waytowalk.`,
     },
     `${data.travellerName} replied on your enquiry`
   );
@@ -289,7 +289,7 @@ export function renderTravellerQuoteSent(data: TravellerQuoteSentData): Rendered
       ],
       facts,
       cta: { label: 'View your proposal', url: data.threadUrl },
-      footnote: 'You are getting this because you are planning this trip with an agency on TravelAI.',
+      footnote: 'You are getting this because you are planning this trip with an agency on waytowalk.',
     },
     `Your ${data.agencyName} proposal is ready`
   );
@@ -346,7 +346,7 @@ export function renderAgencyProposalAccepted(data: AgencyProposalAnswerData): Re
         { label: 'Total', value: data.total },
       ],
       cta: { label: 'Open the lead', url: data.inboxUrl },
-      footnote: `You are getting this because you are on the ${data.agencyName} team in TravelAI.`,
+      footnote: `You are getting this because you are on the ${data.agencyName} team in waytowalk.`,
     },
     `${data.travellerName} accepted proposal ${data.quoteNumber}`
   );
@@ -364,7 +364,7 @@ export function renderAgencyProposalDeclined(data: AgencyProposalAnswerData): Re
         { label: 'Total', value: data.total },
       ],
       cta: { label: 'Open the thread', url: data.inboxUrl },
-      footnote: `You are getting this because you are on the ${data.agencyName} team in TravelAI.`,
+      footnote: `You are getting this because you are on the ${data.agencyName} team in waytowalk.`,
     },
     `${data.travellerName} declined proposal ${data.quoteNumber}`
   );
@@ -389,7 +389,7 @@ export function renderAgencyEventInterest(data: AgencyEventInterestData): Render
       quote: data.note,
       facts: data.eventDates ? [{ label: 'When', value: data.eventDates }] : [],
       cta: { label: 'Open the roster', url: data.rosterUrl },
-      footnote: `You are getting this because you are on the ${data.agencyName} team in TravelAI.`,
+      footnote: `You are getting this because you are on the ${data.agencyName} team in waytowalk.`,
     },
     `${data.travellerName} is interested in ${data.eventTitle}`
   );
@@ -460,11 +460,11 @@ export function renderTripInvite(data: TripInviteData): RenderedEmail {
     {
       heading: `${data.inviterName} invited you to ${data.tripTitle}`,
       paragraphs: [
-        `${data.inviterName} is planning this trip on TravelAI and would like you in it. Open the invitation to see the plan and join the group.`,
+        `${data.inviterName} is planning this trip on waytowalk and would like you in it. Open the invitation to see the plan and join the group.`,
       ],
       facts,
       cta: { label: 'Open the invitation', url: data.inviteUrl },
-      footnote: 'You are getting this because someone invited this email address to a trip on TravelAI.',
+      footnote: 'You are getting this because someone invited this email address to a trip on waytowalk.',
     },
     `${data.inviterName} invited you to ${data.tripTitle}`
   );
@@ -485,7 +485,7 @@ export function renderAgencyInvite(data: AgencyInviteData): RenderedEmail {
     {
       heading: `${data.agencyName} invited you to their workspace`,
       paragraphs: [
-        `${data.agencyName} uses TravelAI to plan trips and answer enquiries. Accept the invitation to open the workspace with the access they chose for you.`,
+        `${data.agencyName} uses waytowalk to plan trips and answer enquiries. Accept the invitation to open the workspace with the access they chose for you.`,
       ],
       facts,
       cta: { label: 'Open the invitation', url: data.inviteUrl },
@@ -506,13 +506,13 @@ export function renderAgencyApplicationReceived(
     {
       heading: `We have your application, ${data.agencyName}`,
       paragraphs: [
-        'Thanks for applying to bring your agency onto TravelAI. A person reviews every application, so this is not an automated yes or no.',
+        'Thanks for applying to bring your agency onto waytowalk. A person reviews every application, so this is not an automated yes or no.',
         'You do not need to do anything else right now. We will email you at this address once there is a decision.',
       ],
-      cta: { label: 'See how TravelAI works for agencies', url: appUrl('/agencies') },
-      footnote: 'You are getting this because this email address was used on a TravelAI agency application.',
+      cta: { label: 'See how waytowalk works for agencies', url: appUrl('/agencies') },
+      footnote: 'You are getting this because this email address was used on a waytowalk agency application.',
     },
-    `We received your TravelAI application`
+    `We received your waytowalk application`
   );
 }
 
@@ -528,7 +528,7 @@ export function renderPlatformApplicationReceived(
 ): RenderedEmail {
   return render(
     {
-      heading: `${data.agencyName} applied to join TravelAI`,
+      heading: `${data.agencyName} applied to join waytowalk`,
       paragraphs: ['A new agency application is waiting for review.'],
       facts: [
         { label: 'Agency', value: data.agencyName },
@@ -537,7 +537,7 @@ export function renderPlatformApplicationReceived(
       ],
       quote: data.note,
       cta: { label: 'Review applications', url: appUrl('/admin/applications') },
-      footnote: 'You are getting this because you are a TravelAI platform admin.',
+      footnote: 'You are getting this because you are a waytowalk platform admin.',
     },
     `New agency application: ${data.agencyName}`
   );
@@ -567,9 +567,9 @@ export function renderAgencyApplicationApproved(
         { label: 'Sign-in email', value: data.email },
       ],
       cta: { label: 'Open the workspace', url: appUrl('/agency/login') },
-      footnote: 'You are getting this because your TravelAI agency application was approved.',
+      footnote: 'You are getting this because your waytowalk agency application was approved.',
     },
-    `${data.agencyName}: your TravelAI workspace is ready`
+    `${data.agencyName}: your waytowalk workspace is ready`
   );
 }
 
@@ -582,15 +582,15 @@ export function renderAgencyApplicationRejected(
 ): RenderedEmail {
   return render(
     {
-      heading: 'An update on your TravelAI application',
+      heading: 'An update on your waytowalk application',
       paragraphs: [
         `Thanks for taking the time to apply with ${data.agencyName}. We are not moving forward with this application right now.`,
         'If things change on your side, you are welcome to apply again. In the meantime, the agency directory shows what the workspace is built for.',
       ],
       cta: { label: 'Visit the agency directory', url: appUrl('/agencies') },
-      footnote: 'You are getting this because this email address was used on a TravelAI agency application.',
+      footnote: 'You are getting this because this email address was used on a waytowalk agency application.',
     },
-    'An update on your TravelAI application'
+    'An update on your waytowalk application'
   );
 }
 
@@ -608,11 +608,11 @@ export function renderAgencyCredentials(data: AgencyCredentialsData): RenderedEm
     : `Your ${data.agencyName} workspace is ready`;
   const paragraphs = data.reset
     ? [
-        'A TravelAI operator issued a new temporary password for your workspace account.',
+        'A waytowalk operator issued a new temporary password for your workspace account.',
         'Sign in with it below, then choose your own password when prompted.',
       ]
     : [
-        `An account has been created for you as the owner of ${data.agencyName} on TravelAI.`,
+        `An account has been created for you as the owner of ${data.agencyName} on waytowalk.`,
         'Sign in with the details below. You will be asked to choose your own password on the first sign-in.',
       ];
 
@@ -627,7 +627,7 @@ export function renderAgencyCredentials(data: AgencyCredentialsData): RenderedEm
       ],
       cta: { label: 'Sign in to your workspace', url: appUrl('/agency/login') },
       footnote:
-        'This temporary password works once and should not be shared. If it no longer works, your TravelAI contact can issue a new one.',
+        'This temporary password works once and should not be shared. If it no longer works, your waytowalk contact can issue a new one.',
     },
     data.reset
       ? `Your ${data.agencyName} workspace password was reset`
@@ -645,15 +645,15 @@ export function renderPasswordReset(data: PasswordResetData): RenderedEmail {
   const greeting = data.name ? `Hi ${data.name}` : 'Hi there';
   return render(
     {
-      heading: 'Choose a new TravelAI password',
+      heading: 'Choose a new waytowalk password',
       paragraphs: [
         `${greeting}, we received a request to reset the password for this account. Use the button below to choose a new one. The link works once and expires in ${data.expiresMinutes} minutes.`,
         'If you did not ask for this, you can ignore this email. Your password stays exactly as it is.',
       ],
       cta: { label: 'Reset your password', url: data.resetUrl },
-      footnote: 'You are getting this because someone asked to reset the password for this TravelAI account.',
+      footnote: 'You are getting this because someone asked to reset the password for this waytowalk account.',
     },
-    'Reset your TravelAI password'
+    'Reset your waytowalk password'
   );
 }
 
@@ -694,7 +694,7 @@ export function renderAgencyStatusChanged(data: AgencyStatusChangedData): Render
       cta: suspended
         ? undefined
         : { label: 'Sign in to your workspace', url: appUrl('/agency/login') },
-      footnote: `You are getting this because you own the ${data.agencyName} workspace on TravelAI.`,
+      footnote: `You are getting this because you own the ${data.agencyName} workspace on waytowalk.`,
     },
     suspended
       ? `${data.agencyName}: workspace access paused`
@@ -718,7 +718,7 @@ export function renderAgencyPlanChanged(data: AgencyPlanChangedData): RenderedEm
     {
       heading: `Your ${data.agencyName} plan is now ${current}`,
       paragraphs: [
-        `The TravelAI workspace for ${data.agencyName} now runs on the ${current} plan. The limits below apply from your next action; nothing already saved is removed.`,
+        `The waytowalk workspace for ${data.agencyName} now runs on the ${current} plan. The limits below apply from your next action; nothing already saved is removed.`,
       ],
       facts: [
         { label: 'Previous plan', value: planLabel(data.previousTierId) },
@@ -728,7 +728,7 @@ export function renderAgencyPlanChanged(data: AgencyPlanChangedData): RenderedEm
         { label: 'Storage', value: `${data.storageMb} MB` },
       ],
       cta: { label: 'Open your workspace', url: appUrl('/agency/login') },
-      footnote: 'You are getting this because you are the billing contact for this TravelAI workspace.',
+      footnote: 'You are getting this because you are the billing contact for this waytowalk workspace.',
     },
     `${data.agencyName}: your plan is now ${current}`
   );
@@ -749,12 +749,12 @@ export function renderAgencyRenewalReminder(data: AgencyRenewalReminderData): Re
     {
       heading: `${data.agencyName} renews on ${data.renewalOn}`,
       paragraphs: [
-        'This is a heads-up from the renewal date on your TravelAI record. No payment is taken through TravelAI today, so nothing will be charged automatically.',
+        'This is a heads-up from the renewal date on your waytowalk record. No payment is taken through waytowalk today, so nothing will be charged automatically.',
         'If the date, plan or billing contact is wrong, reply before the renewal date and it can be corrected.',
       ],
       facts,
       cta: { label: 'Open your workspace', url: appUrl('/agency/login') },
-      footnote: 'You are getting this because you are the billing contact for this TravelAI workspace.',
+      footnote: 'You are getting this because you are the billing contact for this waytowalk workspace.',
     },
     `${data.agencyName}: renewal on ${data.renewalOn}`
   );
@@ -784,7 +784,7 @@ export function renderTravellerEventReminder(
       ],
       facts,
       cta: { label: 'View the event', url: data.eventUrl },
-      footnote: 'You are getting this because you are confirmed for this TravelAI event.',
+      footnote: 'You are getting this because you are confirmed for this waytowalk event.',
     },
     `Coming up: ${data.eventTitle}`
   );
@@ -820,8 +820,8 @@ export function renderAgencyWeeklyDigest(data: AgencyWeeklyDigestData): Rendered
       ],
       facts,
       cta: { label: 'Open the enquiry inbox', url: data.inboxUrl },
-      footnote: 'You are getting this weekly summary because you are on a TravelAI agency team.',
+      footnote: 'You are getting this weekly summary because you are on a waytowalk agency team.',
     },
-    `${data.agencyName}: your week on TravelAI`
+    `${data.agencyName}: your week on waytowalk`
   );
 }

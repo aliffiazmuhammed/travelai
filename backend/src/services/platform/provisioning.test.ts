@@ -56,7 +56,7 @@ test('a personal or platform account with the same email is a warning', () => {
   ]);
   assert.equal(personal.personalAccount, true);
   assert.equal(personal.blocked, false);
-  assert.match(personal.warnings.join(' '), /personal TravelAI account/i);
+  assert.match(personal.warnings.join(' '), /personal waytowalk account/i);
   assert.match(personal.warnings.join(' '), /keeps its own password and trips/i);
 
   const platform = buildAgencyOwnerPreview('owner@example.com', [

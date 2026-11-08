@@ -509,7 +509,7 @@ const AgencyEnquiryDialog: React.FC<AgencyEnquiryDialogProps> = ({
               />
               <span>
                 I agree to share these details with {agencyName} so they can
-                reply to this enquiry. TravelAI does not send marketing email.
+                reply to this enquiry. waytowalk does not send marketing email.
               </span>
             </label>
 
@@ -546,7 +546,7 @@ const AgencyEnquiryDialog: React.FC<AgencyEnquiryDialogProps> = ({
             <p className="flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground">
               <Mail className="h-3 w-3" />
               <MessageSquare className="h-3 w-3" />
-              Replies arrive in the agency&apos;s TravelAI inbox, not by email.
+              Replies arrive in the agency&apos;s waytowalk inbox, not by email.
             </p>
           </form>
         )}

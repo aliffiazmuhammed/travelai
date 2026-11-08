@@ -20,7 +20,7 @@ import { normalizeGalleryTags } from './publish.js';
  *   gallery.
  *
  * These are editorial trips, not real travellers: every curator bio says the
- * trip was curated by the TravelAI team, and the seed accounts have random,
+ * trip was curated by the waytowalk team, and the seed accounts have random,
  * unrecorded passwords so nobody can sign into them.
  */
 
@@ -161,28 +161,28 @@ export const SEED_CURATORS: SeedCurator[] = [
     key: 'maya',
     name: 'Maya Rao',
     handle: 'maya_roams',
-    bio: 'Curated by the TravelAI team. Slow travel, long lunches and train windows.',
+    bio: 'Curated by the waytowalk team. Slow travel, long lunches and train windows.',
     email: `maya@${SEED_EMAIL_DOMAIN}`,
   },
   {
     key: 'rohan',
     name: 'Rohan Mehta',
     handle: 'rohan_offbeat',
-    bio: 'Curated by the TravelAI team. Weekend escapes and mountain air.',
+    bio: 'Curated by the waytowalk team. Weekend escapes and mountain air.',
     email: `rohan@${SEED_EMAIL_DOMAIN}`,
   },
   {
     key: 'sofia',
     name: 'Sofia Marchetti',
     handle: 'sofia_slow',
-    bio: 'Curated by the TravelAI team. Coastal walks and market mornings.',
+    bio: 'Curated by the waytowalk team. Coastal walks and market mornings.',
     email: `sofia@${SEED_EMAIL_DOMAIN}`,
   },
   {
     key: 'kenji',
     name: 'Kenji Abe',
     handle: 'kenji_walks',
-    bio: 'Curated by the TravelAI team. City walks, quiet gardens and good coffee.',
+    bio: 'Curated by the waytowalk team. City walks, quiet gardens and good coffee.',
     email: `kenji@${SEED_EMAIL_DOMAIN}`,
   },
 ];

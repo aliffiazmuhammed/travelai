@@ -7,7 +7,6 @@ import {
   Loader2,
   Lock,
   Mail,
-  Mountain,
   UserRound,
   Users,
 } from 'lucide-react';
@@ -39,23 +38,16 @@ function rememberWorkspaceHint(workspace: string): void {
 }
 
 const AgencyBrand = ({ inverted = false }: { inverted?: boolean }) => (
-  <span className="flex items-center gap-2.5">
-    <span
-      className={`grid h-9 w-9 place-items-center rounded-lg ${
-        inverted ? "bg-white text-agency-accent" : "bg-agency-accent text-white"
-      }`}
-    >
-      <Mountain className="h-4 w-4" aria-hidden="true" />
-    </span>
-    <span
-      className={`font-display text-lg font-semibold tracking-tight ${
-        inverted ? "text-white" : "text-agency-ink"
-      }`}
-    >
-      TravelAI{" "}
-      <span className={inverted ? "text-white/70" : "text-agency-accent"}>
-        Agency
-      </span>
+  <span className="flex items-center gap-3">
+    <img
+      src={inverted ? "/brand/waytowalk-logo-reverse.svg" : "/brand/waytowalk-logo-name.svg"}
+      alt="waytowalk"
+      width="148"
+      height="30"
+      className="h-[30px] w-[148px]"
+    />
+    <span className={`text-sm font-semibold ${inverted ? "text-white/70" : "text-agency-accent"}`}>
+      Agency
     </span>
   </span>
 );
@@ -275,7 +267,7 @@ const AgencyLogin: React.FC = () => {
               <p className="text-sm leading-6 text-agency-muted">
                 {tenant
                   ? `Continue to ${tenant.name}.`
-                  : "Enter the workspace name your TravelAI account manager gave you."}
+                  : "Enter the workspace name your waytowalk account manager gave you."}
               </p>
             </header>
 
@@ -386,7 +378,7 @@ const AgencyLogin: React.FC = () => {
             </form>
 
             <p className="mt-5 border-t border-agency-line pt-5 text-center text-xs leading-5 text-agency-muted">
-              Agency accounts are separate from personal TravelAI accounts. The
+              Agency accounts are separate from personal waytowalk accounts. The
               same email can have both, with different passwords.
             </p>
           </div>

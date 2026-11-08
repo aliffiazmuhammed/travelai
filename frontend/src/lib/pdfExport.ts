@@ -112,7 +112,7 @@ function drawFooter(doc: jsPDF) {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.setTextColor(...MUTED);
-    doc.text("Generated with TravelAI", M, PAGE_H - 10);
+    doc.text("Generated with waytowalk", M, PAGE_H - 10);
     doc.text(`Page ${i} of ${total}`, PAGE_W - M, PAGE_H - 10, { align: "right" });
     doc.setDrawColor(...LINE);
     doc.setLineWidth(0.2);
@@ -132,7 +132,7 @@ function drawCover(ctx: Ctx, data: ItineraryData) {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
   doc.setTextColor(220, 240, 255);
-  doc.text(clean("TRAVELAI  ·  ASSISTANT"), PAGE_W - M - 6, TOP + 10, { align: "right" });
+  doc.text(clean("WAYTOWALK  ·  ASSISTANT"), PAGE_W - M - 6, TOP + 10, { align: "right" });
 
   // Titles — shrink rather than truncate when the destination name is long
   doc.setFont("helvetica", "bold");

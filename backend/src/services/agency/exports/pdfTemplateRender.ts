@@ -641,7 +641,7 @@ export async function renderAgencyPdfTemplate(
 
   const title = String(input.doc.trip?.title ?? '').trim();
   if (title) doc.setTitle(title);
-  doc.setProducer('TravelAI');
+  doc.setProducer('waytowalk');
 
   const pdf = Buffer.from(await doc.save());
   return {

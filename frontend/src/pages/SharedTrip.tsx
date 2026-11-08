@@ -89,17 +89,17 @@ const SharedTrip: React.FC = () => {
 
     if (trip) {
       return applyPageMeta({
-        title: `${title} · Shared itinerary · TravelAI`,
+        title: `${title} · Shared itinerary · waytowalk`,
         description:
           dayCount > 0
-            ? `A ${dayCount}-day itinerary shared on TravelAI. Read-only: budgets and chat stay private.`
-            : "An itinerary shared on TravelAI. Read-only: budgets and chat stay private.",
+            ? `A ${dayCount}-day itinerary shared on waytowalk. Read-only: budgets and chat stay private.`
+            : "An itinerary shared on waytowalk. Read-only: budgets and chat stay private.",
         ogType: "article",
       });
     }
 
     return applyPageMeta({
-      title: "Shared itinerary not found · TravelAI",
+      title: "Shared itinerary not found · waytowalk",
       description:
         error || "The link you followed may be invalid or has been revoked.",
       ogType: "website",

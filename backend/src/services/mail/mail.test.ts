@@ -263,7 +263,7 @@ test('application mail says what happens next without the internal reason', () =
     email: 'owner@example.com',
     credentialsIssued: true,
   });
-  assert.equal(approved.subject, 'Blue Horizon: your TravelAI workspace is ready');
+  assert.equal(approved.subject, 'Blue Horizon: your waytowalk workspace is ready');
   assert.ok(approved.text.includes('separate email'));
 
   const existing = renderAgencyApplicationApproved({
@@ -275,7 +275,7 @@ test('application mail says what happens next without the internal reason', () =
   assert.ok(existing.text.includes('password you already use'));
 
   const rejected = renderAgencyApplicationRejected({ agencyName: 'Blue Horizon' });
-  assert.equal(rejected.subject, 'An update on your TravelAI application');
+  assert.equal(rejected.subject, 'An update on your waytowalk application');
   assert.ok(rejected.text.includes('not moving forward'));
   assert.ok(!rejected.html.includes('decisionNote'));
 });
@@ -301,7 +301,7 @@ test('credential and reset templates carry the temporary password and expiry', (
     resetUrl: 'https://travelai.example/reset-password/tok',
     expiresMinutes: 60,
   });
-  assert.equal(passwordReset.subject, 'Reset your TravelAI password');
+  assert.equal(passwordReset.subject, 'Reset your waytowalk password');
   assert.ok(passwordReset.text.includes('Hi Meera'));
   assert.ok(passwordReset.text.includes('expires in 60 minutes'));
   assert.ok(passwordReset.html.includes('https://travelai.example/reset-password/tok'));

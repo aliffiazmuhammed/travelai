@@ -14,7 +14,7 @@ import { addDaysUtc, exportDateIso } from './format.js';
 
 export const EXPORT_SCHEMA_VERSION = 1;
 
-export const EXPORT_PROVIDER_NAME = 'TravelAI';
+export const EXPORT_PROVIDER_NAME = 'waytowalk';
 
 export interface ExportBrandAssets {
   logoDataUrl?: string | null;

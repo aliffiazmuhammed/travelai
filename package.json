@@ -2,7 +2,7 @@
   "name": "travelai-monorepo",
   "version": "1.0.0",
   "private": true,
-  "description": "TravelAI — Intelligent Travel Planning Monorepo",
+  "description": "waytowalk — collaborative trips, traveller discovery and agency workspaces",
   "workspaces": [
     "frontend",
     "backend"

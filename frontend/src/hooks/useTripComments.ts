@@ -628,9 +628,9 @@ export function useTripComments(
         tripId,
         // The optimistic preview is the plaintext (the wire body is opaque,
         // and a human should never watch their own words turn into base64).
-        label: bot ? 'TravelAI' : 'You',
+        label: bot ? 'waytowalk' : 'You',
         body: plaintextHint ?? body,
-        // F12a: bot rows render as the TravelAI participant immediately.
+        // F12a: bot rows render as the waytowalk participant immediately.
         ...(bot ? { bot: true } : {}),
         isYou: true,
         createdAt: new Date().toISOString(),

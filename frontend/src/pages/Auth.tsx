@@ -147,12 +147,10 @@ const Auth = () => {
         <div className="relative z-10 flex h-full min-h-screen flex-col justify-between p-10 xl:p-14">
           <Link
             to="/"
-            aria-label="TravelAI home"
+            aria-label="waytowalk home"
             className="w-fit rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
           >
-            <span className="font-display text-2xl font-semibold tracking-tight text-slate-950">
-              Travel<span className="text-primary">AI</span>
-            </span>
+            <img src="/brand/waytowalk-logo-reverse.svg" alt="waytowalk" width="156" height="32" className="h-8 w-[156px]" />
           </Link>
 
           <div className="max-w-md pb-4">
@@ -176,12 +174,11 @@ const Auth = () => {
         <div className="relative flex w-full max-w-[440px] flex-col items-center">
           <Link
             to="/"
-            aria-label="TravelAI home"
+            aria-label="waytowalk home"
             className="mb-6 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 lg:hidden"
           >
-            <span className="font-display text-2xl font-semibold tracking-tight text-foreground">
-              Travel<span className="text-primary">AI</span>
-            </span>
+            <img src="/brand/waytowalk-logo-name.svg" alt="waytowalk" width="156" height="32" className="h-8 w-[156px] dark:hidden" />
+            <img src="/brand/waytowalk-logo-reverse.svg" alt="waytowalk" width="156" height="32" className="hidden h-8 w-[156px] dark:block" />
           </Link>
 
           <Card className="w-full overflow-hidden rounded-3xl border-border/70 bg-card shadow-card">
@@ -364,7 +361,7 @@ const Auth = () => {
               <div className="mt-5 flex items-center gap-3">
                 <span aria-hidden className="h-px flex-1 bg-border" />
                 <p className="text-center text-xs text-muted-foreground">
-                  {isLogin ? "New to TravelAI?" : "Already have an account?"}{" "}
+                  {isLogin ? "New to waytowalk?" : "Already have an account?"}{" "}
                   <button
                     type="button"
                     onClick={() => switchMode(!isLogin)}

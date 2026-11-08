@@ -148,9 +148,9 @@ const TravelerProfile = () => {
   useEffect(() => {
     if (!traveler) return;
     return applyPageMeta({
-      title: `${traveler.name} (@${traveler.handle}) · TravelAI`,
+      title: `${traveler.name} (@${traveler.handle}) · waytowalk`,
       description:
-        traveler.bio || `Trips shared by @${traveler.handle} on TravelAI.`,
+        traveler.bio || `Trips shared by @${traveler.handle} on waytowalk.`,
       ogType: "profile",
     });
   }, [traveler]);
@@ -215,7 +215,7 @@ const TravelerProfile = () => {
             <Button asChild variant="hero" className="h-11 gap-2 rounded-2xl px-6 text-xs font-bold">
               <Link to="/">
                 <Sparkles className="h-4 w-4" />
-                Back to TravelAI
+                Back to waytowalk
               </Link>
             </Button>
           </div>
@@ -421,7 +421,7 @@ const TravelerProfile = () => {
                   Planning something similar?
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Build your own day-by-day plan with TravelAI.
+                  Build your own day-by-day plan with waytowalk.
                 </p>
               </div>
               <Button asChild variant="hero" size="sm" className="h-9 gap-1.5 rounded-xl text-xs font-bold">

@@ -7,7 +7,7 @@ import { useAgencyAuth } from '@/context/AgencyAuthContext';
 /**
  * PA0 retired self-service agency creation.
  *
- * Agencies are paying SaaS tenants provisioned by TravelAI from the platform
+ * Agencies are paying SaaS tenants provisioned by waytowalk from the platform
  * admin panel (PA3). This page exists only so old `/agency/onboarding` links
  * land on a clear explanation instead of a broken screen.
  */
@@ -23,7 +23,7 @@ const AgencyOnboarding: React.FC = () => {
 
         <div className="mt-5 space-y-2">
           <h1 className="font-display text-3xl font-semibold tracking-tight text-agency-ink">
-            Agencies are set up by TravelAI
+            Agencies are set up by waytowalk
           </h1>
           <p className="mx-auto max-w-lg text-sm leading-6 text-agency-muted">
             Agency workspaces are provisioned for paying customers, and each
@@ -47,7 +47,7 @@ const AgencyOnboarding: React.FC = () => {
                 Need a new workspace or another teammate?
               </p>
               <p className="mt-0.5 text-sm leading-6 text-agency-muted">
-                Contact your TravelAI account manager. They will create the
+                Contact your waytowalk account manager. They will create the
                 tenant and send the owner a separate agency login.
               </p>
             </div>
@@ -59,7 +59,7 @@ const AgencyOnboarding: React.FC = () => {
                 Your personal account stays personal.
               </p>
               <p className="mt-0.5 text-sm leading-6 text-agency-muted">
-                Your personal TravelAI account is never converted into an agency
+                Your personal waytowalk account is never converted into an agency
                 account, even when the email address is the same.
               </p>
             </div>

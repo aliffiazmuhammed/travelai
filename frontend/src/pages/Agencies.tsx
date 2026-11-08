@@ -286,9 +286,9 @@ const Agencies = () => {
 
   useEffect(() => {
     return applyPageMeta({
-      title: "Travel agencies · TravelAI",
+      title: "Travel agencies · waytowalk",
       description:
-        "Browse travel agencies on TravelAI: the places they cover, the services they offer and how to reach them.",
+        "Browse travel agencies on waytowalk: the places they cover, the services they offer and how to reach them.",
       ogType: "website",
     });
   }, []);

@@ -93,7 +93,7 @@ export function buildAgencyOwnerPreview(
   const warnings: string[] = [];
   if (personalAccount) {
     warnings.push(
-      'A personal TravelAI account already uses this email. It stays separate and keeps its own password and trips.'
+      'A personal waytowalk account already uses this email. It stays separate and keeps its own password and trips.'
     );
   }
   if (platformAccount) {

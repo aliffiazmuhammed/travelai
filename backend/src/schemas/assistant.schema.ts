@@ -4,7 +4,7 @@ import { env } from '../config/env.js';
 /**
  * Zod schema for `POST /api/itinerary/:id/chat/assistant` (Milestone 7, F12a).
  *
- * The @TravelAI context is FED BY THE CLIENT: end-to-end chat (F10) means the
+ * The @waytowalk context is FED BY THE CLIENT: end-to-end chat (F10) means the
  * server cannot read message bodies, so the asker's browser decrypts the last
  * few messages locally and ships them here as `context`. This is the only
  * plaintext path an asker's words ever take — disclosed in the SPA composer.
@@ -23,11 +23,11 @@ export const assistantContextItemSchema = z.object({
 });
 
 export const assistantRequestSchema = z.object({
-  /** The asker's question INCLUDING the @TravelAI mention (server re-checks). */
+  /** The asker's question INCLUDING the @waytowalk mention (server re-checks). */
   prompt: z
     .string()
     .trim()
-    .min(1, 'Say something before asking TravelAI.')
+    .min(1, 'Say something before asking waytowalk.')
     .max(500, 'Questions are limited to 500 characters.'),
   /** The decrypted recent messages — most recent FIRST from the client. */
   context: z.array(assistantContextItemSchema).max(8, 'At most 8 context messages.').optional(),

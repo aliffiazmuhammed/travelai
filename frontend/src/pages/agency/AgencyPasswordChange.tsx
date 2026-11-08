@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { KeyRound, Loader2, LogOut, Mountain, ShieldCheck } from 'lucide-react';
+import { KeyRound, Loader2, LogOut, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -143,7 +143,7 @@ const AgencyPasswordChange: React.FC<AgencyPasswordChangeProps> = ({ forced = fa
             Agency password
           </h2>
           <p className="text-xs leading-5 text-agency-muted">
-            This changes only your agency account. Your personal TravelAI
+            This changes only your agency account. Your personal waytowalk
             password stays the same.
           </p>
         </header>
@@ -156,11 +156,9 @@ const AgencyPasswordChange: React.FC<AgencyPasswordChangeProps> = ({ forced = fa
     <div className="grid min-h-screen place-items-center bg-agency-canvas px-4 py-10">
       <div className="w-full max-w-md">
         <div className="mb-7 flex flex-col items-center gap-2.5">
-          <span className="grid h-12 w-12 place-items-center rounded-xl bg-agency-accent text-white shadow-sm">
-            <Mountain className="h-6 w-6" aria-hidden="true" />
-          </span>
+          <img src="/brand/waytowalk-symbol.svg" alt="" width="48" height="36" className="h-9 w-14" />
           <span className="font-display text-xl font-semibold tracking-tight text-agency-ink">
-            {agency?.name ?? "TravelAI"}{" "}
+            {agency?.name ?? "waytowalk"}{" "}
             <span className="text-agency-accent">Agency</span>
           </span>
         </div>
@@ -195,7 +193,7 @@ const AgencyPasswordChange: React.FC<AgencyPasswordChangeProps> = ({ forced = fa
 
           <p className="mt-5 flex items-center justify-center gap-1.5 border-t border-agency-line pt-5 text-xs text-agency-muted">
             <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
-            Your personal TravelAI password stays the same.
+            Your personal waytowalk password stays the same.
           </p>
         </div>
       </div>

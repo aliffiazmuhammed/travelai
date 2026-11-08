@@ -328,7 +328,7 @@ test('renewal reminders use the billing address, the window and a per-date key',
   assert.equal(created[0].kind, 'agency.renewal_reminder');
   assert.ok(created[0].subject.includes('Blue Horizon: renewal on 12 Nov 2026'));
   assert.ok(created[0].text.includes('Plan: Pro'));
-  assert.ok(created[0].text.includes('No payment is taken through TravelAI today'));
+  assert.ok(created[0].text.includes('No payment is taken through waytowalk today'));
   assert.equal(
     created[0].dedupeKey,
     `agency-renewal:${AGENCY_A}:2026-11-12:billing@example.com`
@@ -390,7 +390,7 @@ test('the digest skips a quiet agency and sends once per week otherwise', async 
   assert.ok(
     created.every((row) => row.dedupeKey.startsWith(`agency-digest:${AGENCY_A}:`))
   );
-  assert.ok(created[0].subject === 'Blue Horizon: your week on TravelAI');
+  assert.ok(created[0].subject === 'Blue Horizon: your week on waytowalk');
   assert.ok(created[0].text.includes('New enquiries: 3'));
   assert.ok(created[0].text.includes('Quotes sent: 1'));
   assert.ok(created[0].text.includes('Proposals accepted: 1'));

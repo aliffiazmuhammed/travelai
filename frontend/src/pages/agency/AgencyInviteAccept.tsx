@@ -5,7 +5,6 @@ import {
   KeyRound,
   Loader2,
   Mail,
-  Mountain,
   ShieldCheck,
   UserPlus,
   UserRound,
@@ -163,13 +162,9 @@ const AgencyInviteAccept: React.FC = () => {
     <div className="grid min-h-screen place-items-center bg-agency-canvas px-4 py-10">
       <div className="w-full max-w-lg">
         <div className="mb-6 flex items-center justify-center gap-2.5">
-          <Link to="/" className="flex items-center gap-2.5">
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-agency-accent text-white shadow-sm">
-              <Mountain className="h-5 w-5" aria-hidden="true" />
-            </span>
-            <span className="font-display text-xl font-semibold tracking-tight text-agency-ink">
-              TravelAI <span className="text-agency-accent">Agency</span>
-            </span>
+          <Link to="/" className="flex items-center gap-3">
+            <img src="/brand/waytowalk-logo-name.svg" alt="waytowalk" width="148" height="30" className="h-[30px] w-[148px]" />
+            <span className="text-sm font-semibold text-agency-accent">Agency</span>
           </Link>
         </div>
 
@@ -182,7 +177,7 @@ const AgencyInviteAccept: React.FC = () => {
               </h1>
               <p className="text-sm leading-6 text-agency-muted">
                 Choose the password for your agency account. This is separate
-                from any personal TravelAI account.
+                from any personal waytowalk account.
               </p>
             </header>
 

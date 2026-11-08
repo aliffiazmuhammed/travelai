@@ -342,7 +342,7 @@ if (shouldServeStatic && frontendDist) {
   app.get('/', (_req, res) => {
     res.json({
       success: true,
-      message: 'TravelAI API is running',
+      message: 'waytowalk API is running',
       note: 'Frontend dist not found at any candidate path',
       checkedPaths: candidatePaths,
     });

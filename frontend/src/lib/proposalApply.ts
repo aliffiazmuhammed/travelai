@@ -1,5 +1,5 @@
 /**
- * F12d: applying an activity-level TravelAI proposal to an itinerary snapshot.
+ * F12d: applying an activity-level waytowalk proposal to an itinerary snapshot.
  *
  * Deliberately dependency-free (no imports, no `@/` aliases): the same file is
  * exercised by the backend's temporary live probe through tsx, so the drift
@@ -38,7 +38,7 @@ export const DAY_GONE_MESSAGE =
 export const ACTIVITY_GONE_MESSAGE =
   "That activity is gone or the day has fewer activities now — reload the trip and ask again.";
 export const ITINERARY_CHANGED_MESSAGE =
-  "The itinerary changed since this was suggested — ask TravelAI again.";
+  "The itinerary changed since this was suggested — ask waytowalk again.";
 export const NO_OP_MOVE_MESSAGE = "That activity is already in that spot.";
 
 /** The label the timeline shows (`title` first, then legacy `name`). */

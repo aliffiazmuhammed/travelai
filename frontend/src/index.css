@@ -8,188 +8,173 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    /* Travel-inspired color palette - Light Mode */
-    --background: 210 25% 98%;
-    --foreground: 220 25% 15%;
+    --background: 41.5 44.8% 94.3%;
+    --foreground: 160 17.1% 13.7%;
 
     --card: 0 0% 100%;
-    --card-foreground: 220 25% 15%;
+    --card-foreground: 160 17.1% 13.7%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 220 25% 15%;
+    --popover-foreground: 160 17.1% 13.7%;
 
-    /* Sky blue - primary travel color (calibrated for high contrast with white text) */
-    --primary: 200 95% 44%;
+    --primary: 165 46.5% 16.9%;
     --primary-foreground: 0 0% 100%;
-    --primary-glow: 200 90% 70%;
+    --primary-glow: 164.5 18.8% 67.6%;
 
-    /* Warm cream/sand - secondary */
-    --secondary: 210 20% 94%;
-    --secondary-foreground: 220 25% 20%;
+    --secondary: 164.5 18.8% 67.6%;
+    --secondary-foreground: 165 46.5% 16.9%;
 
-    /* Muted backgrounds & crisp readable text */
-    --muted: 210 20% 95%;
-    --muted-foreground: 220 18% 40%;
+    --muted: 142.5 11.8% 90.7%;
+    --muted-foreground: 159 10.9% 36.1%;
 
-    /* Fresh green - accent */
-    --accent: 155 70% 40%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 13.2 76% 62.4%;
+    --accent-foreground: 165 46.5% 16.9%;
 
-    --destructive: 0 75% 55%;
+    --destructive: 0 65% 48%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 16% 88%;
-    --input: 220 16% 88%;
-    --ring: 200 95% 44%;
+    --border: 142.5 11.8% 86.7%;
+    --input: 142.5 11.8% 86.7%;
+    --ring: 165 46.5% 16.9%;
 
-    /* Agency sidebar: white rail, teal hover/active, matching the workspace. */
     --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 220 25% 15%;
-    --sidebar-primary: 175 84% 32%;
+    --sidebar-foreground: 160 17.1% 13.7%;
+    --sidebar-primary: 165 46.5% 16.9%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 174 60% 95%;
-    --sidebar-accent-foreground: 176 72% 24%;
-    --sidebar-border: 220 16% 88%;
-    --sidebar-ring: 200 95% 44%;
+    --sidebar-accent: 164.5 18.8% 90%;
+    --sidebar-accent-foreground: 165 46.5% 16.9%;
+    --sidebar-border: 142.5 11.8% 86.7%;
+    --sidebar-ring: 165 46.5% 16.9%;
 
     --radius: 0.75rem;
 
-    /* Travel-specific design tokens (Light Mode) */
-    --gradient-sky: linear-gradient(135deg, hsl(200 95% 46%), hsl(215 90% 54%));
-    --gradient-sunrise: linear-gradient(135deg, hsl(35 90% 52%), hsl(15 85% 56%));
-    --gradient-hero: linear-gradient(180deg, hsl(210 40% 98%), hsl(40 30% 96%));
-    
-    --shadow-soft: 0 4px 20px -4px hsl(200 50% 50% / 0.12);
-    --shadow-card: 0 8px 30px -6px hsl(220 30% 30% / 0.10);
-    --shadow-hover: 0 12px 40px -8px hsl(200 50% 50% / 0.22);
-    
+    --gradient-sky: hsl(165 46.5% 16.9%);
+    --gradient-sunrise: hsl(13.2 76% 62.4%);
+    --gradient-hero: hsl(41.5 44.8% 94.3%);
+
+    --shadow-soft: 0 4px 20px -4px hsl(165 30% 20% / 0.09);
+    --shadow-card: 0 8px 30px -6px hsl(165 30% 20% / 0.10);
+    --shadow-hover: 0 12px 40px -8px hsl(165 30% 20% / 0.16);
+
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .dark {
-    --background: 220 30% 8%;
-    --foreground: 40 30% 96%;
+    --background: 165.5 47.5% 12%;
+    --foreground: 41.5 44.8% 94.3%;
 
-    --card: 220 25% 12%;
-    --card-foreground: 40 30% 96%;
+    --card: 164 34% 16%;
+    --card-foreground: 41.5 44.8% 94.3%;
 
-    --popover: 220 25% 12%;
-    --popover-foreground: 40 30% 96%;
+    --popover: 164 34% 16%;
+    --popover-foreground: 41.5 44.8% 94.3%;
 
-    --primary: 200 90% 56%;
-    --primary-foreground: 220 30% 8%;
-    --primary-glow: 200 90% 75%;
+    --primary: 41.5 44.8% 94.3%;
+    --primary-foreground: 165 46.5% 16.9%;
+    --primary-glow: 164.5 18.8% 67.6%;
 
-    --secondary: 220 20% 18%;
-    --secondary-foreground: 40 30% 96%;
+    --secondary: 164 25% 22%;
+    --secondary-foreground: 41.5 44.8% 94.3%;
 
-    --muted: 220 20% 16%;
-    --muted-foreground: 40 15% 68%;
+    --muted: 164 24% 20%;
+    --muted-foreground: 164.5 18.8% 72%;
 
-    --accent: 150 60% 55%;
-    --accent-foreground: 220 30% 8%;
+    --accent: 13.2 76% 62.4%;
+    --accent-foreground: 165.5 47.5% 12%;
 
-    --destructive: 0 70% 60%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 0 70% 65%;
+    --destructive-foreground: 165.5 47.5% 12%;
 
-    --border: 220 20% 22%;
-    --input: 220 20% 22%;
-    --ring: 200 90% 56%;
+    --border: 162 22% 26%;
+    --input: 162 22% 26%;
+    --ring: 41.5 44.8% 94.3%;
 
-    /* Agency sidebar (dark): the panel sits just above the page floor. */
-    --sidebar-background: 220 28% 10%;
-    --sidebar-foreground: 40 30% 96%;
-    --sidebar-primary: 174 70% 45%;
-    --sidebar-primary-foreground: 220 30% 8%;
-    --sidebar-accent: 220 22% 17%;
-    --sidebar-accent-foreground: 40 30% 96%;
-    --sidebar-border: 220 20% 20%;
-    --sidebar-ring: 200 90% 56%;
-    
-    /* Travel-specific design tokens (Dark Mode) */
-    --gradient-sky: linear-gradient(135deg, hsl(200 90% 50%), hsl(220 85% 58%));
-    --gradient-sunrise: linear-gradient(135deg, hsl(35 85% 48%), hsl(15 80% 50%));
-    --gradient-hero: linear-gradient(180deg, hsl(220 30% 7%), hsl(220 28% 10%));
+    --sidebar-background: 165.5 47.5% 12%;
+    --sidebar-foreground: 41.5 44.8% 94.3%;
+    --sidebar-primary: 41.5 44.8% 94.3%;
+    --sidebar-primary-foreground: 165 46.5% 16.9%;
+    --sidebar-accent: 164 25% 22%;
+    --sidebar-accent-foreground: 41.5 44.8% 94.3%;
+    --sidebar-border: 162 22% 26%;
+    --sidebar-ring: 41.5 44.8% 94.3%;
 
-    --shadow-soft: 0 4px 20px -4px hsl(0 0% 0% / 0.4);
-    --shadow-card: 0 8px 30px -6px hsl(0 0% 0% / 0.5);
-    --shadow-hover: 0 12px 40px -8px hsl(200 50% 40% / 0.4);
+    --gradient-sky: hsl(41.5 44.8% 94.3%);
+    --gradient-sunrise: hsl(13.2 76% 62.4%);
+    --gradient-hero: hsl(165.5 47.5% 12%);
+
+    --shadow-soft: 0 4px 20px -4px hsl(0 0% 0% / 0.28);
+    --shadow-card: 0 8px 30px -6px hsl(0 0% 0% / 0.34);
+    --shadow-hover: 0 12px 40px -8px hsl(0 0% 0% / 0.42);
   }
 
-  /* Agency workspace surfaces: warm paper, one teal accent, hairline rules. */
   :root {
-    --agency-canvas: 45 22% 96.5%;
+    --agency-canvas: 41.5 44.8% 94.3%;
     --agency-panel: 0 0% 100%;
-    --agency-line: 42 21% 88%;
-    --agency-ink: 60 5% 11%;
-    --agency-muted: 60 4% 40%;
-    --agency-soft: 40 20% 93%;
-    --agency-accent: 174 72% 28%;
-    --agency-accent-soft: 174 60% 95%;
+    --agency-line: 142.5 11.8% 86.7%;
+    --agency-ink: 160 17.1% 13.7%;
+    --agency-muted: 159 10.9% 36.1%;
+    --agency-soft: 164.5 18.8% 90%;
+    --agency-accent: 165 46.5% 16.9%;
+    --agency-accent-soft: 164.5 18.8% 90%;
   }
 
   .dark {
-    --agency-canvas: 60 4% 8%;
-    --agency-panel: 60 4% 11%;
-    --agency-line: 60 4% 20%;
-    --agency-ink: 40 20% 96%;
-    --agency-muted: 40 8% 65%;
-    --agency-soft: 60 4% 14%;
-    --agency-accent: 174 65% 42%;
-    --agency-accent-soft: 174 40% 16%;
+    --agency-canvas: 165.5 47.5% 12%;
+    --agency-panel: 164 34% 16%;
+    --agency-line: 162 22% 26%;
+    --agency-ink: 41.5 44.8% 94.3%;
+    --agency-muted: 164.5 18.8% 72%;
+    --agency-soft: 164 25% 22%;
+    --agency-accent: 41.5 44.8% 94.3%;
+    --agency-accent-soft: 164 25% 22%;
   }
 
-  /*
-   * Scoped to the agency workspace. The theme class sits on <html> while an
-   * agency route is mounted, so dialogs and sheets portalled to <body> pick up
-   * the same teal primary and warm borders.
-   */
   .agency-theme {
-    --background: 45 22% 96.5%;
-    --foreground: 60 5% 11%;
+    --background: 41.5 44.8% 94.3%;
+    --foreground: 160 17.1% 13.7%;
 
     --card: 0 0% 100%;
-    --card-foreground: 60 5% 11%;
+    --card-foreground: 160 17.1% 13.7%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 60 5% 11%;
+    --popover-foreground: 160 17.1% 13.7%;
 
-    --primary: 174 72% 28%;
+    --primary: 165 46.5% 16.9%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 40 20% 94%;
-    --secondary-foreground: 60 5% 15%;
+    --secondary: 164.5 18.8% 67.6%;
+    --secondary-foreground: 165 46.5% 16.9%;
 
-    --muted: 40 20% 94%;
-    --muted-foreground: 60 4% 40%;
+    --muted: 142.5 11.8% 90.7%;
+    --muted-foreground: 159 10.9% 36.1%;
 
-    --border: 42 21% 88%;
-    --input: 42 21% 88%;
-    --ring: 174 72% 28%;
+    --border: 142.5 11.8% 86.7%;
+    --input: 142.5 11.8% 86.7%;
+    --ring: 165 46.5% 16.9%;
   }
 
   .agency-theme.dark {
-    --background: 60 4% 8%;
-    --foreground: 40 20% 96%;
+    --background: 165.5 47.5% 12%;
+    --foreground: 41.5 44.8% 94.3%;
 
-    --card: 60 4% 11%;
-    --card-foreground: 40 20% 96%;
+    --card: 164 34% 16%;
+    --card-foreground: 41.5 44.8% 94.3%;
 
-    --popover: 60 4% 11%;
-    --popover-foreground: 40 20% 96%;
+    --popover: 164 34% 16%;
+    --popover-foreground: 41.5 44.8% 94.3%;
 
-    --primary: 174 65% 42%;
-    --primary-foreground: 60 4% 8%;
+    --primary: 41.5 44.8% 94.3%;
+    --primary-foreground: 165 46.5% 16.9%;
 
-    --secondary: 60 4% 14%;
-    --secondary-foreground: 40 20% 96%;
+    --secondary: 164 25% 22%;
+    --secondary-foreground: 41.5 44.8% 94.3%;
 
-    --muted: 60 4% 14%;
-    --muted-foreground: 40 8% 65%;
+    --muted: 164 24% 20%;
+    --muted-foreground: 164.5 18.8% 72%;
 
-    --border: 60 4% 20%;
-    --input: 60 4% 20%;
-    --ring: 174 65% 48%;
+    --border: 162 22% 26%;
+    --input: 162 22% 26%;
+    --ring: 41.5 44.8% 94.3%;
   }
 }
 

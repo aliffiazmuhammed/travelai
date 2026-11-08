@@ -223,7 +223,7 @@ const AdminLayout: React.FC = () => {
               </span>
               <span className="min-w-0 leading-tight group-data-[collapsible=icon]:hidden">
                 <span className="block truncate text-sm font-semibold text-sidebar-foreground">
-                  TravelAI
+                  waytowalk
                 </span>
                 <span className="block truncate text-[11px] text-sidebar-foreground/60">
                   Platform console

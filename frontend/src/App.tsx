@@ -62,9 +62,9 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const PageLoader = () => (
   <div className="min-h-screen flex items-center justify-center bg-background">
     <div className="flex flex-col items-center gap-3">
-      <div className="w-9 h-9 border-3 border-sky-500/20 border-t-sky-500 rounded-full animate-spin" />
+      <div className="w-9 h-9 border-3 border-primary/20 border-t-primary rounded-full animate-spin" />
       <p className="text-sm font-medium text-muted-foreground animate-pulse">
-        Opening TravelAI…
+        Opening waytowalk…
       </p>
     </div>
   </div>

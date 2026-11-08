@@ -142,7 +142,7 @@ export async function assertSeatAvailable(agencyId: string): Promise<void> {
   const used = await AgencyMember.countDocuments({ agencyId });
   if (used >= limits.seats) {
     throw new AppError(
-      `Seat limit reached for this plan (${used}/${limits.seats}). Ask TravelAI to upgrade the plan before inviting more members.`,
+      `Seat limit reached for this plan (${used}/${limits.seats}). Ask waytowalk to upgrade the plan before inviting more members.`,
       409
     );
   }
@@ -173,7 +173,7 @@ export async function assertStorageQuota(
   const capBytes = limits.storageMb * MB;
   if (usedBytes + Math.max(0, additionalBytes) > capBytes) {
     throw new AppError(
-      `Storage limit reached (${(usedBytes / MB).toFixed(1)}/${limits.storageMb} MB used). Delete unused assets or ask TravelAI to upgrade the plan.`,
+      `Storage limit reached (${(usedBytes / MB).toFixed(1)}/${limits.storageMb} MB used). Delete unused assets or ask waytowalk to upgrade the plan.`,
       409
     );
   }
@@ -276,7 +276,7 @@ export async function applyAgencyPlan(input: ApplyAgencyPlanInput): Promise<{
 }
 
 /**
- * TravelAI-ops plan change. Gated on `AGENCY_OPS_KEY` (constant-time), not on
+ * waytowalk-ops plan change. Gated on `AGENCY_OPS_KEY` (constant-time), not on
  * agency rank — ops is not a member. Absent key = nobody can change plans via
  * the API. Audited without an actor; the viewer labels ops events from the
  * action name.
@@ -287,7 +287,7 @@ export async function changeAgencyPlan(input: {
   plan: AgencyPlanChange;
 }): Promise<AgencyPlanLimits> {
   if (!opsKeyMatches(input.opsKey)) {
-    throw new AppError('Plan changes require TravelAI ops access.', 403);
+    throw new AppError('Plan changes require waytowalk ops access.', 403);
   }
   const result = await applyAgencyPlan({
     agencyId: input.agencyId,

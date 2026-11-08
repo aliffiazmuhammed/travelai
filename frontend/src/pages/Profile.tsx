@@ -883,7 +883,7 @@ const Profile = () => {
                   Your public page
                 </h2>
                 <p className="text-sm leading-relaxed text-muted-foreground">
-                  This is how others find you on TravelAI.
+                  This is how others find you on waytowalk.
                 </p>
               </div>
 

@@ -1,221 +1,168 @@
 import { Link } from "react-router-dom";
-import {
-  ArrowRight,
-  CalendarRange,
-  Check,
-  Compass,
-  Sparkles,
-  Users,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { ArrowRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import heroGroupHike from "@/assets/hero-group-hike.jpg";
 
 export interface HeroProps {
   tripCount: number;
   eventCount: number;
   discovering: boolean;
-  /** Without a directory there is somewhere real to send the empty-event door. */
   directoryEnabled: boolean;
 }
 
-interface Door {
-  to: string;
-  icon: LucideIcon;
-  tone: "primary" | "accent" | "indigo";
-  headline: string;
-  note: string;
-  cta: string;
-  /** Live tallies stay honest: no invented totals, no going counts. */
-  count: string;
-}
-
-const DOOR_TONE: Record<Door["tone"], string> = {
-  primary: "bg-primary/10 text-primary group-hover:bg-primary/15",
-  accent: "bg-accent/10 text-accent group-hover:bg-accent/15",
-  indigo:
-    "bg-indigo-500/10 text-indigo-600 group-hover:bg-indigo-500/15 dark:text-indigo-400",
-};
-
-/**
- * The homepage's first screen. Three doors instead of one pitch: trips to join
- * and events come first, and AI planning is the door you take when nothing
- * fits. Counts are live, and each door degrades to an invitation when its
- * shelf is empty.
- */
 const Hero = ({
   tripCount,
   eventCount,
   discovering,
   directoryEnabled,
 }: HeroProps) => {
-  const tripsDoor: Door = discovering
-    ? {
-        to: "/explore",
-        icon: Compass,
-        tone: "primary",
-        headline: "Find a trip",
-        note: "Checking the trips and events people shared.",
-        cta: "Browse anyway",
-        count: "Looking for what's on…",
-      }
-    : tripCount === 0
-    ? {
-        to: "/plan",
-        icon: Compass,
-        tone: "primary",
-        headline: "Find a trip",
-        note: "Plan something and publish it — yours could be the first trip someone else joins.",
-        cta: "Start the first trip",
-        count: "Be the first to share one",
-      }
-    : tripCount < 5
-    ? {
-        to: "/explore",
-        icon: Compass,
-        tone: "primary",
-        headline: "Find a trip",
-        note: "The gallery is just warming up. Read one, ask the owner to come along, or take a copy.",
-        cta: "See the trips",
-        count: `${tripCount} ${tripCount === 1 ? "trip" : "trips"} shared so far`,
-      }
-    : {
-        to: "/explore",
-        icon: Compass,
-        tone: "primary",
-        headline: "Find a trip",
-        note: "Real trips, shared by the people who planned them. Ask the owner and join the plan.",
-        cta: "Browse the trips",
-        count: `${tripCount} trips to join`,
-      };
-
-  const eventsDoor: Door = discovering
-    ? {
-        to: "/explore",
-        icon: CalendarRange,
-        tone: "accent",
-        headline: "Find an event",
-        note: "Looking for camps, retreats and group departures.",
-        cta: "Browse anyway",
-        count: "Checking the calendar…",
-      }
-    : eventCount === 0
-    ? {
-        to: directoryEnabled ? "/agencies" : "/explore",
-        icon: CalendarRange,
-        tone: "accent",
-        headline: "Find an event",
-        note: directoryEnabled
-          ? "Agencies post camps and retreats here. Browse the directory in the meantime."
-          : "When an agency posts a camp or retreat, it shows up here. Trips are open in the meantime.",
-        cta: directoryEnabled ? "Meet the agencies" : "Browse trips instead",
-        count: "No events yet",
-      }
-    : {
-        to: "/explore#events",
-        icon: CalendarRange,
-        tone: "accent",
-        headline: "Find an event",
-        note: "Camps, retreats and group departures you can ask about — no plan of your own needed.",
-        cta: "See what's on",
-        count: `${eventCount} ${eventCount === 1 ? "event" : "events"} open`,
-      };
-
-  const planDoor: Door = {
-    to: "/plan",
-    icon: Sparkles,
-    tone: "indigo",
-    headline: "Plan it with AI",
-    note: "Tell us where and who. Get a day-by-day plan with a map and costs in one message.",
-    cta: "Plan a trip",
-    count: "One message, one plan",
-  };
-
-  const doors = [tripsDoor, eventsDoor, planDoor];
+  const discoveryItems = [
+    {
+      label: "Trips to join",
+      shortLabel: "Trips",
+      meta: discovering
+        ? "Finding shared trips…"
+        : tripCount > 0
+        ? `${tripCount} ${tripCount === 1 ? "trip" : "trips"} shared`
+        : "Start the first trip",
+      to: !discovering && tripCount === 0 ? "/plan" : "/explore",
+    },
+    {
+      label: "Events",
+      shortLabel: "Events",
+      meta: discovering
+        ? "Checking the calendar…"
+        : eventCount > 0
+        ? `${eventCount} ${eventCount === 1 ? "event" : "events"} open`
+        : directoryEnabled
+        ? "Meet the agencies"
+        : "Browse trips instead",
+      to:
+        eventCount > 0
+          ? "/explore#events"
+          : directoryEnabled
+          ? "/agencies"
+          : "/explore",
+    },
+    {
+      label: "Agencies",
+      shortLabel: "Agencies",
+      meta: directoryEnabled ? "Professional trip planning" : "Travel expertise",
+      to: "/agencies",
+    },
+  ];
 
   return (
-    <section className="relative isolate overflow-hidden pt-28 pb-16 sm:pt-36 sm:pb-24">
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 -z-20 bg-background"
-      />
-      <div
-        aria-hidden="true"
-        className="absolute inset-x-0 top-0 -z-10 h-[620px] bg-[radial-gradient(ellipse_60%_60%_at_15%_0%,hsl(var(--primary)/0.20),transparent_70%),radial-gradient(ellipse_50%_50%_at_85%_5%,hsl(var(--accent)/0.16),transparent_70%)]"
-      />
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 -z-10 bg-[radial-gradient(hsl(var(--foreground)/0.07)_1px,transparent_1px)] bg-[size:22px_22px] [mask-image:linear-gradient(to_bottom,black,transparent_65%)]"
-      />
-
-      <div className="container mx-auto px-4">
-        <div className="mx-auto max-w-4xl text-center">
-          <span className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-background/70 px-4 py-2 text-[11px] font-semibold text-primary shadow-xs backdrop-blur">
-            <Compass className="h-3.5 w-3.5" aria-hidden="true" />
-            Trips, events and the people going
-          </span>
-
-          <h1 className="mt-7 font-display text-4xl font-semibold leading-[1.05] tracking-tight text-foreground sm:text-6xl md:text-7xl">
-            Find your people.
-            <span className="block bg-gradient-to-r from-primary via-sky-500 to-accent bg-clip-text text-transparent">
-              Then plan the trip.
-            </span>
-          </h1>
-
-          <p className="mx-auto mt-6 max-w-2xl text-base font-medium leading-relaxed text-muted-foreground sm:text-lg">
-            Browse trips other travellers already shared, join a camp or retreat,
-            or hand a blank page to AI. Wherever you start, the plan, the map and
-            the group chat end up in one place.
+    <section className="relative overflow-hidden pt-28 sm:pt-32">
+      <div className="container relative mx-auto max-w-[1280px] px-4 sm:px-6 lg:px-8">
+        <div className="relative z-10 max-w-[900px]">
+          <p className="mb-5 flex items-center gap-2.5 text-[11px] font-bold uppercase tracking-[0.18em] text-primary">
+            <span className="h-2 w-2 rounded-full bg-accent" aria-hidden="true" />
+            Real trips. Real people.
           </p>
-        </div>
-
-        <div className="mx-auto mt-12 grid max-w-5xl gap-4 sm:mt-14 md:grid-cols-3">
-          {doors.map((door) => (
-            <Link
-              key={door.headline}
-              to={door.to}
-              className="group flex flex-col rounded-3xl border border-border/70 bg-card/85 p-6 text-left shadow-card backdrop-blur transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          <h1 className="font-display text-[3.35rem] font-medium leading-[0.95] tracking-[-0.045em] text-foreground sm:text-7xl lg:text-[82px]">
+            Find a journey.
+            <span className="block">Walk it your way.</span>
+          </h1>
+          <p className="mb-7 mt-7 max-w-[650px] text-base leading-8 text-muted-foreground sm:text-[17px]">
+            Join a trip, find your people, or shape a route of your own. Keep the
+            map, costs and conversations together from first idea to final day.
+          </p>
+          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <Button
+              asChild
+              variant="hero"
+              size="lg"
+              className="w-full rounded-full px-6 text-[13px] font-bold sm:w-auto"
             >
-              <div className="flex items-center gap-3">
-                <span
-                  className={cn(
-                    "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl transition-colors",
-                    DOOR_TONE[door.tone]
-                  )}
-                >
-                  <door.icon className="h-5 w-5" aria-hidden="true" />
-                </span>
-                <h2 className="font-display text-xl font-semibold tracking-tight text-foreground">
-                  {door.headline}
-                </h2>
-              </div>
-              <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
-                {door.note}
-              </p>
-              <span className="mt-4 inline-flex items-center gap-1.5 text-xs font-bold text-primary">
-                {door.cta}
-                <ArrowRight
-                  className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5"
-                  aria-hidden="true"
-                />
-              </span>
-              <p className="mt-auto inline-flex items-center gap-1.5 border-t border-border/60 pt-3 text-[11px] font-semibold text-muted-foreground">
-                <Users className="h-3.5 w-3.5" aria-hidden="true" />
-                {door.count}
-              </p>
-            </Link>
-          ))}
-        </div>
-
-        <ul className="mx-auto mt-10 flex max-w-2xl flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[11px] font-medium text-muted-foreground">
-          {["Free to start", "No card needed", "You choose who comes"].map(
-            (item) => (
-              <li key={item} className="inline-flex items-center gap-1.5">
-                <Check className="h-3.5 w-3.5 text-accent" aria-hidden="true" />
+              <Link to="/explore">
+                Explore real trips
+                <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
+              </Link>
+            </Button>
+            <Button
+              asChild
+              variant="outline"
+              size="lg"
+              className="w-full rounded-full border-primary/30 bg-transparent px-6 text-[13px] font-bold text-primary hover:bg-primary/5 sm:w-auto"
+            >
+              <Link to="/plan">Start planning</Link>
+            </Button>
+          </div>
+          <ul className="flex flex-wrap gap-x-5 gap-y-2 text-[10px] font-semibold text-muted-foreground sm:text-[11px]">
+            {["Free to start", "No card needed", "You choose who comes"].map((item) => (
+              <li key={item} className="inline-flex items-center gap-2">
+                <span className="h-1 w-1 rounded-full bg-secondary" aria-hidden="true" />
                 {item}
               </li>
-            )
-          )}
-        </ul>
+            ))}
+          </ul>
+        </div>
+
+        <aside className="absolute right-8 top-32 hidden w-[220px] border-l border-border pl-6 xl:block">
+          <p className="font-display text-[25px] font-medium leading-[1.1] text-primary">
+            Start with something real.
+          </p>
+          <p className="mt-3 text-xs leading-6 text-muted-foreground">
+            Trips shared by travellers and agencies, ready to join or make your own.
+          </p>
+        </aside>
+
+        <div className="relative mt-12 h-[470px] rounded-[26px] bg-[#173F35] sm:mt-14 sm:h-[430px] sm:rounded-[30px]">
+          <img
+            src={heroGroupHike}
+            alt="Travellers walking together on a mountain trail"
+            className="h-full w-full rounded-[inherit] object-cover object-[42%_center] sm:object-center"
+          />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 rounded-b-[inherit] bg-gradient-to-t from-[#102D26]/50 to-transparent" />
+          <svg
+            className="absolute right-[8%] top-12 h-[250px] w-[130px] sm:right-[16%] sm:top-14 sm:h-[270px] sm:w-[160px]"
+            viewBox="0 0 160 270"
+            aria-hidden="true"
+          >
+            <path
+              d="M121 6 C159 27 54 42 78 68 C100 91 29 93 46 124 C66 157 127 135 112 172 C98 207 18 198 29 259"
+              fill="none"
+              stroke="#E87656"
+              strokeWidth="5"
+              strokeLinecap="round"
+            />
+          </svg>
+
+          <span className="absolute bottom-[104px] left-4 rounded-2xl bg-[#F7F3EA] px-4 py-3 text-[9px] font-bold tracking-[0.12em] text-[#173F35] sm:bottom-6 sm:left-6 sm:text-[10px]">
+            GO FURTHER, TOGETHER
+          </span>
+
+          <div className="absolute inset-x-4 bottom-4 grid min-h-[76px] grid-cols-3 overflow-hidden rounded-[20px] border border-white/50 bg-[#F7F3EA]/95 shadow-hover sm:inset-x-auto sm:bottom-6 sm:right-6 sm:w-[590px] sm:grid-cols-[1fr_1fr_1fr_54px]">
+            {discoveryItems.map((item) => (
+              <Link
+                key={item.label}
+                to={item.to}
+                className="flex min-w-0 flex-col items-center justify-center gap-1 border-r border-[#D9E1DC] px-1 py-3 text-center text-[#173F35] transition-colors hover:bg-white/60 sm:px-3"
+              >
+                <span className="flex items-center gap-2 text-[10px] font-bold sm:text-xs">
+                  {item.label === "Trips to join" && (
+                    <span className="hidden h-1.5 w-1.5 rounded-full bg-accent sm:block" aria-hidden="true" />
+                  )}
+                  <span className="sm:hidden">{item.shortLabel}</span>
+                  <span className="hidden sm:inline">{item.label}</span>
+                </span>
+                <span className="hidden max-w-full truncate text-[9px] font-medium text-[#52665F] md:block">
+                  {item.meta}
+                </span>
+              </Link>
+            ))}
+            <Link
+              to="/explore"
+              aria-label="Explore real trips"
+              className="hidden h-full items-center justify-center sm:flex"
+            >
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#173F35] text-white transition-transform hover:translate-x-0.5">
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </span>
+            </Link>
+          </div>
+        </div>
       </div>
     </section>
   );

@@ -87,7 +87,7 @@ const AdminLogin: React.FC = () => {
               </h1>
               <p className="text-sm leading-6 text-muted-foreground">
                 The internal operations console is switched off. Nothing else on
-                TravelAI is affected.
+                waytowalk is affected.
               </p>
             </div>
           </CardContent>
@@ -116,9 +116,8 @@ const AdminLogin: React.FC = () => {
           <span className="grid h-10 w-10 place-items-center rounded-xl bg-indigo-500 text-white shadow-md shadow-indigo-500/25">
             <ShieldCheck className="h-5 w-5" aria-hidden />
           </span>
-          <span className="text-lg font-semibold tracking-tight text-foreground">
-            TravelAI <span className="text-indigo-400">Platform</span>
-          </span>
+          <img src="/brand/waytowalk-logo-reverse.svg" alt="waytowalk" width="140" height="28" className="h-7 w-[140px]" />
+          <span className="text-sm font-semibold text-secondary">Platform</span>
         </div>
 
         <Card className="rounded-2xl border-border bg-card shadow-2xl shadow-black/40">

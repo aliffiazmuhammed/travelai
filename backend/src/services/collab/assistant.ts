@@ -8,7 +8,7 @@ import {
 } from '../../schemas/assistant.schema.js';
 
 /**
- * The @TravelAI participant (Milestone 7, F12a) — answer-only assistant.
+ * The @waytowalk participant (Milestone 7, F12a) — answer-only assistant.
  *
  * THE F10 SHAPE OF THIS SERVICE: end-to-end chat means the server cannot read
  * message bodies, so all chat grounding arrives CLIENT-FED (`context` = the
@@ -73,7 +73,7 @@ export interface TripFacts {
 /*  Pure rules (unit-tested in assistant.test.ts)                              */
 /* -------------------------------------------------------------------------- */
 
-export const MENTION_RE = /@travelai/i;
+export const MENTION_RE = /@(?:waytowalk|travelai)/i;
 
 /**
  * F12c: the ask's TASK, inferred from the question the asker typed (it is
@@ -110,7 +110,7 @@ export function assertAssistantInputs(
   const rawPrompt = String(prompt || '').trim();
   if (!rawPrompt) throw new AppError('Ask a question first.', 400);
   if (!MENTION_RE.test(rawPrompt)) {
-    throw new AppError('Mention @TravelAI to call the assistant.', 400);
+    throw new AppError('Mention @waytowalk to call the assistant.', 400);
   }
   if (rawPrompt.length > ASSISTANT_RULES.PROMPT_MAX) {
     throw new AppError(`Questions are limited to ${ASSISTANT_RULES.PROMPT_MAX} characters.`, 400);
@@ -133,7 +133,7 @@ export function assertAssistantInputs(
       0
     );
   if (rawTotal > ASSISTANT_RULES.WIRE_BUDGET) {
-    throw new AppError("That's too much context at once — mention @TravelAI again with less.", 400);
+    throw new AppError("That's too much context at once — mention @waytowalk again with less.", 400);
   }
 
   // Labels are display-only (email local-parts). Passing them through, so the
@@ -203,7 +203,7 @@ export function buildAssistantPrompt(
       ? 'Task: summarize the discussion for the group in 2-5 plain sentences. Lead with what the group DECIDED (choices or commitments on record), then what is still open, then a concrete next step. Do not propose a change unless one is clearly pending agreement.'
       : 'Task: answer the question. 1-4 short, plain sentences for a chat bubble, no list longer than 3 items, concrete about the trip below. Propose a change only when the ask clearly wants one or an obvious improvement is worth offering.';
   const sections: string[] = [
-    'You are TravelAI, a trip-planning assistant participating in a group chat for one trip.',
+    'You are waytowalk, a trip-planning assistant participating in a group chat for one trip.',
     'ALWAYS answer with ONLY one JSON object: {"text": "...", "proposal": null} or {"text": "...", "proposal": {...}}. No markdown, no code fences, no words outside the JSON. Numbers stay numbers.',
     `"text" is your chat reply. ${taskLine}`,
     '"proposal" is either null, or ONE concrete itinerary change you suggest. It must be EXACTLY one of:',
@@ -403,7 +403,7 @@ export function consumeDailyQuota(
 /* -------------------------------------------------------------------------- */
 
 /**
- * Answers one @TravelAI ask. The reply text returns ONLY to the caller's
+ * Answers one @waytowalk ask. The reply text returns ONLY to the caller's
  * browser, where the F10 client encrypts it into the trip thread — the server
  * neither stores nor reads back any chat plaintext it does not have to.
  */

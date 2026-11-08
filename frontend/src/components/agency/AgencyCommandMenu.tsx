@@ -113,7 +113,7 @@ const AgencyCommandMenu: React.FC<AgencyCommandMenuProps> = ({
           ) : null}
           <CommandItem value="workspace home travelai" onSelect={() => go('/')}>
             <Home className="mr-2 h-4 w-4 text-slate-400" aria-hidden />
-            TravelAI home
+            waytowalk home
           </CommandItem>
           <CommandItem
             value="sign out of agency"

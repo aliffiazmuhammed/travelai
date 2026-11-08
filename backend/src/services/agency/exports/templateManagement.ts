@@ -128,7 +128,7 @@ async function loadCustomTemplate(
   const template = await AgencyTemplate.findOne({ _id: templateId, agencyId });
   if (!template) throw new AppError('Template not found', 404);
   if (template.builtinKey) {
-    throw new AppError('Built-in templates are managed by TravelAI.', 400);
+    throw new AppError('Built-in templates are managed by waytowalk.', 400);
   }
   if (template.engine !== 'html' && template.engine !== 'pdf-background') {
     throw new AppError('That template engine is not supported yet.', 400);

@@ -151,7 +151,7 @@ const EventDetail = () => {
 
     if (notFound) {
       return applyPageMeta({
-        title: 'Event not found · TravelAI',
+        title: 'Event not found · waytowalk',
         description:
           'This event is no longer public. It may have been unpublished, or its agency may no longer be listed.',
         ogType: 'website',
@@ -305,7 +305,7 @@ const EventDetail = () => {
                 </Link>
               </Button>
               <Button asChild variant="outline" className="h-11 rounded-2xl px-6 text-xs font-bold">
-                <Link to="/">Back to TravelAI</Link>
+                <Link to="/">Back to waytowalk</Link>
               </Button>
             </div>
           </div>
@@ -492,7 +492,7 @@ const EventDetail = () => {
               <p className="flex items-start gap-1.5 border-t border-border/60 pt-4 text-[11px] leading-relaxed text-muted-foreground">
                 <Info className="mt-0.5 h-3 w-3 shrink-0 text-primary" aria-hidden="true" />
                 Details and what's included are set by {event.agency.name}. Ask them when you
-                write — nothing is charged on TravelAI.
+                write — nothing is charged on waytowalk.
               </p>
             </section>
           </div>
@@ -675,7 +675,7 @@ const EventDetail = () => {
                   <p className="flex items-start gap-1.5 text-[10px] leading-relaxed text-muted-foreground">
                     <Info className="mt-0.5 h-3 w-3 shrink-0 text-primary" aria-hidden="true" />
                     The agency replies to you directly. Your contact details are never shown on
-                    TravelAI.
+                    waytowalk.
                   </p>
                 </form>
               )}
@@ -703,7 +703,7 @@ const EventDetail = () => {
                       )}
                     </p>
                     <p className="truncate text-[11px] text-muted-foreground">
-                      Travel agency on TravelAI
+                      Travel agency on waytowalk
                     </p>
                   </div>
                 </Link>

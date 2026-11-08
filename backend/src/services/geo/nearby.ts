@@ -199,7 +199,7 @@ const DEFAULT_GEOAPIFY_TIMEOUT_MS = 8000;
 const DEFAULT_NOMINATIM_TIMEOUT_MS = 10000;
 const DEFAULT_NOMINATIM_MIN_INTERVAL_MS = 1100;
 
-const NEARBY_USER_AGENT = 'TravelAI/1.0 (+https://github.com/travelai; nearby search)';
+const NEARBY_USER_AGENT = 'waytowalk/1.0 (+https://github.com/travelai; nearby search)';
 
 /** Per-provider attribution, required by Geoapify's free plan and OSM's ODbL. */
 const PROVIDER_ATTRIBUTION: Record<Exclude<NearbyProvider, 'none'>, string> = {
