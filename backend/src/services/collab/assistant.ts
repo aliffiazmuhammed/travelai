@@ -2,6 +2,7 @@ import { AppError } from '../../utils/AppError.js';
 import { env } from '../../config/env.js';
 import { generateWithFallback, type AIProvider } from '../ai/index.js';
 import {
+  ASSISTANT_PROPOSALS_MAX,
   ASSISTANT_PROPOSAL_JSON_MAX,
   assistantProposalSchema,
   type AssistantProposal,
@@ -46,6 +47,9 @@ export const ASSISTANT_RULES = {
   DAY_PLANS_MAX: 20,
   ACTIVITIES_PER_DAY_MAX: 6,
   ACTIVITY_LABEL_MAX: 60,
+  /** F12f: the stays the model may point an add/replace at. */
+  STAYS_PER_DAY_MAX: 4,
+  STAY_LABEL_MAX: 60,
 } as const;
 
 export interface AssistantContextItem {
@@ -65,8 +69,10 @@ export interface TripFacts {
    * F12d: the activity labels per day with stable 0-based positions. This is
    * what lets the model aim `move_activity` / `update_activity` — and what
    * `proposalFitsTrip` validates `expect` against before a card ever ships.
+   * F12f adds the stay names, which is what `add_stay` / `stay_choices` point
+   * at when they replace rather than add.
    */
-  dayPlans: Array<{ day: number; activities: string[] }>;
+  dayPlans: Array<{ day: number; activities: string[]; stays: string[] }>;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -181,6 +187,14 @@ export function tripFactsFrom(trip: any): TripFacts {
               .slice(0, ASSISTANT_RULES.ACTIVITY_LABEL_MAX)
           )
           .filter(Boolean),
+        stays: (Array.isArray(d?.stay_recommendations) ? d.stay_recommendations : [])
+          .slice(0, ASSISTANT_RULES.STAYS_PER_DAY_MAX)
+          .map((s: any) =>
+            String(typeof s === 'string' ? s : s?.name || '')
+              .trim()
+              .slice(0, ASSISTANT_RULES.STAY_LABEL_MAX)
+          )
+          .filter(Boolean),
       }))
       .filter((plan: { day: number }) => Number.isInteger(plan.day) && plan.day >= 1),
   };
@@ -204,7 +218,7 @@ export function buildAssistantPrompt(
       : 'Task: answer the question. 1-4 short, plain sentences for a chat bubble, no list longer than 3 items, concrete about the trip below. Propose a change only when the ask clearly wants one or an obvious improvement is worth offering.';
   const sections: string[] = [
     'You are waytowalk, a trip-planning assistant participating in a group chat for one trip.',
-    'ALWAYS answer with ONLY one JSON object: {"text": "...", "proposal": null} or {"text": "...", "proposal": {...}}. No markdown, no code fences, no words outside the JSON. Numbers stay numbers.',
+    'ALWAYS answer with ONLY one JSON object: {"text": "...", "proposal": null} or {"text": "...", "proposal": {...}}. No markdown, no code fences, no words outside the JSON.',
     `"text" is your chat reply. ${taskLine}`,
     '"proposal" is either null, or ONE concrete itinerary change you suggest. It must be EXACTLY one of:',
     '- {"kind":"title","value":"<new trip title, max 120 chars>"}',
@@ -214,8 +228,17 @@ export function buildAssistantPrompt(
     '- {"kind":"swap_days","from_day":<an existing day>,"to_day":<another existing day>}',
     '- {"kind":"move_activity","day":<source day>,"index":<0-based position>,"to_day":<destination day>,"to_index":<final 0-based position>,"expect":"<source activity label>"}',
     '- {"kind":"update_activity","day":<day>,"index":<0-based position>,"value":"<new activity title, max 120 chars>","expect":"<old activity label>"}',
+    '- {"kind":"add_activity","day":<day>,"index":<optional 0-based insert position; omit to add at the end>,"value":"<activity title, max 120 chars>"}',
+    '- {"kind":"activity_choices","day":<day>,"index":<optional 0-based position to replace>,"expect":"<that activity label, required with index>","options":["<first idea>","<second idea>","<third idea>"]}',
+    '- {"kind":"add_stay","day":<day>,"value":{"name":"<place name, max 80 chars>","location":"<optional area/city>","vibe":"<optional short vibe>"},"expect":"<optional existing stay name this replaces>"}',
+    '- {"kind":"stay_choices","day":<day>,"options":[{"name":"<first stay>","location":"<area>","vibe":"<vibe>"},{"name":"<second stay>"}, ...],"expect":"<optional existing stay name this replaces>"}',
+    'When the ask wants TWO OR THREE independent changes in one answer, return {"text":"...","proposals":[{...},{...}]} instead of "proposal" — never both, never more than three. Each item must be one of the shapes above, a picker (activity_choices/stay_choices) must be the ONLY item, and no two items may target the same day (count both days of a swap or move). Apply order is the array order.',
     'Use day numbers ONLY from the planned days below, and indices ONLY against the activities listed for that day. Otherwise null.',
-    '"to_index" is the FINAL position after the move. Copy "expect" VERBATIM from the activity list — the app refuses the change when the itinerary has moved on.',
+    '"to_index" is the FINAL position after the move. Copy "expect" VERBATIM from the activity or stay list — the app refuses the change when the itinerary has moved on.',
+    'Choosing the right change: when the asker names one extra activity to include, use add_activity. When they want ideas, alternatives, "something else", or what to do instead of an activity they dislike, use activity_choices with 2-3 DISTINCT concrete activities — never near-duplicate renames. If they point at a specific activity that should be replaced, set index and expect to it (the picked idea replaces it); otherwise omit both so the picked idea is added. Use update_activity ONLY when the asker has already stated the exact new title.',
+    'Day-level asks: exchange two days\' plans with swap_days when they want Day A and Day B swapped; rename a day with day_title; add one practical note with day_tip. Those are separate kinds — never stretch update_activity into a day edit.',
+    'Stays: when they ask where to stay or for hotel options on a day, use stay_choices with 2-3 DISTINCT named stays (name plus optional location/vibe) — never near-duplicate names. When they name one stay to include, use add_stay; set expect to an existing stay name only when the new stay replaces it on that day, otherwise omit it so it is added.',
+    'When a proposal is included, keep "text" to 1-2 sentences: describe the suggestion in words and let the card carry the change. Do not list options or repeat every edit in "text".',
     'You never edit the trip yourself. Never say you will do something, that you have done it, or that something is arranged unless the facts above already show it. A proposal is the ONLY way a change can happen, and a human applies it — describe it as a suggestion the group can apply, never as something you are doing or will do. If the ask needs a change you cannot express with exactly these shapes, say plainly that you cannot do that yet — never promise to do it later.',
   ];
   const factsBlock: string[] = [];
@@ -236,6 +259,11 @@ export function buildAssistantPrompt(
           .join(' | ')}`
     );
   if (activityLines.length) factsBlock.push(activityLines.join('\n'));
+  // F12f: the named stays an add_stay / stay_choices may replace.
+  const stayLines = (facts.dayPlans || [])
+    .filter((plan) => plan.stays.length > 0)
+    .map((plan) => `Day ${plan.day} stays: ${plan.stays.map((label) => `“${label}”`).join(' | ')}`);
+  if (stayLines.length) factsBlock.push(stayLines.join('\n'));
   // F12c: the asker's day anchor — only added when the trip actually describes
   // that day, so it never invents structure.
   if (opts.dayAnchor) {
@@ -279,10 +307,76 @@ function stripOuterFences(raw: string): string {
 export function validateAssistantProposal(raw: unknown): AssistantProposal | null {
   const result = assistantProposalSchema.safeParse(raw);
   if (!result.success) return null;
+  let data = result.data;
+  if (data.kind === 'activity_choices') {
+    // Two near-identical "options" are not a choice; drop repeats and require
+    // at least two distinct ideas before the card ships.
+    const seen = new Set<string>();
+    const options = data.options.filter((option) => {
+      const key = option.toLowerCase().replace(/\s+/g, ' ');
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    if (options.length < 2) return null;
+    data = { ...data, options };
+  }
+  if (data.kind === 'stay_choices') {
+    const seen = new Set<string>();
+    const options = data.options.filter((option) => {
+      const key = option.name.toLowerCase().replace(/\s+/g, ' ');
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    if (options.length < 2) return null;
+    data = { ...data, options };
+  }
   // Serialized size backstop: reply + proposal must fit inside ONE encrypted
   // comment (the meaning cap is COMMENT_MAX_LEN = 2000; see decisions doc).
-  if (JSON.stringify(result.data).length > ASSISTANT_PROPOSAL_JSON_MAX) return null;
-  return result.data;
+  if (JSON.stringify(data).length > ASSISTANT_PROPOSAL_JSON_MAX) return null;
+  return data;
+}
+
+const isChoiceKind = (proposal: AssistantProposal): boolean =>
+  proposal.kind === 'activity_choices' || proposal.kind === 'stay_choices';
+
+/** Every day a proposal reads or writes — the multi-edit disjointness unit. */
+function touchedDays(proposal: AssistantProposal): number[] {
+  if (proposal.kind === 'swap_days') return [proposal.from_day, proposal.to_day];
+  if (proposal.kind === 'move_activity') return [proposal.day, proposal.to_day];
+  return 'day' in proposal ? [proposal.day] : [];
+}
+
+/**
+ * F12f: validates the whole edit set (the legacy single is just a set of one).
+ *
+ * Two rules keep sequential application honest, because every index and
+ * `expect` in the set was written against the itinerary BEFORE any edit ran:
+ * a picker is always alone (it is a question, not a settled edit), and no two
+ * edits may touch the same day (a swap/move touches both of its days).
+ */
+export function validateAssistantProposals(raw: unknown): AssistantProposal[] {
+  if (!Array.isArray(raw) || raw.length > ASSISTANT_PROPOSALS_MAX) return [];
+  const valid: AssistantProposal[] = [];
+  for (const item of raw) {
+    const proposal = validateAssistantProposal(item);
+    if (proposal) valid.push(proposal);
+  }
+  if (valid.length === 0) return [];
+  if (valid.some(isChoiceKind)) {
+    const pickers = valid.filter(isChoiceKind);
+    return pickers.length === 1 ? [pickers[0]] : [];
+  }
+  const seen = new Set<number>();
+  for (const proposal of valid) {
+    for (const day of touchedDays(proposal)) {
+      if (seen.has(day)) return [];
+      seen.add(day);
+    }
+  }
+  if (JSON.stringify(valid).length > ASSISTANT_PROPOSAL_JSON_MAX) return [];
+  return valid;
 }
 
 /**
@@ -327,6 +421,36 @@ export function proposalFitsTrip(proposal: AssistantProposal, facts: TripFacts):
     if (!target || proposal.to_index > target.activities.length) return false;
     return !(proposal.day === proposal.to_day && proposal.index === proposal.to_index);
   }
+  if (proposal.kind === 'add_activity') {
+    const day = planFor(facts, proposal.day);
+    if (!day) return false;
+    // Appending needs no position; an explicit insert may not skip past the end.
+    return proposal.index === undefined || proposal.index <= day.activities.length;
+  }
+  if (proposal.kind === 'activity_choices') {
+    const day = planFor(facts, proposal.day);
+    if (!day) return false;
+    // An add-style picker (no index/expect) is always safe; a replace-style one
+    // must still find the label it promised to swap out.
+    if (proposal.index === undefined && proposal.expect === undefined) return true;
+    if (proposal.index === undefined || proposal.expect === undefined) return false;
+    if (proposal.index >= day.activities.length) return false;
+    return labelMatches(day.activities[proposal.index], proposal.expect);
+  }
+  if (proposal.kind === 'stay_choices') {
+    const day = planFor(facts, proposal.day);
+    if (!day) return false;
+    // Add-style (no expect) is always safe; a replace-style picker must still
+    // find the stay it promised to swap out.
+    if (proposal.expect === undefined) return true;
+    return day.stays.some((label) => labelMatches(label, proposal.expect));
+  }
+  if (proposal.kind === 'add_stay') {
+    const day = planFor(facts, proposal.day);
+    if (!day) return false;
+    if (proposal.expect === undefined) return true;
+    return day.stays.some((label) => labelMatches(label, proposal.expect));
+  }
   if (!('day' in proposal)) return true;
   if (!facts.days) return false; // no duration anchored → no day is safe
   return proposal.day >= 1 && proposal.day <= facts.days;
@@ -338,23 +462,42 @@ export function proposalFitsTrip(proposal: AssistantProposal, facts: TripFacts):
  * 5xx: an unparseable reply is prose, a bad proposal is dropped, a missing
  * text with a valid proposal gets a template line.
  */
-export function parseAssistantAnswer(raw: unknown): { text: string; proposal: AssistantProposal | null } {
+export function parseAssistantAnswer(raw: unknown): {
+  text: string;
+  proposal: AssistantProposal | null;
+  proposals: AssistantProposal[];
+} {
   const source = String(raw || '').trim();
   const unwrapped = stripOuterFences(source);
   if (unwrapped.startsWith('{')) {
     try {
       const parsed = JSON.parse(unwrapped);
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        const proposal = validateAssistantProposal((parsed as any).proposal);
+        const rawList = (parsed as any).proposals;
+        let proposals =
+          Array.isArray(rawList) && rawList.length > 0 ? validateAssistantProposals(rawList) : [];
+        if (proposals.length === 0) {
+          const single = validateAssistantProposal((parsed as any).proposal);
+          proposals = single ? [single] : [];
+        }
         let text = String((parsed as any).text || '').trim();
-        if (!text && proposal) text = 'Here is a proposed change for the trip.';
-        return { text: clampReply(text), proposal };
+        if (!text && proposals.length > 0) {
+          text =
+            proposals.length === 1
+              ? 'Here is a proposed change for the trip.'
+              : 'Here are the proposed changes for the trip.';
+        }
+        return {
+          text: clampReply(text),
+          proposal: proposals.length === 1 ? proposals[0] : null,
+          proposals,
+        };
       }
     } catch {
       /* the wrapper was prose that merely looked like JSON — fall through */
     }
   }
-  return { text: clampReply(source), proposal: null };
+  return { text: clampReply(source), proposal: null, proposals: [] };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -413,7 +556,13 @@ export async function answerTravelAI(
   payload: { prompt: unknown; contextItems: unknown; dayAnchor?: number },
   memberLabels?: Set<string>,
   quotas: QuotaMap = dailyQuotas
-): Promise<{ reply: string; provider: AIProvider; cached: boolean; proposal: AssistantProposal | null }> {
+): Promise<{
+  reply: string;
+  provider: AIProvider;
+  cached: boolean;
+  proposal: AssistantProposal | null;
+  proposals: AssistantProposal[];
+}> {
   const tripId = String((trip as any)._id);
 
   // Shape first (a rejected ask costs the provider nothing, so it also costs
@@ -427,14 +576,23 @@ export async function answerTravelAI(
   });
 
   const result = await generateWithFallback(composed); // Gemini → GROQ → cache
-  const { text, proposal } = parseAssistantAnswer(result.text);
+  const { text, proposals } = parseAssistantAnswer(result.text);
   // A proposal pointing past the itinerary is as good as malformed — drop it
-  // rather than hand the client a card that cannot apply.
-  const fits = proposal && proposalFitsTrip(proposal, facts) ? proposal : null;
+  // rather than hand the client a card that cannot apply. For a multi-edit set
+  // a dropped item would silently change the ask, so an incomplete set is
+  // downgraded to the reply alone.
+  const fit = proposals.filter((proposal) => proposalFitsTrip(proposal, facts));
+  const fits = fit.length === proposals.length ? fit : [];
 
   // Day anchoring of the answer bubble is the client's call (it posts the
   // reply row itself, encrypted); the server stays out of chat layout.
-  return { reply: text, proposal: fits, provider: result.provider, cached: result.cached };
+  return {
+    reply: text,
+    proposal: fits.length === 1 ? fits[0] : null,
+    proposals: fits,
+    provider: result.provider,
+    cached: result.cached,
+  };
 }
 
 /** Process-wide budget buckets — restart resets them by design. */

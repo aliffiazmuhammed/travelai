@@ -56,8 +56,22 @@ export const ASSISTANT_WIRE_BUDGET = 6000;
  * the label exactly as the model saw it. The service rejects a mismatch
  * against its own snapshot and the CLIENT re-checks against the live itinerary
  * before applying, so a card that outlived a reshuffle can never edit the
- * wrong row. Structural day insertion/removal stays future work.
+ * wrong row. F12e adds `add_activity` and `activity_choices` (a 2-3 option
+ * picker), because "suggest something else for Day 1" was previously
+ * unexpressible and degraded to a rename. F12f adds `add_stay` /
+ * `stay_choices` (where to sleep on a day) and lets one answer carry up to
+ * three edits (`proposals`), validated as a set: a picker rides alone and no
+ * two edits may touch the same day, so applying them in order is safe.
+ * Structural day insertion/removal stays future work.
  */
+export const stayProposalSchema = z.object({
+  /** Place name — what the timeline and stays panel display. */
+  name: z.string().trim().min(1).max(80),
+  /** Neighbourhood/city hint (the stays panel shows it under the name). */
+  location: z.string().trim().min(1).max(80).optional(),
+  vibe: z.string().trim().min(1).max(60).optional(),
+});
+
 export const assistantProposalSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('title'),
@@ -107,10 +121,56 @@ export const assistantProposalSchema = z.discriminatedUnion('kind', [
     /** Drift guard: the old label exactly as the facts listed it. */
     expect: z.string().trim().min(1).max(120),
   }),
+  z.object({
+    kind: z.literal('add_activity'),
+    day: z.coerce.number().int().min(1).max(999),
+    /** 0-based insert position; omitted = append at the end of the day. */
+    index: z.coerce.number().int().min(0).max(199).optional(),
+    /** The activity title to insert. */
+    value: z.string().trim().min(1).max(120),
+  }),
+  /**
+   * F12e: "suggest something else for Day N" — 2-3 distinct concrete activities
+   * the group picks from. With `index` + `expect` the picked option REPLACES
+   * that activity (drift-guarded like `update_activity`); without them it is
+   * added to the day. The card renders one picker, never an applied edit.
+   */
+  z.object({
+    kind: z.literal('activity_choices'),
+    day: z.coerce.number().int().min(1).max(999),
+    index: z.coerce.number().int().min(0).max(199).optional(),
+    expect: z.string().trim().min(1).max(120).optional(),
+    /** 2-3 distinct activity titles; duplicates are dropped by validation. */
+    options: z.array(z.string().trim().min(1).max(100)).min(2).max(3),
+  }),
+  /**
+   * F12f: where to sleep on Day N. `expect` names the stay this suggestion
+   * replaces on that day (drift-guarded); without it the stay is added.
+   */
+  z.object({
+    kind: z.literal('add_stay'),
+    day: z.coerce.number().int().min(1).max(999),
+    value: stayProposalSchema,
+    expect: z.string().trim().min(1).max(80).optional(),
+  }),
+  /**
+   * F12f: "where should we stay on Day N?" — 2-3 distinct named stays the
+   * group picks from. With `expect`, the pick replaces that stay; otherwise
+   * it is added to the day. Never combined with other edits.
+   */
+  z.object({
+    kind: z.literal('stay_choices'),
+    day: z.coerce.number().int().min(1).max(999),
+    expect: z.string().trim().min(1).max(80).optional(),
+    options: z.array(stayProposalSchema).min(2).max(3),
+  }),
 ]);
 
 export type AssistantProposal = z.infer<typeof assistantProposalSchema>;
 
-/** Serialized-proposal backstop: reply (≤800) + proposal must fit one comment. */
-export const ASSISTANT_PROPOSAL_JSON_MAX = 800;
+/** Serialized-proposal backstop: reply (≤800) + proposals must fit one comment. */
+export const ASSISTANT_PROPOSAL_JSON_MAX = 1400;
+
+/** F12f: one answer may carry this many independent edits. */
+export const ASSISTANT_PROPOSALS_MAX = 3;
 

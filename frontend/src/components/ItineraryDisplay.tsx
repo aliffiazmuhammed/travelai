@@ -50,7 +50,7 @@ import {
 import type { LatLng } from "@/lib/geo";
 import { avatarSrc } from "@/lib/avatar";
 import { swapDayPlans } from "@/lib/weatherRouting";
-import { applyActivityEdit } from "@/lib/proposalApply";
+import { applyActivityEdit, applyStayEdit } from "@/lib/proposalApply";
 import type {
   ActivityItem,
   CustomRoute,
@@ -270,54 +270,82 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
   const railMapVisible = useRailMapVisible();
 
   /**
-   * F12b/F12d: compose a TravelAI proposal into the itinerary snapshot and save
-   * it through the SAME path manual editing uses (`onSave` → PUT with required
-   * `baseRev`, versioned). The bot never writes; this only types what a
-   * contributor typed by hand. Structural kinds carry the drift guard: the
-   * activity label the model saw must still be exactly where it said it was.
+   * F12b/F12d/F12f: compose a TravelAI proposal set into the itinerary snapshot
+   * and save it through the SAME path manual editing uses (`onSave` → PUT with
+   * required `baseRev`, versioned). The bot never writes; this only types what
+   * a contributor typed by hand. Structural kinds carry the drift guard: the
+   * activity/stay label the model saw must still be exactly where it said it
+   * was.
+   *
+   * A set is applied from ONE pre-edit snapshot and saved ONCE: the server
+   * guarantees its members touch disjoint days, so every index and `expect`
+   * still describes the row it names even as earlier edits land.
    */
   const applyAssistantProposal = useCallback(
-    async (proposal: AssistantProposal): Promise<void> => {
+    async (input: AssistantProposal | AssistantProposal[]): Promise<void> => {
       if (!onSave) throw new Error("Applying needs edit access for this trip.");
+      const proposals = Array.isArray(input) ? input : [input];
       const findDay = (dayNumber: number) =>
         itinerary.find((day) => day.day === dayNumber);
 
-      if (proposal.kind === "swap_days") {
-        // Same operation as the weather-routing suggestion: the two plans
-        // exchange places and days stay contiguous (1..n display order).
-        if (proposal.from_day === proposal.to_day) {
-          throw new Error("Pick two different days to exchange.");
+      let days = itinerary;
+      let tripTitle = safeData.trip_title;
+      let budget = safeData.budget_per_person;
+
+      for (const proposal of proposals) {
+        if (proposal.kind === "swap_days") {
+          // Same operation as the weather-routing suggestion: the two plans
+          // exchange places and days stay contiguous (1..n display order).
+          if (proposal.from_day === proposal.to_day) {
+            throw new Error("Pick two different days to exchange.");
+          }
+          const swapped = swapDayPlans(days, proposal.from_day, proposal.to_day);
+          if (swapped === days) {
+            throw new Error(
+              "This trip no longer has both days — reload the trip and ask again."
+            );
+          }
+          days = swapped;
+          continue;
         }
-        const swapped = swapDayPlans(itinerary, proposal.from_day, proposal.to_day);
-        if (swapped === itinerary) {
+
+        if (
+          proposal.kind === "move_activity" ||
+          proposal.kind === "update_activity" ||
+          proposal.kind === "add_activity"
+        ) {
+          days = applyActivityEdit(days, proposal);
+          continue;
+        }
+
+        if (proposal.kind === "add_stay") {
+          days = applyStayEdit(days, proposal);
+          continue;
+        }
+
+        if (proposal.kind === "activity_choices" || proposal.kind === "stay_choices") {
+          // A picker is resolved by the card; applying it unresolved is a bug.
           throw new Error(
-            "This trip no longer has both days — reload the trip and ask again."
+            proposal.kind === "activity_choices"
+              ? "Pick one of the suggested activities first."
+              : "Pick one of the suggested stays first."
           );
         }
-        await onSave({ ...safeData, day_by_day_itinerary: swapped });
-        return;
-      }
 
-      if (proposal.kind === "move_activity" || proposal.kind === "update_activity") {
-        await onSave({
-          ...safeData,
-          day_by_day_itinerary: applyActivityEdit(itinerary, proposal),
-        });
-        return;
-      }
+        if (proposal.kind === "title") {
+          tripTitle = proposal.value;
+          continue;
+        }
+        if (proposal.kind === "budget") {
+          budget = proposal.value;
+          continue;
+        }
 
-      if (proposal.kind !== "title" && proposal.kind !== "budget" && !findDay(proposal.day)) {
-        throw new Error("This trip no longer has that day — reload the trip and ask again.");
-      }
-      const next: ItineraryData = {
-        ...safeData,
-        day_by_day_itinerary: itinerary,
-        ...(proposal.kind === "title" ? { trip_title: proposal.value } : {}),
-        ...(proposal.kind === "budget" ? { budget_per_person: proposal.value } : {}),
-      };
-      if (proposal.kind === "day_title" || proposal.kind === "day_tip") {
+        if (!findDay(proposal.day)) {
+          throw new Error("This trip no longer has that day — reload the trip and ask again.");
+        }
         // Pure replacement — never mutate the live state objects in place.
-        next.day_by_day_itinerary = itinerary.map((day) => {
+        days = days.map((day) => {
           if (day.day !== proposal.day) return day;
           if (proposal.kind === "day_title") return { ...day, title: proposal.value };
           return {
@@ -329,6 +357,13 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
           };
         });
       }
+
+      const next: ItineraryData = {
+        ...safeData,
+        trip_title: tripTitle,
+        budget_per_person: budget,
+        day_by_day_itinerary: days,
+      };
       await onSave(next); // throws on 409 REV_CONFLICT → upstream medicine applies
     },
     [onSave, safeData, itinerary]

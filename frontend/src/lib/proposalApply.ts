@@ -16,12 +16,22 @@ export interface EditableActivity {
   name?: string;
 }
 
+export interface EditableStay {
+  name: string;
+  location?: string;
+  price_per_night?: string | number;
+  vibe?: string;
+  description?: string;
+  [key: string]: unknown;
+}
+
 export interface EditableDay {
   day: number;
   activities?: Array<string | EditableActivity>;
+  stay_recommendations?: Array<string | EditableStay>;
 }
 
-/** The two proposal kinds this module applies (swaps reuse `swapDayPlans`). */
+/** The proposal kinds this module applies (swaps reuse `swapDayPlans`). */
 export type ActivityEdit =
   | {
       kind: "move_activity";
@@ -31,7 +41,76 @@ export type ActivityEdit =
       to_index: number;
       expect: string;
     }
-  | { kind: "update_activity"; day: number; index: number; value: string; expect: string };
+  | { kind: "update_activity"; day: number; index: number; value: string; expect: string }
+  | { kind: "add_activity"; day: number; index?: number; value: string };
+
+/** The picker card's payload (F12e): 2-3 ideas, one chosen. */
+export interface ActivityChoiceProposal {
+  kind: "activity_choices";
+  day: number;
+  index?: number;
+  expect?: string;
+  options: string[];
+}
+
+/**
+ * Turns the option a human picked into the concrete edit an editor's Apply
+ * would have produced: replace the activity named by `index` + `expect`, or
+ * add the picked activity (at `index`, else at the end).
+ */
+export function resolveActivityChoice(
+  proposal: ActivityChoiceProposal,
+  option: string
+): Exclude<ActivityEdit, { kind: "move_activity" }> {
+  if (proposal.index !== undefined && proposal.expect !== undefined) {
+    return {
+      kind: "update_activity",
+      day: proposal.day,
+      index: proposal.index,
+      value: option,
+      expect: proposal.expect,
+    };
+  }
+  return { kind: "add_activity", day: proposal.day, index: proposal.index, value: option };
+}
+
+/**
+ * Turns the stay a human picked into the concrete add/replace edit: replace
+ * the stay named by `expect` when the card pointed at one, else add it.
+ */
+export function resolveStayChoice(
+  proposal: StayChoiceProposal,
+  option: StayProposalValue
+): StayEdit {
+  return {
+    kind: "add_stay",
+    day: proposal.day,
+    value: option,
+    ...(proposal.expect ? { expect: proposal.expect } : {}),
+  };
+}
+
+/** F12f: a stay suggestion with just enough to name it on a day. */
+export interface StayProposalValue {
+  name: string;
+  location?: string;
+  vibe?: string;
+}
+
+export type StayEdit = {
+  kind: "add_stay";
+  day: number;
+  value: StayProposalValue;
+  expect?: string;
+};
+
+/** The stay picker card's payload (F12f): 2-3 stays, one chosen. */
+export interface StayChoiceProposal {
+  kind: "stay_choices";
+  day: number;
+  expect?: string;
+  options: StayProposalValue[];
+}
 
 export const DAY_GONE_MESSAGE =
   "This trip no longer has that day — reload the trip and ask again.";
@@ -40,6 +119,8 @@ export const ACTIVITY_GONE_MESSAGE =
 export const ITINERARY_CHANGED_MESSAGE =
   "The itinerary changed since this was suggested — ask waytowalk again.";
 export const NO_OP_MOVE_MESSAGE = "That activity is already in that spot.";
+export const STAY_GONE_MESSAGE =
+  "That stay is no longer on the day — reload the trip and ask again.";
 
 /** The label the timeline shows (`title` first, then legacy `name`). */
 export function activityLabelOf(
@@ -74,14 +155,54 @@ const dayIndexFor = (days: EditableDay[], day: number): number =>
 const activitiesOf = (day: EditableDay): Array<string | EditableActivity> =>
   Array.isArray(day.activities) ? day.activities : [];
 
+/** The stay label the panel groups by (`name`; legacy string entries as-is). */
+export function stayLabelOf(stay: string | EditableStay | null | undefined): string {
+  if (typeof stay === "string") return stay.trim();
+  if (!stay) return "";
+  return String(stay.name || "").trim();
+}
+
+const staysOf = (day: EditableDay): Array<string | EditableStay> =>
+  Array.isArray(day.stay_recommendations) ? day.stay_recommendations : [];
+
 /**
- * Returns a new days array with one activity moved or renamed. Throws a
+ * Returns a new days array with one activity moved, renamed or added. Throws a
  * user-facing message when the snapshot no longer matches the proposal.
  */
 export function applyActivityEdit<D extends EditableDay>(
   days: D[],
   proposal: ActivityEdit
 ): D[] {
+  if (proposal.kind === "add_activity") {
+    const targetIndex = dayIndexFor(days, proposal.day);
+    if (targetIndex === -1) throw new Error(DAY_GONE_MESSAGE);
+    const value = proposal.value.trim();
+    if (!value) throw new Error("The new activity title is empty.");
+    const target = days[targetIndex];
+    const existing = activitiesOf(target);
+    // Two editors can pick the same idea from one card — mutual prefix match
+    // is equality here, and it stops the activity appearing twice.
+    if (
+      existing.some(
+        (activity) =>
+          labelMatches(activityLabelOf(activity), value) &&
+          labelMatches(value, activityLabelOf(activity))
+      )
+    ) {
+      throw new Error(`“${value}” is already on Day ${proposal.day}.`);
+    }
+    // `index` is an insert position: 0..length (length appends).
+    const at = proposal.index ?? existing.length;
+    if (!Number.isInteger(at) || at < 0 || at > existing.length) {
+      throw new Error(ACTIVITY_GONE_MESSAGE);
+    }
+    const activities = [...existing];
+    activities.splice(at, 0, { title: value });
+    const next = [...days];
+    next[targetIndex] = { ...target, activities } as D;
+    return next;
+  }
+
   const sourceIndex = dayIndexFor(days, proposal.day);
   if (sourceIndex === -1) throw new Error(DAY_GONE_MESSAGE);
 
@@ -144,5 +265,56 @@ export function applyActivityEdit<D extends EditableDay>(
   const destination = [...targetActivities];
   destination.splice(Math.min(proposal.to_index, destination.length), 0, moved);
   next[targetIndex] = { ...days[targetIndex], activities: destination } as D;
+  return next;
+}
+
+/**
+ * F12f: returns a new days array with one stay added to (or swapped on) a day.
+ * Replacement keeps the old card's other details (price, description), so a
+ * suggested hotel never wipes what an editor already curated. Throws a
+ * user-facing message when the snapshot no longer matches.
+ */
+export function applyStayEdit<D extends EditableDay>(days: D[], proposal: StayEdit): D[] {
+  const targetIndex = dayIndexFor(days, proposal.day);
+  if (targetIndex === -1) throw new Error(DAY_GONE_MESSAGE);
+  const name = proposal.value.name.trim();
+  if (!name) throw new Error("The suggested stay needs a name.");
+  const target = days[targetIndex];
+  const existing = staysOf(target);
+  const next = [...days];
+
+  if (proposal.expect !== undefined) {
+    const at = existing.findIndex((stay) => labelMatches(stayLabelOf(stay), proposal.expect));
+    if (at === -1) throw new Error(STAY_GONE_MESSAGE);
+    const old = existing[at];
+    const base = typeof old === "string" ? {} : { ...old };
+    const replacement: EditableStay = {
+      ...base,
+      name,
+      ...(proposal.value.location ? { location: proposal.value.location } : {}),
+      ...(proposal.value.vibe ? { vibe: proposal.value.vibe } : {}),
+    };
+    const stays = [...existing];
+    stays[at] = replacement;
+    next[targetIndex] = { ...target, stay_recommendations: stays } as D;
+    return next;
+  }
+
+  // Two editors can pick the same stay from one card — mutual prefix match is
+  // equality here, and it stops the hotel appearing twice on the day.
+  if (
+    existing.some(
+      (stay) =>
+        labelMatches(stayLabelOf(stay), name) && labelMatches(name, stayLabelOf(stay))
+    )
+  ) {
+    throw new Error(`“${name}” is already on Day ${proposal.day}.`);
+  }
+  const entry: EditableStay = {
+    name,
+    ...(proposal.value.location ? { location: proposal.value.location } : {}),
+    ...(proposal.value.vibe ? { vibe: proposal.value.vibe } : {}),
+  };
+  next[targetIndex] = { ...target, stay_recommendations: [...existing, entry] } as D;
   return next;
 }

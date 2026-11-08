@@ -16,6 +16,7 @@ import {
   stripMention,
   tripFactsFrom,
   validateAssistantProposal,
+  validateAssistantProposals,
   type QuotaMap,
 } from './assistant.js';
 import { AppError } from '../../utils/AppError.js';
@@ -317,8 +318,14 @@ const planFacts = () =>
           day: 1,
           title: 'Arrive',
           activities: [{ title: 'Beach walk', time: '9am' }, { name: 'Night market' }],
+          stay_recommendations: [{ name: 'Casa Anjuna' }, 'Beach hut'],
         },
-        { day: 2, title: 'Scooters', activities: ['Temple run'] },
+        {
+          day: 2,
+          title: 'Scooters',
+          activities: ['Temple run'],
+          stay_recommendations: [{ name: 'Palm Lodge' }],
+        },
         { day: 3, title: 'Fly home', activities: [] },
       ],
     },
@@ -328,9 +335,9 @@ test('tripFactsFrom: activity labels become positional server facts', () => {
   // `title` wins over `name` (the timeline's own display order); string
   // activities (legacy payloads) pass through; empty days keep their line.
   assert.deepEqual(planFacts().dayPlans, [
-    { day: 1, activities: ['Beach walk', 'Night market'] },
-    { day: 2, activities: ['Temple run'] },
-    { day: 3, activities: [] },
+    { day: 1, activities: ['Beach walk', 'Night market'], stays: ['Casa Anjuna', 'Beach hut'] },
+    { day: 2, activities: ['Temple run'], stays: ['Palm Lodge'] },
+    { day: 3, activities: [], stays: [] },
   ]);
 });
 
@@ -344,6 +351,23 @@ test('tripFactsFrom: activity facts cap per day and per label', () => {
   });
   assert.equal(facts.dayPlans[0].activities.length, ASSISTANT_RULES.ACTIVITIES_PER_DAY_MAX);
   assert.equal(facts.dayPlans[0].activities[0].length, ASSISTANT_RULES.ACTIVITY_LABEL_MAX);
+});
+
+test('tripFactsFrom: stay names cap per day and per label', () => {
+  const facts = tripFactsFrom({
+    tripDetails: {
+      day_by_day_itinerary: [
+        {
+          day: 1,
+          stay_recommendations: Array.from({ length: 6 }, () => ({ name: 'S'.repeat(120) })),
+        },
+        { day: 2, stay_recommendations: [{}, '  ', null] },
+      ],
+    },
+  });
+  assert.equal(facts.dayPlans[0].stays.length, ASSISTANT_RULES.STAYS_PER_DAY_MAX);
+  assert.equal(facts.dayPlans[0].stays[0].length, ASSISTANT_RULES.STAY_LABEL_MAX);
+  assert.deepEqual(facts.dayPlans[1].stays, [], 'nameless stays and junk drop out');
 });
 
 test('validateAssistantProposal: swap/move/update shapes coerce numbers, reject junk', () => {
@@ -436,12 +460,107 @@ test('proposalFitsTrip: update_activity refuses a stale label', () => {
   );
 });
 
+/* ----------------------- F12e: add + choose-one ideas ----------------------- */
+
+test('validateAssistantProposal: add_activity and activity_choices shapes', () => {
+  assert.deepEqual(
+    validateAssistantProposal({ kind: 'add_activity', day: '1', value: 'Cooking class' }),
+    { kind: 'add_activity', day: 1, value: 'Cooking class' }
+  );
+  assert.deepEqual(
+    validateAssistantProposal({
+      kind: 'activity_choices',
+      day: '1',
+      options: ['  Cooking class  ', 'Spice market walk'],
+    }),
+    { kind: 'activity_choices', day: 1, options: ['Cooking class', 'Spice market walk'] }
+  );
+  assert.equal(
+    validateAssistantProposal({ kind: 'activity_choices', day: 1, options: ['Only one'] }),
+    null,
+    'a single option is not a choice'
+  );
+  assert.equal(
+    validateAssistantProposal({
+      kind: 'activity_choices',
+      day: 1,
+      options: ['Market walk', 'market WALK'],
+    }),
+    null,
+    'near-duplicate options collapse to one and are rejected'
+  );
+  assert.equal(
+    validateAssistantProposal({
+      kind: 'activity_choices',
+      day: 1,
+      options: ['A', 'B', 'C', 'D'],
+    }),
+    null,
+    'at most three options fit one card'
+  );
+});
+
+test('proposalFitsTrip: add_activity needs a real day and a legal insert position', () => {
+  const facts = planFacts();
+  assert.equal(proposalFitsTrip({ kind: 'add_activity', day: 1, value: 'X' }, facts), true);
+  assert.equal(
+    proposalFitsTrip({ kind: 'add_activity', day: 1, index: 2, value: 'X' }, facts),
+    true,
+    'appending after the last activity is legal'
+  );
+  assert.equal(
+    proposalFitsTrip({ kind: 'add_activity', day: 1, index: 3, value: 'X' }, facts),
+    false,
+    'an insert cannot skip past the end'
+  );
+  assert.equal(
+    proposalFitsTrip({ kind: 'add_activity', day: 9, value: 'X' }, facts),
+    false,
+    'no such day'
+  );
+});
+
+test('proposalFitsTrip: activity_choices guards a replace, allows an add', () => {
+  const facts = planFacts();
+  const choices = (patch: Record<string, unknown> = {}) => ({
+    kind: 'activity_choices' as const,
+    day: 1,
+    options: ['Cooking class', 'Kerala houseboat lunch'],
+    ...patch,
+  });
+  assert.equal(proposalFitsTrip(choices(), facts), true, 'an add-style picker is safe');
+  assert.equal(
+    proposalFitsTrip(choices({ index: 0, expect: 'Beach walk' }), facts),
+    true,
+    'a replace-style picker matches the label it saw'
+  );
+  assert.equal(
+    proposalFitsTrip(choices({ index: 0, expect: 'Museum' }), facts),
+    false,
+    'a stale label is refused'
+  );
+  assert.equal(
+    proposalFitsTrip(choices({ index: 5, expect: 'Beach walk' }), facts),
+    false,
+    'an out-of-range replace target is refused'
+  );
+  assert.equal(
+    proposalFitsTrip(choices({ expect: 'Beach walk' }), facts),
+    false,
+    'expect without a position is ambiguous'
+  );
+  assert.equal(proposalFitsTrip(choices({ day: 9 }), facts), false, 'no such day');
+});
+
 test('buildAssistantPrompt: activity facts and the F12d protocol render together', () => {
   const composed = buildAssistantPrompt(planFacts(), 'move the beach walk to day 2', []);
   assert.ok(composed.includes('Day 1 activities: [0] Beach walk | [1] Night market'));
   assert.ok(composed.includes('"swap_days"'));
   assert.ok(composed.includes('"move_activity"'));
   assert.ok(composed.includes('"update_activity"'));
+  assert.ok(composed.includes('"add_activity"'));
+  assert.ok(composed.includes('"activity_choices"'));
+  assert.ok(composed.includes('Use update_activity ONLY when the asker has already stated the exact new title'));
   assert.ok(composed.includes('Copy "expect" VERBATIM'));
   assert.ok(composed.includes('never promise to do it later'), 'the no-promises rule ships');
   assert.ok(!composed.includes('Day 3 activities:'), 'days without activities add no line');
@@ -525,4 +644,235 @@ test('buildAssistantPrompt: a day anchor is only added when the trip describes t
   // An out-of-range day adds NO invented structure.
   const phantom = buildAssistantPrompt(facts, 'q', [], { dayAnchor: 9 });
   assert.ok(!phantom.includes('asking about'));
+});
+
+/* --------------------- F12f: stays + multi-edit sets ----------------------- */
+
+test('validateAssistantProposal: add_stay and stay_choices shapes', () => {
+  assert.deepEqual(
+    validateAssistantProposal({
+      kind: 'add_stay',
+      day: '1',
+      value: { name: '  Casa Anjuna  ', location: 'Anjuna', vibe: 'quiet' },
+    }),
+    { kind: 'add_stay', day: 1, value: { name: 'Casa Anjuna', location: 'Anjuna', vibe: 'quiet' } }
+  );
+  assert.deepEqual(
+    validateAssistantProposal({
+      kind: 'stay_choices',
+      day: '2',
+      options: [{ name: 'Palm Lodge' }, { name: 'Cove House', location: 'Vagator' }],
+    }),
+    {
+      kind: 'stay_choices',
+      day: 2,
+      options: [{ name: 'Palm Lodge' }, { name: 'Cove House', location: 'Vagator' }],
+    },
+    'a stay picker needs names only — location/vibe stay optional'
+  );
+  assert.equal(
+    validateAssistantProposal({ kind: 'stay_choices', day: 2, options: [{ name: 'One' }] }),
+    null,
+    'a single stay is not a choice'
+  );
+  assert.equal(
+    validateAssistantProposal({
+      kind: 'stay_choices',
+      day: 2,
+      options: [{ name: 'Palm Lodge' }, { name: 'palm  lodge' }],
+    }),
+    null,
+    'near-duplicate stay names collapse to one and are rejected'
+  );
+  assert.equal(
+    validateAssistantProposal({ kind: 'add_stay', day: 1, value: { name: '' } }),
+    null,
+    'an unnamed stay cannot be added'
+  );
+});
+
+test('proposalFitsTrip: stays need a real day and a matching replace target', () => {
+  const facts = planFacts();
+  assert.equal(
+    proposalFitsTrip({ kind: 'add_stay', day: 3, value: { name: 'Airport hotel' } }, facts),
+    true,
+    'a day with no stays can still receive one'
+  );
+  assert.equal(
+    proposalFitsTrip({ kind: 'add_stay', day: 9, value: { name: 'X' } }, facts),
+    false,
+    'no such day'
+  );
+  assert.equal(
+    proposalFitsTrip(
+      { kind: 'add_stay', day: 1, value: { name: 'Cove House' }, expect: 'Beach hut' },
+      facts
+    ),
+    true,
+    'a replace target is matched case/space tolerantly'
+  );
+  assert.equal(
+    proposalFitsTrip(
+      { kind: 'add_stay', day: 1, value: { name: 'Cove House' }, expect: 'Somewhere else' },
+      facts
+    ),
+    false,
+    'a stale replace target is refused'
+  );
+  assert.equal(
+    proposalFitsTrip(
+      { kind: 'stay_choices', day: 2, options: [{ name: 'Cove House' }, { name: 'Palm Grove' }] },
+      facts
+    ),
+    true,
+    'an add-style stay picker is safe'
+  );
+  assert.equal(
+    proposalFitsTrip(
+      {
+        kind: 'stay_choices',
+        day: 2,
+        expect: 'Palm Lodge',
+        options: [{ name: 'Cove House' }, { name: 'Palm Grove' }],
+      },
+      facts
+    ),
+    true,
+    'a replace-style picker finds its stay'
+  );
+  assert.equal(
+    proposalFitsTrip(
+      {
+        kind: 'stay_choices',
+        day: 3,
+        expect: 'Palm Lodge',
+        options: [{ name: 'Cove House' }, { name: 'Palm Grove' }],
+      },
+      facts
+    ),
+    false,
+    'a replace target on a day without stays is refused'
+  );
+});
+
+test('validateAssistantProposals: a multi-edit set must touch distinct days', () => {
+  const rename = { kind: 'day_title', day: 1, value: 'Beach morning' };
+  const tip = { kind: 'day_tip', day: 2, value: 'Carry cash' };
+  assert.deepEqual(validateAssistantProposals([rename, tip]), [rename, tip]);
+
+  assert.deepEqual(
+    validateAssistantProposals([rename, { kind: 'day_tip', day: 1, value: 'More' }]),
+    [],
+    'two edits on the same day cannot apply safely'
+  );
+  assert.deepEqual(
+    validateAssistantProposals([
+      { kind: 'swap_days', from_day: 1, to_day: 2 },
+      { kind: 'day_tip', day: 2, value: 'More' },
+    ]),
+    [],
+    'a swap claims both of its days'
+  );
+  assert.deepEqual(
+    validateAssistantProposals([
+      { kind: 'move_activity', day: 1, index: 0, to_day: 2, to_index: 0, expect: 'Beach walk' },
+      { kind: 'day_title', day: 2, value: 'Later' },
+    ]),
+    [],
+    'a move claims source and destination'
+  );
+  assert.deepEqual(
+    validateAssistantProposals([
+      { kind: 'move_activity', day: 1, index: 0, to_day: 2, to_index: 0, expect: 'Beach walk' },
+      { kind: 'day_title', day: 3, value: 'Home' },
+    ]).length,
+    2,
+    'unrelated days are fine'
+  );
+});
+
+test('validateAssistantProposals: a picker is always alone and the set is capped', () => {
+  const picker = {
+    kind: 'activity_choices',
+    day: 1,
+    options: ['Cooking class', 'Spice market walk'],
+  };
+  const tip = { kind: 'day_tip', day: 2, value: 'Carry cash' };
+  assert.deepEqual(validateAssistantProposals([picker, tip]), [picker], 'the picker survives alone');
+
+  const stayPicker = {
+    kind: 'stay_choices',
+    day: 2,
+    options: [{ name: 'Cove House' }, { name: 'Palm Grove' }],
+  };
+  assert.deepEqual(validateAssistantProposals([stayPicker, tip]), [stayPicker]);
+
+  const four = [
+    { kind: 'day_title', day: 1, value: 'A' },
+    { kind: 'day_title', day: 2, value: 'B' },
+    { kind: 'day_title', day: 3, value: 'C' },
+    { kind: 'day_title', day: 4, value: 'D' },
+  ];
+  assert.deepEqual(
+    validateAssistantProposals(four),
+    [],
+    'more than three edits is the whole answer, not a truncated set'
+  );
+
+  assert.deepEqual(validateAssistantProposals([]), []);
+  assert.deepEqual(validateAssistantProposals('nope'), []);
+  assert.deepEqual(
+    validateAssistantProposals([{ kind: 'unknown' }, tip]),
+    [tip],
+    'junk items drop, the valid ones stay'
+  );
+});
+
+test('parseAssistantAnswer: a proposals array becomes one multi-edit answer', () => {
+  const parsed = parseAssistantAnswer(
+    JSON.stringify({
+      text: 'Shuffled Day 1 and retitled Day 2.',
+      proposals: [
+        { kind: 'day_title', day: 1, value: 'Beach morning' },
+        { kind: 'day_tip', day: 2, value: 'Carry cash' },
+      ],
+    })
+  );
+  assert.equal(parsed.text, 'Shuffled Day 1 and retitled Day 2.');
+  assert.equal(parsed.proposal, null, 'a set is not a single proposal');
+  assert.deepEqual(parsed.proposals, [
+    { kind: 'day_title', day: 1, value: 'Beach morning' },
+    { kind: 'day_tip', day: 2, value: 'Carry cash' },
+  ]);
+});
+
+test('parseAssistantAnswer: a one-item array collapses to a normal card', () => {
+  const parsed = parseAssistantAnswer(
+    '{"text":"","proposals":[{"kind":"day_tip","day":1,"value":"Carry cash"}]}'
+  );
+  assert.deepEqual(parsed.proposal, { kind: 'day_tip', day: 1, value: 'Carry cash' });
+  assert.equal(parsed.proposals.length, 1);
+  assert.ok(parsed.text.length > 0);
+});
+
+test('parseAssistantAnswer: an empty text with several edits gets a template line', () => {
+  const parsed = parseAssistantAnswer(
+    '{"text":"","proposals":[{"kind":"day_tip","day":1,"value":"A"},{"kind":"day_tip","day":2,"value":"B"}]}'
+  );
+  assert.equal(parsed.text, 'Here are the proposed changes for the trip.');
+  assert.equal(parsed.proposals.length, 2);
+});
+
+test('buildAssistantPrompt: stays, multi-edit protocol and routing rules ship', () => {
+  const composed = buildAssistantPrompt(planFacts(), 'where should we stay on day 1?', []);
+  assert.ok(composed.includes('Day 1 stays: “Casa Anjuna” | “Beach hut”'));
+  assert.ok(composed.includes('Day 2 stays: “Palm Lodge”'));
+  assert.ok(!composed.includes('Day 3 stays:'), 'days without stays add no line');
+  assert.ok(composed.includes('"add_stay"'));
+  assert.ok(composed.includes('"stay_choices"'));
+  assert.ok(composed.includes('"proposals"'));
+  assert.ok(composed.includes('never more than three'));
+  assert.ok(composed.includes('a picker (activity_choices/stay_choices) must be the ONLY item'));
+  assert.ok(composed.includes('swap_days'), 'day swaps are routed explicitly');
+  assert.ok(composed.includes('rename a day with day_title'));
 });

@@ -17,12 +17,14 @@ import {
 import { toast } from "sonner";
 import {
   BarChart3,
+  BedDouble,
   Bot,
   ChevronDown,
   Loader2,
   MessageCircle,
   Pencil,
   Pin,
+  Plus,
   RotateCcw,
   Send,
   Sparkles,
@@ -37,12 +39,19 @@ import type { TripComment, TripDecision, TripPoll, TripRole } from "@/types/trip
 import type {
   AssistantProposal,
   BotBubblePayload,
+  StayProposal as StayProposalValue,
 } from "@/types/trip";
 import type { UseTripComments } from "@/hooks/useTripComments";
 import type { ChatCryptoApi } from "@/hooks/useTripChatCrypto";
 import { useDecodedPolls } from "@/hooks/useDecodedPolls";
 import { PollCard, PollComposer, PollsBand } from "@/components/dashboard/Polls";
 import { isRevConflict } from "@/lib/conflicts";
+import { resolveActivityChoice, resolveStayChoice } from "@/lib/proposalApply";
+import {
+  assistantCardStateKey,
+  loadAssistantCardMemory,
+  saveAssistantCardMemory,
+} from "@/lib/assistantCardState";
 
 /**
  * The trip discussion surface (Milestone 6 §19.7 / §20, sprint F6b) — day-
@@ -84,7 +93,7 @@ interface CommentsTabProps {
    * versioned). Absent for read-only viewers — their cards render the
    * suggestion without the Apply controls.
    */
-  onApplyProposal?: (proposal: AssistantProposal) => Promise<void> | void;
+  onApplyProposal?: (proposals: AssistantProposal[]) => Promise<void> | void;
   /**
    * F13a: the caller's own user id. Polls are voted on by comparing the stable
    * id on each vote (broadcast frames cannot carry a per-recipient `isYou`),
@@ -141,14 +150,20 @@ function mentionTokenAt(
  */
 function parseBotCard(
   plain: string
-): { text: string; proposal: AssistantProposal } | null {
+): { text: string; proposals: AssistantProposal[] } | null {
   const body = plain.trim();
   if (!body.startsWith("{") || !body.endsWith("}")) return null;
   try {
     const parsed = JSON.parse(body) as BotBubblePayload | null;
     if (!parsed || parsed.v !== 1 || typeof parsed.text !== "string") return null;
-    const proposal = parsed.proposal;
-    return looksLikeProposal(proposal) ? { text: parsed.text, proposal } : null;
+    const rawList =
+      Array.isArray(parsed.proposals) && parsed.proposals.length > 0
+        ? parsed.proposals
+        : parsed.proposal
+          ? [parsed.proposal]
+          : [];
+    const proposals = validateProposalSet(rawList);
+    return proposals.length > 0 ? { text: parsed.text, proposals } : null;
   } catch {
     return null;
   }
@@ -162,6 +177,55 @@ const isPosition = (value: unknown): value is number =>
 
 const isDayNumber = (value: unknown): value is number =>
   Number.isInteger(value) && (value as number) >= 1;
+
+const isStay = (value: unknown): value is StayProposalValue => {
+  if (!value || typeof value !== "object") return false;
+  const stay = value as Record<string, unknown>;
+  return (
+    isText(stay.name) &&
+    (stay.location === undefined || isText(stay.location)) &&
+    (stay.vibe === undefined || isText(stay.vibe))
+  );
+};
+
+/** Max edits per answer — mirrors `ASSISTANT_PROPOSALS_MAX` server-side. */
+const BOT_PROPOSALS_MAX = 3;
+/** Serialized-size backstop — mirrors `ASSISTANT_PROPOSAL_JSON_MAX`. */
+const BOT_PROPOSALS_JSON_MAX = 1400;
+
+const isChoiceProposal = (proposal: AssistantProposal): boolean =>
+  proposal.kind === "activity_choices" || proposal.kind === "stay_choices";
+
+/** Every day a proposal reads or writes (a swap/move claims both). */
+function touchedDays(proposal: AssistantProposal): number[] {
+  if (proposal.kind === "swap_days") return [proposal.from_day, proposal.to_day];
+  if (proposal.kind === "move_activity") return [proposal.day, proposal.to_day];
+  return "day" in proposal ? [proposal.day] : [];
+}
+
+/**
+ * Client backstop for a decrypted bot envelope: the server only ever writes
+ * valid sets, but any member can flag their own row `bot: true`. A set is
+ * shown only when it is safe to apply in array order — at most three edits,
+ * a picker strictly alone, and no two edits on one day.
+ */
+function validateProposalSet(raw: unknown[]): AssistantProposal[] {
+  if (raw.length > BOT_PROPOSALS_MAX) return [];
+  const valid = raw.filter(looksLikeProposal) as AssistantProposal[];
+  if (valid.length === 0) return [];
+  if (valid.some(isChoiceProposal)) {
+    const pickers = valid.filter(isChoiceProposal);
+    return pickers.length === 1 ? [pickers[0]] : [];
+  }
+  const seen = new Set<number>();
+  for (const proposal of valid) {
+    for (const day of touchedDays(proposal)) {
+      if (seen.has(day)) return [];
+      seen.add(day);
+    }
+  }
+  return JSON.stringify(valid).length <= BOT_PROPOSALS_JSON_MAX ? valid : [];
+}
 
 /**
  * Client-side backstop mirroring the server's zod union. Structural kinds
@@ -191,6 +255,50 @@ function looksLikeProposal(proposal: unknown): proposal is AssistantProposal {
       );
     case "update_activity":
       return isDayNumber(p.day) && isPosition(p.index) && isText(p.value) && isText(p.expect);
+    case "add_activity":
+      return (
+        isDayNumber(p.day) &&
+        isText(p.value) &&
+        (p.index === undefined || isPosition(p.index))
+      );
+    case "activity_choices":
+      return (
+        isDayNumber(p.day) &&
+        Array.isArray(p.options) &&
+        p.options.length >= 2 &&
+        p.options.length <= 3 &&
+        p.options.every(isText) &&
+        (p.index === undefined || isPosition(p.index)) &&
+        (p.expect === undefined || isText(p.expect))
+      );
+    case "add_stay":
+      return (
+        isDayNumber(p.day) &&
+        isStay(p.value) &&
+        (p.expect === undefined || isText(p.expect))
+      );
+    case "stay_choices": {
+      if (
+        !(
+          isDayNumber(p.day) &&
+          Array.isArray(p.options) &&
+          p.options.length >= 2 &&
+          p.options.length <= 3 &&
+          p.options.every(isStay) &&
+          (p.expect === undefined || isText(p.expect))
+        )
+      ) {
+        return false;
+      }
+      // Distinct names only: a repeated option is not a choice (and would
+      // collide as a React key).
+      const names = new Set(
+        p.options.map((option) =>
+          (option as StayProposalValue).name.trim().toLowerCase().replace(/\s+/g, " ")
+        )
+      );
+      return names.size === p.options.length;
+    }
     default:
       return false;
   }
@@ -211,6 +319,20 @@ function proposalLabel(proposal: AssistantProposal): string {
       return `Day ${proposal.from_day} ↔ Day ${proposal.to_day}`;
     case "move_activity":
       return `Day ${proposal.day} → Day ${proposal.to_day} — move an activity`;
+    case "add_activity":
+      return `Day ${proposal.day} — add an activity`;
+    case "activity_choices":
+      return proposal.index !== undefined && proposal.expect !== undefined
+        ? `Day ${proposal.day} — choose a replacement`
+        : `Day ${proposal.day} — choose an activity`;
+    case "add_stay":
+      return proposal.expect !== undefined
+        ? `Day ${proposal.day} — swap the stay`
+        : `Day ${proposal.day} — add a stay`;
+    case "stay_choices":
+      return proposal.expect !== undefined
+        ? `Day ${proposal.day} — choose a replacement stay`
+        : `Day ${proposal.day} — choose a stay`;
     default:
       return `Day ${proposal.day} — rename an activity`;
   }
@@ -227,6 +349,16 @@ function formatProposalValue(proposal: AssistantProposal): string {
       return `“${proposal.expect}” moves to Day ${proposal.to_day}`;
     case "update_activity":
       return `“${proposal.value}”`;
+    case "add_activity":
+      return `“${proposal.value}”`;
+    case "activity_choices":
+      return `${proposal.options.length} options to pick from`;
+    case "add_stay":
+      return `“${proposal.value.name}”${
+        proposal.value.location ? ` — ${proposal.value.location}` : ""
+      }`;
+    case "stay_choices":
+      return `${proposal.options.length} stays to pick from`;
     default:
       return proposal.value;
   }
@@ -302,9 +434,18 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
   // F12a: a @waytowalk ask is in flight — "waytowalk is typing…" placeholder.
   const [botThinking, setBotThinking] = useState(false);
   // F12b: per-row local decision state for proposal cards (the row itself is
-  // immutable ciphertext — "applied"/"dismissed" survive only this visit).
-  const [appliedProposals, setAppliedProposals] = useState<Set<string>>(new Set());
-  const [dismissedProposals, setDismissedProposals] = useState<Set<string>>(new Set());
+  // immutable ciphertext). F12e follow-up: persisted per trip × user so a
+  // chosen card stays chosen after the drawer closes or the page reloads.
+  const cardStateKey = useMemo(
+    () => assistantCardStateKey(tripId, currentUserId),
+    [tripId, currentUserId]
+  );
+  const [appliedProposals, setAppliedProposals] = useState<Set<string>>(
+    () => loadAssistantCardMemory(cardStateKey).applied
+  );
+  const [dismissedProposals, setDismissedProposals] = useState<Set<string>>(
+    () => loadAssistantCardMemory(cardStateKey).dismissed
+  );
   // F13a: poll composer + the one poll whose vote/close/remove is in flight.
   const [pollComposerOpen, setPollComposerOpen] = useState(false);
   const [pollCreating, setPollCreating] = useState(false);
@@ -324,13 +465,30 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
     }
   });
 
-  /** Compose the proposal through the parent save path, then mark the card. */
-  const applyProposal = async (row: TripComment) => {
-    const proposal = parseBotCard(bodyOf(row))?.proposal;
-    if (!proposal || !onApplyProposal) return;
+  /** Compose the proposal set through the parent save path, then mark the card. */
+  const applyProposal = async (
+    row: TripComment,
+    chosenOption?: string | StayProposalValue
+  ) => {
+    const card = parseBotCard(bodyOf(row));
+    if (!card || !onApplyProposal) return;
+    // A picker is not an edit by itself: the picked idea becomes a concrete
+    // replace/add, which the parent then drift-checks and saves. A settled set
+    // applies whole — one save for every edit the answer proposed.
+    const [first] = card.proposals;
+    let resolved: AssistantProposal[];
+    if (card.proposals.length === 1 && first.kind === "activity_choices") {
+      if (typeof chosenOption !== "string") return;
+      resolved = [resolveActivityChoice(first, chosenOption)];
+    } else if (card.proposals.length === 1 && first.kind === "stay_choices") {
+      if (!chosenOption || typeof chosenOption === "string") return;
+      resolved = [resolveStayChoice(first, chosenOption)];
+    } else {
+      resolved = card.proposals;
+    }
     try {
       setBusyId(row._id);
-      await onApplyProposal(proposal);
+      await onApplyProposal(resolved);
       setAppliedProposals((prev) => new Set(prev).add(row._id));
     } catch (err: any) {
       // A 409 already showed its own conflict medicine upstream — no duet.
@@ -358,6 +516,22 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
   useEffect(() => {
     cryptoApi.syncRows(decisions);
   }, [decisions, cryptoApi]);
+
+  // Card memory follows the trip × user key: if the chat identity resolves
+  // after mount (or the drawer is reused for another trip) reload, and keep
+  // the stored sets in sync on every apply or dismiss.
+  const cardStateKeyRef = useRef(cardStateKey);
+  useEffect(() => {
+    if (cardStateKeyRef.current === cardStateKey) return;
+    cardStateKeyRef.current = cardStateKey;
+    const memory = loadAssistantCardMemory(cardStateKey);
+    setAppliedProposals(memory.applied);
+    setDismissedProposals(memory.dismissed);
+  }, [cardStateKey]);
+  useEffect(() => {
+    if (cardStateKeyRef.current !== cardStateKey) return;
+    saveAssistantCardMemory(cardStateKey, appliedProposals, dismissedProposals);
+  }, [cardStateKey, appliedProposals, dismissedProposals]);
 
   // Dismiss the context actions on anything but the bubble that opened them:
   // a click elsewhere, Escape, or any scroll (capture — the chat surface is a
@@ -532,13 +706,21 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
           context,
           day: anchorDay ?? undefined,
         });
-        // F12b: a proposal rides INSIDE the bubble as a visible JSON envelope
-        // — other members decrypt the same bytes and render the same card.
-        const bubble = answer.proposal
+        // F12b/F12f: proposals ride INSIDE the bubble as a visible JSON
+        // envelope — other members decrypt the same bytes and render the same
+        // card. One edit keeps the legacy single `proposal` shape.
+        const proposals = answer.proposals?.length
+          ? answer.proposals
+          : answer.proposal
+            ? [answer.proposal]
+            : [];
+        const bubble = proposals.length
           ? JSON.stringify({
               v: 1,
               text: answer.reply,
-              proposal: answer.proposal,
+              ...(proposals.length === 1
+                ? { proposal: proposals[0] }
+                : { proposals }),
             } satisfies BotBubblePayload)
           : answer.reply;
         const replyPayload = await cryptoApi.encryptOutgoing(bubble);
@@ -1297,7 +1479,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
               proposalApplied={appliedProposals.has(row._id)}
               proposalDismissed={dismissedProposals.has(row._id)}
               canApplyProposal={Boolean(onApplyProposal)}
-              onApplyProposal={() => void applyProposal(row)}
+              onApplyProposal={(option) => void applyProposal(row, option)}
               onDismissProposal={() =>
                 setDismissedProposals((prev) => new Set(prev).add(row._id))
               }
@@ -1707,14 +1889,14 @@ interface CommentRowProps {
   onSaveEdit: () => void;
   onCancelEdit: () => void;
   onAskDelete: () => void;
-  /** F12b: a validated proposal envelope parsed from this row (bot rows only). */
-  botCard?: { text: string; proposal: AssistantProposal } | null;
+  /** F12b/F12f: a validated proposal set parsed from this row (bot rows only). */
+  botCard?: { text: string; proposals: AssistantProposal[] } | null;
   /** F12b: local, per-visit card state. */
   proposalApplied?: boolean;
   proposalDismissed?: boolean;
   /** Applying needs edit access on the trip (the parent composes the save). */
   canApplyProposal?: boolean;
-  onApplyProposal?: () => void;
+  onApplyProposal?: (chosenOption?: string | StayProposalValue) => void;
   onDismissProposal?: () => void;
 }
 
@@ -1915,34 +2097,124 @@ const CommentRow: React.FC<CommentRowProps> = ({
           </p>
         )}
 
-        {/* F12b proposal card: rides inside the bot bubble, dismissed/applied
-            is per-visit local state (the row itself is immutable ciphertext). */}
+        {/* F12b/F12f proposal card: rides inside the bot bubble. The row itself
+            is immutable ciphertext, so "applied"/"dismissed" live in per-browser
+            memory (see lib/assistantCardState) and survive a reopened drawer.
+            A multi-edit answer renders one row per edit and applies as one set. */}
         {botCard && !proposalDismissed && (
           <div className="mt-1.5 rounded-xl border border-violet-300/60 bg-background/85 p-2.5 dark:border-violet-500/30">
             <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-violet-600 dark:text-violet-300">
               <Bot className="h-3 w-3" />
-              <span>Proposed change</span>
+              <span>
+                {botCard.proposals.length > 1 ? "Proposed changes" : "Proposed change"}
+              </span>
             </div>
-            <p className="mt-1 text-sm font-bold">{proposalLabel(botCard.proposal)}</p>
-            <p className="text-sm break-words text-foreground/90">
-              <span className="text-muted-foreground">→ </span>
-              {formatProposalValue(botCard.proposal)}
-            </p>
+            <div
+              className={cn(
+                "mt-1 space-y-2",
+                botCard.proposals.length > 1 &&
+                  "divide-y divide-violet-300/40 dark:divide-violet-500/25"
+              )}
+            >
+              {botCard.proposals.map((proposal, index) => (
+                <div key={index} className={cn(index > 0 && "pt-2")}>
+                  <p className="text-sm font-bold">{proposalLabel(proposal)}</p>
+                  {proposal.kind === "activity_choices" ? (
+                    <div className="mt-1.5 space-y-1.5">
+                      <p className="text-[11px] leading-snug text-muted-foreground">
+                        {proposal.index !== undefined && proposal.expect !== undefined
+                          ? `Pick one to replace “${proposal.expect}”.`
+                          : "Pick one to add it to the day."}
+                      </p>
+                      <div className="space-y-1.5">
+                        {proposal.options.map((option) => (
+                          <button
+                            key={option}
+                            type="button"
+                            onClick={() => onApplyProposal?.(option)}
+                            disabled={isBusy || !canApplyProposal || proposalApplied}
+                            className="flex w-full items-start gap-2 rounded-lg border border-violet-300/60 bg-background px-2.5 py-2 text-left text-xs font-semibold leading-snug transition-colors hover:bg-violet-500/10 disabled:cursor-default disabled:opacity-60 dark:border-violet-500/30"
+                          >
+                            <Plus className="mt-0.5 h-3 w-3 shrink-0 text-violet-600 dark:text-violet-300" />
+                            <span className="break-words">{option}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : proposal.kind === "stay_choices" ? (
+                    <div className="mt-1.5 space-y-1.5">
+                      <p className="text-[11px] leading-snug text-muted-foreground">
+                        {proposal.expect !== undefined
+                          ? `Pick one to replace “${proposal.expect}”.`
+                          : "Pick one to add it to the day."}
+                      </p>
+                      <div className="space-y-1.5">
+                        {proposal.options.map((option) => (
+                          <button
+                            key={option.name}
+                            type="button"
+                            onClick={() => onApplyProposal?.(option)}
+                            disabled={isBusy || !canApplyProposal || proposalApplied}
+                            className="flex w-full items-start gap-2 rounded-lg border border-violet-300/60 bg-background px-2.5 py-2 text-left text-xs font-semibold leading-snug transition-colors hover:bg-violet-500/10 disabled:cursor-default disabled:opacity-60 dark:border-violet-500/30"
+                          >
+                            <BedDouble className="mt-0.5 h-3 w-3 shrink-0 text-violet-600 dark:text-violet-300" />
+                            <span className="min-w-0">
+                              <span className="block break-words">{option.name}</span>
+                              {(option.location || option.vibe) && (
+                                <span className="mt-0.5 block text-[10px] font-medium text-muted-foreground">
+                                  {[option.location, option.vibe].filter(Boolean).join(" · ")}
+                                </span>
+                              )}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm break-words text-foreground/90">
+                      <span className="text-muted-foreground">→ </span>
+                      {formatProposalValue(proposal)}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
             {proposalApplied ? (
               <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-violet-500/15 px-2 py-0.5 text-[10px] font-bold text-violet-700 dark:text-violet-300">
                 <Sparkles className="h-2.5 w-2.5" /> Applied to the itinerary
               </span>
+            ) : botCard.proposals.length === 1 &&
+              (botCard.proposals[0].kind === "activity_choices" ||
+                botCard.proposals[0].kind === "stay_choices") ? (
+              canApplyProposal ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={onDismissProposal}
+                  disabled={isBusy}
+                  className="mt-2 h-7 rounded-full text-muted-foreground"
+                >
+                  Not now
+                </Button>
+              ) : (
+                <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
+                  Members with edit access can apply this from the card.
+                </p>
+              )
             ) : canApplyProposal ? (
               <div className="mt-2 flex items-center gap-1.5">
                 <Button
                   type="button"
                   size="sm"
-                  onClick={onApplyProposal}
+                  onClick={() => onApplyProposal?.()}
                   disabled={isBusy}
                   className="h-7 rounded-full gap-1.5"
                 >
                   {isBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-                  Apply change
+                  {botCard.proposals.length > 1
+                    ? `Apply all ${botCard.proposals.length} changes`
+                    : "Apply change"}
                 </Button>
                 <Button
                   type="button"

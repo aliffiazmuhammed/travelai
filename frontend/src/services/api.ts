@@ -2963,8 +2963,9 @@ class ApiClient {
    * grounding. The reply comes back PLAINTEXT to this caller's browser ONLY;
    * the caller then encrypts it with the trip conversation key and posts it
    * through addTripComment as a bot:true row (the server stores no plaintext).
-   * F12b: `proposal` carries ONE typed itinerary change (or null); the client
-   * envelope-wraps it into the bubble and a human applies it through the
+   * F12b: `proposal` carries ONE typed itinerary change (or null); F12f adds
+   * `proposals` for a multi-edit set (0..3, empty when none). The client
+   * envelope-wraps them into the bubble and a human applies them through the
    * normal save path.
    */
   async askAssistant(
@@ -2974,6 +2975,7 @@ class ApiClient {
     success: boolean;
     reply: string;
     proposal: AssistantProposal | null;
+    proposals: AssistantProposal[];
     provider: string;
     cached: boolean;
   }> {

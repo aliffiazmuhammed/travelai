@@ -510,6 +510,13 @@ export interface TripInviteInfo {
   createdAt: string;
 }
 
+/** F12f: the stay a suggestion names — enough for the card, nothing else. */
+export interface StayProposal {
+  name: string;
+  location?: string;
+  vibe?: string;
+}
+
 /**
  * F12b: ONE typed itinerary change TravelAI may SUGGEST. Never applied by the
  * bot — a human with edit access taps Apply through the normal save path (PUT
@@ -530,13 +537,34 @@ export type AssistantProposal =
       to_index: number;
       expect: string;
     }
-  | { kind: "update_activity"; day: number; index: number; value: string; expect: string };
+  | { kind: "update_activity"; day: number; index: number; value: string; expect: string }
+  | { kind: "add_activity"; day: number; index?: number; value: string }
+  | {
+      kind: "activity_choices";
+      day: number;
+      index?: number;
+      expect?: string;
+      options: string[];
+    }
+  | { kind: "add_stay"; day: number; value: StayProposal; expect?: string }
+  | {
+      kind: "stay_choices";
+      day: number;
+      expect?: string;
+      options: StayProposal[];
+    };
 
-/** F12b: the JSON envelope encrypted into a bot row when the answer proposes a change. */
+/**
+ * F12b/F12f: the JSON envelope encrypted into a bot row when the answer
+ * proposes changes. `proposal` is the single-edit legacy shape; `proposals`
+ * carries a multi-edit set (server-validated to at most 3, disjoint days,
+ * a picker always alone).
+ */
 export interface BotBubblePayload {
   v: 1;
   text: string;
-  proposal: AssistantProposal | null;
+  proposal?: AssistantProposal | null;
+  proposals?: AssistantProposal[] | null;
 }
 
 /**

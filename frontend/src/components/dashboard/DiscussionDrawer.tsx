@@ -45,8 +45,8 @@ interface DiscussionDrawerProps {
   crypto?: ChatCryptoApi;
   /** The live SSE roster — shown as a mini avatar stack in the header. */
   presence?: PresenceUser[];
-  /** F12b: proposal Apply composition — forwarded to the inner CommentsTab. */
-  onApplyProposal?: (proposal: AssistantProposal) => Promise<void> | void;
+  /** F12b/F12f: proposal Apply composition — forwarded to the inner CommentsTab. */
+  onApplyProposal?: (proposals: AssistantProposal[]) => Promise<void> | void;
   /** F13a: the caller's id, so poll votes can be recognised as "mine". */
   currentUserId?: string;
 }

@@ -257,6 +257,49 @@ The user asked the assistant to *swap the activities of Day 1 and Day 2*. The bo
 
 **Verification.** Backend `tsc` clean; suite **276/276** (9 new: facts/index caps, coercion walls, swap/move/update fit-checks, drift refusal, prompt protocol + no-promises line, envelope round-trip, `labelMatches`). The pure apply module was probed directly (11/11: rename preserving other fields, cross-day insert, same-day final-position reorder, move into an empty day, stale-label/out-of-range/append/no-op refusals, input purity). Live two-provider probe confirmed all three kinds come back correctly indexed with a verbatim `expect`. `smoke-f12a.mts` extended: the smoke trip now carries activities, the typed-kind wall covers 7 kinds, and bob's bucket adds the activity ask with drift-guard assertions. Frontend typecheck + build + SPA mirror refreshed.
 
+### 12.12b F12e — add + choose-one activity ideas (user-reported, 2026-11-08)
+
+The user reported that asking *"suggest other activity for day 1"* produced only rename cards. The union could express replacing one activity's title, but not **adding** an activity or offering the group a set of ideas — so the model's only legal move was a rename, which is what it did.
+
+Two kinds joined the union (9 total):
+
+| kind | fields | meaning |
+|---|---|---|
+| `add_activity` | `day`, optional `index`, `value` | insert one activity (append when `index` is omitted); `index` is an insert position `0..length` |
+| `activity_choices` | `day`, optional `index` + `expect`, `options[2..3]` | a pick-one card: with `index`+`expect` the picked idea **replaces** that activity (same drift guard); without them it is **added** |
+
+The prompt now routes by intent: alternatives/ideas/"something else" → `activity_choices` with 2-3 DISTINCT concrete activities; a single named addition → `add_activity`; `update_activity` only when the asker already stated the exact new title. Near-duplicate options are collapsed by `validateAssistantProposal` (fewer than two distinct ideas → no card), and `proposalFitsTrip` validates the day and the optional replace target before the card ships. The card renders one row per option; picking one resolves client-side (`resolveActivityChoice` in `lib/proposalApply.ts`) into the same `update_activity` / `add_activity` edit the existing Apply path already saves, so the bot still never writes.
+
+**Choosing is remembered (follow-up, same day).** The user then reported that a picked card asked again after closing and reopening the chat: applied/dismissed lived in component state, and the drawer unmounts. A bot row is immutable ciphertext, so the decision has nowhere to live on the server — it now persists per **trip × user** in `localStorage` (`lib/assistantCardState.ts`, key `ww:assistant-card-state:<tripId>:<userId>`, 200 ids per set, corrupt/private-mode storage degrades to the old per-visit behaviour). Applied cards keep their "Applied to the itinerary" chip and disabled options; a dismissed card stays hidden. This is deliberately per browser, not per account: another member's card still offers the choice, and two editors picking the same "add" option are stopped by a case/space-insensitive duplicate guard in `applyActivityEdit` ("… is already on Day N.") instead of adding the activity twice.
+
+**Verification.** Live provider probe (Gemini): *"suggest other activity for day 1"* → 3 distinct options, add-style, `fits: true`; *"something else on day 2 instead of adventure sports"* → 2 options with `index: 0` and the verbatim `expect`, `fits: true`. Backend `tsc` + frontend typecheck clean; assistant suite 42/42 (dual-option dedupe, add/replace fit walls, prompt protocol). Browser QA on a cloned trip: ask → 2-option card → pick one → the row id lands in `localStorage` and the card shows applied; Escape-close/reopen still applied; full page reload, walk back into the trip and chat, still applied. No console errors.
+
+### 12.12c F12f — stays, day swaps, day edits and multi-edit answers (user-reported, 2026-11-08)
+
+The user asked for "stay suggestions day swaps multiple edits day edits". Swaps and per-day title/tip cards had shipped in F12d, but the prompt only described them in passing; the two genuinely missing capabilities were **stay suggestions** and an answer that changes **more than one thing**.
+
+**Stays — two kinds join the union (11 total):**
+
+| kind | fields | meaning |
+|---|---|---|
+| `add_stay` | `day`, `value {name, location?, vibe?}`, optional `expect` | add one stay; with `expect` it **replaces** that named stay on the day |
+| `stay_choices` | `day`, optional `expect`, `options[2..3]` | a pick-one stay card; with `expect` the pick replaces, otherwise it is added |
+
+`tripFactsFrom` now emits `Day N stays: “…” | “…”` per day (≤4 stays × 60 chars), which is what makes a replace target addressable; `proposalFitsTrip` checks the day and that the named stay still exists, and `validateAssistantProposal` collapses near-duplicate options. The card shows each stay's name with its location · vibe line. Apply is `applyStayEdit` in `lib/proposalApply.ts`: a replacement keeps the curated card's other details (price, description) and swaps only name/location/vibe, while an add refuses a duplicate name case/space-insensitively — two editors picking the same hotel cannot double-book the card.
+
+**Multi-edit answers.** The envelope gains `{"text":"…","proposals":[…]}` (the single `proposal` shape is still read); at most three edits. Two rules keep sequential application honest, because every index and `expect` in a set was written against the itinerary **before** any edit ran:
+
+1. a picker (`activity_choices` / `stay_choices`) must be the **only** item — it is a question, not a settled edit;
+2. no two edits may touch the same day, where a swap claims both of its days and a move claims source and destination.
+
+`validateAssistantProposals` enforces both (and drops a four-item answer whole rather than trimming it — a trimmed set would silently change the ask), and `answerTravelAI` drops the whole set when any member fails `proposalFitsTrip`. The client mirrors every rule in `validateProposalSet`, because any member can flag their own row `bot: true`. A set applies from one pre-edit snapshot and saves **once** through the unchanged `onSave` path (required `baseRev`, versioned); the card renders one labelled row per edit with a single `Apply all N changes`. `ASSISTANT_PROPOSAL_JSON_MAX` moved 800 → 1400, still comfortably inside the 2000-char comment and 4000-char ciphertext caps.
+
+**Routing.** The prompt now names the day-level kinds explicitly (`swap_days` for exchanging two days' plans, `day_title` to rename, `day_tip` for one practical note — never stretched into an activity rename), routes stays separately from activities, and states when a picker is the right shape versus a settled edit.
+
+**Verification.** Backend `tsc` clean; assistant suite **51/51** (stay shapes/caps/fit walls, set disjointness, picker-alone, over-cap rejection, array envelope, prompt protocol); full backend suite **1051/1051**. Frontend `tsc` + `vite build` clean. A dependency-free probe of the real `proposalApply.ts` passed 17 assertions (add to empty day, duplicate refusal, replacement preserving price/description, stale-target/complete-day refusals, picker resolution, sequential distinct-day application). Live browser QA on a cloned 8-day Rajasthan trip: *"swap the plans of day 1 and day 2"* → `Day 1 ↔ Day 2` card, applied, the two activity lists exchanged exactly; *"rename day 2 to Slow coastal morning"* → `Day 2 — title`, applied; *"where should we stay on day 3? suggest two different places"* → a 2-stay picker (the model chose to **replace** "Guesthouse below Mehrangarh"), picking Umaid Bhawan Palace replaced the stay on Day 3; *"make two changes: rename day 1 …, and add a tip to day 3 …"* → `PROPOSED CHANGES` with both rows and `Apply all 2 changes`, and both landed in one save. No console errors; QA account/trip purged.
+
+**Deferred (deliberate):** day insertion/removal and a trip-wide stay list (stays remain per day, like the editor's curation model); a set is capped at three edits on distinct days and a second picker is refused rather than serialized.
+
 ### 12.13 F10e — the E2EE audit: three real defects, fixed (user-reported, 2026-10-20)
 
 The user reported that encryption/decryption still had "some serious flaws" and asked for a full audit plus corrective measures if the architecture was unsound. The audit (whole server surface + the browser crypto core) found the architecture sound *in its own trust model* and three defects that were not — two of them severe enough to break the product's headline promise ("multi-device chat keys work automatically, without copying backup codes").
