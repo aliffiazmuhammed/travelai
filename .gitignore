@@ -56,3 +56,10 @@ backend/agency-exports/
 
 # Uploaded agency proposal templates (A6) — private tenant source files
 backend/agency-templates/
+
+# Brand presentation working files — renders, raw images and Office lock files
+brand/presentation-assets/
+brand/presentation-render-*/
+brand/waytowalk-homepage-redesign-concept-*.png
+brand/~$*
+vibe_images/
