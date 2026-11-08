@@ -57,6 +57,10 @@ All colors MUST be HSL.
     --shadow-hover: 0 12px 40px -8px hsl(165 30% 20% / 0.16);
 
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+    /* Content-loading skeletons (concept 02) */
+    --skeleton-base: 41.5 30% 89%;
+    --skeleton-highlight: 41.5 50% 96%;
   }
 
   .dark {
@@ -105,6 +109,9 @@ All colors MUST be HSL.
     --shadow-soft: 0 4px 20px -4px hsl(0 0% 0% / 0.28);
     --shadow-card: 0 8px 30px -6px hsl(0 0% 0% / 0.34);
     --shadow-hover: 0 12px 40px -8px hsl(0 0% 0% / 0.42);
+
+    --skeleton-base: 164 24% 20%;
+    --skeleton-highlight: 164 22% 27%;
   }
 
   :root {
@@ -258,6 +265,184 @@ All colors MUST be HSL.
   
   .transition-smooth {
     transition: var(--transition-smooth);
+  }
+
+  /* Concept 02: content-loading shimmer. Soft blocks keep the page's shape
+     while the real cards arrive. */
+  .skeleton-shimmer {
+    background-color: hsl(var(--skeleton-base));
+    background-image: linear-gradient(
+      100deg,
+      hsl(var(--skeleton-base)) 28%,
+      hsl(var(--skeleton-highlight)) 48%,
+      hsl(var(--skeleton-base)) 68%
+    );
+    background-size: 250% 100%;
+    animation: ww-shimmer 1.8s linear infinite;
+  }
+
+  /* Concept 01: the trail draws itself toward the coral waypoint. */
+  .ww-loader .ww-ghost {
+    fill: currentColor;
+    opacity: 0.14;
+  }
+  .ww-loader .ww-trail {
+    fill: currentColor;
+    animation: ww-trail 4s linear infinite;
+  }
+  .ww-loader .ww-reveal {
+    transform-box: fill-box;
+    transform-origin: left center;
+    animation: ww-reveal 4s cubic-bezier(0.6, 0, 0.25, 1) infinite;
+  }
+  .ww-loader .ww-waypoint {
+    fill: hsl(var(--accent));
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: ww-waypoint 4s cubic-bezier(0.2, 1.4, 0.4, 1) infinite;
+  }
+  .ww-loader .ww-ping {
+    fill: none;
+    stroke: hsl(var(--accent) / 0.5);
+    stroke-width: 2;
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: ww-ping 4s ease-out infinite;
+  }
+
+  /* The coral "walk" that ends a loading caption. */
+  .ww-dots i {
+    display: block;
+    width: 6px;
+    height: 6px;
+    border-radius: 9999px;
+    background: hsl(var(--accent));
+    animation: ww-walk 1.3s ease-in-out infinite;
+  }
+  .ww-dots i:nth-child(2) {
+    animation-delay: 0.16s;
+  }
+  .ww-dots i:nth-child(3) {
+    animation-delay: 0.32s;
+  }
+}
+
+@keyframes ww-shimmer {
+  0% {
+    background-position: 160% 0;
+  }
+  100% {
+    background-position: -60% 0;
+  }
+}
+
+@keyframes ww-reveal {
+  0%,
+  10% {
+    transform: scaleX(0);
+  }
+  55% {
+    transform: scaleX(1);
+  }
+  90% {
+    transform: scaleX(1);
+  }
+  100% {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes ww-trail {
+  0%,
+  7% {
+    opacity: 0;
+  }
+  13% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  95%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes ww-waypoint {
+  0%,
+  52% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  57% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+  62%,
+  90% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  95%,
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+@keyframes ww-ping {
+  0%,
+  54% {
+    opacity: 0;
+    transform: scale(1);
+  }
+  58% {
+    opacity: 0.5;
+  }
+  80%,
+  100% {
+    opacity: 0;
+    transform: scale(2.1);
+  }
+}
+
+@keyframes ww-walk {
+  0%,
+  100% {
+    opacity: 0.22;
+    transform: translateY(0);
+  }
+  35% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-shimmer {
+    animation: none;
+    background-image: none;
+  }
+  .ww-loader .ww-trail,
+  .ww-loader .ww-reveal,
+  .ww-loader .ww-waypoint,
+  .ww-loader .ww-ping,
+  .ww-dots i {
+    animation: none;
+  }
+  .ww-loader .ww-ping {
+    display: none;
+  }
+  .ww-loader .ww-reveal {
+    transform: none;
+  }
+  .ww-loader .ww-waypoint {
+    opacity: 1;
+    transform: none;
+  }
+  .ww-dots i {
+    opacity: 0.7;
   }
 }
 

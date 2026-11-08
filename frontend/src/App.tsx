@@ -8,6 +8,7 @@ import { AgencyAuthProvider } from "./context/AgencyAuthContext";
 import { PlatformAuthProvider } from "./context/PlatformAuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ErrorBoundary from "./components/ErrorBoundary";
+import WaytowalkLoader from "./components/brand/WaytowalkLoader";
 import { queryClient } from "./lib/queryClient";
 
 // Lazy-loaded route pages for production code-splitting
@@ -61,12 +62,7 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 
 const PageLoader = () => (
   <div className="min-h-screen flex items-center justify-center bg-background">
-    <div className="flex flex-col items-center gap-3">
-      <div className="w-9 h-9 border-3 border-primary/20 border-t-primary rounded-full animate-spin" />
-      <p className="text-sm font-medium text-muted-foreground animate-pulse">
-        Opening waytowalk…
-      </p>
-    </div>
+    <WaytowalkLoader />
   </div>
 );
 

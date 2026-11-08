@@ -12,6 +12,7 @@ import { PublicEventCard } from "@/components/events/PublicEventCard";
 import { TripCover } from "@/components/gallery/TripCover";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Accordion,
   AccordionContent,
@@ -261,12 +262,31 @@ const LiveTripCard = ({ trip }: { trip: GalleryTripSummary }) => (
 
 const TripSkeleton = () => (
   <div className="overflow-hidden rounded-3xl border border-border/70 bg-card/60">
-    <div className="h-[230px] animate-pulse bg-muted" />
+    <Skeleton className="h-[230px] w-full rounded-none" />
     <div className="space-y-4 p-6">
-      <div className="h-3 w-1/3 animate-pulse rounded bg-muted" />
-      <div className="h-8 w-4/5 animate-pulse rounded bg-muted" />
-      <div className="h-10 animate-pulse rounded bg-muted" />
-      <div className="h-8 animate-pulse rounded bg-muted" />
+      <Skeleton className="h-3 w-1/3 rounded" />
+      <Skeleton className="h-8 w-4/5 rounded" />
+      <Skeleton className="h-10 rounded" />
+      <Skeleton className="h-8 rounded" />
+    </div>
+  </div>
+);
+
+const EventSkeleton = () => (
+  <div className="overflow-hidden rounded-3xl border border-border/70 bg-card">
+    <Skeleton className="aspect-[16/9] w-full rounded-none" />
+    <div className="space-y-3 p-5">
+      <Skeleton className="h-4 w-4/5 rounded" />
+      <Skeleton className="h-3 w-full rounded" />
+      <Skeleton className="h-3 w-2/3 rounded" />
+      <div className="space-y-1.5 pt-1">
+        <Skeleton className="h-3 w-2/5 rounded" />
+        <Skeleton className="h-3 w-3/5 rounded" />
+      </div>
+      <div className="flex gap-2 border-t border-border/60 pt-3">
+        <Skeleton className="h-3 w-16 rounded" />
+        <Skeleton className="h-3 w-12 rounded" />
+      </div>
     </div>
   </div>
 );
@@ -372,7 +392,11 @@ const Landing = () => {
               </div>
             </div>
 
-            {discovery.events.length > 0 && (
+            {discovery.loading ? (
+              <div className="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+                {[0, 1, 2].map((item) => <EventSkeleton key={item} />)}
+              </div>
+            ) : discovery.events.length > 0 && (
               <div className="mt-8">
                 <DiscoveryRail label="Upcoming events" count={Math.min(discovery.events.length, 3)}>
                   {discovery.events.slice(0, 3).map((event) => (

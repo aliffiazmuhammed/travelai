@@ -358,7 +358,7 @@ const Enquiries: React.FC = () => {
                     {[0, 1, 2, 3].map((row) => (
                       <div
                         key={row}
-                        className="h-24 animate-pulse rounded-xl border border-border/60 bg-muted/40"
+                        className="h-24 skeleton-shimmer rounded-xl border border-border/60"
                       />
                     ))}
                   </div>

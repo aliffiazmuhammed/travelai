@@ -388,21 +388,21 @@ const Dashboard: React.FC = () => {
             {/* Mirrors the my-trips header: crumb, serif title, one quiet line,
                 actions on the right, then the tab/search rail. */}
             <div className="space-y-4">
-              <div className="h-3 w-24 rounded bg-muted animate-pulse" />
+              <div className="h-3 w-24 rounded skeleton-shimmer" />
               <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                 <div className="space-y-2">
-                  <div className="h-10 w-56 rounded-lg bg-muted animate-pulse" />
-                  <div className="h-3 w-72 max-w-full rounded bg-muted animate-pulse" />
+                  <div className="h-10 w-56 rounded-lg skeleton-shimmer" />
+                  <div className="h-3 w-72 max-w-full rounded skeleton-shimmer" />
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="h-11 w-40 rounded-xl bg-muted animate-pulse" />
-                  <div className="h-11 w-40 rounded-xl bg-muted animate-pulse" />
+                  <div className="h-11 w-40 rounded-xl skeleton-shimmer" />
+                  <div className="h-11 w-40 rounded-xl skeleton-shimmer" />
                 </div>
               </div>
             </div>
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div className="h-10 w-72 max-w-full rounded-full bg-muted animate-pulse" />
-              <div className="h-11 w-full rounded-xl bg-muted animate-pulse lg:w-[340px]" />
+              <div className="h-10 w-72 max-w-full rounded-full skeleton-shimmer" />
+              <div className="h-11 w-full rounded-xl skeleton-shimmer lg:w-[340px]" />
             </div>
             <TripsGridSkeleton />
           </div>

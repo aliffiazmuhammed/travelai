@@ -6,6 +6,8 @@ import { TripCover } from "@/components/gallery/TripCover";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { LoadingDots } from "@/components/brand/WaytowalkLoader";
 import {
   Popover,
   PopoverContent,
@@ -27,7 +29,6 @@ import {
   Clock3,
   Compass,
   History,
-  Loader2,
   MapPin,
   Search,
   Sparkles,
@@ -260,15 +261,28 @@ const ExploreCard = ({ trip, past }: { trip: GalleryTripSummary; past?: boolean 
   </article>
 );
 
+const ExploreCardSkeleton = () => (
+  <div className="overflow-hidden rounded-3xl border border-border/70 bg-card">
+    <Skeleton className="aspect-[16/10] w-full rounded-none" />
+    <div className="space-y-2.5 p-4">
+      <Skeleton className="h-3 w-2/5 rounded" />
+      <Skeleton className="h-5 w-4/5 rounded" />
+      <Skeleton className="h-3 w-full rounded" />
+      <div className="mt-3 flex items-center justify-between border-t border-border/60 pt-3">
+        <Skeleton className="h-3 w-24 rounded" />
+        <Skeleton className="h-6 w-24 rounded-full" />
+      </div>
+    </div>
+  </div>
+);
+
 interface PageResult {
   key: string;
   trips: GalleryTripSummary[];
   total: number;
   page: number;
   hasMore: boolean;
-}
-
-interface PagePosition {
+}interface PagePosition {
   key: string;
   page: number;
 }
@@ -556,15 +570,15 @@ const Explore = () => {
           <h2 className="sr-only">Shared trips</h2>
 
           {loading ? (
-            <div className="flex min-h-[320px] flex-col items-center justify-center space-y-4">
-              <Loader2 className="h-9 w-9 animate-spin text-primary" />
-              <div className="space-y-1 text-center">
-                <h3 className="text-base font-bold text-foreground">
-                  Gathering trips people shared…
-                </h3>
-                <p className="text-xs text-muted-foreground">
-                  Only the ones their owners were happy to share
-                </p>
+            <div className="space-y-6" role="status" aria-live="polite">
+              <p className="flex items-center gap-2.5 text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+                Gathering trips people shared
+                <LoadingDots />
+              </p>
+              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3" aria-hidden="true">
+                {Array.from({ length: 6 }).map((_, index) => (
+                  <ExploreCardSkeleton key={index} />
+                ))}
               </div>
             </div>
           ) : error ? (

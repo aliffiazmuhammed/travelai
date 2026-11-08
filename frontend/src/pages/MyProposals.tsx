@@ -262,7 +262,7 @@ const MyProposals: React.FC = () => {
             {[0, 1, 2, 3].map((card) => (
               <div
                 key={card}
-                className="h-64 animate-pulse rounded-2xl border border-border/60 bg-card"
+                className="h-64 skeleton-shimmer rounded-2xl border border-border/60"
               />
             ))}
           </div>

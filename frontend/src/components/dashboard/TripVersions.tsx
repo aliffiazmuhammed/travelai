@@ -179,7 +179,7 @@ export const TripVersions: React.FC<TripVersionsProps> = ({
           {[0, 1, 2].map((i) => (
             <div
               key={i}
-              className="h-20 rounded-3xl bg-muted/50 animate-pulse border border-border/60"
+              className="h-20 rounded-3xl skeleton-shimmer border border-border/60"
             />
           ))}
         </div>

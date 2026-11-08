@@ -1006,7 +1006,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
                       {[0, 1, 2].map((row) => (
                         <div
                           key={row}
-                          className="h-9 animate-pulse rounded-lg bg-muted"
+                          className="h-9 skeleton-shimmer rounded-lg"
                         />
                       ))}
                     </div>

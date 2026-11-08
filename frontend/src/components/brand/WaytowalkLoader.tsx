@@ -1,0 +1,74 @@
+import { useId } from "react";
+import { cn } from "@/lib/utils";
+
+// The canonical waytowalk W, traced from the first logo.
+const W_PATH =
+  "M 274.500 58.319 C 263.412 63.703, 258.229 73.302, 248.483 106.500 C 245.900 115.300, 242.924 125.572, 241.869 129.326 C 237.751 143.980, 231.997 153, 226.766 153 C 223.527 153, 219.328 147.452, 212.868 134.636 C 205.006 119.039, 200.901 112.820, 193.883 105.872 C 184.190 96.275, 171.367 91.646, 160.515 93.825 C 145.217 96.898, 135.036 105.891, 122.322 127.561 C 109.333 149.700, 106.070 154.527, 102.779 156.471 C 101.081 157.475, 98.442 158.260, 96.915 158.217 C 89.857 158.016, 86.200 152.112, 76.032 124.500 C 67.447 101.191, 63.110 93.104, 54.514 84.384 C 46.899 76.658, 41.856 73.591, 33.996 71.906 C 23.934 69.748, 13.925 74.553, 9.865 83.491 C 7.751 88.145, 7.588 90.959, 9.110 96.500 C 10.452 101.386, 17.517 108.515, 21.989 109.498 C 23.727 109.879, 26.722 111.573, 28.645 113.262 C 32.424 116.580, 37.661 126.196, 40.483 135 C 44.250 146.752, 51.565 163.865, 56.130 171.609 C 61.884 181.369, 69.608 188.729, 78.802 193.215 C 85.179 196.327, 86.051 196.484, 97.018 196.492 C 108.051 196.500, 108.819 196.360, 115.290 193.176 C 128.015 186.915, 136.972 176.420, 151.074 151.249 C 159.095 136.931, 162.286 133, 165.886 133 C 169.651 133, 172.942 136.794, 178.031 147 C 185.259 161.499, 191.743 172.426, 195.961 177.219 C 201.428 183.429, 208.093 187.667, 216.329 190.169 C 234.160 195.585, 252.082 188.118, 263.998 170.309 C 269.676 161.823, 273.010 153.508, 279.963 130.500 C 288.613 101.875, 290.796 97.250, 298.861 90.464 C 300.627 88.978, 302.731 86.488, 303.536 84.931 C 304.341 83.373, 304.993 79.489, 304.984 76.300 C 304.963 69.124, 302.192 63.784, 296.361 59.686 C 293.155 57.433, 290.823 56.689, 285.869 56.340 C 280.578 55.968, 278.654 56.303, 274.500 58.319";
+
+const SIZES = {
+  sm: "w-14",
+  md: "w-24",
+  lg: "w-[156px]",
+} as const;
+
+/**
+ * Concept 01 — the app-boot loader. The trail traces left to right and the
+ * coral waypoint lands before the loop softens out. One brand moment only:
+ * use it for the lazy-route fallback and session checks, never per request.
+ * Motion collapses to a static mark under `prefers-reduced-motion`.
+ */
+const WaytowalkLoader = ({
+  size = "lg",
+  caption = "Finding your way…",
+  className,
+}: {
+  size?: keyof typeof SIZES;
+  caption?: string | null;
+  className?: string;
+}) => {
+  // useId can contain characters that are awkward inside url(#…).
+  const clipId = `ww-clip-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className={cn("ww-loader flex flex-col items-center gap-6 text-primary", className)}
+    >
+      <svg
+        viewBox="0 0 326 205"
+        aria-hidden="true"
+        focusable="false"
+        className={cn("h-auto overflow-visible", SIZES[size])}
+      >
+        <defs>
+          <clipPath id={clipId} clipPathUnits="userSpaceOnUse">
+            <rect className="ww-reveal" x="0" y="0" width="326" height="205" />
+          </clipPath>
+        </defs>
+        <path className="ww-ghost" d={W_PATH} />
+        <g clipPath={`url(#${clipId})`}>
+          <path className="ww-trail" d={W_PATH} />
+        </g>
+        <circle className="ww-ping" cx="298" cy="29.5" r="21" />
+        <circle className="ww-waypoint" cx="298" cy="29.5" r="21" />
+      </svg>
+      {caption && (
+        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+          {caption}
+        </p>
+      )}
+    </div>
+  );
+};
+
+/** Concept 02's walking coral dots, for loading captions. */
+export const LoadingDots = ({ className }: { className?: string }) => (
+  <span className={cn("ww-dots inline-flex items-center gap-[5px]", className)} aria-hidden="true">
+    <i />
+    <i />
+    <i />
+  </span>
+);
+
+export default WaytowalkLoader;
