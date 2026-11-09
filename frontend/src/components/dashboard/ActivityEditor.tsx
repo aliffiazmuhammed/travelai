@@ -12,7 +12,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { MapPin, Clock, IndianRupee, Save, MapPinned, Type } from "lucide-react";
-import type { ActivityItem } from "@/types/trip";
+import { TripPhotoField } from "./TripPhotoField";
+import type { ActivityItem, MediaRef } from "@/types/trip";
 
 interface ActivityEditorProps {
   open: boolean;
@@ -21,6 +22,8 @@ interface ActivityEditorProps {
   day: number;
   activity?: ActivityItem | string | null;
   onSave: (activity: ActivityItem) => void;
+  /** Owning trip — enables the photo upload field when present. */
+  tripId?: string;
 }
 
 interface FormState {
@@ -31,6 +34,7 @@ interface FormState {
   approx_cost: string;
   latitude: string;
   longitude: string;
+  image?: MediaRef;
 }
 
 const EMPTY_FORM: FormState = {
@@ -64,6 +68,7 @@ function toFormState(activity?: ActivityItem | string | null): FormState {
       Array.isArray(coords) && coords[0] != null ? String(coords[0]) : "",
     longitude:
       Array.isArray(coords) && coords[1] != null ? String(coords[1]) : "",
+    ...(activity.image ? { image: activity.image } : {}),
   };
 }
 
@@ -73,6 +78,7 @@ export const ActivityEditor: React.FC<ActivityEditorProps> = ({
   day,
   activity,
   onSave,
+  tripId,
 }) => {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [error, setError] = useState<string | null>(null);
@@ -108,6 +114,7 @@ export const ActivityEditor: React.FC<ActivityEditorProps> = ({
       location_name: form.location_name.trim() || undefined,
       approx_cost: Number.isNaN(cost) ? undefined : cost,
       coordinates: hasValidCoords ? [lat, lng] : undefined,
+      ...(form.image ? { image: form.image } : {}),
     };
 
     onSave(payload);
@@ -204,6 +211,24 @@ export const ActivityEditor: React.FC<ActivityEditorProps> = ({
               className="text-sm rounded-xl min-h-[80px]"
             />
           </div>
+
+          {/* Photo */}
+          {tripId && (
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold">Photo (optional)</Label>
+              <TripPhotoField
+                tripId={tripId}
+                value={form.image}
+                alt={form.title}
+                variant="card"
+                label="Add a photo of this activity"
+                onChange={(image) => setForm((prev) => ({ ...prev, image }))}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Shown on this card and in the exported plan.
+              </p>
+            </div>
+          )}
 
           {/* Coordinates */}
           <div className="space-y-1.5">

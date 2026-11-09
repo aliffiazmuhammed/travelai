@@ -961,6 +961,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
             <div ref={timelineRef} className="min-w-0">
               <DayTimeline
                 itinerary={itinerary}
+                tripId={tripId}
                 onUpdateItinerary={onSave ? handleUpdateItinerary : undefined}
                 onUpdateActivity={handleUpdateActivity}
                 onReorderActivities={handleReorderActivities}
@@ -1134,6 +1135,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
         <TabsContent value="stays" className="outline-hidden animate-fade-in">
           <StayAndCuisine
             itinerary={itinerary}
+            tripId={tripId}
             onUpdateItinerary={
               isRealTrip && onSave ? handleUpdateItinerary : undefined
             }

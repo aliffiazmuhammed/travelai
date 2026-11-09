@@ -81,7 +81,8 @@ const PNG = Buffer.from(
 );
 
 // Mirrors the published contract example: cover + one page per day with a
-// conditional day image, so it requires a day asset mapping.
+// conditional day image. Trip photos fill day images, so a day asset mapping
+// is optional.
 const DAY_IMAGE_TEMPLATE = `
 <style>
   .page { page-break-after: always; padding: 14mm; font-family: var(--font-body); }
@@ -280,18 +281,17 @@ async function main() {
       audience: 'client' as const,
     };
 
-    // 1. Asset coverage: a day-image template without a day mapping is refused.
+    // 1. Asset coverage: day images come from trip photos, so a day-image
+    // template without a day mapping is accepted.
+    const withoutDayImage = await createAgencyTemplate({
+      ...baseInput,
+      buffer: Buffer.from(DAY_IMAGE_TEMPLATE, 'utf8'),
+      assets: { logoAssetId: logo.asset._id },
+    });
     check(
-      'upload without a day image mapping is refused',
-      await expectAppError(
-        () =>
-          createAgencyTemplate({
-            ...baseInput,
-            buffer: Buffer.from(DAY_IMAGE_TEMPLATE, 'utf8'),
-            assets: { logoAssetId: logo.asset._id },
-          }),
-        400
-      )
+      'upload without a day image mapping is accepted',
+      withoutDayImage.template.status === 'draft',
+      withoutDayImage.template.status
     );
 
     // 2. A mapped upload creates a draft with version 1.

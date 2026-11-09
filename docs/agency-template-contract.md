@@ -61,7 +61,7 @@ An `img` source must be one of:
   - `{{assets.logoDataUrl}}`
   - `{{assets.mascotDataUrl}}`
   - `{{assets.coverImageDataUrl}}`
-  - `{{imageDataUrl}}` (inside a day)
+  - `{{imageDataUrl}}` (inside a day, activity, stay or food item)
 
 Remote (`https:`, `//host/...`), relative and unknown image URLs are rejected.
 The A6 renderer embeds agency assets as data URLs before rendering, so a PDF
@@ -94,8 +94,12 @@ days[].day  days[].pageNumber  days[].date  days[].title  days[].summary
 days[].permitRequired  days[].imageDataUrl
 days[].activities[].time  days[].activities[].title
 days[].activities[].description  days[].activities[].location
+days[].activities[].imageDataUrl
 days[].stays[].name  days[].stays[].location  days[].stays[].vibe
-days[].stays[].description
+days[].stays[].description  days[].stays[].imageDataUrl
+days[].foodItems[].name  days[].foodItems[].cuisine
+days[].foodItems[].price  days[].foodItems[].note
+days[].foodItems[].imageDataUrl
 
 contact.phone  contact.email  contact.website  contact.instagram
 
@@ -113,7 +117,7 @@ Objects and lists are used as sections; they cannot be interpolated directly.
 #agency  #trip  #client  #quote  #contact  #assets
 #days
 #quote.inclusions  #quote.exclusions  #quote.terms
-#days.activities  #days.stays
+#days.activities  #days.stays  #days.foodItems
 #days.food  #days.transport  #days.tips
 #recommendations  #thingsToCarry  #cancellationPolicy
 ```
@@ -131,16 +135,24 @@ the trip should pair it with an inverted section:
 `#recommendations`, `#thingsToCarry`, `#cancellationPolicy`, or the current
 image URL inside `#imageDataUrl`.
 
+`#days.food` holds flat labels kept for templates written before structured
+food existed. `#days.foodItems` exposes the same entries with `name`, `cuisine`,
+`price`, `note` and `imageDataUrl`; use it when the layout shows a photo, a
+per-item price or a cuisine.
+
 Nested sections resolve names against the nearest context and then walk up, as
 Mustache does. Inside `{{#days}}`, `{{title}}` means `days[].title`; inside
 `{{#activities}}`, `{{time}}` means the activity time.
 
 `{{day}}` is the itinerary day number. `{{pageNumber}}` is the 1-based position
 in the rendered itinerary (`1`, `2`, …) and is the number a template should
-show as "Day 1 of N"; it is not the calendar day of the month. Day image
-snapshots are matched by that same position: `pageNumber = 1` renders slot
-`day-1`. If the itinerary is reordered after upload, images stay with their
-position, not with the original day number.
+show as "Day 1 of N"; it is not the calendar day of the month.
+
+Day, activity, stay and food images come from photos uploaded on the trip
+itself. The template's own day snapshots are only a fallback: a day photo on
+the trip wins, otherwise the snapshot matched by position is used
+(`pageNumber = 1` renders slot `day-1`). If the itinerary is reordered after
+upload, snapshots stay with their position, not with the original day number.
 
 ### Internal-only values
 
@@ -258,9 +270,10 @@ Rules:
 - Images are limited to PNG, JPEG and WebP; fonts to WOFF, WOFF2, TTF and OTF.
   The MIME is sniffed from the bytes, not trusted from the upload.
 - A version may snapshot at most 32 MiB in total and at most 30 day images.
-- A template that references `assets.logoDataUrl`, `assets.mascotDataUrl`,
-  `assets.coverImageDataUrl` or `days[].imageDataUrl` must have a matching
-  slot, otherwise the upload fails. Missing client-facing images are never
+- A template that references `assets.logoDataUrl`, `assets.mascotDataUrl` or
+  `assets.coverImageDataUrl` must have a matching slot, otherwise the upload
+  fails. Day images are exempt: trip photos fill them, so a day snapshot is
+  optional and only acts as a fallback. Missing client-facing images are never
   discovered at render time.
 - Snapshots are version-pinned: replacing or deleting the A3 asset later does
   not change an already uploaded version. At load time the stored byte count
@@ -469,13 +482,16 @@ day.activityCosts  day.stayPrices
 ```
 
 Image tokens: `image.logo`, `image.mascot`, `image.cover` and `day.image`
-(repeat page only). Lists render as `• ` lines in the slot.
+(repeat page only). The day token renders the trip's own photo for that day
+when one was uploaded, and otherwise falls back to the `day-N` snapshot matched
+by position. Lists render as `• ` lines in the slot.
 
 ### 10.4 Images and assets
 
 - Mapped image slots reuse the A6 asset snapshots (§7). A layout that maps
-  `image.logo`, `image.mascot`, `image.cover` or `day.image` must have the
-  matching snapshot, or the upload/save fails before anything is stored.
+  `image.logo`, `image.mascot` or `image.cover` must have the matching
+  snapshot, or the upload/save fails before anything is stored. `day.image`
+  needs no snapshot because trip photos supply it.
 - The PDF renderer can embed **PNG and JPEG only**. A WebP snapshot selected for
   a mapped slot is rejected with 400 at upload/save time; pick a PNG or JPEG
   version of that image. (The HTML engine still accepts WebP.)

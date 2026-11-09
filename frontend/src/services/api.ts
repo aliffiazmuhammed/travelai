@@ -33,6 +33,7 @@ import type {
   TripExpense,
   TripParticipant,
   TripFinance,
+  TripPhoto,
   WeatherResponse,
   NearbyCategory,
   NearbyResponse,
@@ -2252,6 +2253,33 @@ class ApiClient {
   async duplicateTrip(id: string): Promise<Trip> {
     return this.request(`/api/itinerary/${id}/duplicate`, {
       method: 'POST',
+    });
+  }
+
+  /**
+   * Uploads a trip photo (multipart, editors only). Dimensions are the
+   * downscaled size produced in the browser, stored so exports can lay out
+   * without re-reading the bytes.
+   */
+  async uploadTripPhoto(
+    tripId: string,
+    photo: Blob,
+    meta: { width?: number; height?: number } = {}
+  ): Promise<{ success: boolean; media: TripPhoto }> {
+    const form = new FormData();
+    form.append('photo', photo, 'photo.jpg');
+    if (meta.width) form.append('width', String(meta.width));
+    if (meta.height) form.append('height', String(meta.height));
+    return this.requestForm(`/api/itinerary/${tripId}/media`, form);
+  }
+
+  /** Deletes a trip photo. References to it vanish with `stripTripMediaRefs` only on copies. */
+  async deleteTripPhoto(
+    tripId: string,
+    mediaId: string
+  ): Promise<{ success: boolean }> {
+    return this.request(`/api/itinerary/${tripId}/media/${mediaId}`, {
+      method: 'DELETE',
     });
   }
 

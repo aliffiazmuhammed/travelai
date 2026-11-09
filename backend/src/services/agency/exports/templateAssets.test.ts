@@ -241,9 +241,9 @@ test('template coverage rejects unmapped image slots', () => {
       ),
     400
   );
-  expectAppError(
-    () => assertTemplateAssetCoverage(['days.imageDataUrl'], [{ slot: 'cover' }]),
-    400
+  // Trip photos fill day images, so an uploaded day snapshot is optional.
+  assert.doesNotThrow(() =>
+    assertTemplateAssetCoverage(['days.imageDataUrl'], [{ slot: 'cover' }])
   );
   assert.doesNotThrow(() =>
     assertTemplateAssetCoverage(['days.imageDataUrl'], [{ slot: 'day-2' }])

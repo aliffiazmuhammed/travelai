@@ -134,6 +134,8 @@ export async function ensureLiveProposalForQuote(input: {
 
   // Built from the same normalizer the PDF renderer uses, so the snapshot is
   // client-safe by construction: no markup, internal cost or chat ciphertext.
+  // Photos stay as ids: the live document reads them without images, and
+  // embedding data URLs would park megabytes of base64 in every link row.
   const snapshot = buildExportDocument({ agency, trip, quote, client });
 
   const rawToken = mintInviteToken();

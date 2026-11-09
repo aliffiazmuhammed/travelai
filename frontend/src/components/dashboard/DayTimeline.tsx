@@ -40,14 +40,17 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ActivityEditor } from "./ActivityEditor";
+import { TripPhotoField } from "./TripPhotoField";
 import { WeatherAdvisoryPanel, WeatherBadge } from "./WeatherAdvisory";
 import { buildLegs, formatDistance, formatDuration, isValidCoord, totalRoute } from "@/lib/geo";
 import { hasSignificantRisk } from "@/lib/weather";
 import type { GeoLeg, LatLng } from "@/lib/geo";
-import type { ActivityItem, DailyWeather, ItineraryData } from "@/types/trip";
+import type { ActivityItem, DailyWeather, ItineraryData, MediaRef } from "@/types/trip";
 
 interface DayTimelineProps {
   itinerary: ItineraryData["day_by_day_itinerary"];
+  /** Owning trip — enables day and activity photo uploads when present. */
+  tripId?: string;
   onUpdateItinerary?: (updated: ItineraryData["day_by_day_itinerary"]) => void;
   /** Persist a single activity change. Falls back to local update when omitted. */
   onUpdateActivity?: (
@@ -102,6 +105,7 @@ function activityCoords(activity: ActivityItem | string): LatLng | null {
 
 export const DayTimeline: React.FC<DayTimelineProps> = ({
   itinerary,
+  tripId,
   onUpdateItinerary,
   onUpdateActivity,
   onReorderActivities,
@@ -174,6 +178,14 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
     onUpdateItinerary(cloned);
     setNewActivityText("");
     setActiveNewDay(null);
+  };
+
+  const handleSetDayImage = (dayIndex: number, image: MediaRef | undefined) => {
+    if (!onUpdateItinerary) return;
+    const cloned = JSON.parse(JSON.stringify(itinerary));
+    if (image) cloned[dayIndex].image = image;
+    else delete cloned[dayIndex].image;
+    onUpdateItinerary(cloned);
   };
 
   // --- Full-detail activity edit (via modal) ---
@@ -404,6 +416,20 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
                 </div>
               </div>
 
+              {/* Day hero photo */}
+              <TripPhotoField
+                tripId={tripId}
+                value={dayData.image}
+                alt={cleanTitle || `Day ${dayData.day}`}
+                variant="hero"
+                label={`Add a cover photo for Day ${dayData.day}`}
+                onChange={
+                  canEdit && tripId
+                    ? (image) => handleSetDayImage(actualDayIndex, image)
+                    : undefined
+                }
+              />
+
               {/* Weather advisory + AI alternative (Milestone 4.4) */}
               {(dayWeather || (onSuggestAlternative && canEdit)) && (
                 <div className="space-y-2">
@@ -533,6 +559,16 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
                           <div className="w-8 h-8 rounded-xl bg-muted/60 flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
                             {timeSlot.icon}
                           </div>
+
+                          {isObj && activity.image && (
+                            <TripPhotoField
+                              tripId={tripId}
+                              value={activity.image}
+                              alt={actTitle}
+                              variant="thumb"
+                              className="mt-0.5"
+                            />
+                          )}
 
                           <div className="flex-1 min-w-0 space-y-1">
                             <div className="flex items-center gap-2 flex-wrap">
@@ -841,6 +877,7 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
         }}
         day={editorDayNumber}
         activity={editorActivity}
+        tripId={tripId}
         onSave={handleSaveActivityDetails}
       />
     </div>

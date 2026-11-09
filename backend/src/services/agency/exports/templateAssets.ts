@@ -145,9 +145,9 @@ export function normalizeAgencyTemplateAssetSelection(
 }
 
 /**
- * Rejects a template that references a snapshot slot the admin did not map.
- * Without this check a client proposal would silently ship with a missing
- * cover or day image.
+ * Rejects a template that references a brand snapshot the admin did not map.
+ * Day images are exempt: the trip's own photos fill those slots, and the
+ * snapshot is only a per-day fallback that may legitimately be absent.
  */
 export function assertTemplateAssetCoverage(
   usedTokens: string[],
@@ -166,15 +166,6 @@ export function assertTemplateAssetCoverage(
         400
       );
     }
-  }
-  if (
-    usedTokens.includes('days.imageDataUrl') &&
-    ![...slots].some((slot) => /^day-\d+$/.test(slot))
-  ) {
-    throw new AppError(
-      'This template uses day images. Choose at least one day image before uploading.',
-      400
-    );
   }
 }
 

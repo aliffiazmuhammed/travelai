@@ -65,6 +65,39 @@ test('the public projection leaks nothing sensitive (F14 exhaustive sweep)', () 
   }
 });
 
+test('public image references carry share-scoped URLs', () => {
+  const mediaId = 'a'.repeat(24);
+  const details = {
+    day_by_day_itinerary: [
+      {
+        day: 1,
+        image: { id: mediaId },
+        activities: [{ title: 'Walk', image: { id: mediaId, alt: 'Trail' } }],
+        stay_recommendations: [{ name: 'Homestay', image: { id: 'not-a-media-id' } }],
+      },
+    ],
+  };
+
+  const projection = projectPublicTrip({
+    _id: 'tripid',
+    title: 'Wayanad Wander',
+    status: 'planned',
+    shareId: 'share-abc',
+    tripDetails: details,
+    createdAt: new Date(),
+  }) as any;
+
+  const expected = `/api/itinerary/shared/share-abc/media/${mediaId}/content`;
+  const day = projection.tripDetails.day_by_day_itinerary[0];
+  assert.equal(day.image.url, expected);
+  assert.equal(day.activities[0].image.url, expected);
+  assert.equal(day.activities[0].image.alt, 'Trail');
+  // Unknown ids are left alone rather than turned into fetchable URLs.
+  assert.deepEqual(day.stay_recommendations[0].image, { id: 'not-a-media-id' });
+  // The stored itinerary is cloned, not mutated.
+  assert.equal('url' in details.day_by_day_itinerary[0].image, false);
+});
+
 test('customRoutes defaults to an empty array (drafts drawn nothing yet)', () => {
   const projection = projectPublicTrip({
     _id: 'tripid',

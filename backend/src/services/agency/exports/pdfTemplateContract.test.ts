@@ -297,6 +297,15 @@ test('slot resolvers reuse the HTML view and asset snapshots', () => {
     resolveAgencyPdfSlotImage(assets, 'day.image', { pageNumber: 1 }),
     PNG
   );
+  const TRIP_PHOTO = 'data:image/png;base64,dHJpcC1waG90bw==';
+  assert.equal(
+    resolveAgencyPdfSlotImage(assets, 'day.image', {
+      pageNumber: 1,
+      imageDataUrl: TRIP_PHOTO,
+    }),
+    TRIP_PHOTO,
+    'a trip photo wins over the template day snapshot'
+  );
   assert.equal(resolveAgencyPdfSlotImage(assets, 'image.cover', null), '');
 
   const coverage = slotMapCoverageTokens(

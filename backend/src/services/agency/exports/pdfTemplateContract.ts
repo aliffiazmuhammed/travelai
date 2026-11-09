@@ -74,6 +74,8 @@ interface SlotTokenDefinition {
 const text = (value: unknown): string =>
   value === null || value === undefined ? '' : String(value);
 
+const IMAGE_DATA_URL = /^data:image\/(?:png|jpe?g|webp);base64,[a-z0-9+/=]+$/i;
+
 function lines(value: unknown, prefix = '• '): string {
   if (!Array.isArray(value)) return '';
   return value
@@ -368,6 +370,10 @@ export function resolveAgencyPdfSlotImage(
     case 'image.cover':
       return assets.images.cover ?? '';
     case 'day.image': {
+      // The view already prefers the trip's own photo and falls back to the
+      // template snapshot; older documents may lack it, so keep the lookup.
+      const fromView = text(day?.imageDataUrl).trim();
+      if (IMAGE_DATA_URL.test(fromView)) return fromView;
       const position = Number(day?.pageNumber);
       return Number.isInteger(position) && position >= 1
         ? assets.images[`day-${position}`] ?? ''

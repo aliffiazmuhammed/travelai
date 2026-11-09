@@ -241,6 +241,32 @@ test('the client view exposes contract values but no internal cost fields', () =
   assert.doesNotMatch(serialized, /47\.31|9876\.54|secret-/);
 });
 
+test('trip photos reach the view and win over the day snapshot', () => {
+  const PHOTO = 'data:image/jpeg;base64,cGhvdG8=';
+  const exported = documentFixture();
+  const embedded = { id: null, dataUrl: PHOTO, width: null, height: null, alt: null };
+  exported.trip.days[0].image = embedded;
+  exported.trip.days[0].activities[0].image = embedded;
+  exported.trip.days[0].stay[0].image = embedded;
+
+  const view = buildAgencyTemplateView({
+    doc: exported,
+    templateName: TEMPLATE.name,
+    audience: 'client',
+    assets: assetsFixture(),
+  }) as any;
+
+  assert.equal(view.days[0].imageDataUrl, PHOTO);
+  assert.equal(view.days[0].activities[0].imageDataUrl, PHOTO);
+  assert.equal(view.days[0].stays[0].imageDataUrl, PHOTO);
+  // Without a trip photo the template's per-day snapshot still applies.
+  assert.equal(view.days[1].imageDataUrl, PNG);
+
+  assert.deepEqual(view.days[0].food, ['Sol Cafe', 'Taste of Spiti']);
+  assert.equal(view.days[0].foodItems[0].name, 'Sol Cafe');
+  assert.equal(view.days[0].foodItems[0].imageDataUrl, '');
+});
+
 test('internal templates receive formatted estimates and an internal label', () => {
   const view = buildAgencyTemplateView({
     doc: documentFixture(quoteFixture({ status: 'draft' })),

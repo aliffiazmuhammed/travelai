@@ -41,6 +41,7 @@ import {
   assertPdfTemplateVersionIntegrity,
   resolveAgencyTemplateVersion,
 } from './templateResolver.js';
+import { embedTripMedia } from './tripPhotos.js';
 import {
   buildAgencyTemplatePdfStorageKey,
   buildAgencyTemplateStorageKey,
@@ -1072,12 +1073,15 @@ export async function previewAgencyTemplateVersion(
   const client = trip.clientId
     ? await AgencyClient.findOne({ _id: trip.clientId, agencyId })
     : null;
-  const doc = buildExportDocument({
-    agency: input.agency,
-    trip,
-    quote,
-    client,
-  });
+  const doc = await embedTripMedia(
+    buildExportDocument({
+      agency: input.agency,
+      trip,
+      quote,
+      client,
+    }),
+    tripId
+  );
   const rendered =
     resolved.engine === 'pdf-background'
       ? await renderAgencyPdfTemplate({

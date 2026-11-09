@@ -22,7 +22,6 @@ export interface EditableStay {
   price_per_night?: string | number;
   vibe?: string;
   description?: string;
-  [key: string]: unknown;
 }
 
 export interface EditableDay {

@@ -42,6 +42,10 @@ import { sanitizeTripFor } from '../utils/sanitizeTrip.js';
 import { roleOf } from '../services/collab/access.js';
 import { tripContext } from '../middleware/tripAccess.middleware.js';
 import { findPublicSharedTrip, projectPublicTrip } from '../services/collab/publicTrip.js';
+import {
+  sanitizeTripMediaRefs,
+  stripTripMediaRefs,
+} from '../services/tripMedia/media.js';
 import { setTripPublication } from '../services/gallery/publish.js';
 import { cloneGalleryTrip as clonePublishedTrip } from '../services/gallery/clone.js';
 import { AuthenticatedRequest } from '../types/index.js';
@@ -511,8 +515,12 @@ export const getTripById = catchAsync(
 
 export const updateTrip = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const { title, status, tripDetails } = req.body;
+    const { title, status } = req.body;
     const { trip, role } = tripContext(req);
+    const tripDetails =
+      req.body.tripDetails !== undefined
+        ? sanitizeTripMediaRefs(req.body.tripDetails)
+        : undefined;
 
     const detailsChanged =
       tripDetails !== undefined &&
@@ -552,12 +560,13 @@ export const saveTripItinerary = catchAsync(
     const { tripDetails } = req.body;
     const { trip, role } = tripContext(req);
 
+    const sanitizedDetails = sanitizeTripMediaRefs(tripDetails);
     const detailsChanged =
-      JSON.stringify(tripDetails) !== JSON.stringify(trip.tripDetails || {});
+      JSON.stringify(sanitizedDetails) !== JSON.stringify(trip.tripDetails || {});
 
     if (detailsChanged) {
       snapshotCurrent(trip, 'Edited itinerary details');
-      trip.tripDetails = tripDetails;
+      trip.tripDetails = sanitizedDetails;
       trip.markModified('tripDetails');
       trip.version = (trip.version ?? 1) + 1;
       trip.hasEdited = true;
@@ -578,10 +587,15 @@ export const updateTripActivity = catchAsync(
     const { trip, role } = tripContext(req);
 
     const itinerary = getItineraryDays(trip);
+    const safeActivity =
+      activity && typeof activity === 'object' && !Array.isArray(activity)
+        ? sanitizeTripMediaRefs({ day_by_day_itinerary: [{ activities: [activity] }] })
+            .day_by_day_itinerary[0].activities[0]
+        : activity;
 
     let nextDays: any[];
     try {
-      nextDays = updateActivityInDays(itinerary, day, activityIndex, activity);
+      nextDays = updateActivityInDays(itinerary, day, activityIndex, safeActivity);
     } catch (err) {
       throw new AppError(
         err instanceof Error ? err.message : 'Unable to update the activity.',
@@ -909,7 +923,7 @@ export const duplicateTrip = catchAsync(
     // agency-owned copy; planners and above may.
     await ensureAgencyDuplicateAllowed(trip, agencyRole, agencyStaff);
 
-    const clonedDetails = JSON.parse(JSON.stringify(trip.tripDetails));
+    const clonedDetails = stripTripMediaRefs(trip.tripDetails);
     const originalTitle = trip.title || clonedDetails.trip_title || 'Trip';
     const clonedTitle = `${originalTitle} (Copy)`;
     clonedDetails.trip_title = clonedTitle;

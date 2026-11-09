@@ -176,12 +176,16 @@ export function buildAgencyTemplateView(input: {
       title: day.title,
       summary: text(day.summary),
       permitRequired: Boolean(day.permitRequired),
-      imageDataUrl: safeImage(assets.images[`day-${index + 1}`]),
+      // A photo uploaded on the trip wins; the template snapshot is the fallback.
+      imageDataUrl:
+        safeImage(day.image?.dataUrl) ||
+        safeImage(assets.images[`day-${index + 1}`]),
       activities: day.activities.map((activity) => ({
         time: text(activity.time),
         title: activity.title,
         description: text(activity.description),
         location: text(activity.location),
+        imageDataUrl: safeImage(activity.image?.dataUrl),
         ...(internal
           ? {
               costFormatted:
@@ -196,11 +200,19 @@ export function buildAgencyTemplateView(input: {
         location: text(stay.location),
         vibe: text(stay.vibe),
         description: text(stay.description),
+        imageDataUrl: safeImage(stay.image?.dataUrl),
         ...(internal
           ? { pricePerNightFormatted: stayPrice(stay.pricePerNight, currency) }
           : {}),
       })),
       food: day.food,
+      foodItems: day.foodItems.map((food) => ({
+        name: food.name,
+        cuisine: text(food.cuisine),
+        price: text(food.price),
+        note: text(food.note),
+        imageDataUrl: safeImage(food.image?.dataUrl),
+      })),
       transport: day.transport,
       tips: day.tips,
     })),

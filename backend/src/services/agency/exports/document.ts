@@ -60,6 +60,19 @@ export interface ExportQuote {
   terms: string[];
 }
 
+/**
+ * A trip photo on the export document. `id` is resolved to `dataUrl` at render
+ * time (`embedTripMedia`); renderers only consume the embedded form.
+ */
+export interface ExportImage {
+  /** TripMedia id, validated at build time. Null for a legacy string entry. */
+  id: string | null;
+  dataUrl: string | null;
+  width: number | null;
+  height: number | null;
+  alt: string | null;
+}
+
 export interface ExportActivity {
   title: string;
   time: string | null;
@@ -67,6 +80,7 @@ export interface ExportActivity {
   location: string | null;
   /** Content-only estimate from the AI itinerary; never an agency cost. */
   cost: number | null;
+  image: ExportImage | null;
 }
 
 export interface ExportStay {
@@ -75,6 +89,15 @@ export interface ExportStay {
   description: string | null;
   vibe: string | null;
   pricePerNight: string | null;
+  image: ExportImage | null;
+}
+
+export interface ExportFood {
+  name: string;
+  cuisine: string | null;
+  price: string | null;
+  note: string | null;
+  image: ExportImage | null;
 }
 
 export interface ExportDay {
@@ -84,11 +107,13 @@ export interface ExportDay {
   summary: string | null;
   activities: ExportActivity[];
   stay: ExportStay[];
+  /** Flat labels kept for templates written before structured food existed. */
   food: string[];
+  foodItems: ExportFood[];
   transport: string[];
   tips: string[];
   permitRequired: boolean;
-  imageUrl: string | null;
+  image: ExportImage | null;
 }
 
 export interface ExportTrip {
@@ -137,6 +162,8 @@ const MAX_STRING = 2_000;
 const MAX_DAY_TITLE = 160;
 const MAX_DAY_COUNT = 30;
 const MAX_TEXT_ITEMS = 100;
+const OBJECT_ID = /^[a-f0-9]{24}$/i;
+const MAX_IMAGE_DIMENSION = 20_000;
 
 function text(value: unknown, max = MAX_STRING): string {
   if (typeof value === 'number' && Number.isFinite(value)) return String(value);
@@ -162,6 +189,31 @@ function wholeNumber(value: unknown, min: number, max: number): number | null {
   const parsed = finiteNumber(value);
   if (parsed === null || !Number.isInteger(parsed)) return null;
   return Math.min(max, Math.max(min, parsed));
+}
+
+function positiveDimension(value: unknown): number | null {
+  const parsed = finiteNumber(value);
+  return parsed !== null &&
+    Number.isInteger(parsed) &&
+    parsed >= 1 &&
+    parsed <= MAX_IMAGE_DIMENSION
+    ? parsed
+    : null;
+}
+
+/** A stored photo reference, or null when the entry has no usable photo. */
+function normalizeImage(value: unknown): ExportImage | null {
+  if (!value || typeof value !== 'object') return null;
+  const source = value as any;
+  const id = String(source.id ?? '').trim().toLowerCase();
+  if (!OBJECT_ID.test(id)) return null;
+  return {
+    id,
+    dataUrl: null,
+    width: positiveDimension(source.width),
+    height: positiveDimension(source.height),
+    alt: nullableText(source.alt, 160),
+  };
 }
 
 /** Accepts strings and the `{ title }` / `{ name }` shapes models may return. */
@@ -194,6 +246,7 @@ export function normalizeActivities(value: unknown): ExportActivity[] {
               description: null,
               location: null,
               cost: null,
+              image: null,
             }
           : null;
       }
@@ -210,6 +263,7 @@ export function normalizeActivities(value: unknown): ExportActivity[] {
         description,
         location: nullableText(source.location ?? source.location_name, 160),
         cost: cost !== null && cost >= 0 ? cost : null,
+        image: normalizeImage(source.image),
       };
     })
     .filter((entry): entry is ExportActivity => entry !== null);
@@ -228,6 +282,7 @@ export function normalizeStays(value: unknown): ExportStay[] {
               description: null,
               vibe: null,
               pricePerNight: null,
+              image: null,
             }
           : null;
       }
@@ -246,9 +301,36 @@ export function normalizeStays(value: unknown): ExportStay[] {
         description: nullableText(source.description, 2_000),
         vibe: nullableText(source.vibe, 160),
         pricePerNight: price,
+        image: normalizeImage(source.image),
       };
     })
     .filter((entry): entry is ExportStay => entry !== null);
+}
+
+/** Structured food entries; the legacy string stays in `food` for templates. */
+export function normalizeFoods(value: unknown): ExportFood[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry): ExportFood | null => {
+      if (typeof entry === 'string') {
+        const name = text(entry, 240);
+        return name
+          ? { name, cuisine: null, price: null, note: null, image: null }
+          : null;
+      }
+      if (!entry || typeof entry !== 'object') return null;
+      const source = entry as any;
+      const name = text(source.name, 240);
+      if (!name) return null;
+      return {
+        name,
+        cuisine: nullableText(source.cuisine, 160),
+        price: nullableText(source.price, 80),
+        note: nullableText(source.note, 500),
+        image: normalizeImage(source.image),
+      };
+    })
+    .filter((entry): entry is ExportFood => entry !== null);
 }
 
 function validDate(value: unknown): Date | null {
@@ -284,10 +366,11 @@ function normalizeDay(source: any, index: number, startDate: Date | null): Expor
     activities: normalizeActivities(raw.activities),
     stay: normalizeStays(raw.stay_recommendations ?? raw.stays),
     food: textList(raw.food_spots ?? raw.food, 40, 240),
+    foodItems: normalizeFoods(raw.food_spots ?? raw.food),
     transport: textList(raw.transport, 40, 240),
     tips: textList(raw.pro_tip ?? raw.tips, 40, 500),
     permitRequired: Boolean(raw.permit_required ?? raw.permitRequired),
-    imageUrl: null,
+    image: normalizeImage(raw.image),
   };
 }
 

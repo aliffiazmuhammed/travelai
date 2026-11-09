@@ -404,6 +404,22 @@ export const publicShareLimiter = rateLimit({
 });
 
 /**
+ * Shared-trip photos. One page can request dozens of images, so the photo
+ * brake is looser than the page brake while still capping enumeration.
+ */
+export const tripMediaShareLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 600,
+  message: {
+    success: false,
+    error: 'Too many photo requests. Please slow down and try again shortly.',
+    message: 'Too many photo requests. Please slow down and try again shortly.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
  * Public traveler profiles (G2). Handles are short and guessable, so profile
  * reads get the same IP brake as unlisted shares: 120 reads / 15 min covers a
  * person browsing several profiles (and the SPA's refetches) while capping

@@ -125,9 +125,19 @@ import {
   joinRequestLimiter,
   publicShareLimiter,
   tripCloneLimiter,
+  tripMediaShareLimiter,
   typingPingLimiter,
 } from '../middleware/rateLimiter.middleware.js';
-import { handleReceiptUpload } from '../middleware/upload.middleware.js';
+import {
+  handleReceiptUpload,
+  handleTripMediaUpload,
+} from '../middleware/upload.middleware.js';
+import {
+  deleteTripMediaFile,
+  serveSharedTripMedia,
+  serveTripMedia,
+  uploadTripMedia,
+} from '../controllers/tripMedia.controller.js';
 
 const router = Router();
 
@@ -151,6 +161,13 @@ router.post(
 );
 
 // Public Shared Trip Endpoint (No auth required). IP-limited (F11, E5).
+// Photos on the shared page are read through the same share id, so revoking
+// the link closes them too.
+router.get(
+  '/shared/:shareId/media/:mediaId',
+  tripMediaShareLimiter,
+  serveSharedTripMedia
+);
 router.get('/shared/:shareId', publicShareLimiter, getSharedTrip);
 
 // Full CRUD Endpoints
@@ -266,6 +283,29 @@ router.post(
 
 router.post('/:id/share', protectSession, requireTripRole('owner'), shareTrip);
 router.delete('/:id/share', protectSession, requireTripRole('owner'), revokeShareTrip);
+
+// Trip photos (days, activities, stays, food). Editors upload and detach;
+// viewers read. Photo bytes never change after upload, so the content route
+// can be cached hard.
+router.post(
+  '/:id/media',
+  protectSession,
+  requireTripRole('editor'),
+  handleTripMediaUpload,
+  uploadTripMedia
+);
+router.delete(
+  '/:id/media/:mediaId',
+  protectSession,
+  requireTripRole('editor'),
+  deleteTripMediaFile
+);
+router.get(
+  '/:id/media/:mediaId/content',
+  protectSession,
+  requireTripRole('viewer'),
+  serveTripMedia
+);
 
 // Gallery publish/unpublish (Milestone 8 G1) — owner-only, personal trips only
 // (the service rejects agency rows before any write).

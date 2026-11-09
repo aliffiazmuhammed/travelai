@@ -121,8 +121,10 @@ function activityRow(activity: ExportActivity, internal: boolean): string {
           formatExportMoney(activity.cost, 'INR')
         )}</span>`
       : '';
+  const photo = imageDataUrl(activity.image?.dataUrl);
   return `<li class="activity">
     <span class="activity-dot"></span>
+    ${photo ? `<img class="activity-photo" src="${photo}" alt="" />` : ''}
     <div class="activity-body">
       <div class="activity-head">
         ${activity.time ? `<span class="activity-time">${escapeHtml(activity.time)}</span>` : ''}
@@ -160,11 +162,15 @@ function dayPage(
           .join('')}</ol>`
       : '<p class="muted">The detailed plan for this day is being finalised.</p>';
 
+  const hero = imageDataUrl(day.image?.dataUrl);
+
   const stays =
     day.stay.length > 0
       ? `<div class="stay-grid">${day.stay
-          .map(
-            (stay) => `<div class="stay-card">
+          .map((stay) => {
+            const photo = imageDataUrl(stay.image?.dataUrl);
+            return `<div class="stay-card">
+              ${photo ? `<img class="stay-photo" src="${photo}" alt="" />` : ''}
               <strong>${escapeHtml(stay.name)}</strong>
               ${stay.location ? `<span>${escapeHtml(stay.location)}</span>` : ''}
               ${stay.vibe ? `<em>${escapeHtml(stay.vibe)}</em>` : ''}
@@ -174,8 +180,8 @@ function dayPage(
                   : ''
               }
               ${stay.description ? `<p>${escapeHtml(stay.description)}</p>` : ''}
-            </div>`
-          )
+            </div>`;
+          })
           .join('')}</div>`
       : '<p class="muted">Stay details will be confirmed with the final plan.</p>';
 
@@ -202,6 +208,7 @@ function dayPage(
           : ''
       }
     </header>
+    ${hero ? `<img class="day-hero" src="${hero}" alt="" />` : ''}
     <div class="day-main">
       <div class="timeline-wrap">${activities}</div>
       <div class="day-side">${detailBlocks}</div>
@@ -697,10 +704,12 @@ p { margin: 0; }
 .day-date { float: right; color: #64748B; font-size: 9pt; margin-top: 1.5mm; }
 .day-head h2 { clear: both; font-size: 24pt; margin-top: 3mm; overflow-wrap: anywhere; }
 .permit { margin-top: 3mm; }
+.day-hero { display: block; width: 100%; height: 38mm; object-fit: cover; border-radius: 3mm; margin-top: 5mm; }
 .day-main { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 7mm; margin-top: 6mm; }
 .timeline { list-style: none; margin: 0; padding: 0; }
 .activity { display: flex; gap: 3mm; padding: 0 0 4mm; }
 .activity-dot { flex: 0 0 auto; width: 3mm; height: 3mm; border-radius: 50%; margin-top: 2mm; background: ${primary}; }
+.activity-photo { flex: 0 0 auto; width: 24mm; height: 17mm; object-fit: cover; border-radius: 2mm; margin-top: 0.5mm; }
 .activity-body { min-width: 0; flex: 1; }
 .activity-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2.5mm; }
 .activity-head strong { font-size: 10.5pt; overflow-wrap: anywhere; }
@@ -719,6 +728,7 @@ p { margin: 0; }
 .stay-section { margin-top: 4mm; }
 .stay-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3mm; }
 .stay-card { border: 1px solid #E2E8F0; border-radius: 3mm; padding: 3.5mm; min-width: 0; }
+.stay-photo { display: block; width: 100%; height: 26mm; object-fit: cover; border-radius: 2mm; margin-bottom: 2mm; }
 .stay-card strong { display: block; font-size: 10pt; overflow-wrap: anywhere; }
 .stay-card span { display: block; color: #64748B; font-size: 8.5pt; margin-top: 1mm; overflow-wrap: anywhere; }
 .stay-card em { display: block; margin-top: 1mm; font-size: 8.5pt; color: #475569; }

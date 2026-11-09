@@ -166,6 +166,25 @@ test('internal costs are accepted only for internal templates', () => {
   invalid(source, 'client');
 });
 
+test('trip photo tokens validate for days, activities, stays and food', () => {
+  const source = `
+    <section class="page">{{#days}}
+      {{#imageDataUrl}}<img src="{{.}}" alt="">{{/imageDataUrl}}
+      {{#activities}}{{#imageDataUrl}}<img src="{{.}}" alt="{{title}}">{{/imageDataUrl}}{{/activities}}
+      {{#stays}}{{#imageDataUrl}}<img src="{{.}}" alt="{{name}}">{{/imageDataUrl}}{{/stays}}
+      {{#foodItems}}{{name}}{{#imageDataUrl}}<img src="{{.}}" alt="">{{/imageDataUrl}}{{/foodItems}}
+    {{/days}}</section>
+  `;
+  const result = validateAgencyTemplateSource(source, { audience: 'client' });
+  assert.ok(result.tokens.includes('days.activities.imageDataUrl'));
+  assert.ok(result.tokens.includes('days.stays.imageDataUrl'));
+  assert.ok(result.tokens.includes('days.foodItems.name'));
+
+  const html = renderAgencyTemplateFragment(source, buildTemplateValidationView());
+  assert.match(html, /data:image(?:&#x2F;|\/)png;base64/);
+  assert.match(html, /Sol Cafe/);
+});
+
 test('unsafe markup is rejected', () => {
   const cases = [
     '<script>alert(1)</script>',

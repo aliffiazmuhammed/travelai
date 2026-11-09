@@ -1,5 +1,27 @@
 import type { TripGallery, TripModeration, TripVisibility } from './gallery';
 
+/**
+ * A trip photo reference. `id` is the only stored key; `url` appears on the
+ * public share payload, where anonymous viewers cannot build the member URL.
+ */
+export interface MediaRef {
+  id: string;
+  url?: string;
+  alt?: string;
+  width?: number;
+  height?: number;
+}
+
+/** Server view of an uploaded trip photo (`POST /api/itinerary/:id/media`). */
+export interface TripPhoto {
+  id: string;
+  url: string;
+  mime: string;
+  bytes: number;
+  width?: number;
+  height?: number;
+}
+
 export interface ActivityItem {
   name?: string;
   title?: string;
@@ -9,6 +31,7 @@ export interface ActivityItem {
   location_name?: string;
   approx_cost?: number;
   coordinates?: [number, number];
+  image?: MediaRef;
 }
 
 export interface StayItem {
@@ -18,6 +41,7 @@ export interface StayItem {
   vibe?: string;
   description?: string;
   coordinates?: [number, number];
+  image?: MediaRef;
 }
 
 export interface FoodItem {
@@ -25,6 +49,7 @@ export interface FoodItem {
   cuisine?: string;
   price?: string;
   note?: string;
+  image?: MediaRef;
 }
 
 export interface ItineraryData {
@@ -43,6 +68,8 @@ export interface ItineraryData {
   day_by_day_itinerary: {
     day: number;
     title: string;
+    /** Day hero photo, shown above the day's timeline. */
+    image?: MediaRef;
     activities: (string | ActivityItem)[];
     stay_recommendations: (string | StayItem)[];
     transport: string[];

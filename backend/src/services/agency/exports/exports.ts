@@ -21,6 +21,7 @@ import { recordAgencyAudit } from '../audit.js';
 import { assertExportQuota, monthStart } from '../plan.js';
 import { resolveExportBrand } from './brand.js';
 import { buildExportDocument } from './document.js';
+import { embedTripMedia } from './tripPhotos.js';
 import { renderCustomTemplateHtml } from './customTemplate.js';
 import {
   countPdfPages,
@@ -401,13 +402,16 @@ export async function renderPinnedAgencyExport(input: {
 
   if (template.builtinKey) {
     const brand = await resolveExportBrand(input.agencyId, input.agency);
-    const doc = buildExportDocument({
-      agency: input.agency,
-      trip: input.trip,
-      quote: input.quote,
-      client: input.client,
-      brand: brand.documentAssets,
-    });
+    const doc = await embedTripMedia(
+      buildExportDocument({
+        agency: input.agency,
+        trip: input.trip,
+        quote: input.quote,
+        client: input.client,
+        brand: brand.documentAssets,
+      }),
+      String(input.trip._id)
+    );
     return renderExportHtml(
       doc,
       renderTemplate({
@@ -434,12 +438,15 @@ export async function renderPinnedAgencyExport(input: {
       409
     );
   }
-  const doc = buildExportDocument({
-    agency: input.agency,
-    trip: input.trip,
-    quote: input.quote,
-    client: input.client,
-  });
+  const doc = await embedTripMedia(
+    buildExportDocument({
+      agency: input.agency,
+      trip: input.trip,
+      quote: input.quote,
+      client: input.client,
+    }),
+    String(input.trip._id)
+  );
   return renderCustomTemplateHtml({
     doc,
     template: {
@@ -574,13 +581,16 @@ export async function previewAgencyExport(
       ? await resolveExportBrand(input.agencyId, agency)
       : null;
 
-  const doc = buildExportDocument({
-    agency,
-    trip: input.trip,
-    quote,
-    client,
-    ...(brand ? { brand: brand.documentAssets } : {}),
-  });
+  const doc = await embedTripMedia(
+    buildExportDocument({
+      agency,
+      trip: input.trip,
+      quote,
+      client,
+      ...(brand ? { brand: brand.documentAssets } : {}),
+    }),
+    String(input.trip._id)
+  );
   const rendered = await renderResolvedTemplate(resolved, doc, brand ?? {});
 
   return {
@@ -855,13 +865,16 @@ export async function processAgencyExport(
       resolved.kind === 'builtin'
         ? await resolveExportBrand(String(job.agencyId), agency)
         : null;
-    const doc = buildExportDocument({
-      agency,
-      trip,
-      quote,
-      client,
-      ...(brand ? { brand: brand.documentAssets } : {}),
-    });
+    const doc = await embedTripMedia(
+      buildExportDocument({
+        agency,
+        trip,
+        quote,
+        client,
+        ...(brand ? { brand: brand.documentAssets } : {}),
+      }),
+      String(job.tripId)
+    );
     const rendered = await renderResolvedTemplate(resolved, doc, brand ?? {});
     const pdf =
       rendered.engine === 'pdf-background'

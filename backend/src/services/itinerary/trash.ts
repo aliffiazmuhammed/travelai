@@ -7,6 +7,7 @@ import TripInvite from '../../models/TripInvite.js';
 import TripPoll from '../../models/TripPoll.js';
 import TripReadState from '../../models/TripReadState.js';
 import { deleteReceiptFile } from '../finance/receipt.js';
+import { purgeTripMedia } from '../tripMedia/media.js';
 
 /**
  * Recently deleted trips (Milestone 7, M7.7).
@@ -96,6 +97,10 @@ export async function purgeTripCascade(trip: any): Promise<void> {
 
   await Trip.deleteOne({ _id: tripId });
 
-  // `deleteReceiptFile` is best-effort and already logs Cloudinary failures.
-  await Promise.all(receiptUrls.map((url) => deleteReceiptFile(url)));
+  // `deleteReceiptFile` and trip photo removal are best-effort and already log
+  // storage failures; a missing file is the desired end state.
+  await Promise.all([
+    ...receiptUrls.map((url) => deleteReceiptFile(url)),
+    purgeTripMedia(tripId),
+  ]);
 }

@@ -34,10 +34,13 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import type { FoodItem, ItineraryData, StayItem } from "@/types/trip";
+import { TripPhotoField } from "./TripPhotoField";
+import type { FoodItem, ItineraryData, MediaRef, StayItem } from "@/types/trip";
 
 interface StayAndCuisineProps {
   itinerary: ItineraryData["day_by_day_itinerary"];
+  /** Owning trip — enables stay/food photo uploads when present. */
+  tripId?: string;
   /**
    * Present only for trip editors (owners, editors, agency staff with edit
    * access). Stays are saved through the itinerary autosave path, so the
@@ -52,6 +55,7 @@ interface NormalizedStay {
   location?: string;
   price?: string;
   vibe?: string;
+  image?: MediaRef;
   days: number[];
   raw: string | StayItem;
 }
@@ -61,6 +65,7 @@ interface StayDraft {
   location: string;
   price: string;
   vibe: string;
+  image?: MediaRef;
   days: number[];
 }
 
@@ -70,6 +75,7 @@ interface NormalizedFood {
   cuisine?: string;
   price?: string;
   note?: string;
+  image?: MediaRef;
   days: number[];
   raw: string | FoodItem;
 }
@@ -79,6 +85,7 @@ interface FoodDraft {
   cuisine: string;
   price: string;
   note: string;
+  image?: MediaRef;
   days: number[];
 }
 
@@ -87,6 +94,7 @@ function normalizeStay(item: string | StayItem): {
   location?: string;
   price?: string;
   vibe?: string;
+  image?: MediaRef;
 } {
   if (typeof item === "object" && item !== null) {
     return {
@@ -94,6 +102,7 @@ function normalizeStay(item: string | StayItem): {
       location: item.location?.trim(),
       price: item.price_per_night ? String(item.price_per_night) : undefined,
       vibe: item.vibe || item.description,
+      image: item.image,
     };
   }
 
@@ -149,6 +158,7 @@ function normalizeFood(item: string | FoodItem): {
   cuisine?: string;
   price?: string;
   note?: string;
+  image?: MediaRef;
 } {
   if (typeof item === "object" && item !== null) {
     return {
@@ -156,6 +166,7 @@ function normalizeFood(item: string | FoodItem): {
       cuisine: item.cuisine?.trim() || undefined,
       price: item.price ? String(item.price).trim() || undefined : undefined,
       note: item.note?.trim() || undefined,
+      image: item.image,
     };
   }
   return splitLegacyFood(String(item || ""));
@@ -235,6 +246,7 @@ const DayPicker: React.FC<{
 
 export const StayAndCuisine: React.FC<StayAndCuisineProps> = ({
   itinerary,
+  tripId,
   onUpdateItinerary,
 }) => {
   const canEdit = Boolean(onUpdateItinerary);
@@ -270,6 +282,7 @@ export const StayAndCuisine: React.FC<StayAndCuisineProps> = ({
           if (!existing.vibe && norm.vibe) existing.vibe = norm.vibe;
           if (!existing.price && norm.price) existing.price = norm.price;
           if (!existing.location && norm.location) existing.location = norm.location;
+          if (!existing.image && norm.image) existing.image = norm.image;
         } else {
           map.set(key, {
             id: key,
@@ -277,6 +290,7 @@ export const StayAndCuisine: React.FC<StayAndCuisineProps> = ({
             location: norm.location,
             price: norm.price,
             vibe: norm.vibe,
+            image: norm.image,
             days: [dayData.day],
             raw: rec,
           });
@@ -307,6 +321,7 @@ export const StayAndCuisine: React.FC<StayAndCuisineProps> = ({
           if (!existing.cuisine && norm.cuisine) existing.cuisine = norm.cuisine;
           if (!existing.price && norm.price) existing.price = norm.price;
           if (!existing.note && norm.note) existing.note = norm.note;
+          if (!existing.image && norm.image) existing.image = norm.image;
         } else {
           map.set(key, {
             id: key,
@@ -314,6 +329,7 @@ export const StayAndCuisine: React.FC<StayAndCuisineProps> = ({
             cuisine: norm.cuisine,
             price: norm.price,
             note: norm.note,
+            image: norm.image,
             days: [dayData.day],
             raw: spot,
           });
@@ -338,6 +354,7 @@ export const StayAndCuisine: React.FC<StayAndCuisineProps> = ({
       location: stay.location ?? "",
       price: stay.price ?? "",
       vibe: stay.vibe ?? "",
+      image: stay.image,
       days: [...stay.days].sort((a, b) => a - b),
     });
   };
@@ -398,6 +415,8 @@ export const StayAndCuisine: React.FC<StayAndCuisineProps> = ({
       setOrClear(entry, "location", draft.location);
       setOrClear(entry, "price_per_night", draft.price);
       setOrClear(entry, "vibe", draft.vibe);
+      if (draft.image) entry.image = draft.image;
+      else delete entry.image;
 
       return { ...dayData, stay_recommendations: [...kept, entry] };
     });
@@ -435,6 +454,7 @@ export const StayAndCuisine: React.FC<StayAndCuisineProps> = ({
       cuisine: spot.cuisine ?? "",
       price: spot.price ?? "",
       note: spot.note ?? "",
+      image: spot.image,
       days: [...spot.days].sort((a, b) => a - b),
     });
   };
@@ -501,6 +521,8 @@ export const StayAndCuisine: React.FC<StayAndCuisineProps> = ({
       else delete entry.price;
       if (note) entry.note = note;
       else delete entry.note;
+      if (foodDraft.image) entry.image = foodDraft.image;
+      else delete entry.image;
 
       return { ...dayData, food_spots: [...kept, entry] };
     });
@@ -597,8 +619,15 @@ export const StayAndCuisine: React.FC<StayAndCuisineProps> = ({
               return (
                 <Card
                   key={stay.id}
-                  className="rounded-3xl border border-border/70 hover:border-primary/40 bg-card/80 backdrop-blur-sm shadow-card transition-all"
+                  className="rounded-3xl border border-border/70 hover:border-primary/40 bg-card/80 backdrop-blur-sm shadow-card transition-all overflow-hidden"
                 >
+                  <TripPhotoField
+                    tripId={tripId}
+                    value={stay.image}
+                    alt={stay.name}
+                    variant="card"
+                    className="rounded-none border-0 border-b border-border/60"
+                  />
                   <CardContent className="p-5 space-y-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-start gap-3">
@@ -734,8 +763,15 @@ export const StayAndCuisine: React.FC<StayAndCuisineProps> = ({
             {foodSpots.map((spot) => (
               <Card
                 key={spot.id}
-                className="rounded-3xl border border-border/70 hover:border-orange-500/30 bg-card/80 backdrop-blur-sm shadow-card transition-all"
+                className="rounded-3xl border border-border/70 hover:border-orange-500/30 bg-card/80 backdrop-blur-sm shadow-card transition-all overflow-hidden"
               >
+                <TripPhotoField
+                  tripId={tripId}
+                  value={spot.image}
+                  alt={spot.name}
+                  variant="card"
+                  className="rounded-none border-0 border-b border-border/60"
+                />
                 <CardContent className="p-5 space-y-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-start gap-3">
@@ -913,6 +949,22 @@ export const StayAndCuisine: React.FC<StayAndCuisineProps> = ({
               />
             </div>
 
+            {tripId && (
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Photo (optional)</Label>
+                <TripPhotoField
+                  tripId={tripId}
+                  value={draft?.image}
+                  alt={draft?.name}
+                  variant="card"
+                  label="Add a photo of the stay"
+                  onChange={(image) =>
+                    setDraft((current) => (current ? { ...current, image } : current))
+                  }
+                />
+              </div>
+            )}
+
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold">Which nights?</Label>
               <DayPicker
@@ -1075,6 +1127,24 @@ export const StayAndCuisine: React.FC<StayAndCuisineProps> = ({
                 }
               />
             </div>
+
+            {tripId && (
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Photo (optional)</Label>
+                <TripPhotoField
+                  tripId={tripId}
+                  value={foodDraft?.image}
+                  alt={foodDraft?.name}
+                  variant="card"
+                  label="Add a photo of the food spot"
+                  onChange={(image) =>
+                    setFoodDraft((current) =>
+                      current ? { ...current, image } : current
+                    )
+                  }
+                />
+              </div>
+            )}
 
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold">Which days?</Label>

@@ -254,6 +254,32 @@ test('missing dates, photos, quote and optional fields still render a safe draft
   assert.ok(!rendered.html.includes('data:image/'));
 });
 
+test('embedded trip photos render in the built-in layout', () => {
+  const PHOTO =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  const trip = tripFixture(1);
+  const day = trip.tripDetails.day_by_day_itinerary[0];
+  day.image = { id: 'a'.repeat(24) };
+  day.activities[0].image = { id: 'b'.repeat(24) };
+  day.stay_recommendations[0].image = { id: 'c'.repeat(24) };
+
+  const doc = buildExportDocument({
+    agency: agencyFixture(),
+    trip,
+    quote: quoteFixture(),
+  });
+  // `embedTripMedia` fills these after the DTO is built.
+  doc.trip.days[0].image!.dataUrl = PHOTO;
+  doc.trip.days[0].activities[0].image!.dataUrl = PHOTO;
+  doc.trip.days[0].stay[0].image!.dataUrl = PHOTO;
+
+  const { html } = renderExportHtml(doc, TEMPLATE, {});
+  assert.equal((html.match(/class="day-hero"/g) ?? []).length, 1);
+  assert.equal((html.match(/class="activity-photo"/g) ?? []).length, 1);
+  assert.equal((html.match(/class="stay-photo"/g) ?? []).length, 1);
+  assert.ok(html.includes(`src="${PHOTO}"`));
+});
+
 test('the client DTO excludes margin, prepared-by, expenses and chat ciphertext', () => {
   const { doc } = render(4, { quote: quoteFixture() });
   const serialized = JSON.stringify(doc);

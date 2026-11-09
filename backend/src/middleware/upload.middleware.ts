@@ -16,6 +16,10 @@ import {
 } from '../services/agency/assets.js';
 import { AGENCY_TEMPLATE_MAX_BYTES } from '../services/agency/exports/templateValidation.js';
 import { AGENCY_PDF_MAX_BYTES } from '../services/agency/exports/pdfTemplateContract.js';
+import {
+  TRIP_MEDIA_MAX_BYTES,
+  TRIP_MEDIA_MAX_MB,
+} from '../services/tripMedia/media.js';
 
 /**
  * Receipt uploads are buffered in memory (capped by `MAX_UPLOAD_MB`) so the
@@ -98,6 +102,59 @@ export const handleAvatarUpload: RequestHandler = (req, res, next) => {
       }
       if (error.code === 'LIMIT_FILE_COUNT' || error.code === 'LIMIT_UNEXPECTED_FILE') {
         next(new AppError('Please upload a single photo.', 400));
+        return;
+      }
+      next(new AppError('We could not process that photo. Please try again.', 400));
+      return;
+    }
+
+    next(error);
+  });
+};
+
+/**
+ * Trip photos. Same in-memory-then-sniff contract as avatars; the service
+ * enforces the image allow-list and the byte cap a second time after sniffing.
+ */
+const tripMediaUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: TRIP_MEDIA_MAX_BYTES, files: 1 },
+  fileFilter: (_req, file, callback) => {
+    const mime = String(file.mimetype ?? '')
+      .toLowerCase()
+      .split(';')[0]
+      .trim();
+    if (mime === 'image/jpg' || mime === 'image/pjpeg') {
+      callback(null, true);
+      return;
+    }
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(mime)) {
+      callback(new AppError('Choose a JPEG, PNG or WebP photo.', 400));
+      return;
+    }
+    callback(null, true);
+  },
+}).single('photo');
+
+export const handleTripMediaUpload: RequestHandler = (req, res, next) => {
+  tripMediaUpload(req, res, (error: unknown) => {
+    if (!error) {
+      next();
+      return;
+    }
+
+    if (error instanceof multer.MulterError) {
+      if (error.code === 'LIMIT_FILE_SIZE') {
+        next(
+          new AppError(
+            `Photos must be smaller than ${TRIP_MEDIA_MAX_MB} MB.`,
+            413
+          )
+        );
+        return;
+      }
+      if (error.code === 'LIMIT_FILE_COUNT' || error.code === 'LIMIT_UNEXPECTED_FILE') {
+        next(new AppError('Attach one photo under the "photo" field.', 400));
         return;
       }
       next(new AppError('We could not process that photo. Please try again.', 400));
