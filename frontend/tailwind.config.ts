@@ -14,8 +14,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ["Manrope", "ui-sans-serif", "system-ui", "sans-serif"],
-        display: ["Newsreader", "ui-serif", "Georgia", "serif"],
+        sans: ["Cabin", "ui-sans-serif", "system-ui", "sans-serif"],
+        display: ["Cabin", "ui-sans-serif", "system-ui", "sans-serif"],
       },
       backgroundImage: {
         "gradient-sky": "var(--gradient-sky)",

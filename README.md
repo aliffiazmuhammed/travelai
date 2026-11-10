@@ -461,7 +461,7 @@ Generated or local-only directories (`backend/public`, `backend/dist`, `backend/
 | Layer | Technologies |
 |---|---|
 | Frontend | React 18, TypeScript, Vite 5, React Router 6, TanStack Query, Tailwind CSS, shadcn/ui + Radix, Lucide |
-| Typography | Newsreader (display) and Manrope (body) |
+| Typography | Cabin (display and body) |
 | Maps and visuals | Leaflet, React-Leaflet, OpenStreetMap, Recharts |
 | Documents | jsPDF (personal itinerary), pdf-lib + pdfjs-dist (agency templates), Mustache + parse5 (HTML templates) |
 | Backend | Node.js 20+, Express 5, TypeScript, tsx, Zod, Multer |
