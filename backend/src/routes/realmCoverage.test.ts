@@ -89,7 +89,7 @@ test('every trip-invite route uses protectPersonal', () => {
 });
 
 test('every shared trip route uses protectSession', () => {
-  const PUBLIC = new Set(['/shared/:shareId']);
+  const PUBLIC = new Set(['/shared/:shareId', '/shared/:shareId/media/:mediaId']);
   const PERSONAL = new Set(['/', '/insights', '/trash', '/:id/clone', '/:id/join-request']);
   const SESSION = new Set(['/generate', '/generate-stream']);
 
