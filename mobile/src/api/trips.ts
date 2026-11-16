@@ -115,3 +115,22 @@ export function fetchMyTrips(): Promise<MyTripSummary[]> {
 export function fetchMyTrip(tripId: string): Promise<MyTripDetail> {
   return apiRequest<MyTripDetail>(`/itinerary/${encodeURIComponent(tripId)}`);
 }
+
+export interface PlanEditInput {
+  /** The revision the edit started from; a stale write is rejected with 409. */
+  baseRev: number;
+  tripDetails: TripItinerary;
+  /** Owner-only. When present, name and content save together in one write. */
+  title?: string;
+}
+
+/**
+ * Whole-itinerary save. A rename goes through the owner route so both land in
+ * one revision; content-only edits use the editor-safe route so collaborators
+ * can save from their own phones.
+ */
+export function savePlanChanges(tripId: string, input: PlanEditInput): Promise<MyTripDetail> {
+  const id = encodeURIComponent(tripId);
+  const path = input.title !== undefined ? `/itinerary/${id}` : `/itinerary/${id}/itinerary`;
+  return apiRequest<MyTripDetail>(path, { method: 'PUT', body: input });
+}

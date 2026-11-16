@@ -11,7 +11,7 @@ import { radius, typography } from '@/theme/tokens';
 import { useTheme } from '@/theme/useTheme';
 import { AppText } from './AppText';
 
-type Variant = 'primary' | 'accent' | 'secondary' | 'ghost';
+type Variant = 'primary' | 'accent' | 'secondary' | 'ghost' | 'danger';
 type Size = 'sm' | 'md' | 'lg';
 
 const height: Record<Size, number> = { sm: 40, md: 48, lg: 54 };
@@ -44,6 +44,7 @@ export function Button({
     accent: { bg: palette.accent, fg: palette.accentForeground, border: palette.accent },
     secondary: { bg: palette.muted, fg: palette.secondaryForeground, border: palette.muted },
     ghost: { bg: 'transparent', fg: palette.foreground, border: palette.border },
+    danger: { bg: palette.destructive, fg: palette.destructiveForeground, border: palette.destructive },
   }[variant];
 
   return (

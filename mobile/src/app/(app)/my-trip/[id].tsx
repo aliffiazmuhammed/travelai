@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useMemo, type ComponentProps } from 'react';
+import { useMemo, type ComponentProps, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ApiError } from '@/api/client';
@@ -108,7 +108,7 @@ export default function MyTripScreen() {
     router.navigate('/trips');
   };
 
-  const topRow = (
+  const topRow = (right?: ReactNode) => (
     <View style={styles.topRow}>
       <Pressable
         accessibilityRole="button"
@@ -124,13 +124,14 @@ export default function MyTripScreen() {
       <AppText variant="title" tone="primary" style={styles.wordmark}>
         waytowalk
       </AppText>
+      {right ?? null}
     </View>
   );
 
   if (tripQuery.isPending) {
     return (
       <Screen scroll edges={['top', 'bottom']} contentContainerStyle={styles.content}>
-        {topRow}
+        {topRow()}
         <TripSkeleton />
       </Screen>
     );
@@ -143,7 +144,7 @@ export default function MyTripScreen() {
 
     return (
       <Screen scroll edges={['top', 'bottom']} contentContainerStyle={styles.content}>
-        {topRow}
+        {topRow()}
         <View style={styles.page}>
           <Card style={styles.errorCard}>
             <View style={[styles.errorIcon, { backgroundColor: `${palette.destructive}14` }]}>
@@ -190,6 +191,7 @@ export default function MyTripScreen() {
   const status = trip.status ?? 'planned';
   const role = trip.role ?? 'owner';
   const isOwner = role === 'owner';
+  const canEdit = isOwner || role === 'editor';
   const memberCount = Math.max(trip.members?.length ?? 0, 1);
   const duration = itinerary.duration_days ?? days.length;
   const highlights = itinerary.highlights ?? [];
@@ -222,7 +224,24 @@ export default function MyTripScreen() {
   return (
     <View style={styles.root}>
       <Screen scroll edges={['top', 'bottom']} contentContainerStyle={styles.content}>
-        {topRow}
+        {topRow(
+          canEdit ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Edit plan"
+              onPress={() => router.navigate(`/edit-trip/${tripId}`)}
+              style={({ pressed }) => [
+                styles.editAction,
+                { backgroundColor: palette.muted, opacity: pressed ? 0.7 : 1 },
+              ]}
+            >
+              <Ionicons name="create-outline" size={14} color={palette.primary} />
+              <AppText variant="label" tone="primary">
+                Edit plan
+              </AppText>
+            </Pressable>
+          ) : undefined
+        )}
 
         <View style={styles.page}>
           <Card padded={false}>
@@ -380,8 +399,8 @@ export default function MyTripScreen() {
               </AppText>
             </View>
             <AppText variant="caption" tone="muted">
-              {isOwner
-                ? 'Editing, expenses and trip chat are next for the app. Until then, the whole itinerary is here to read wherever you are.'
+              {canEdit
+                ? 'Reshape any day from the app — stops, timings and notes save for everyone on the trip. Expenses and chat still live on the web.'
                 : 'Trip chat and expenses stay on the web for now. The whole itinerary is here to read wherever you are.'}
             </AppText>
           </Card>
@@ -412,7 +431,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  wordmark: { letterSpacing: -0.4 },
+  wordmark: { letterSpacing: -0.4, flex: 1 },
+  editAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: radius.pill,
+  },
   heroClip: { borderRadius: radius.xxl, overflow: 'hidden' },
   hero: { height: 220, justifyContent: 'space-between', padding: space.lg },
   heroChipRow: { flexDirection: 'row', justifyContent: 'space-between', gap: space.sm },
