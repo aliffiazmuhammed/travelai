@@ -87,6 +87,12 @@ export const ROLE_LABEL: Record<TripRole, string> = {
   viewer: 'Viewer',
 };
 
+/** "an editor" / "a viewer" — for sentences, not standalone chips. */
+export function rolePhrase(role: TripRole): string {
+  const label = ROLE_LABEL[role].toLowerCase();
+  return role === 'editor' ? `an ${label}` : `a ${label}`;
+}
+
 /** Orders upcoming trips by start date, past trips by the most recent, drafts by edits. */
 export function sortMyTrips(trips: MyTripSummary[], tab: TripTab): MyTripSummary[] {
   const time = (value?: string) => {
@@ -135,6 +141,7 @@ function activityToGallery(
     description: entry.description,
     location: entry.location || entry.location_name,
     coordinates: entry.coordinates,
+    image: entry.image,
   };
 }
 
@@ -151,6 +158,7 @@ function stayToGallery(entry: NonNullable<TripDay['stay_recommendations']>[numbe
     description: entry.description,
     vibe: entry.vibe,
     coordinates: entry.coordinates,
+    image: entry.image,
   };
 }
 
@@ -177,6 +185,7 @@ export function toGalleryDays(days: TripDay[] | undefined): GalleryDay[] {
     .map((day) => ({
       day: day.day,
       title: day.title ?? '',
+      image: day.image,
       activities: (day.activities ?? [])
         .map(activityToGallery)
         .filter((activity): activity is GalleryActivity => activity !== null),

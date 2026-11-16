@@ -4,6 +4,8 @@ import type {
   GalleryLocalTransport,
   GalleryWeather,
 } from '@/api/explore';
+import type { TripExpense, TripFinance, TripParticipant } from '@/api/expenses';
+import type { MediaRef } from '@/api/media';
 import { apiRequest } from '@/api/client';
 
 export type TripStatus = 'draft' | 'planned' | 'ongoing' | 'completed';
@@ -49,6 +51,7 @@ export interface TripStay {
   vibe?: string;
   price_per_night?: string | number;
   coordinates?: [number, number];
+  image?: MediaRef;
 }
 
 export interface TripFood {
@@ -56,11 +59,13 @@ export interface TripFood {
   cuisine?: string;
   price?: string;
   note?: string;
+  image?: MediaRef;
 }
 
 export interface TripDay {
   day: number;
   title?: string;
+  image?: MediaRef;
   activities?: (string | (GalleryActivity & { title?: string; location_name?: string }))[];
   stay_recommendations?: (string | TripStay)[];
   transport?: string[];
@@ -106,6 +111,9 @@ export interface TripCustomRoute {
 export interface MyTripDetail extends Omit<MyTripSummary, 'tripDetails'> {
   tripDetails?: TripItinerary;
   customRoutes?: TripCustomRoute[];
+  expenses?: TripExpense[];
+  participants?: TripParticipant[];
+  finance?: TripFinance;
 }
 
 export function fetchMyTrips(): Promise<MyTripSummary[]> {

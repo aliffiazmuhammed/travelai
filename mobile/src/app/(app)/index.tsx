@@ -185,7 +185,7 @@ export default function ExploreScreen() {
               onPress={() => goToTab('profile')}
               style={({ pressed }) => [styles.avatarButton, { opacity: pressed ? 0.75 : 1 }]}
             >
-              <Avatar name={user?.name || user?.email || 'You'} size={36} />
+              <Avatar name={user?.name || user?.email || 'You'} size={36} uri={user?.avatarUrl} />
             </Pressable>
           </View>
 
@@ -331,7 +331,13 @@ export default function ExploreScreen() {
                 contentContainerStyle={styles.agencyRow}
               >
                 {agencies.map((agency) => (
-                  <AgencyCard key={agency.slug} agency={agency} />
+                  <AgencyCard
+                    key={agency.slug}
+                    agency={agency}
+                    onPress={() =>
+                      router.push({ pathname: '/agency/[slug]', params: { slug: agency.slug } })
+                    }
+                  />
                 ))}
               </ScrollView>
             </View>

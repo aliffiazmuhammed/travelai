@@ -472,18 +472,47 @@ export default function TripScreen() {
               ))}
             </View>
 
-            <View style={[styles.publisher, { borderTopColor: palette.border }]}>
-              <Avatar name={hostName} size={40} />
-              <View style={styles.publisherText}>
-                <AppText variant="bodyStrong" numberOfLines={1}>
-                  Shared by {hostName}
-                </AppText>
-                <AppText variant="caption" tone="muted" numberOfLines={1}>
-                  {trip.publisher.handle ? `@${trip.publisher.handle}` : 'Trip host'}
-                  {sharedOn ? ` · ${sharedOn}` : ''}
-                </AppText>
+            {trip.publisher.handle ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Open ${hostName}’s profile`}
+                onPress={() =>
+                  router.push({
+                    pathname: '/traveler/[handle]',
+                    params: { handle: trip.publisher.handle },
+                  })
+                }
+                style={({ pressed }) => [
+                  styles.publisher,
+                  { borderTopColor: palette.border, opacity: pressed ? 0.7 : 1 },
+                ]}
+              >
+                <Avatar name={hostName} size={40} uri={trip.publisher.avatarUrl} />
+                <View style={styles.publisherText}>
+                  <AppText variant="bodyStrong" numberOfLines={1}>
+                    Shared by {hostName}
+                  </AppText>
+                  <AppText variant="caption" tone="muted" numberOfLines={1}>
+                    @{trip.publisher.handle}
+                    {sharedOn ? ` · ${sharedOn}` : ''}
+                  </AppText>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={palette.mutedForeground} />
+              </Pressable>
+            ) : (
+              <View style={[styles.publisher, { borderTopColor: palette.border }]}>
+                <Avatar name={hostName} size={40} uri={trip.publisher.avatarUrl} />
+                <View style={styles.publisherText}>
+                  <AppText variant="bodyStrong" numberOfLines={1}>
+                    Shared by {hostName}
+                  </AppText>
+                  <AppText variant="caption" tone="muted" numberOfLines={1}>
+                    Trip host
+                    {sharedOn ? ` · ${sharedOn}` : ''}
+                  </AppText>
+                </View>
               </View>
-            </View>
+            )}
           </View>
 
           <JoinAction

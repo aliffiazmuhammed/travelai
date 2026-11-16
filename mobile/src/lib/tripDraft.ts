@@ -1,4 +1,5 @@
 import type { GalleryActivity } from '@/api/explore';
+import type { MediaRef } from '@/api/media';
 import type { TripDay } from '@/api/trips';
 
 export type DraftActivity = GalleryActivity & { title?: string; location_name?: string };
@@ -9,6 +10,7 @@ export interface ActivityFields {
   time: string;
   description: string;
   location: string;
+  image?: MediaRef;
 }
 
 /** Legacy string entries and full objects read the same to the editor. */
@@ -21,6 +23,7 @@ export function activityFields(entry: ActivityEntry): ActivityFields {
     time: entry.time ?? '',
     description: entry.description ?? '',
     location: entry.location ?? entry.location_name ?? '',
+    image: entry.image,
   };
 }
 
@@ -40,6 +43,7 @@ function applyFields(entry: ActivityEntry, fields: ActivityFields): DraftActivit
     time: fields.time.trim() || undefined,
     description: fields.description.trim() || undefined,
     location: fields.location.trim() || undefined,
+    image: fields.image,
   };
 }
 
@@ -60,6 +64,14 @@ function editActivities(
 
 export function setDayTitle(days: TripDay[], dayIndex: number, title: string): TripDay[] {
   return editDay(days, dayIndex, (day) => ({ ...day, title: title.trim() || undefined }));
+}
+
+export function setDayImage(
+  days: TripDay[],
+  dayIndex: number,
+  image: MediaRef | undefined
+): TripDay[] {
+  return editDay(days, dayIndex, (day) => ({ ...day, image }));
 }
 
 export function addActivity(days: TripDay[], dayIndex: number, fields: ActivityFields): TripDay[] {

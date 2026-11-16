@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
 
 import { ApiError } from '@/api/client';
+import { uploadTripPhoto } from '@/api/media';
 import {
   fetchMyTrip,
   savePlanChanges,
@@ -14,15 +15,18 @@ import {
 } from '@/api/trips';
 import { ActivitySheet } from '@/components/ActivitySheet';
 import { cleanDayTitle } from '@/components/trip/DayPlan';
+import { TripPhotoField } from '@/components/trip/TripPhotoField';
 import {
   activityFields,
   addActivity,
   editActivity,
   moveActivity,
   removeActivity,
+  setDayImage,
   setDayTitle,
   type ActivityFields,
 } from '@/lib/tripDraft';
+import { pickTripPhoto, type PhotoSource } from '@/lib/tripPhotos';
 import { tripTitle } from '@/lib/personalTrip';
 import { radius, space } from '@/theme/tokens';
 import { useTheme } from '@/theme/useTheme';
@@ -46,7 +50,7 @@ function TopRow({ onBack, right }: { onBack: () => void; right?: ReactNode }) {
       >
         <Ionicons name="chevron-back" size={18} color={palette.foreground} />
       </Pressable>
-      <AppText variant="title" tone="primary" style={styles.wordmark}>
+      <AppText variant="heading" tone="primary" style={styles.wordmark}>
         waytowalk
       </AppText>
       {right ?? null}
@@ -62,16 +66,26 @@ function EditDayCard({
   day,
   dayIndex,
   first,
+  tripId,
+  photoBusy,
+  photoError,
   onSetTitle,
   onEditStop,
   onAddStop,
+  onPickPhoto,
+  onRemovePhoto,
 }: {
   day: TripDay;
   dayIndex: number;
   first: boolean;
+  tripId: string;
+  photoBusy: boolean;
+  photoError: string | null;
   onSetTitle: (dayIndex: number, value: string) => void;
   onEditStop: (dayIndex: number, activityIndex: number) => void;
   onAddStop: (dayIndex: number) => void;
+  onPickPhoto: (dayIndex: number, source: PhotoSource) => void;
+  onRemovePhoto: (dayIndex: number) => void;
 }) {
   const { palette } = useTheme();
   const [open, setOpen] = useState(first);
@@ -134,6 +148,16 @@ function EditDayCard({
             onChangeText={(value) => onSetTitle(dayIndex, value)}
             placeholder="Arrive and settle in"
             maxLength={90}
+          />
+
+          <TripPhotoField
+            label="Day photo"
+            photo={day.image}
+            tripId={tripId}
+            busy={photoBusy}
+            error={photoError}
+            onPick={(source) => onPickPhoto(dayIndex, source)}
+            onRemove={() => onRemovePhoto(dayIndex)}
           />
 
           {entries.length > 0 ? (
@@ -321,6 +345,11 @@ function EditTripForm({
   const [failure, setFailure] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
   const [discardOpen, setDiscardOpen] = useState(false);
+  const [photoJob, setPhotoJob] = useState<{
+    dayIndex: number;
+    busy: boolean;
+    error: string | null;
+  } | null>(null);
   const mounted = useRef(true);
 
   useEffect(
@@ -341,6 +370,37 @@ function EditTripForm({
       ...current,
       day_by_day_itinerary: change(current.day_by_day_itinerary ?? []),
     }));
+
+  const pickDayPhoto = async (dayIndex: number, source: PhotoSource) => {
+    if (photoJob?.busy) return;
+    setPhotoJob({ dayIndex, busy: true, error: null });
+    try {
+      const picked = await pickTripPhoto(source);
+      if (picked) {
+        const ref = await uploadTripPhoto(tripId, picked);
+        updateDays((current) => setDayImage(current, dayIndex, ref));
+      }
+      setPhotoJob(null);
+    } catch (error) {
+      setPhotoJob({
+        dayIndex,
+        busy: false,
+        error:
+          error instanceof Error ? error.message : 'That photo didn’t upload. Try again.',
+      });
+    }
+  };
+
+  const removeDayPhoto = (dayIndex: number) => {
+    setPhotoJob(null);
+    updateDays((current) => setDayImage(current, dayIndex, undefined));
+  };
+
+  const uploadStopPhoto = async (source: PhotoSource) => {
+    const picked = await pickTripPhoto(source);
+    if (!picked) return null;
+    return uploadTripPhoto(tripId, picked);
+  };
 
   const requestClose = () => {
     if (dirty) {
@@ -463,11 +523,16 @@ function EditTripForm({
                 day={day}
                 dayIndex={dayIndex}
                 first={dayIndex === 0}
+                tripId={tripId}
+                photoBusy={photoJob?.dayIndex === dayIndex && photoJob.busy}
+                photoError={photoJob?.dayIndex === dayIndex ? photoJob.error : null}
                 onSetTitle={(index, value) =>
                   updateDays((current) => setDayTitle(current, index, value))
                 }
                 onEditStop={(index, activityIndex) => setSheet({ dayIndex: index, activityIndex })}
                 onAddStop={(index) => setSheet({ dayIndex: index, activityIndex: null })}
+                onPickPhoto={(index, source) => void pickDayPhoto(index, source)}
+                onRemovePhoto={removeDayPhoto}
               />
             ))}
           </View>
@@ -514,7 +579,9 @@ function EditTripForm({
         <ActivitySheet
           mode={sheet.activityIndex === null ? 'add' : 'edit'}
           dayNumber={sheetDay?.day ?? sheet.dayIndex + 1}
+          tripId={tripId}
           initial={sheetEntry ? activityFields(sheetEntry) : EMPTY_FIELDS}
+          onUploadPhoto={uploadStopPhoto}
           canMoveUp={sheet.activityIndex !== null && sheet.activityIndex > 0}
           canMoveDown={
             sheet.activityIndex !== null && sheet.activityIndex < sheetEntries.length - 1

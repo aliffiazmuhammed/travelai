@@ -8,23 +8,63 @@
     "scheme": "waytowalk",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.waytowalk.app"
     },
     "android": {
       "package": "com.waytowalk.app",
       "adaptiveIcon": {
         "backgroundColor": "#F7F3EA",
         "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "expo-router",
       "expo-secure-store",
       "expo-font",
-      "expo-image"
-    ]
+      "expo-image",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 180,
+          "backgroundColor": "#F7F3EA",
+          "dark": {
+            "image": "./assets/splash-icon-dark.png",
+            "backgroundColor": "#102D26"
+          }
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Pick a photo for your trip from your library. waytowalk only opens your photos when you ask it to.",
+          "cameraPermission": "Take a photo for your trip. waytowalk only opens the camera when you ask it to.",
+          "microphonePermission": false
+        }
+      ]
+    ],
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "30913adf-f7e6-4604-8cdd-521ec7d96885"
+      }
+    },
+    "owner": "aliffiazmuhammed",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/30913adf-f7e6-4604-8cdd-521ec7d96885"
+    }
   }
 }

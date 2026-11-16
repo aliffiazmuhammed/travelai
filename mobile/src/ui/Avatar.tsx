@@ -1,5 +1,7 @@
+import { Image } from 'expo-image';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { assetUrl } from '@/config';
 import { fontFamily, radius } from '@/theme/tokens';
 import { useTheme } from '@/theme/useTheme';
 
@@ -8,6 +10,8 @@ interface AvatarProps {
   size?: number;
   color?: string;
   textColor?: string;
+  /** Absolute or API-relative photo URL; initials show until it loads. */
+  uri?: string;
 }
 
 function initials(name: string): string {
@@ -18,7 +22,7 @@ function initials(name: string): string {
   return `${first}${last}`.toUpperCase();
 }
 
-export function Avatar({ name, size = 32, color, textColor }: AvatarProps) {
+export function Avatar({ name, size = 32, color, textColor, uri }: AvatarProps) {
   const { palette } = useTheme();
 
   return (
@@ -30,6 +34,7 @@ export function Avatar({ name, size = 32, color, textColor }: AvatarProps) {
         backgroundColor: color ?? palette.secondary,
         alignItems: 'center',
         justifyContent: 'center',
+        overflow: 'hidden',
       }}
     >
       <Text
@@ -41,6 +46,14 @@ export function Avatar({ name, size = 32, color, textColor }: AvatarProps) {
       >
         {initials(name)}
       </Text>
+      {uri ? (
+        <Image
+          source={{ uri: uri.startsWith('/') ? assetUrl(uri) : uri }}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          transition={150}
+        />
+      ) : null}
     </View>
   );
 }

@@ -6,6 +6,7 @@ import type { GalleryDay, GalleryRoute, GalleryStay } from '@/api/explore';
 import { radius, space } from '@/theme/tokens';
 import { useTheme } from '@/theme/useTheme';
 import { AppText, Card } from '@/ui';
+import { TripPhoto } from './TripPhoto';
 
 /** "Day 2: Arrive and settle in" → "Arrive and settle in". */
 export function cleanDayTitle(title: string): string {
@@ -24,15 +25,24 @@ function DayLabel({ children }: { children: string }) {
   );
 }
 
-function StayRow({ stay }: { stay: GalleryStay }) {
+function StayRow({ stay, tripId }: { stay: GalleryStay; tripId?: string }) {
   const { palette } = useTheme();
   const detail = [stay.location, stay.vibe || stay.description].filter(Boolean).join(' · ');
 
   return (
     <View style={styles.row}>
-      <View style={[styles.rowIcon, { backgroundColor: palette.muted }]}>
-        <Ionicons name="bed-outline" size={15} color={palette.primary} />
-      </View>
+      {stay.image ? (
+        <TripPhoto
+          photo={stay.image}
+          tripId={tripId}
+          style={styles.stayPhoto}
+          accessibilityLabel={`${stay.name} photo`}
+        />
+      ) : (
+        <View style={[styles.rowIcon, { backgroundColor: palette.muted }]}>
+          <Ionicons name="bed-outline" size={15} color={palette.primary} />
+        </View>
+      )}
       <View style={styles.rowBody}>
         <AppText variant="label">{stay.name}</AppText>
         {detail ? (
@@ -123,10 +133,13 @@ export function DayCard({
   day,
   routes,
   first,
+  tripId,
 }: {
   day: GalleryDay;
   routes: GalleryRoute[];
   first: boolean;
+  /** Member context: enables the authenticated photo route. */
+  tripId?: string;
 }) {
   const { palette } = useTheme();
   const [open, setOpen] = useState(first);
@@ -196,6 +209,15 @@ export function DayCard({
 
       {open ? (
         <>
+          {day.image ? (
+            <TripPhoto
+              photo={day.image}
+              tripId={tripId}
+              style={styles.dayPhoto}
+              accessibilityLabel={`Photo for day ${day.day}`}
+            />
+          ) : null}
+
           <DayRouteBand day={day} routes={dayRoutes} places={places} />
 
           {day.activities.length > 0 ? (
@@ -213,6 +235,14 @@ export function DayCard({
                       <View style={[styles.activityDot, { backgroundColor: palette.primary }]} />
                     )}
                   </View>
+                  {activity.image ? (
+                    <TripPhoto
+                      photo={activity.image}
+                      tripId={tripId}
+                      style={styles.activityPhoto}
+                      accessibilityLabel={`${activity.name} photo`}
+                    />
+                  ) : null}
                   <View style={styles.rowBody}>
                     <AppText variant="bodyStrong">{activity.name}</AppText>
                     {activity.description ? (
@@ -242,7 +272,7 @@ export function DayCard({
             <View style={styles.section}>
               <DayLabel>WHERE YOU SLEEP</DayLabel>
               {day.stay_recommendations.map((stay, index) => (
-                <StayRow key={`${stay.name}-${index}`} stay={stay} />
+                <StayRow key={`${stay.name}-${index}`} stay={stay} tripId={tripId} />
               ))}
             </View>
           ) : null}
@@ -326,6 +356,12 @@ const styles = StyleSheet.create({
   routeMeta: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
   routeMetaText: { flex: 1, lineHeight: 17 },
   section: { gap: space.sm },
+  dayPhoto: {
+    width: '100%',
+    height: 168,
+    borderRadius: radius.xl,
+    backgroundColor: '#e4eae7',
+  },
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   labelTick: { width: 12, height: 2, borderRadius: radius.pill },
   label: { letterSpacing: 0.8, fontSize: 11 },
@@ -338,6 +374,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   rowBody: { flex: 1, gap: 2 },
+  stayPhoto: { width: 40, height: 40, borderRadius: radius.lg, backgroundColor: '#e4eae7' },
+  activityPhoto: { width: 52, height: 52, borderRadius: radius.lg, backgroundColor: '#e4eae7' },
   activity: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md },
   timeColumn: { width: 54, alignItems: 'flex-start', paddingTop: 2 },
   timePill: {

@@ -31,15 +31,26 @@ function initials(name: string): string {
     .join('');
 }
 
-/** One directory listing in the Explore strip. Profile navigation lands later. */
-export function AgencyCard({ agency }: { agency: AgencyDirectoryCard }) {
+/** One directory listing in the Explore strip; opens the agency's public profile. */
+export function AgencyCard({
+  agency,
+  onPress,
+}: {
+  agency: AgencyDirectoryCard;
+  onPress?: () => void;
+}) {
   const { palette } = useTheme();
   const [logoFailed, setLogoFailed] = useState(false);
   const showLogo = Boolean(agency.logoUrl) && !logoFailed;
   const specialties = agency.specialties.slice(0, 2).join(' · ');
 
   return (
-    <Card padded={false} style={styles.card}>
+    <Card
+      padded={false}
+      onPress={onPress}
+      accessibilityLabel={`Open ${agency.name}’s profile`}
+      style={styles.card}
+    >
       <View style={styles.body}>
         <View style={styles.top}>
           <View style={[styles.logo, { backgroundColor: palette.secondary }]}>

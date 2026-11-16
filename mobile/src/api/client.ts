@@ -32,6 +32,11 @@ export interface RequestOptions {
   headers?: Record<string, string>;
   /** Defaults to true; sign-in/sign-up run without a token. */
   auth?: boolean;
+  /**
+   * Defaults to true. Set false where a 401 is a form-level answer (a wrong
+   * current password) rather than an expired session.
+   */
+  handleUnauthorized?: boolean;
   signal?: AbortSignal;
 }
 
@@ -40,7 +45,8 @@ export interface RequestOptions {
  * caller as the mobile client, and normalizes the `{ success, error }` envelope.
  */
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, headers = {}, auth = true, signal } = options;
+  const { method = 'GET', body, headers = {}, auth = true, handleUnauthorized = true, signal } =
+    options;
   const token = auth ? await getSessionToken() : null;
   const isForm = typeof FormData !== 'undefined' && body instanceof FormData;
 
@@ -68,7 +74,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 
   const payload = (await response.json().catch(() => null)) as (T & ApiEnvelope) | null;
   if (!response.ok || payload === null || payload.success === false) {
-    if (response.status === 401 && token) unauthorizedHandler?.();
+    if (response.status === 401 && token && handleUnauthorized) unauthorizedHandler?.();
     const message =
       payload?.error || payload?.message || `Request failed (${response.status}).`;
     throw new ApiError(message, response.status);

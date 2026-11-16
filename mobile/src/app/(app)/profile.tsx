@@ -1,5 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useQuery } from '@tanstack/react-query';
+import { router } from 'expo-router';
 import { useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import {
   Pressable,
@@ -156,7 +157,7 @@ export default function ProfileScreen() {
 
           <Card style={styles.identity}>
             <View style={styles.identityRow}>
-              <Avatar name={name} size={64} />
+              <Avatar name={name} size={64} uri={user?.avatarUrl} />
               <View style={styles.identityText}>
                 <AppText variant="title" numberOfLines={1}>
                   {name}
@@ -177,7 +178,7 @@ export default function ProfileScreen() {
               </AppText>
             ) : (
               <AppText variant="caption" tone="muted" style={styles.bio}>
-                Add a short bio on the web so people know who they’re travelling with.
+                A line about how you travel helps people know who they’re joining.
               </AppText>
             )}
           </Card>
@@ -190,6 +191,12 @@ export default function ProfileScreen() {
 
           <Card padded={false} style={styles.menu}>
             <MenuRow
+              icon="person-circle-outline"
+              label="Edit profile"
+              caption="Your name, photo, username and password."
+              onPress={() => router.push('/account')}
+            />
+            <MenuRow
               icon="map-outline"
               label="Your trips"
               caption={
@@ -200,6 +207,7 @@ export default function ProfileScreen() {
                   : 'Everything you’re planning or part of.'
               }
               onPress={() => goToTab('trips')}
+              divided
             />
             <MenuRow
               icon="compass-outline"

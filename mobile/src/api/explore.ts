@@ -1,3 +1,4 @@
+import type { MediaRef } from '@/api/media';
 import { apiRequest } from './client';
 
 /**
@@ -42,6 +43,7 @@ export interface GalleryActivity {
   description?: string;
   location?: string;
   coordinates?: [number, number];
+  image?: MediaRef;
 }
 
 export interface GalleryStay {
@@ -50,11 +52,13 @@ export interface GalleryStay {
   description?: string;
   vibe?: string;
   coordinates?: [number, number];
+  image?: MediaRef;
 }
 
 export interface GalleryDay {
   day: number;
   title: string;
+  image?: MediaRef;
   activities: GalleryActivity[];
   stay_recommendations: GalleryStay[];
   transport: string[];

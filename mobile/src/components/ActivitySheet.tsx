@@ -3,7 +3,10 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import type { MediaRef } from '@/api/media';
+import { TripPhotoField } from '@/components/trip/TripPhotoField';
 import type { ActivityFields } from '@/lib/tripDraft';
+import type { PhotoSource } from '@/lib/tripPhotos';
 import { radius, space } from '@/theme/tokens';
 import { useTheme } from '@/theme/useTheme';
 import { AppText, Button, TextField } from '@/ui';
@@ -11,11 +14,14 @@ import { AppText, Button, TextField } from '@/ui';
 interface ActivitySheetProps {
   mode: 'add' | 'edit';
   dayNumber: number;
+  tripId: string;
   initial: ActivityFields;
   canMoveUp: boolean;
   canMoveDown: boolean;
   onClose: () => void;
   onSave: (fields: ActivityFields) => void;
+  /** Uploads right away and returns the stored reference, or null if cancelled. */
+  onUploadPhoto: (source: PhotoSource) => Promise<MediaRef | null>;
   onMove?: (delta: -1 | 1) => void;
   onDelete?: () => void;
 }
@@ -27,11 +33,13 @@ interface ActivitySheetProps {
 export function ActivitySheet({
   mode,
   dayNumber,
+  tripId,
   initial,
   canMoveUp,
   canMoveDown,
   onClose,
   onSave,
+  onUploadPhoto,
   onMove,
   onDelete,
 }: ActivitySheetProps) {
@@ -39,9 +47,27 @@ export function ActivitySheet({
   const insets = useSafeAreaInsets();
   const [fields, setFields] = useState(initial);
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
 
   const update = (patch: Partial<ActivityFields>) => setFields((current) => ({ ...current, ...patch }));
   const named = fields.name.trim().length > 0;
+
+  const pickPhoto = async (source: PhotoSource) => {
+    if (photoBusy) return;
+    setPhotoBusy(true);
+    setPhotoError(null);
+    try {
+      const ref = await onUploadPhoto(source);
+      if (ref) update({ image: ref });
+    } catch (error) {
+      setPhotoError(
+        error instanceof Error ? error.message : 'That photo didn’t upload. Try again.'
+      );
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
 
   return (
     <Modal visible transparent animationType="slide" statusBarTranslucent onRequestClose={onClose}>
@@ -149,6 +175,17 @@ export function ActivitySheet({
             numberOfLines={3}
             maxLength={600}
             style={styles.notes}
+          />
+
+          <TripPhotoField
+            label="Stop photo"
+            photo={fields.image}
+            tripId={tripId}
+            variant="row"
+            busy={photoBusy}
+            error={photoError}
+            onPick={(source) => void pickPhoto(source)}
+            onRemove={() => update({ image: undefined })}
           />
 
           {confirmRemove && onDelete ? (

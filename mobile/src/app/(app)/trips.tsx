@@ -174,7 +174,7 @@ export default function TripsScreen() {
               onPress={() => goToTab('profile')}
               style={({ pressed }) => [styles.avatarButton, { opacity: pressed ? 0.75 : 1 }]}
             >
-              <Avatar name={user?.name || user?.email || 'You'} size={36} />
+              <Avatar name={user?.name || user?.email || 'You'} size={36} uri={user?.avatarUrl} />
             </Pressable>
           </View>
 

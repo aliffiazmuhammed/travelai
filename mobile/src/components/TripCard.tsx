@@ -13,6 +13,8 @@ import { AppText, Avatar, Card, Skeleton } from '@/ui';
 interface TripCardProps {
   trip: GalleryTripSummary;
   past?: boolean;
+  /** Off on a traveller's own portfolio, where every card shares the same host. */
+  showPublisher?: boolean;
   onPress?: () => void;
 }
 
@@ -20,7 +22,7 @@ interface TripCardProps {
  * People-led gallery card: the photo leads, then the plan, then who is holding
  * it. The whole card opens the trip page once a handler is supplied.
  */
-export function TripCard({ trip, past = false, onPress }: TripCardProps) {
+export function TripCard({ trip, past = false, showPublisher = true, onPress }: TripCardProps) {
   const { palette } = useTheme();
   const publisherName = trip.publisher.name || trip.publisher.handle || 'A traveller';
   const glass = { backgroundColor: 'rgba(17,32,27,0.55)' };
@@ -86,17 +88,19 @@ export function TripCard({ trip, past = false, onPress }: TripCardProps) {
             </AppText>
           </View>
 
-          <View style={[styles.publisher, { borderTopColor: palette.border }]}>
-            <Avatar name={publisherName} size={28} />
-            <View style={styles.publisherText}>
-              <AppText variant="label" numberOfLines={1}>
-                {publisherName}
-              </AppText>
-              <AppText variant="caption" tone="muted" numberOfLines={1}>
-                {trip.publisher.handle ? `@${trip.publisher.handle}` : 'Shared a trip'}
-              </AppText>
+          {showPublisher ? (
+            <View style={[styles.publisher, { borderTopColor: palette.border }]}>
+              <Avatar name={publisherName} size={28} />
+              <View style={styles.publisherText}>
+                <AppText variant="label" numberOfLines={1}>
+                  {publisherName}
+                </AppText>
+                <AppText variant="caption" tone="muted" numberOfLines={1}>
+                  {trip.publisher.handle ? `@${trip.publisher.handle}` : 'Shared a trip'}
+                </AppText>
+              </View>
             </View>
-          </View>
+          ) : null}
         </View>
       </View>
     </Card>

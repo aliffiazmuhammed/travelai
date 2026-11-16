@@ -29,6 +29,8 @@ interface SessionValue {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (input: { email: string; password: string; name?: string }) => Promise<void>;
   signOut: () => Promise<void>;
+  /** Apply the server's projection after the owner edits their own profile. */
+  updateUser: (next: SessionUser) => void;
 }
 
 const SessionContext = createContext<SessionValue | undefined>(undefined);
@@ -112,9 +114,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const updateUser = useCallback((next: SessionUser) => {
+    setUser(next);
+  }, []);
+
   const value = useMemo(
-    () => ({ status, user, sessionExpired: expired, signIn, signUp, signOut }),
-    [status, user, expired, signIn, signUp, signOut]
+    () => ({ status, user, sessionExpired: expired, signIn, signUp, signOut, updateUser }),
+    [status, user, expired, signIn, signUp, signOut, updateUser]
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

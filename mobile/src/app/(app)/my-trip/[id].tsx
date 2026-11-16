@@ -7,14 +7,17 @@ import { useMemo, type ComponentProps, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ApiError } from '@/api/client';
+import { fetchReadState } from '@/api/discussion';
+import { fetchJoinQueue } from '@/api/people';
 import { fetchMyTrip, type TripItinerary } from '@/api/trips';
 import { DayCard } from '@/components/trip/DayPlan';
 import { GoodToKnowRow } from '@/components/trip/GoodToKnow';
+import { baseAmountOf, formatMoney } from '@/lib/expenses';
 import { formatDuration } from '@/lib/galleryFormat';
 import {
-  ROLE_LABEL,
   TRIP_STATUS_LABEL,
   formatTripDates,
+  rolePhrase,
   toGalleryDays,
   toGalleryRoutes,
   tripDestination,
@@ -96,9 +99,31 @@ export default function MyTripScreen() {
       !(error instanceof ApiError && error.status >= 400 && error.status < 500) && failureCount < 1,
   });
   const trip = tripQuery.data;
+  const role = trip?.role;
+  const isOwner = role === 'owner';
   const itinerary: TripItinerary = trip?.tripDetails ?? {};
   const days = useMemo(() => toGalleryDays(trip?.tripDetails?.day_by_day_itinerary), [trip]);
   const routes = useMemo(() => toGalleryRoutes(trip?.customRoutes), [trip]);
+
+  // Owners see how many people are waiting on them before they open People.
+  const joinQueueQuery = useQuery({
+    queryKey: ['join-requests', tripId],
+    queryFn: () => (tripId ? fetchJoinQueue(tripId) : Promise.reject(new Error('No trip requested.'))),
+    enabled: Boolean(tripId) && isOwner,
+    retry: 1,
+  });
+  const pendingJoinCount = joinQueueQuery.data?.length ?? 0;
+
+  // The conversation badge is the one number worth carrying onto the trip page:
+  // it answers "is there anything waiting for me?" before opening the chat.
+  const readStateQuery = useQuery({
+    queryKey: ['discussion-read', tripId],
+    queryFn: () => (tripId ? fetchReadState(tripId) : Promise.reject(new Error('No trip requested.'))),
+    enabled: Boolean(tripId),
+    retry: 1,
+    refetchInterval: 30_000,
+  });
+  const unreadCount = readStateQuery.data?.unread ?? 0;
 
   const goBack = () => {
     if (router.canGoBack()) {
@@ -189,13 +214,18 @@ export default function MyTripScreen() {
   const title = tripTitle(trip);
   const destination = tripDestination(trip);
   const status = trip.status ?? 'planned';
-  const role = trip.role ?? 'owner';
-  const isOwner = role === 'owner';
-  const canEdit = isOwner || role === 'editor';
+  const tripRole = role ?? 'owner';
+  const canEdit = isOwner || tripRole === 'editor';
   const memberCount = Math.max(trip.members?.length ?? 0, 1);
   const duration = itinerary.duration_days ?? days.length;
   const highlights = itinerary.highlights ?? [];
   const budget = itinerary.budget_per_person;
+  const expenseCount = trip.expenses?.length ?? 0;
+  const expenseTotal = (trip.expenses ?? []).reduce(
+    (sum, expense) => sum + baseAmountOf(expense),
+    0
+  );
+  const expenseBase = (trip.finance?.baseCurrency ?? 'INR').toUpperCase();
   const facts = [
     duration > 0 ? { icon: 'calendar-outline' as IconName, label: formatDuration(duration) } : null,
     itinerary.group_type
@@ -208,7 +238,7 @@ export default function MyTripScreen() {
     ? memberCount > 1
       ? `You own this trip · ${memberCount} travellers`
       : 'You own this trip · just you so far'
-    : `You’re a ${ROLE_LABEL[role].toLowerCase()} here · ${memberCount} ${
+    : `You’re ${rolePhrase(tripRole)} here · ${memberCount} ${
         memberCount === 1 ? 'traveller' : 'travellers'
       }`;
 
@@ -309,12 +339,38 @@ export default function MyTripScreen() {
               </View>
             ) : null}
 
-            <View style={[styles.people, { borderTopColor: palette.border }]}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={
+                isOwner && pendingJoinCount > 0
+                  ? `People on this trip, ${pendingJoinCount} join ${
+                      pendingJoinCount === 1 ? 'request' : 'requests'
+                    } waiting`
+                  : 'People on this trip'
+              }
+              onPress={() => router.navigate(`/my-trip/${tripId}/people`)}
+              style={({ pressed }) => [
+                styles.people,
+                { borderTopColor: palette.border },
+                pressed ? { opacity: 0.68 } : null,
+              ]}
+            >
               <Ionicons name="people-outline" size={15} color={palette.primary} />
               <AppText variant="bodyStrong" numberOfLines={1} style={styles.peopleText}>
                 {peopleLine}
               </AppText>
-            </View>
+              {isOwner && pendingJoinCount > 0 ? (
+                <View style={[styles.peopleBadge, { backgroundColor: palette.accent }]}>
+                  <AppText
+                    variant="label"
+                    style={[styles.peopleBadgeText, { color: palette.accentForeground }]}
+                  >
+                    {pendingJoinCount}
+                  </AppText>
+                </View>
+              ) : null}
+              <Ionicons name="chevron-forward" size={15} color={palette.mutedForeground} />
+            </Pressable>
           </View>
 
           {highlights.length > 0 ? (
@@ -343,6 +399,7 @@ export default function MyTripScreen() {
                   day={day}
                   routes={routes}
                   first={index === 0}
+                  tripId={tripId}
                 />
               ))
             ) : (
@@ -361,6 +418,82 @@ export default function MyTripScreen() {
             transport={itinerary.local_transport}
             footnotes={itinerary.footnotes_safety_tips}
           />
+
+          <Card
+            onPress={() => router.navigate(`/my-trip/${tripId}/discussion`)}
+            accessibilityLabel={
+              unreadCount > 0
+                ? `Trip conversation, ${unreadCount} unread ${
+                    unreadCount === 1 ? 'message' : 'messages'
+                  }`
+                : 'Trip conversation'
+            }
+            style={styles.discussionEntry}
+          >
+            <View style={styles.budgetRow}>
+              <View style={styles.budgetText}>
+                <AppText variant="caption" tone="muted" style={styles.budgetLabel}>
+                  THE CONVERSATION
+                </AppText>
+                <View style={styles.discussionTitleRow}>
+                  <AppText variant="title">
+                    {unreadCount > 0
+                      ? `${unreadCount} new ${unreadCount === 1 ? 'message' : 'messages'}`
+                      : 'Talk it through'}
+                  </AppText>
+                  {unreadCount > 0 ? (
+                    <View style={[styles.peopleBadge, { backgroundColor: palette.accent }]}>
+                      <AppText
+                        variant="label"
+                        style={[styles.peopleBadgeText, { color: palette.accentForeground }]}
+                      >
+                        {unreadCount}
+                      </AppText>
+                    </View>
+                  ) : null}
+                </View>
+                <AppText variant="caption" tone="muted">
+                  {unreadCount > 0
+                    ? 'Questions, polls and what you agreed — pick up where the group left off.'
+                    : 'Polls, decisions and the group’s back-and-forth, sealed end to end.'}
+                </AppText>
+              </View>
+              <View style={styles.expenseIcons}>
+                <View style={[styles.budgetIcon, { backgroundColor: palette.muted }]}>
+                  <Ionicons name="chatbubbles-outline" size={18} color={palette.primary} />
+                </View>
+                <Ionicons name="chevron-forward" size={15} color={palette.mutedForeground} />
+              </View>
+            </View>
+          </Card>
+
+          <Card
+            onPress={() => router.navigate(`/my-trip/${tripId}/expenses`)}
+            accessibilityLabel="Trip expenses"
+            style={styles.expenseEntry}
+          >
+            <View style={styles.budgetRow}>
+              <View style={styles.budgetText}>
+                <AppText variant="caption" tone="muted" style={styles.budgetLabel}>
+                  TRIP EXPENSES
+                </AppText>
+                <AppText variant="title">
+                  {expenseCount > 0 ? formatMoney(expenseTotal, expenseBase) : 'Start the ledger'}
+                </AppText>
+                <AppText variant="caption" tone="muted">
+                  {expenseCount > 0
+                    ? `${expenseCount} ${expenseCount === 1 ? 'entry' : 'entries'} logged · see who owes whom`
+                    : 'Track what you spend, and split it fairly.'}
+                </AppText>
+              </View>
+              <View style={styles.expenseIcons}>
+                <View style={[styles.budgetIcon, { backgroundColor: palette.muted }]}>
+                  <Ionicons name="wallet-outline" size={18} color={palette.primary} />
+                </View>
+                <Ionicons name="chevron-forward" size={15} color={palette.mutedForeground} />
+              </View>
+            </View>
+          </Card>
 
           {typeof budget === 'number' && budget > 0 ? (
             <Card style={styles.budget}>
@@ -452,6 +585,15 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
   },
   peopleText: { flex: 1 },
+  peopleBadge: {
+    minWidth: 22,
+    height: 22,
+    paddingHorizontal: 7,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  peopleBadgeText: { fontSize: 12, lineHeight: 16 },
   highlights: { gap: space.sm },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   bulletRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
@@ -464,6 +606,15 @@ const styles = StyleSheet.create({
   eyebrow: { letterSpacing: 1.2 },
   emptyDays: { alignItems: 'flex-start', gap: space.sm },
   budget: { gap: space.sm },
+  expenseEntry: { gap: space.xs },
+  discussionEntry: { gap: space.xs },
+  discussionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    flexWrap: 'wrap',
+  },
+  expenseIcons: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   budgetRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   budgetText: { flex: 1 },
   budgetLabel: { letterSpacing: 0.8, fontSize: 11 },
