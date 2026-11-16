@@ -17,6 +17,15 @@ interface ApiEnvelope {
   message?: string;
 }
 
+type UnauthorizedHandler = () => void;
+
+let unauthorizedHandler: UnauthorizedHandler | null = null;
+
+/** The session provider subscribes here so a rejected token lands on sign-in. */
+export function setUnauthorizedHandler(handler: UnauthorizedHandler | null): void {
+  unauthorizedHandler = handler;
+}
+
 export interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
@@ -59,6 +68,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 
   const payload = (await response.json().catch(() => null)) as (T & ApiEnvelope) | null;
   if (!response.ok || payload === null || payload.success === false) {
+    if (response.status === 401 && token) unauthorizedHandler?.();
     const message =
       payload?.error || payload?.message || `Request failed (${response.status}).`;
     throw new ApiError(message, response.status);

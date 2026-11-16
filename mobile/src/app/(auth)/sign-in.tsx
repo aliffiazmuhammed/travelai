@@ -1,16 +1,19 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useRef, useState, type ComponentRef } from 'react';
 import { Keyboard, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { ApiError } from '@/api/client';
 import { useSession } from '@/auth/SessionProvider';
-import { space } from '@/theme/tokens';
+import { radius, space } from '@/theme/tokens';
+import { useTheme } from '@/theme/useTheme';
 import { AppText, Button, InlineError, Screen, TextField } from '@/ui';
 
 const EMAIL = /^\S+@\S+\.\S+$/;
 
 export default function SignInScreen() {
-  const { signIn } = useSession();
+  const { signIn, sessionExpired } = useSession();
+  const { palette } = useTheme();
   const router = useRouter();
   const passwordRef = useRef<ComponentRef<typeof TextInput>>(null);
   const [email, setEmail] = useState('');
@@ -56,6 +59,15 @@ export default function SignInScreen() {
         </View>
 
         <View style={styles.form}>
+          {sessionExpired ? (
+            <View style={[styles.expired, { backgroundColor: palette.muted }]}>
+              <Ionicons name="time-outline" size={16} color={palette.primary} />
+              <AppText variant="caption" tone="muted" style={styles.expiredText}>
+                Your session timed out, so we signed you out. Sign in and your trips are right
+                where you left them.
+              </AppText>
+            </View>
+          ) : null}
           <InlineError message={error} />
           <TextField
             label="Email"
@@ -114,6 +126,14 @@ const styles = StyleSheet.create({
   head: { gap: space.sm },
   wordmark: { letterSpacing: -0.4, marginBottom: space.md },
   form: { gap: 14 },
+  expired: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: space.sm,
+    padding: space.md,
+    borderRadius: radius.lg,
+  },
+  expiredText: { flex: 1, lineHeight: 18 },
   submit: { marginTop: space.sm },
   footer: {
     marginTop: 'auto',

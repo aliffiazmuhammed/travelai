@@ -15,7 +15,7 @@ import {
   signup as apiSignup,
   type SessionUser,
 } from '@/api/auth';
-import { ApiError } from '@/api/client';
+import { ApiError, setUnauthorizedHandler } from '@/api/client';
 import { clearSessionToken, getSessionToken } from '@/auth/tokenStorage';
 import { queryClient } from '@/query/client';
 
@@ -24,6 +24,8 @@ export type SessionStatus = 'loading' | 'signedIn' | 'signedOut';
 interface SessionValue {
   status: SessionStatus;
   user: SessionUser | null;
+  /** True when the server rejected a stored token, so sign-in can say why. */
+  sessionExpired: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (input: { email: string; password: string; name?: string }) => Promise<void>;
   signOut: () => Promise<void>;
@@ -34,9 +36,20 @@ const SessionContext = createContext<SessionValue | undefined>(undefined);
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<SessionStatus>('loading');
   const [user, setUser] = useState<SessionUser | null>(null);
+  const [expired, setExpired] = useState(false);
 
   useEffect(() => {
     let active = true;
+
+    // A token can expire between launches; the API client reports that here so
+    // the app returns to sign-in instead of showing errors on every screen.
+    setUnauthorizedHandler(() => {
+      clearSessionToken().catch(() => {});
+      queryClient.clear();
+      setUser(null);
+      setStatus('signedOut');
+      setExpired(true);
+    });
 
     (async () => {
       try {
@@ -65,12 +78,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
     return () => {
       active = false;
+      setUnauthorizedHandler(null);
     };
   }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {
     const nextUser = await apiSignin(email, password);
     queryClient.clear();
+    setExpired(false);
     setUser(nextUser);
     setStatus('signedIn');
   }, []);
@@ -79,6 +94,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     async (input: { email: string; password: string; name?: string }) => {
       const nextUser = await apiSignup(input.email, input.password, input.name);
       queryClient.clear();
+      setExpired(false);
       setUser(nextUser);
       setStatus('signedIn');
     },
@@ -90,14 +106,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       await apiSignOut();
     } finally {
       queryClient.clear();
+      setExpired(false);
       setUser(null);
       setStatus('signedOut');
     }
   }, []);
 
   const value = useMemo(
-    () => ({ status, user, signIn, signUp, signOut }),
-    [status, user, signIn, signUp, signOut]
+    () => ({ status, user, sessionExpired: expired, signIn, signUp, signOut }),
+    [status, user, expired, signIn, signUp, signOut]
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
