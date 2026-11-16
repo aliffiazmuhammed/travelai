@@ -47,6 +47,9 @@ export class GeminiService implements AIService {
     try {
       const model = this.getModel();
       const result = await model.generateContentStream(prompt);
+      // The SDK returns an aggregate promise we never await; without a handler its
+      // rejection on a broken stream becomes an unhandled rejection that kills Node.
+      result.response.catch(() => undefined);
       let fullText = '';
       for await (const chunk of result.stream) {
         const text = chunk.text();
@@ -61,6 +64,7 @@ export class GeminiService implements AIService {
           console.log('Attempting streaming fallback to gemini-2.5-flash...');
           const fallbackModel = this.getModel('gemini-2.5-flash');
           const result = await fallbackModel.generateContentStream(prompt);
+          result.response.catch(() => undefined);
           let fullText = '';
           for await (const chunk of result.stream) {
             const text = chunk.text();
