@@ -12,3 +12,8 @@ const localApi =
   }) ?? 'http://localhost:5000/api';
 
 export const API_URL = (process.env.EXPO_PUBLIC_API_URL || localApi).replace(/\/+$/, '');
+
+/** Absolute URL for a site-relative asset the API hands back (e.g. an agency logo). */
+export function assetUrl(path: string): string {
+  return `${API_URL.replace(/\/api$/, '')}${path}`;
+}

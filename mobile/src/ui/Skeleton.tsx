@@ -1,7 +1,8 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Animated,
   Easing,
+  Platform,
   type DimensionValue,
   type StyleProp,
   type ViewStyle,
@@ -19,7 +20,7 @@ interface SkeletonProps {
 
 export function Skeleton({ width = '100%', height = 16, radius: corner = radius.sm, style }: SkeletonProps) {
   const { palette } = useTheme();
-  const pulse = useRef(new Animated.Value(0)).current;
+  const pulse = useState(() => new Animated.Value(0))[0];
 
   useEffect(() => {
     const loop = Animated.loop(
@@ -28,13 +29,13 @@ export function Skeleton({ width = '100%', height = 16, radius: corner = radius.
           toValue: 1,
           duration: 700,
           easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
         Animated.timing(pulse, {
           toValue: 0,
           duration: 700,
           easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
       ])
     );

@@ -7,5 +7,6 @@ export { InlineError } from './InlineError';
 export { NavShell, type NavTab } from './NavShell';
 export { PillTabs, type PillTabItem } from './PillTabs';
 export { NAV_BOTTOM_SPACE, Screen } from './Screen';
+export { SearchBar } from './SearchBar';
 export { Skeleton } from './Skeleton';
 export { TextField } from './TextField';

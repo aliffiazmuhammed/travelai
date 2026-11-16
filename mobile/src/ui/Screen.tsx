@@ -1,10 +1,12 @@
-import type { ReactNode } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   View,
+  type ScrollViewInstance,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
@@ -25,6 +27,9 @@ interface ScreenProps {
   edges?: Edge[];
   style?: StyleProp<ViewStyle>;
   contentContainerStyle?: StyleProp<ViewStyle>;
+  scrollRef?: RefObject<ScrollViewInstance | null>;
+  refreshing?: boolean;
+  onRefresh?: () => void;
 }
 
 export function Screen({
@@ -35,14 +40,28 @@ export function Screen({
   edges = ['top'],
   style,
   contentContainerStyle,
+  scrollRef,
+  refreshing = false,
+  onRefresh,
 }: ScreenProps) {
   const { palette } = useTheme();
   const contentStyle = [padded && styles.padded, contentContainerStyle];
   const body = scroll ? (
     <ScrollView
+      ref={scrollRef}
       contentContainerStyle={contentStyle}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
+      refreshControl={
+        onRefresh ? (
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={palette.primary}
+            colors={[palette.primary]}
+          />
+        ) : undefined
+      }
     >
       {children}
     </ScrollView>
