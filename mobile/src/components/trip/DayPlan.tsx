@@ -1,5 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { StyleSheet, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import type { GalleryDay, GalleryRoute, GalleryStay } from '@/api/explore';
 import { radius, space } from '@/theme/tokens';
@@ -113,6 +114,11 @@ function DayRouteBand({
   );
 }
 
+/**
+ * One day of the plan. The first day opens by itself; later days stay as a
+ * single header row until someone taps them, so a ten-day trip reads as a
+ * short list instead of a wall of cards.
+ */
 export function DayCard({
   day,
   routes,
@@ -123,7 +129,9 @@ export function DayCard({
   first: boolean;
 }) {
   const { palette } = useTheme();
+  const [open, setOpen] = useState(first);
   const title = cleanDayTitle(day.title);
+  const stopCount = day.activities.length;
   const places = day.activities
     .map((activity) => activity.location?.trim() ?? '')
     .filter((location) => location.length > 0)
@@ -132,27 +140,41 @@ export function DayCard({
 
   return (
     <Card style={styles.card}>
-      <View style={styles.header}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Day ${day.day}${title ? `: ${title}` : ''}`}
+        accessibilityState={{ expanded: open }}
+        aria-expanded={open}
+        onPress={() => setOpen((value) => !value)}
+        style={({ pressed }) => [styles.header, pressed && styles.headerPressed]}
+      >
         <View
           style={[
             styles.dayBadge,
             {
-              backgroundColor: first ? palette.primary : palette.muted,
-              borderColor: first ? palette.primary : palette.border,
+              backgroundColor: open ? palette.primary : palette.muted,
+              borderColor: open ? palette.primary : palette.border,
             },
           ]}
         >
           <AppText
             variant="label"
-            style={{ color: first ? palette.primaryForeground : palette.primary }}
+            style={{ color: open ? palette.primaryForeground : palette.primary }}
           >
             {day.day}
           </AppText>
         </View>
         <View style={styles.headerText}>
-          <AppText variant="heading">Day {day.day}</AppText>
+          <View style={styles.headerTitleRow}>
+            <AppText variant="bodyStrong">Day {day.day}</AppText>
+            {!open && stopCount > 0 ? (
+              <AppText variant="caption" tone="muted">
+                {stopCount} {stopCount === 1 ? 'stop' : 'stops'}
+              </AppText>
+            ) : null}
+          </View>
           {title ? (
-            <AppText tone="muted" numberOfLines={2}>
+            <AppText tone="muted" numberOfLines={open ? 2 : 1}>
               {title}
             </AppText>
           ) : null}
@@ -165,88 +187,105 @@ export function DayCard({
             </AppText>
           </View>
         ) : null}
-      </View>
+        <Ionicons
+          name={open ? 'chevron-up' : 'chevron-down'}
+          size={16}
+          color={palette.mutedForeground}
+        />
+      </Pressable>
 
-      <DayRouteBand day={day} routes={dayRoutes} places={places} />
+      {open ? (
+        <>
+          <DayRouteBand day={day} routes={dayRoutes} places={places} />
 
-      {day.activities.length > 0 ? (
-        <View style={styles.section}>
-          {day.activities.map((activity, index) => (
-            <View key={`${activity.name}-${index}`} style={styles.activity}>
-              <View style={styles.timeColumn}>
-                {activity.time ? (
-                  <View style={[styles.timePill, { backgroundColor: palette.muted }]}>
-                    <AppText variant="caption" tone="primary" style={styles.timeText}>
-                      {activity.time}
-                    </AppText>
+          {day.activities.length > 0 ? (
+            <View style={styles.section}>
+              {day.activities.map((activity, index) => (
+                <View key={`${activity.name}-${index}`} style={styles.activity}>
+                  <View style={styles.timeColumn}>
+                    {activity.time ? (
+                      <View style={[styles.timePill, { backgroundColor: palette.muted }]}>
+                        <AppText variant="caption" tone="primary" style={styles.timeText}>
+                          {activity.time}
+                        </AppText>
+                      </View>
+                    ) : (
+                      <View style={[styles.activityDot, { backgroundColor: palette.primary }]} />
+                    )}
                   </View>
-                ) : (
-                  <View style={[styles.activityDot, { backgroundColor: palette.primary }]} />
-                )}
-              </View>
-              <View style={styles.rowBody}>
-                <AppText variant="bodyStrong">{activity.name}</AppText>
-                {activity.description ? (
-                  <AppText variant="caption" tone="muted" style={styles.description}>
-                    {activity.description}
-                  </AppText>
-                ) : null}
-                {activity.location ? (
-                  <View style={styles.locationRow}>
-                    <Ionicons name="location-outline" size={12} color={palette.mutedForeground} />
-                    <AppText variant="caption" tone="muted">
-                      {activity.location}
-                    </AppText>
+                  <View style={styles.rowBody}>
+                    <AppText variant="bodyStrong">{activity.name}</AppText>
+                    {activity.description ? (
+                      <AppText variant="caption" tone="muted" style={styles.description}>
+                        {activity.description}
+                      </AppText>
+                    ) : null}
+                    {activity.location ? (
+                      <View style={styles.locationRow}>
+                        <Ionicons
+                          name="location-outline"
+                          size={12}
+                          color={palette.mutedForeground}
+                        />
+                        <AppText variant="caption" tone="muted">
+                          {activity.location}
+                        </AppText>
+                      </View>
+                    ) : null}
                   </View>
-                ) : null}
+                </View>
+              ))}
+            </View>
+          ) : null}
+
+          {day.stay_recommendations.length > 0 ? (
+            <View style={styles.section}>
+              <DayLabel>WHERE YOU SLEEP</DayLabel>
+              {day.stay_recommendations.map((stay, index) => (
+                <StayRow key={`${stay.name}-${index}`} stay={stay} />
+              ))}
+            </View>
+          ) : null}
+
+          {day.food_spots.length > 0 ? (
+            <View style={styles.section}>
+              <DayLabel>WHAT YOU EAT</DayLabel>
+              <View style={styles.chips}>
+                {day.food_spots.map((spot, index) => (
+                  <View
+                    key={`${spot}-${index}`}
+                    style={[styles.foodChip, { backgroundColor: palette.muted }]}
+                  >
+                    <Ionicons
+                      name="restaurant-outline"
+                      size={11}
+                      color={palette.mutedForeground}
+                    />
+                    <AppText variant="caption">{spot}</AppText>
+                  </View>
+                ))}
               </View>
             </View>
-          ))}
-        </View>
-      ) : null}
+          ) : null}
 
-      {day.stay_recommendations.length > 0 ? (
-        <View style={styles.section}>
-          <DayLabel>WHERE YOU SLEEP</DayLabel>
-          {day.stay_recommendations.map((stay, index) => (
-            <StayRow key={`${stay.name}-${index}`} stay={stay} />
-          ))}
-        </View>
-      ) : null}
-
-      {day.food_spots.length > 0 ? (
-        <View style={styles.section}>
-          <DayLabel>WHAT YOU EAT</DayLabel>
-          <View style={styles.chips}>
-            {day.food_spots.map((spot, index) => (
-              <View
-                key={`${spot}-${index}`}
-                style={[styles.foodChip, { backgroundColor: palette.muted }]}
-              >
-                <Ionicons name="restaurant-outline" size={11} color={palette.mutedForeground} />
-                <AppText variant="caption">{spot}</AppText>
+          {day.pro_tip.length > 0 ? (
+            <View
+              style={[
+                styles.tip,
+                { backgroundColor: `${palette.secondary}26`, borderColor: palette.border },
+              ]}
+            >
+              <Ionicons name="bulb-outline" size={16} color={palette.primary} />
+              <View style={styles.rowBody}>
+                {day.pro_tip.map((tip, index) => (
+                  <AppText key={`${tip}-${index}`} variant="caption" style={styles.tipText}>
+                    {tip}
+                  </AppText>
+                ))}
               </View>
-            ))}
-          </View>
-        </View>
-      ) : null}
-
-      {day.pro_tip.length > 0 ? (
-        <View
-          style={[
-            styles.tip,
-            { backgroundColor: `${palette.secondary}26`, borderColor: palette.border },
-          ]}
-        >
-          <Ionicons name="bulb-outline" size={16} color={palette.primary} />
-          <View style={styles.rowBody}>
-            {day.pro_tip.map((tip, index) => (
-              <AppText key={`${tip}-${index}`} variant="caption" style={styles.tipText}>
-                {tip}
-              </AppText>
-            ))}
-          </View>
-        </View>
+            </View>
+          ) : null}
+        </>
       ) : null}
     </Card>
   );
@@ -254,7 +293,8 @@ export function DayCard({
 
 const styles = StyleSheet.create({
   card: { gap: space.lg },
-  header: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md },
+  header: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  headerPressed: { opacity: 0.7 },
   dayBadge: {
     width: 38,
     height: 38,
@@ -264,6 +304,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerText: { flex: 1, gap: 2 },
+  headerTitleRow: { flexDirection: 'row', alignItems: 'baseline', gap: space.sm },
   permit: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -287,7 +328,7 @@ const styles = StyleSheet.create({
   section: { gap: space.sm },
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   labelTick: { width: 12, height: 2, borderRadius: radius.pill },
-  label: { letterSpacing: 1, fontSize: 10 },
+  label: { letterSpacing: 0.8, fontSize: 11 },
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm },
   rowIcon: {
     width: 30,
@@ -301,10 +342,10 @@ const styles = StyleSheet.create({
   timeColumn: { width: 54, alignItems: 'flex-start', paddingTop: 2 },
   timePill: {
     paddingHorizontal: 7,
-    paddingVertical: 2,
+    paddingVertical: 3,
     borderRadius: radius.sm,
   },
-  timeText: { fontSize: 11, lineHeight: 15 },
+  timeText: { fontSize: 12, lineHeight: 16 },
   activityDot: { width: 7, height: 7, borderRadius: radius.pill, marginTop: 7, marginLeft: 6 },
   description: { lineHeight: 18 },
   locationRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 1 },

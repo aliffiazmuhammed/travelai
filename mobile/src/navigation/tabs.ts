@@ -2,10 +2,9 @@ import { router } from 'expo-router';
 
 import type { NavTab } from '@/ui';
 
-const TAB_HREF: Record<NavTab, '/' | '/trips' | '/chat' | '/profile'> = {
+const TAB_HREF: Record<NavTab, '/' | '/trips' | '/profile'> = {
   explore: '/',
   trips: '/trips',
-  chat: '/chat',
   profile: '/profile',
 };
 

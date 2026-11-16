@@ -165,7 +165,7 @@ export default function TripsScreen() {
       >
         <View style={styles.page}>
           <View style={styles.topRow}>
-            <AppText variant="title" tone="primary" style={styles.wordmark}>
+            <AppText variant="heading" tone="primary" style={styles.wordmark}>
               waytowalk
             </AppText>
             <Pressable
@@ -178,14 +178,10 @@ export default function TripsScreen() {
             </Pressable>
           </View>
 
-          <View style={styles.hero}>
-            <AppText variant="caption" tone="muted" style={styles.eyebrow}>
-              YOUR TRIPS
-            </AppText>
-            <AppText variant="display">The plans you’re part of.</AppText>
-            <AppText tone="muted">
-              Trips you’re shaping, trips you’re going on, and the ones already behind you —
-              all in one place.
+          <View style={styles.intro}>
+            <AppText variant="title">The plans you’re part of.</AppText>
+            <AppText variant="caption" tone="muted">
+              Shaping, going, or already behind you.
             </AppText>
           </View>
 
@@ -206,7 +202,7 @@ export default function TripsScreen() {
             }}
           >
             <View style={styles.resultsHeader}>
-              <AppText variant="title">{RESULT_LABEL[tab]}</AppText>
+              <AppText variant="label">{RESULT_LABEL[tab]}</AppText>
               {tripsQuery.data ? (
                 <AppText variant="caption" tone="muted">
                   {groups.all.length} {groups.all.length === 1 ? 'trip' : 'trips'}
@@ -331,12 +327,11 @@ export default function TripsScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  page: { width: '100%', maxWidth: 560, alignSelf: 'center', gap: space.xxl },
+  page: { width: '100%', maxWidth: 560, alignSelf: 'center', gap: space.xl },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   wordmark: { letterSpacing: -0.4 },
   avatarButton: { borderRadius: radius.pill },
-  hero: { gap: space.sm },
-  eyebrow: { fontFamily: fontFamily.semibold, letterSpacing: 1.2 },
+  intro: { gap: 2 },
   controls: { gap: space.md },
   results: { gap: space.lg },
   resultsHeader: { gap: 2 },

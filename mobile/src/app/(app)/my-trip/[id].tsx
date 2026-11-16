@@ -9,7 +9,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { ApiError } from '@/api/client';
 import { fetchMyTrip, type TripItinerary } from '@/api/trips';
 import { DayCard } from '@/components/trip/DayPlan';
-import { PracticalitiesCard } from '@/components/trip/Practicalities';
+import { GoodToKnowRow } from '@/components/trip/GoodToKnow';
 import { formatDuration } from '@/lib/galleryFormat';
 import {
   ROLE_LABEL,
@@ -47,7 +47,7 @@ function SectionHeading({
           {eyebrow}
         </AppText>
       </View>
-      <AppText variant="title">{title}</AppText>
+      <AppText variant="heading">{title}</AppText>
       {body ? (
         <AppText variant="caption" tone="muted">
           {body}
@@ -60,7 +60,7 @@ function SectionHeading({
 function TripSkeleton() {
   return (
     <View style={styles.page}>
-      <Skeleton height={220} radius={radius.xxl} />
+      <Skeleton height={190} radius={radius.xxl} />
       <View style={styles.titleBlock}>
         <Skeleton width="85%" height={30} />
         <Skeleton width="60%" height={30} />
@@ -121,7 +121,7 @@ export default function MyTripScreen() {
       >
         <Ionicons name="chevron-back" size={18} color={palette.foreground} />
       </Pressable>
-      <AppText variant="title" tone="primary" style={styles.wordmark}>
+      <AppText variant="heading" tone="primary" style={styles.wordmark}>
         waytowalk
       </AppText>
       {right ?? null}
@@ -310,19 +310,10 @@ export default function MyTripScreen() {
             ) : null}
 
             <View style={[styles.people, { borderTopColor: palette.border }]}>
-              <View style={[styles.peopleIcon, { backgroundColor: palette.muted }]}>
-                <Ionicons name="people-outline" size={16} color={palette.primary} />
-              </View>
-              <View style={styles.peopleText}>
-                <AppText variant="bodyStrong" numberOfLines={1}>
-                  {peopleLine}
-                </AppText>
-                <AppText variant="caption" tone="muted">
-                  {isOwner
-                    ? 'Invites, expenses and the shared chat stay on the web for now.'
-                    : 'You can read the plan and follow along from here.'}
-                </AppText>
-              </View>
+              <Ionicons name="people-outline" size={15} color={palette.primary} />
+              <AppText variant="bodyStrong" numberOfLines={1} style={styles.peopleText}>
+                {peopleLine}
+              </AppText>
             </View>
           </View>
 
@@ -365,17 +356,16 @@ export default function MyTripScreen() {
             )}
           </View>
 
-          <PracticalitiesCard
+          <GoodToKnowRow
             weather={itinerary.weather_advisory}
             transport={itinerary.local_transport}
             footnotes={itinerary.footnotes_safety_tips}
-            intro="Weather, getting around, and the local know-how for this trip."
           />
 
           {typeof budget === 'number' && budget > 0 ? (
             <Card style={styles.budget}>
               <View style={styles.budgetRow}>
-                <View>
+                <View style={styles.budgetText}>
                   <AppText variant="caption" tone="muted" style={styles.budgetLabel}>
                     PLANNED BUDGET
                   </AppText>
@@ -386,24 +376,10 @@ export default function MyTripScreen() {
                 </View>
               </View>
               <AppText variant="caption" tone="muted">
-                A planning figure, not a ledger. Logged expenses stay on the web for now.
+                A planning figure, not a ledger.
               </AppText>
             </Card>
           ) : null}
-
-          <Card style={styles.readingNote}>
-            <View style={styles.cardHead}>
-              <Ionicons name="book-outline" size={15} color={palette.mutedForeground} />
-              <AppText variant="label">
-                {isOwner ? 'Your plan, in your pocket' : 'The plan, wherever you are'}
-              </AppText>
-            </View>
-            <AppText variant="caption" tone="muted">
-              {canEdit
-                ? 'Reshape any day from the app — stops, timings and notes save for everyone on the trip. Expenses and chat still live on the web.'
-                : 'Trip chat and expenses stay on the web for now. The whole itinerary is here to read wherever you are.'}
-            </AppText>
-          </Card>
 
           <View style={styles.footer}>
             <Button
@@ -422,7 +398,7 @@ export default function MyTripScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   content: { paddingTop: space.sm, paddingBottom: space.xxxl },
-  page: { width: '100%', maxWidth: 560, alignSelf: 'center', gap: space.xxl },
+  page: { width: '100%', maxWidth: 560, alignSelf: 'center', gap: space.xl },
   topRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   back: {
     width: 36,
@@ -441,7 +417,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
   },
   heroClip: { borderRadius: radius.xxl, overflow: 'hidden' },
-  hero: { height: 220, justifyContent: 'space-between', padding: space.lg },
+  hero: { height: 190, justifyContent: 'space-between', padding: space.lg },
   heroChipRow: { flexDirection: 'row', justifyContent: 'space-between', gap: space.sm },
   heroChip: {
     flexDirection: 'row',
@@ -470,19 +446,12 @@ const styles = StyleSheet.create({
   people: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: space.md,
+    gap: space.sm,
     marginTop: space.xs,
     paddingTop: space.md,
     borderTopWidth: 1,
   },
-  peopleIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  peopleText: { flex: 1, gap: 2 },
+  peopleText: { flex: 1 },
   highlights: { gap: space.sm },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   bulletRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
@@ -496,7 +465,8 @@ const styles = StyleSheet.create({
   emptyDays: { alignItems: 'flex-start', gap: space.sm },
   budget: { gap: space.sm },
   budgetRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  budgetLabel: { letterSpacing: 1, fontSize: 10 },
+  budgetText: { flex: 1 },
+  budgetLabel: { letterSpacing: 0.8, fontSize: 11 },
   budgetIcon: {
     width: 40,
     height: 40,
@@ -504,7 +474,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  readingNote: { gap: space.sm },
   footer: { alignItems: 'stretch' },
   errorCard: { alignItems: 'flex-start', gap: space.sm },
   errorIcon: {

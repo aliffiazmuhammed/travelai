@@ -54,22 +54,149 @@ function TopRow({ onBack, right }: { onBack: () => void; right?: ReactNode }) {
   );
 }
 
-function EditIntro() {
+/**
+ * One day in the editor. Collapsed days stay a single header row so a long
+ * trip stays scannable; opening one reveals its title and stops to reshape.
+ */
+function EditDayCard({
+  day,
+  dayIndex,
+  first,
+  onSetTitle,
+  onEditStop,
+  onAddStop,
+}: {
+  day: TripDay;
+  dayIndex: number;
+  first: boolean;
+  onSetTitle: (dayIndex: number, value: string) => void;
+  onEditStop: (dayIndex: number, activityIndex: number) => void;
+  onAddStop: (dayIndex: number) => void;
+}) {
   const { palette } = useTheme();
+  const [open, setOpen] = useState(first);
+  const title = cleanDayTitle(day.title ?? '');
+  const entries = day.activities ?? [];
 
   return (
-    <View style={styles.intro}>
-      <View style={styles.eyebrowRow}>
-        <View style={[styles.eyebrowTick, { backgroundColor: palette.accent }]} />
-        <AppText variant="caption" tone="muted" style={styles.eyebrow}>
-          EDITING
-        </AppText>
-      </View>
-      <AppText variant="display">Reshape the plan</AppText>
-      <AppText tone="muted">
-        Add a stop, move a morning around, fix a name. Nothing saves until you tap Save.
-      </AppText>
-    </View>
+    <Card style={styles.dayCard}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Day ${day.day}${title ? `: ${title}` : ''}`}
+        accessibilityState={{ expanded: open }}
+        aria-expanded={open}
+        onPress={() => setOpen((value) => !value)}
+        style={({ pressed }) => [styles.dayHead, pressed && styles.pressed]}
+      >
+        <View
+          style={[
+            styles.dayBadge,
+            {
+              backgroundColor: open ? palette.primary : palette.muted,
+              borderColor: open ? palette.primary : palette.border,
+            },
+          ]}
+        >
+          <AppText
+            variant="label"
+            style={{ color: open ? palette.primaryForeground : palette.primary }}
+          >
+            {day.day}
+          </AppText>
+        </View>
+        <View style={styles.dayHeadText}>
+          <View style={styles.dayTitleRow}>
+            <AppText variant="bodyStrong">Day {day.day}</AppText>
+            <AppText variant="caption" tone="muted">
+              {entries.length === 0
+                ? 'No stops yet'
+                : `${entries.length} ${entries.length === 1 ? 'stop' : 'stops'}`}
+            </AppText>
+          </View>
+          {!open && title ? (
+            <AppText tone="muted" numberOfLines={1}>
+              {title}
+            </AppText>
+          ) : null}
+        </View>
+        <Ionicons
+          name={open ? 'chevron-up' : 'chevron-down'}
+          size={16}
+          color={palette.mutedForeground}
+        />
+      </Pressable>
+
+      {open ? (
+        <>
+          <TextField
+            label="What’s the day about?"
+            value={title}
+            onChangeText={(value) => onSetTitle(dayIndex, value)}
+            placeholder="Arrive and settle in"
+            maxLength={90}
+          />
+
+          {entries.length > 0 ? (
+            <View>
+              {entries.map((entry, activityIndex) => {
+                const fields = activityFields(entry);
+                const detail = fields.location || fields.description;
+                const last = activityIndex === entries.length - 1;
+
+                return (
+                  <Pressable
+                    key={`${fields.name}-${activityIndex}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Edit ${fields.name || 'stop'}`}
+                    onPress={() => onEditStop(dayIndex, activityIndex)}
+                    style={({ pressed }) => [
+                      styles.stopRow,
+                      !last && { borderBottomWidth: 1, borderBottomColor: palette.border },
+                      pressed && { backgroundColor: palette.muted },
+                    ]}
+                  >
+                    <View style={styles.stopMeta}>
+                      {fields.time ? (
+                        <View style={[styles.timePill, { backgroundColor: palette.muted }]}>
+                          <AppText variant="caption" tone="primary">
+                            {fields.time}
+                          </AppText>
+                        </View>
+                      ) : (
+                        <View style={[styles.stopDot, { backgroundColor: palette.primary }]} />
+                      )}
+                    </View>
+                    <View style={styles.stopBody}>
+                      <AppText variant="bodyStrong" numberOfLines={1}>
+                        {fields.name || 'Untitled stop'}
+                      </AppText>
+                      {detail ? (
+                        <AppText variant="caption" tone="muted" numberOfLines={1}>
+                          {detail}
+                        </AppText>
+                      ) : null}
+                    </View>
+                    <Ionicons name="chevron-forward" size={15} color={palette.mutedForeground} />
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : (
+            <AppText variant="caption" tone="muted">
+              No stops yet — add the first one and the day starts taking shape.
+            </AppText>
+          )}
+
+          <Button
+            label={entries.length === 0 ? 'Add the first stop' : 'Add a stop'}
+            variant="ghost"
+            size="sm"
+            icon={<Ionicons name="add" size={16} color={palette.foreground} />}
+            onPress={() => onAddStop(dayIndex)}
+          />
+        </>
+      ) : null}
+    </Card>
   );
 }
 
@@ -102,10 +229,9 @@ export default function EditTripScreen() {
       <Screen scroll edges={['top', 'bottom']} contentContainerStyle={styles.content}>
         <TopRow onBack={close} />
         <View style={styles.page}>
-          <Skeleton width="55%" height={16} />
-          <Skeleton width="80%" height={34} />
-          <Skeleton height={120} radius={radius.xxl} />
-          <Skeleton height={180} radius={radius.xxl} />
+          <Skeleton height={150} radius={radius.xxl} />
+          <Skeleton height={96} radius={radius.xxl} />
+          <Skeleton height={72} radius={radius.xxl} />
         </View>
       </Screen>
     );
@@ -275,9 +401,22 @@ function EditTripForm({
       />
 
       <View style={styles.page}>
-        <EditIntro />
+        <Card style={styles.introCard}>
+          <View style={styles.intro}>
+            <View style={styles.eyebrowRow}>
+              <View style={[styles.eyebrowTick, { backgroundColor: palette.accent }]} />
+              <AppText variant="caption" tone="muted" style={styles.eyebrow}>
+                EDITING
+              </AppText>
+            </View>
+            <AppText variant="display">Reshape the plan</AppText>
+            <AppText tone="muted">
+              Add a stop, move a morning around, fix a name. Nothing saves until you tap Save.
+            </AppText>
+          </View>
 
-        <Card style={styles.nameCard}>
+          <View style={[styles.divider, { backgroundColor: palette.border }]} />
+
           {isOwner ? (
             <TextField
               label="Trip name"
@@ -285,11 +424,7 @@ function EditTripForm({
               onChangeText={setTitle}
               placeholder="Give the trip a name"
               maxLength={140}
-              hint={
-                nameMissing
-                  ? 'A trip needs a name to save.'
-                  : 'Shown in your trips and at the top of the plan.'
-              }
+              error={nameMissing ? 'A trip needs a name to save.' : undefined}
             />
           ) : (
             <View style={styles.readOnlyName}>
@@ -313,110 +448,29 @@ function EditTripForm({
             </AppText>
           </Card>
         ) : (
-          days.map((day, dayIndex) => {
-            const entries = day.activities ?? [];
-            return (
-              <Card key={`${day.day}-${dayIndex}`} style={styles.dayCard}>
-                <View style={styles.dayHead}>
-                  <View style={[styles.dayBadge, { backgroundColor: palette.muted }]}>
-                    <AppText variant="label" tone="primary">
-                      {day.day}
-                    </AppText>
-                  </View>
-                  <View style={styles.dayHeadText}>
-                    <AppText variant="heading">Day {day.day}</AppText>
-                    <AppText variant="caption" tone="muted">
-                      {entries.length === 0
-                        ? 'Nothing planned yet'
-                        : `${entries.length} ${entries.length === 1 ? 'stop' : 'stops'}`}
-                    </AppText>
-                  </View>
-                </View>
-
-                <TextField
-                  label="What’s the day about?"
-                  value={cleanDayTitle(day.title ?? '')}
-                  onChangeText={(value) =>
-                    updateDays((current) => setDayTitle(current, dayIndex, value))
-                  }
-                  placeholder="Arrive and settle in"
-                  maxLength={90}
-                />
-
-                {entries.length > 0 ? (
-                  <View style={styles.activityList}>
-                    {entries.map((entry, activityIndex) => {
-                      const fields = activityFields(entry);
-                      return (
-                        <Pressable
-                          key={`${fields.name}-${activityIndex}`}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Edit ${fields.name || 'stop'}`}
-                          onPress={() => setSheet({ dayIndex, activityIndex })}
-                          style={({ pressed }) => [
-                            styles.activityRow,
-                            {
-                              borderColor: palette.border,
-                              backgroundColor: pressed ? palette.muted : 'transparent',
-                            },
-                          ]}
-                        >
-                          <View style={styles.activityMeta}>
-                            {fields.time ? (
-                              <View style={[styles.timePill, { backgroundColor: palette.muted }]}>
-                                <AppText variant="caption" tone="primary" style={styles.timeText}>
-                                  {fields.time}
-                                </AppText>
-                              </View>
-                            ) : (
-                              <View style={[styles.activityDot, { backgroundColor: palette.primary }]} />
-                            )}
-                          </View>
-                          <View style={styles.activityBody}>
-                            <AppText variant="bodyStrong">{fields.name || 'Untitled stop'}</AppText>
-                            {fields.location ? (
-                              <View style={styles.locationRow}>
-                                <Ionicons
-                                  name="location-outline"
-                                  size={12}
-                                  color={palette.mutedForeground}
-                                />
-                                <AppText variant="caption" tone="muted" numberOfLines={1}>
-                                  {fields.location}
-                                </AppText>
-                              </View>
-                            ) : null}
-                            {fields.description ? (
-                              <AppText variant="caption" tone="muted" numberOfLines={1}>
-                                {fields.description}
-                              </AppText>
-                            ) : null}
-                          </View>
-                          <Ionicons
-                            name="chevron-forward"
-                            size={16}
-                            color={palette.mutedForeground}
-                          />
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                ) : (
-                  <AppText variant="caption" tone="muted">
-                    Add the first stop and the day starts taking shape.
-                  </AppText>
-                )}
-
-                <Button
-                  label="Add a stop"
-                  variant="ghost"
-                  size="sm"
-                  icon={<Ionicons name="add" size={16} color={palette.foreground} />}
-                  onPress={() => setSheet({ dayIndex, activityIndex: null })}
-                />
-              </Card>
-            );
-          })
+          <View style={styles.dayList}>
+            <View style={styles.sectionHead}>
+              <AppText variant="caption" tone="muted" style={styles.eyebrow}>
+                THE PLAN
+              </AppText>
+              <AppText variant="caption" tone="muted">
+                {days.length} {days.length === 1 ? 'day' : 'days'} · tap one to open it
+              </AppText>
+            </View>
+            {days.map((day, dayIndex) => (
+              <EditDayCard
+                key={`${day.day}-${dayIndex}`}
+                day={day}
+                dayIndex={dayIndex}
+                first={dayIndex === 0}
+                onSetTitle={(index, value) =>
+                  updateDays((current) => setDayTitle(current, index, value))
+                }
+                onEditStop={(index, activityIndex) => setSheet({ dayIndex: index, activityIndex })}
+                onAddStop={(index) => setSheet({ dayIndex: index, activityIndex: null })}
+              />
+            ))}
+          </View>
         )}
 
         <View style={styles.footer}>
@@ -531,7 +585,7 @@ function EditTripForm({
 
 const styles = StyleSheet.create({
   content: { paddingTop: space.sm, paddingBottom: space.xxxl },
-  page: { width: '100%', maxWidth: 560, alignSelf: 'center', gap: space.xxl },
+  page: { width: '100%', maxWidth: 560, alignSelf: 'center', gap: space.xl },
   topRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   back: {
     width: 36,
@@ -549,45 +603,52 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: radius.pill,
   },
+  introCard: { gap: space.lg },
   intro: { gap: space.sm },
   eyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   eyebrowTick: { width: 12, height: 2, borderRadius: radius.pill },
-  eyebrow: { letterSpacing: 1.2, fontSize: 10 },
-  nameCard: { gap: space.sm },
+  eyebrow: { letterSpacing: 1.1, fontSize: 11 },
+  divider: { height: 1 },
   readOnlyName: { gap: 4 },
   emptyCard: { alignItems: 'flex-start', gap: space.sm },
+  dayList: { gap: space.sm },
+  sectionHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: space.sm,
+    paddingHorizontal: space.xs,
+  },
   dayCard: { gap: space.lg },
   dayHead: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  pressed: { opacity: 0.7 },
   dayBadge: {
     width: 38,
     height: 38,
     borderRadius: radius.pill,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   dayHeadText: { flex: 1, gap: 2 },
-  activityList: { gap: 2 },
-  activityRow: {
+  dayTitleRow: { flexDirection: 'row', alignItems: 'baseline', gap: space.sm },
+  stopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
-    paddingVertical: space.sm,
-    paddingHorizontal: space.sm,
-    borderRadius: radius.lg,
-    borderWidth: 1,
+    paddingVertical: 10,
+    borderRadius: radius.sm,
   },
-  activityMeta: { width: 54, alignItems: 'flex-start' },
+  stopMeta: { width: 52, alignItems: 'flex-start' },
   timePill: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: radius.sm },
-  timeText: { fontSize: 11, lineHeight: 15 },
-  activityDot: {
+  stopDot: {
     width: 7,
     height: 7,
     borderRadius: radius.pill,
     marginLeft: 6,
     marginTop: 7,
   },
-  activityBody: { flex: 1, gap: 2 },
-  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  stopBody: { flex: 1, gap: 2 },
   footer: { gap: space.sm },
   saveNote: { textAlign: 'center' },
   conflictCard: { gap: space.sm },

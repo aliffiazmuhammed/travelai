@@ -84,13 +84,13 @@ export function TripLibraryCard({ trip, shared = false, onPress }: TripLibraryCa
               </AppText>
             </View>
 
-            <AppText variant="caption" tone="muted" numberOfLines={1}>
-              {shared
-                ? `Shared with you by another traveller${members > 1 ? ` · ${members} people` : ''}`
-                : members > 1
-                  ? `Yours · ${members} travellers`
-                  : 'Yours'}
-            </AppText>
+            {shared || members > 1 ? (
+              <AppText variant="caption" tone="muted" numberOfLines={1}>
+                {shared
+                  ? `Shared with you by another traveller${members > 1 ? ` · ${members} people` : ''}`
+                  : `${members} travellers`}
+              </AppText>
+            ) : null}
           </View>
 
           <Ionicons name="chevron-forward" size={18} color={palette.mutedForeground} />

@@ -12,7 +12,7 @@ import { fetchMyTrips } from '@/api/trips';
 import { useSession } from '@/auth/SessionProvider';
 import { matchesTripTab } from '@/lib/personalTrip';
 import { goToCreate, goToTab } from '@/navigation/tabs';
-import { fontFamily, radius, space } from '@/theme/tokens';
+import { radius, space } from '@/theme/tokens';
 import { useTheme } from '@/theme/useTheme';
 import {
   AppText,
@@ -136,7 +136,7 @@ export default function ProfileScreen() {
       >
         <View style={styles.page}>
           <View style={styles.topRow}>
-            <AppText variant="title" tone="primary" style={styles.wordmark}>
+            <AppText variant="heading" tone="primary" style={styles.wordmark}>
               waytowalk
             </AppText>
             <View style={[styles.signedIn, { backgroundColor: palette.muted }]}>
@@ -147,13 +147,10 @@ export default function ProfileScreen() {
             </View>
           </View>
 
-          <View style={styles.hero}>
-            <AppText variant="caption" tone="muted" style={styles.eyebrow}>
-              YOU
-            </AppText>
-            <AppText variant="display">Your corner of the road.</AppText>
-            <AppText tone="muted">
-              Who you are, the trips you’re part of, and the next place you’re headed.
+          <View style={styles.intro}>
+            <AppText variant="title">Your corner of the road.</AppText>
+            <AppText variant="caption" tone="muted">
+              Who you are, and where you’re headed next.
             </AppText>
           </View>
 
@@ -270,7 +267,7 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  page: { width: '100%', maxWidth: 560, alignSelf: 'center', gap: space.xxl },
+  page: { width: '100%', maxWidth: 560, alignSelf: 'center', gap: space.xl },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   wordmark: { letterSpacing: -0.4 },
   signedIn: {
@@ -282,8 +279,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
   },
   signedDot: { width: 6, height: 6, borderRadius: radius.pill },
-  hero: { gap: space.sm },
-  eyebrow: { fontFamily: fontFamily.semibold, letterSpacing: 1.2 },
+  intro: { gap: 2 },
   identity: { gap: space.md },
   identityRow: { flexDirection: 'row', alignItems: 'center', gap: space.lg },
   identityText: { flex: 1, gap: 2 },

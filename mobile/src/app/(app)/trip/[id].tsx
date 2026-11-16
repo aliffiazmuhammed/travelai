@@ -20,7 +20,7 @@ import {
 } from '@/api/joinRequests';
 import { JoinSheet } from '@/components/JoinSheet';
 import { DayCard } from '@/components/trip/DayPlan';
-import { PracticalitiesCard } from '@/components/trip/Practicalities';
+import { GoodToKnowRow } from '@/components/trip/GoodToKnow';
 import { formatDuration, formatGalleryDates } from '@/lib/galleryFormat';
 import { tripCoverUrl } from '@/lib/tripCover';
 import { goToCreate } from '@/navigation/tabs';
@@ -88,7 +88,7 @@ function SectionHeading({
           {eyebrow}
         </AppText>
       </View>
-      <AppText variant="title">{title}</AppText>
+      <AppText variant="heading">{title}</AppText>
       {body ? (
         <AppText variant="caption" tone="muted">
           {body}
@@ -209,7 +209,7 @@ function JoinAction({
 function TripSkeleton() {
   return (
     <View style={styles.page}>
-      <Skeleton height={240} radius={radius.xxl} />
+      <Skeleton height={190} radius={radius.xxl} />
       <View style={styles.titleBlock}>
         <Skeleton width="85%" height={30} />
         <Skeleton width="65%" height={30} />
@@ -329,7 +329,7 @@ export default function TripScreen() {
       >
         <Ionicons name="chevron-back" size={18} color={palette.foreground} />
       </Pressable>
-      <AppText variant="title" tone="primary" style={styles.wordmark}>
+      <AppText variant="heading" tone="primary" style={styles.wordmark}>
         waytowalk
       </AppText>
     </View>
@@ -521,7 +521,7 @@ export default function TripScreen() {
             <Card style={styles.highlights}>
               <View style={styles.cardHead}>
                 <Ionicons name="sparkles-outline" size={16} color={palette.primary} />
-                <AppText variant="heading">Trip highlights</AppText>
+                <AppText variant="heading">What this trip is about</AppText>
               </View>
               {itinerary.highlights.map((highlight, index) => (
                 <View key={`${highlight}-${index}`} style={styles.bulletRow}>
@@ -611,7 +611,7 @@ export default function TripScreen() {
             </Card>
           ) : null}
 
-          <PracticalitiesCard
+          <GoodToKnowRow
             weather={itinerary.weather_advisory}
             transport={itinerary.local_transport}
             footnotes={itinerary.footnotes_safety_tips}
@@ -639,17 +639,6 @@ export default function TripScreen() {
               ))}
             </Card>
           ) : null}
-
-          <Card style={styles.privacy}>
-            <View style={styles.cardHead}>
-              <Ionicons name="lock-closed-outline" size={15} color={palette.mutedForeground} />
-              <AppText variant="label">Shared on purpose, private by default</AppText>
-            </View>
-            <AppText variant="caption" tone="muted">
-              You’re seeing the itinerary, the dates {hostName} chose to share and their public
-              profile. Budgets, expenses and travel companions stay private.
-            </AppText>
-          </Card>
 
           <View style={styles.footer}>
             <Button
@@ -686,7 +675,7 @@ export default function TripScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   content: { paddingTop: space.sm, paddingBottom: space.xxxl },
-  page: { width: '100%', maxWidth: 560, alignSelf: 'center', gap: space.xxl },
+  page: { width: '100%', maxWidth: 560, alignSelf: 'center', gap: space.xl },
   topRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   back: {
     width: 36,
@@ -697,7 +686,7 @@ const styles = StyleSheet.create({
   },
   wordmark: { letterSpacing: -0.4 },
   heroClip: { borderRadius: radius.xxl, overflow: 'hidden' },
-  hero: { height: 240, justifyContent: 'space-between', padding: space.lg },
+  hero: { height: 190, justifyContent: 'space-between', padding: space.lg },
   heroChipRow: { flexDirection: 'row', justifyContent: 'space-between', gap: space.sm },
   heroChip: {
     flexDirection: 'row',
@@ -777,7 +766,6 @@ const styles = StyleSheet.create({
     paddingTop: space.md,
     borderTopWidth: 1,
   },
-  privacy: { gap: space.sm },
   footer: { alignItems: 'stretch' },
   errorCard: { alignItems: 'flex-start', gap: space.sm },
   errorIcon: {

@@ -9,7 +9,7 @@ import type {
 } from '@/api/explore';
 import { fontFamily, radius, space } from '@/theme/tokens';
 import { useTheme } from '@/theme/useTheme';
-import { AppText, Card } from '@/ui';
+import { AppText } from '@/ui';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -71,13 +71,57 @@ function Section({
   );
 }
 
+type Practicalities = {
+  weather?: GalleryWeather;
+  transport?: GalleryLocalTransport;
+  footnotes?: GalleryFootnotes;
+};
+
+function hasWeather(weather?: GalleryWeather): boolean {
+  return Boolean(
+    weather &&
+      (weather.expected_weather ||
+        weather.packing_tips?.length ||
+        weather.risks?.length ||
+        weather.seasonal_highlights?.length)
+  );
+}
+
+function hasTransport(transport?: GalleryLocalTransport): boolean {
+  return Boolean(
+    transport &&
+      (transport.walking ||
+        transport.auto_rickshaw ||
+        transport.local_buses ||
+        transport.shared_cabs ||
+        transport.tips?.length)
+  );
+}
+
+function hasSafety(footnotes?: GalleryFootnotes): boolean {
+  if (!footnotes) return false;
+  const permits = footnotes.permits ?? {};
+  const connectivity = footnotes.connectivity ?? {};
+  const payment = footnotes.payment ?? {};
+  return Boolean(
+    footnotes.safety?.length ||
+      footnotes.cultural_etiquette?.length ||
+      payment.upi ||
+      payment.cash ||
+      permits.rohtang_pass_required ||
+      permits.apply_online ||
+      connectivity.wifi ||
+      connectivity.mobile_networks
+  );
+}
+
+/** True when any of the three blocks would render something. */
+export function hasPracticalities({ weather, transport, footnotes }: Practicalities): boolean {
+  return hasWeather(weather) || hasTransport(transport) || hasSafety(footnotes);
+}
+
 function WeatherBlock({ weather }: { weather: GalleryWeather }) {
-  const parts =
-    (weather.expected_weather ? 1 : 0) +
-    (weather.packing_tips?.length ? 1 : 0) +
-    (weather.risks?.length ? 1 : 0) +
-    (weather.seasonal_highlights?.length ? 1 : 0);
-  if (parts === 0) return null;
+  if (!hasWeather(weather)) return null;
 
   return (
     <Section icon="partly-sunny-outline" title="Weather">
@@ -140,22 +184,14 @@ function TransportBlock({ transport }: { transport: GalleryLocalTransport }) {
 }
 
 function SafetyBlock({ footnotes }: { footnotes: GalleryFootnotes }) {
+  if (!hasSafety(footnotes)) return null;
+
   const payment = footnotes.payment ?? {};
   const permits = footnotes.permits ?? {};
   const connectivity = footnotes.connectivity ?? {};
   const hasPermitLines = permits.rohtang_pass_required || Boolean(permits.apply_online);
   const hasConnectivity = Boolean(connectivity.wifi || connectivity.mobile_networks);
   const hasPayment = Boolean(payment.upi || payment.cash);
-
-  if (
-    !footnotes.safety?.length &&
-    !footnotes.cultural_etiquette?.length &&
-    !hasPayment &&
-    !hasPermitLines &&
-    !hasConnectivity
-  ) {
-    return null;
-  }
 
   return (
     <Section icon="shield-checkmark-outline" title="Safety & local know-how" divided>
@@ -218,38 +254,18 @@ function SafetyBlock({ footnotes }: { footnotes: GalleryFootnotes }) {
   );
 }
 
-/** Weather, local transport and safety notes, straight from the itinerary. */
-export function PracticalitiesCard({
-  weather,
-  transport,
-  footnotes,
-  intro = 'What the host wrote down about weather, getting around and staying safe.',
-}: {
-  weather?: GalleryWeather;
-  transport?: GalleryLocalTransport;
-  footnotes?: GalleryFootnotes;
-  intro?: string;
-}) {
-  if (!weather && !transport && !footnotes) return null;
-
+/** Weather, local transport and safety notes, ready to drop into a sheet. */
+export function PracticalitiesBody({ weather, transport, footnotes }: Practicalities) {
   return (
-    <Card style={styles.card}>
-      <View style={styles.heading}>
-        <AppText variant="title">Good to know</AppText>
-        <AppText variant="caption" tone="muted">
-          {intro}
-        </AppText>
-      </View>
+    <>
       {weather ? <WeatherBlock weather={weather} /> : null}
       {transport ? <TransportBlock transport={transport} /> : null}
       {footnotes ? <SafetyBlock footnotes={footnotes} /> : null}
-    </Card>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { gap: space.lg },
-  heading: { gap: 2 },
   section: { gap: space.sm, paddingTop: space.lg },
   sectionHead: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   sectionIcon: {
@@ -261,7 +277,7 @@ const styles = StyleSheet.create({
   },
   paragraph: { lineHeight: 20 },
   subBlock: { gap: 5, marginTop: 2 },
-  subLabel: { fontSize: 10, lineHeight: 14, letterSpacing: 1 },
+  subLabel: { fontSize: 11, lineHeight: 15, letterSpacing: 0.8 },
   bullets: { gap: 4 },
   bullet: { flexDirection: 'row', alignItems: 'flex-start', gap: 7 },
   bulletDot: { width: 4, height: 4, borderRadius: radius.pill, marginTop: 7 },
