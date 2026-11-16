@@ -158,6 +158,24 @@ export async function saveAvatar(
 }
 
 /**
+ * True when two URLs point at the same stored object. Cloudinary reuses one
+ * public id per account, so a replacement overwrites the old bytes in place and
+ * must not be "cleaned up" as if it were a different file.
+ */
+export function sameAvatarStorage(a: unknown, b: unknown): boolean {
+  if (!a || !b) return false;
+  if (String(a) === String(b)) return true;
+  const first = parseCloudinaryPublicId(a);
+  const second = parseCloudinaryPublicId(b);
+  return Boolean(
+    first &&
+      second &&
+      first.publicId === second.publicId &&
+      first.resourceType === second.resourceType
+  );
+}
+
+/**
  * Best-effort removal of the file behind a stored URL. Never throws: losing the
  * file must not block the account update that cleared the reference.
  */

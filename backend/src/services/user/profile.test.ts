@@ -21,6 +21,7 @@ import {
   DEFAULT_AVATAR_MAX_MB,
   isAllowedAvatarMime,
   isManagedAvatarUrl,
+  sameAvatarStorage,
 } from './avatar.js';
 import { userLabel, projectComment, LABEL_MAX_LEN } from '../collab/comments.js';
 import User from '../../models/User.js';
@@ -239,6 +240,23 @@ test('assertAvatarBytes: accepts a real PNG and rejects a renamed file', () => {
   assert.throws(() => assertAvatarBytes('image/jpeg', PNG_BYTES), /does not look like a photo/);
   assert.throws(() => assertAvatarBytes('application/pdf', PNG_BYTES), /JPEG, PNG or WebP/);
   assert.throws(() => assertAvatarBytes('image/png', Buffer.from('not an image')), /does not look like/);
+});
+
+test('sameAvatarStorage: one Cloudinary id, so a replacement survives its cleanup', () => {
+  const first = 'https://res.cloudinary.com/demo/image/upload/v1/travelai/avatars/avatar-u1.png';
+  const second = 'https://res.cloudinary.com/demo/image/upload/v2/travelai/avatars/avatar-u1.png';
+  const other = 'https://res.cloudinary.com/demo/image/upload/v1/travelai/avatars/avatar-u2.png';
+
+  assert.equal(sameAvatarStorage(first, second), true);
+  assert.equal(sameAvatarStorage(first, other), false);
+  assert.equal(sameAvatarStorage(first, first), true);
+
+  // Local storage gives every upload a fresh filename, so the old file goes.
+  assert.equal(
+    sameAvatarStorage('/uploads/avatar-u1-abc.png', '/uploads/avatar-u1-def.png'),
+    false
+  );
+  assert.equal(sameAvatarStorage(undefined, first), false);
 });
 
 test('avatar size: 2 MB default, overridable by AVATAR_MAX_MB', () => {

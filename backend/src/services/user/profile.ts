@@ -24,7 +24,7 @@ import Trip from '../../models/Trip.js';
 import { AppError } from '../../utils/AppError.js';
 import { userLabel } from '../collab/comments.js';
 import type { AvatarMimeType } from './avatar.js';
-import { assertAvatarBytes, deleteAvatarFile, saveAvatar } from './avatar.js';
+import { assertAvatarBytes, deleteAvatarFile, sameAvatarStorage, saveAvatar } from './avatar.js';
 import {
   BIO_MAX_LEN,
   HANDLE_MAX_LEN,
@@ -363,7 +363,7 @@ export async function replaceAvatar(
   user.avatarUrl = url;
   await user.save();
 
-  if (previous && previous !== url) {
+  if (!sameAvatarStorage(previous, url)) {
     await deleteAvatarFile(previous);
   }
   return publicUser(user);

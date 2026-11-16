@@ -9,6 +9,7 @@ import {
   updatePersonalProfile,
 } from '../services/user/profile.js';
 import { setRealmCookie, signSessionForAccount } from '../services/auth/realm.js';
+import { wantsTokenInBody } from '../services/auth/clientSession.js';
 
 /**
  * Profile editing (Milestone 7, F14; Milestone 8 G1 adds handle + bio). Every
@@ -41,12 +42,15 @@ export const changePassword = catchAsync(async (req: AuthenticatedRequest, res: 
     req.body?.currentPassword,
     req.body?.newPassword
   );
-  // The password change bumped tokenVersion; reissue THIS realm's cookie so the
-  // caller stays signed in while every other device is signed out.
-  setRealmCookie(res, 'personal', signSessionForAccount(user, 'personal'));
+  // The password change bumped tokenVersion; reissue THIS realm's session so the
+  // caller stays signed in while every other device is signed out. Native shells
+  // take it in the body because they cannot persist the cookie.
+  const token = signSessionForAccount(user, 'personal');
+  setRealmCookie(res, 'personal', token);
   res.status(200).json({
     success: true,
     message: 'Your password has been updated.',
+    ...(wantsTokenInBody(req) ? { token } : {}),
   });
 });
 
