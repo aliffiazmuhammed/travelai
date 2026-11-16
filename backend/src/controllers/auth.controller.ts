@@ -8,22 +8,31 @@ import {
   SESSION_DURATION_MS,
   setRealmCookie,
 } from '../services/auth/realm.js';
+import { wantsTokenInBody } from '../services/auth/clientSession.js';
 
 export { getCsrfToken } from '../middleware/csrf.middleware.js';
 export { getCookieOptions, SESSION_DURATION_MS };
+
+/**
+ * Sign-up/sign-in return the JWT in the body only when the caller identifies
+ * as the native client; browsers keep the httpOnly cookie response.
+ */
+function sessionPayload(req: AuthenticatedRequest, user: unknown, token: string) {
+  return wantsTokenInBody(req) ? { success: true, user, token } : { success: true, user };
+}
 
 export const signup = catchAsync(async (req: AuthenticatedRequest, res: Response) => {
   const { email, password, name } = req.body;
   const { user, token } = await authService.signup(email, password, name);
   setRealmCookie(res, 'personal', token);
-  res.status(201).json({ success: true, user });
+  res.status(201).json(sessionPayload(req, user, token));
 });
 
 export const signin = catchAsync(async (req: AuthenticatedRequest, res: Response) => {
   const { email, password } = req.body;
   const { user, token } = await authService.signin(email, password);
   setRealmCookie(res, 'personal', token);
-  res.status(200).json({ success: true, user });
+  res.status(200).json(sessionPayload(req, user, token));
 });
 
 export const logout = catchAsync(async (_req: AuthenticatedRequest, res: Response) => {
