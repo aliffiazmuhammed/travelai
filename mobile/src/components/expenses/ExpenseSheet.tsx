@@ -1,4 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import { useState, type ComponentProps } from 'react';
 import {
   KeyboardAvoidingView,
@@ -15,10 +17,19 @@ import type {
   ExpenseCategory,
   ExpenseInput,
   ExpenseSplitMode,
+  ReceiptFile,
   TripExpense,
   TripParticipant,
 } from '@/api/expenses';
-import { CURRENCIES, EXPENSE_CATEGORIES, getCategoryMeta } from '@/lib/expenses';
+import {
+  CURRENCIES,
+  EXPENSE_CATEGORIES,
+  getCategoryMeta,
+  isPdfReceipt,
+  receiptError as receiptFileError,
+  receiptKindLabel,
+  RECEIPT_MAX_MB,
+} from '@/lib/expenses';
 import { radius, space } from '@/theme/tokens';
 import { useTheme } from '@/theme/useTheme';
 import { AppText, Button, InlineError, TextField } from '@/ui';
@@ -34,9 +45,14 @@ interface ExpenseSheetProps {
   busy: boolean;
   error?: string | null;
   onClose: () => void;
-  onSubmit: (input: ExpenseInput) => void;
+  onSubmit: (
+    input: ExpenseInput,
+    receipt?: { file?: ReceiptFile | null; remove?: boolean }
+  ) => void;
   onDelete?: () => void;
   deleteBusy?: boolean;
+  /** Opens a stored receipt in the device browser/viewer. */
+  onViewReceipt?: (url: string) => void;
 }
 
 function FieldRow({
@@ -153,6 +169,7 @@ export function ExpenseSheet({
   onSubmit,
   onDelete,
   deleteBusy,
+  onViewReceipt,
 }: ExpenseSheetProps) {
   const { palette } = useTheme();
   const insets = useSafeAreaInsets();
@@ -171,6 +188,97 @@ export function ExpenseSheet({
   const [picker, setPicker] = useState<Picker | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [receiptFile, setReceiptFile] = useState<ReceiptFile | null>(null);
+  const [removeReceipt, setRemoveReceipt] = useState(false);
+  const [showReceiptChoices, setShowReceiptChoices] = useState(false);
+  const [receiptError, setReceiptError] = useState<string | null>(null);
+  const [pickingReceipt, setPickingReceipt] = useState(false);
+
+  const existingReceipt = expense?.receiptUrl;
+
+  const acceptReceipt = (file: ReceiptFile, size?: number) => {
+    const problem = receiptFileError({ type: file.type, size, name: file.name });
+    if (problem) {
+      setReceiptError(problem);
+      return;
+    }
+    setReceiptFile(file);
+    setRemoveReceipt(false);
+    setShowReceiptChoices(false);
+    setReceiptError(null);
+  };
+
+  const extensionFor = (type: string) =>
+    type === 'image/png' ? 'png' : type === 'image/webp' ? 'webp' : type === 'application/pdf' ? 'pdf' : 'jpg';
+
+  const choosePhoto = async () => {
+    if (pickingReceipt) return;
+    setPickingReceipt(true);
+    setReceiptError(null);
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setReceiptError(
+          'Photo access is off. Turn it on in your device settings to choose a receipt.'
+        );
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.8,
+        exif: false,
+      });
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      if (!asset) return;
+      const type = (asset.mimeType || 'image/jpeg').toLowerCase();
+      acceptReceipt(
+        {
+          uri: asset.uri,
+          name: asset.fileName || `receipt-${Date.now()}.${extensionFor(type)}`,
+          type,
+          file: Platform.OS === 'web' ? await (await fetch(asset.uri)).blob() : undefined,
+        },
+        asset.fileSize
+      );
+    } catch {
+      setReceiptError('That photo couldn’t be opened. Try another one.');
+    } finally {
+      setPickingReceipt(false);
+    }
+  };
+
+  const chooseFile = async () => {
+    if (pickingReceipt) return;
+    setPickingReceipt(true);
+    setReceiptError(null);
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'],
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      if (!asset) return;
+      const type = (asset.mimeType || 'application/pdf').toLowerCase();
+      acceptReceipt(
+        {
+          uri: asset.uri,
+          name: asset.name || `receipt-${Date.now()}.${extensionFor(type)}`,
+          type,
+          file:
+            asset.file ??
+            (Platform.OS === 'web' ? await (await fetch(asset.uri)).blob() : undefined),
+        },
+        asset.size
+      );
+    } catch {
+      setReceiptError('That file couldn’t be opened. Try another one.');
+    } finally {
+      setPickingReceipt(false);
+    }
+  };
 
   const numericAmount = amountFrom(amountText);
   const amountValid = Number.isFinite(numericAmount) && numericAmount > 0;
@@ -193,15 +301,21 @@ export function ExpenseSheet({
       return;
     }
     setFormError(null);
-    onSubmit({
-      label: label.trim(),
-      category,
-      amount: numericAmount,
-      currency,
-      paidBy: paidBy || undefined,
-      splitMode: splitMode === 'custom' ? undefined : splitMode,
-      notes: notes.trim() || undefined,
-    });
+    onSubmit(
+      {
+        label: label.trim(),
+        category,
+        amount: numericAmount,
+        currency,
+        paidBy: paidBy || undefined,
+        splitMode: splitMode === 'custom' ? undefined : splitMode,
+        notes: notes.trim() || undefined,
+      },
+      {
+        file: receiptFile,
+        remove: removeReceipt && !receiptFile,
+      }
+    );
   };
 
   return (
@@ -429,6 +543,129 @@ export function ExpenseSheet({
               style={styles.notes}
             />
 
+            <View style={styles.group}>
+              <AppText variant="label">Receipt (optional)</AppText>
+
+              {receiptFile ? (
+                <View style={[styles.receiptCard, { backgroundColor: palette.muted, borderColor: palette.border }]}>
+                  <Ionicons
+                    name={isPdfReceipt(receiptFile.name) ? 'document-text-outline' : 'image-outline'}
+                    size={18}
+                    color={palette.primary}
+                  />
+                  <View style={styles.receiptText}>
+                    <AppText variant="bodyStrong" numberOfLines={1}>
+                      {receiptFile.name}
+                    </AppText>
+                    <AppText variant="caption" tone="muted">
+                      Attached when you save
+                    </AppText>
+                  </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Remove chosen receipt"
+                    hitSlop={8}
+                    onPress={() => setReceiptFile(null)}
+                  >
+                    <Ionicons name="close-circle" size={20} color={palette.mutedForeground} />
+                  </Pressable>
+                </View>
+              ) : existingReceipt && !removeReceipt ? (
+                <>
+                  <View style={[styles.receiptCard, { backgroundColor: palette.muted, borderColor: palette.border }]}>
+                    <Ionicons
+                      name={isPdfReceipt(existingReceipt) ? 'document-text-outline' : 'image-outline'}
+                      size={18}
+                      color={palette.primary}
+                    />
+                    <View style={styles.receiptText}>
+                      <AppText variant="bodyStrong">{receiptKindLabel(existingReceipt)}</AppText>
+                      <AppText variant="caption" tone="muted">
+                        Stored with this expense
+                      </AppText>
+                    </View>
+                  </View>
+                  <View style={styles.receiptActions}>
+                    <Button
+                      label="View"
+                      variant="secondary"
+                      size="sm"
+                      icon={<Ionicons name="eye-outline" size={15} color={palette.secondaryForeground} />}
+                      onPress={() => onViewReceipt?.(existingReceipt)}
+                    />
+                    <Button
+                      label="Replace"
+                      variant="ghost"
+                      size="sm"
+                      disabled={pickingReceipt}
+                      onPress={() => {
+                        setReceiptError(null);
+                        setShowReceiptChoices(true);
+                      }}
+                    />
+                    <Button
+                      label="Remove"
+                      variant="ghost"
+                      size="sm"
+                      onPress={() => {
+                        setReceiptError(null);
+                        setRemoveReceipt(true);
+                      }}
+                    />
+                  </View>
+                </>
+              ) : removeReceipt ? (
+                <View style={[styles.receiptCard, { backgroundColor: palette.muted, borderColor: palette.border }]}>
+                  <Ionicons name="trash-outline" size={18} color={palette.destructive} />
+                  <View style={styles.receiptText}>
+                    <AppText variant="bodyStrong">Receipt will be removed</AppText>
+                    <AppText variant="caption" tone="muted">
+                      Saved without the attachment
+                    </AppText>
+                  </View>
+                  <Button
+                    label="Undo"
+                    variant="ghost"
+                    size="sm"
+                    onPress={() => setRemoveReceipt(false)}
+                  />
+                </View>
+              ) : null}
+
+              {!receiptFile && (!existingReceipt || removeReceipt || showReceiptChoices) ? (
+                <View style={styles.receiptActions}>
+                  <Button
+                    label={pickingReceipt ? 'Opening…' : 'Photo library'}
+                    variant="secondary"
+                    size="sm"
+                    icon={<Ionicons name="image-outline" size={15} color={palette.secondaryForeground} />}
+                    disabled={pickingReceipt}
+                    onPress={() => void choosePhoto()}
+                  />
+                  <Button
+                    label="Choose file"
+                    variant="secondary"
+                    size="sm"
+                    icon={
+                      <Ionicons name="document-outline" size={15} color={palette.secondaryForeground} />
+                    }
+                    disabled={pickingReceipt}
+                    onPress={() => void chooseFile()}
+                  />
+                </View>
+              ) : null}
+
+              {receiptError ? (
+                <AppText variant="caption" tone="danger">
+                  {receiptError}
+                </AppText>
+              ) : !receiptFile && existingReceipt && !removeReceipt && !showReceiptChoices ? null : (
+                <AppText variant="caption" tone="muted">
+                  JPEG, PNG, WebP or PDF, up to {RECEIPT_MAX_MB} MB.
+                </AppText>
+              )}
+            </View>
+
             {confirmDelete && onDelete ? (
               <View style={[styles.confirm, { borderColor: palette.border }]}>
                 <AppText variant="bodyStrong">Delete this expense?</AppText>
@@ -557,6 +794,17 @@ const styles = StyleSheet.create({
   optionText: { flex: 1, gap: 1 },
   note: { borderRadius: radius.md, padding: space.md },
   notes: { minHeight: 84, textAlignVertical: 'top' },
+  receiptCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    borderWidth: 1,
+    borderRadius: radius.lg,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+  },
+  receiptText: { flex: 1, gap: 1 },
+  receiptActions: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   confirm: { borderWidth: 1, borderRadius: radius.lg, padding: space.md, gap: space.sm },
   confirmActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: space.sm },
   footer: {

@@ -84,6 +84,19 @@ interface LedgerResponse {
   finance?: TripFinance;
 }
 
+/** Write endpoints answer with the whole sanitized trip; only the ledger is read. */
+interface TripWriteResponse {
+  expenses?: TripExpense[];
+}
+
+export interface ReceiptFile {
+  uri: string;
+  name: string;
+  type: string;
+  /** The browser's File/Blob; React Native sends the uri shape instead. */
+  file?: Blob;
+}
+
 function tripPath(tripId: string, suffix: string): string {
   return `/itinerary/${encodeURIComponent(tripId)}${suffix}`;
 }
@@ -97,23 +110,59 @@ export async function fetchExpenseLedger(tripId: string): Promise<ExpenseLedger>
   };
 }
 
-export async function createTripExpense(tripId: string, input: ExpenseInput): Promise<void> {
-  await apiRequest(tripPath(tripId, '/expenses'), { method: 'POST', body: input });
+export async function createTripExpense(
+  tripId: string,
+  input: ExpenseInput
+): Promise<TripExpense[]> {
+  const payload = await apiRequest<TripWriteResponse>(tripPath(tripId, '/expenses'), {
+    method: 'POST',
+    body: input,
+  });
+  return payload.expenses ?? [];
 }
 
 export async function updateTripExpense(
   tripId: string,
   expenseId: string,
   input: ExpenseInput
-): Promise<void> {
-  await apiRequest(tripPath(tripId, `/expenses/${encodeURIComponent(expenseId)}`), {
-    method: 'PUT',
-    body: input,
-  });
+): Promise<TripExpense[]> {
+  const payload = await apiRequest<TripWriteResponse>(
+    tripPath(tripId, `/expenses/${encodeURIComponent(expenseId)}`),
+    { method: 'PUT', body: input }
+  );
+  return payload.expenses ?? [];
 }
 
 export async function deleteTripExpense(tripId: string, expenseId: string): Promise<void> {
   await apiRequest(tripPath(tripId, `/expenses/${encodeURIComponent(expenseId)}`), {
+    method: 'DELETE',
+  });
+}
+
+/** Attaches (or replaces) the receipt file on an expense. */
+export async function uploadExpenseReceipt(
+  tripId: string,
+  expenseId: string,
+  receipt: ReceiptFile
+): Promise<void> {
+  const body = new FormData();
+  if (receipt.file) {
+    body.append('receipt', receipt.file, receipt.name);
+  } else {
+    body.append('receipt', {
+      uri: receipt.uri,
+      name: receipt.name,
+      type: receipt.type,
+    } as unknown as Blob);
+  }
+  await apiRequest(tripPath(tripId, `/expenses/${encodeURIComponent(expenseId)}/receipt`), {
+    method: 'POST',
+    body,
+  });
+}
+
+export async function deleteExpenseReceipt(tripId: string, expenseId: string): Promise<void> {
+  await apiRequest(tripPath(tripId, `/expenses/${encodeURIComponent(expenseId)}/receipt`), {
     method: 'DELETE',
   });
 }

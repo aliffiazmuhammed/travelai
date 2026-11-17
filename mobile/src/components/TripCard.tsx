@@ -107,6 +107,63 @@ export function TripCard({ trip, past = false, showPublisher = true, onPress }: 
   );
 }
 
+/**
+ * Compact row variant for browsing many trips on Explore: the photo still
+ * identifies the place, but three short lines carry the rest so a page of
+ * results stays a screen and a half instead of four.
+ */
+export function TripRowCard({
+  trip,
+  past = false,
+  onPress,
+}: {
+  trip: GalleryTripSummary;
+  past?: boolean;
+  onPress?: () => void;
+}) {
+  const { palette } = useTheme();
+  const publisherName = trip.publisher.name || trip.publisher.handle || 'A traveller';
+
+  return (
+    <Card padded={false} onPress={onPress}>
+      <View style={styles.rowCard}>
+        <View style={[styles.thumb, { backgroundColor: palette.muted }]}>
+          <Image
+            source={{ uri: tripCoverUrl(trip.destination || trip.title, 320) }}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            transition={200}
+          />
+        </View>
+        <View style={styles.rowBody}>
+          <AppText variant="bodyStrong" numberOfLines={1}>
+            {trip.title}
+          </AppText>
+          <View style={styles.metaRow}>
+            <Ionicons name="location-outline" size={12} color={palette.mutedForeground} />
+            <AppText variant="caption" tone="muted" numberOfLines={1} style={styles.metaText}>
+              {trip.destination || 'Somewhere new'} · {formatDuration(trip.durationDays)}
+            </AppText>
+          </View>
+          <View style={styles.metaRow}>
+            <Ionicons name="calendar-outline" size={12} color={palette.mutedForeground} />
+            <AppText variant="caption" tone="muted" numberOfLines={1} style={styles.metaText}>
+              {formatGalleryDates(trip.dates)}
+              {past ? ' · Finished' : ''}
+            </AppText>
+          </View>
+          <View style={styles.rowPublisher}>
+            <Avatar name={publisherName} size={20} />
+            <AppText variant="caption" tone="muted" numberOfLines={1} style={styles.metaText}>
+              {publisherName}
+            </AppText>
+          </View>
+        </View>
+      </View>
+    </Card>
+  );
+}
+
 export function TripCardSkeleton() {
   return (
     <Card padded={false}>
@@ -115,6 +172,21 @@ export function TripCardSkeleton() {
         <View style={styles.body}>
           <Skeleton width="75%" height={18} />
           <Skeleton height={12} />
+          <Skeleton width="45%" height={12} />
+        </View>
+      </View>
+    </Card>
+  );
+}
+
+export function TripRowSkeleton() {
+  return (
+    <Card padded={false}>
+      <View style={styles.rowCard}>
+        <Skeleton width={92} height={92} radius={radius.lg} />
+        <View style={styles.rowBody}>
+          <Skeleton width="80%" height={16} />
+          <Skeleton width="55%" height={12} />
           <Skeleton width="45%" height={12} />
         </View>
       </View>
@@ -148,4 +220,10 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
   },
   publisherText: { flex: 1 },
+  rowCard: { flexDirection: 'row', gap: space.md, padding: space.md },
+  thumb: { width: 92, height: 92, borderRadius: radius.lg, overflow: 'hidden' },
+  rowBody: { flex: 1, justifyContent: 'center', gap: 2 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  metaText: { flexShrink: 1 },
+  rowPublisher: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
 });

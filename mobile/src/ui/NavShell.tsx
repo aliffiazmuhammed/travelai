@@ -33,7 +33,7 @@ export function NavShell({ active, onSelect, onCreatePress }: NavShellProps) {
 
   const renderTab = (tab: TabSpec) => {
     const selected = tab.key === active;
-    const color = selected ? palette.primary : palette.mutedForeground;
+    const color = selected ? palette.primaryForeground : palette.mutedForeground;
 
     return (
       <Pressable
@@ -44,11 +44,11 @@ export function NavShell({ active, onSelect, onCreatePress }: NavShellProps) {
         onPress={() => onSelect(tab.key)}
         style={({ pressed }) => [
           styles.tab,
-          selected && { backgroundColor: palette.muted },
-          pressed && { opacity: 0.72 },
+          selected && { backgroundColor: palette.primary },
+          pressed && { opacity: 0.78 },
         ]}
       >
-        <Ionicons name={selected ? tab.activeIcon : tab.icon} size={21} color={color} />
+        <Ionicons name={selected ? tab.activeIcon : tab.icon} size={20} color={color} />
         <Text style={[styles.tabLabel, { color }]}>{tab.label}</Text>
       </Pressable>
     );
@@ -101,34 +101,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
   },
   bar: {
-    height: 66,
+    height: 70,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    paddingHorizontal: space.xs,
+    paddingHorizontal: 7,
     borderRadius: radius.pill,
     borderWidth: 1,
     ...shadows.card,
   },
   tab: {
-    width: 58,
+    minWidth: 62,
+    height: 54,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 3,
-    paddingVertical: 6,
+    gap: 2,
+    paddingHorizontal: 12,
     borderRadius: radius.pill,
   },
   tabLabel: {
-    fontFamily: fontFamily.medium,
-    fontSize: 10,
-    lineHeight: 12,
-    letterSpacing: 0.2,
+    fontFamily: fontFamily.semibold,
+    fontSize: 11,
+    lineHeight: 13,
+    letterSpacing: 0.1,
   },
   create: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    height: 40,
+    height: 46,
     paddingHorizontal: space.lg,
     borderRadius: radius.pill,
     shadowOffset: { width: 0, height: 4 },

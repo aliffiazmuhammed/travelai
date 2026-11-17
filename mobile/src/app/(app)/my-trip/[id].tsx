@@ -3,8 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useMemo, type ComponentProps, type ReactNode } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { useMemo, useState, type ReactNode } from 'react';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { ApiError } from '@/api/client';
 import { fetchReadState } from '@/api/discussion';
@@ -27,57 +27,28 @@ import { tripCoverUrl } from '@/lib/tripCover';
 import { goToCreate } from '@/navigation/tabs';
 import { radius, space } from '@/theme/tokens';
 import { useTheme } from '@/theme/useTheme';
-import { AppText, Button, Card, Screen, Skeleton } from '@/ui';
+import { AppText, Button, Card, EmptyState, Screen, Skeleton, StatTile } from '@/ui';
 
-type IconName = ComponentProps<typeof Ionicons>['name'];
-
-function SectionHeading({
-  eyebrow,
-  title,
-  body,
-}: {
-  eyebrow: string;
-  title: string;
-  body?: string;
-}) {
-  const { palette } = useTheme();
-
-  return (
-    <View style={styles.sectionHeading}>
-      <View style={styles.eyebrowRow}>
-        <View style={[styles.eyebrowTick, { backgroundColor: palette.accent }]} />
-        <AppText variant="caption" tone="muted" style={styles.eyebrow}>
-          {eyebrow}
-        </AppText>
-      </View>
-      <AppText variant="heading">{title}</AppText>
-      {body ? (
-        <AppText variant="caption" tone="muted">
-          {body}
-        </AppText>
-      ) : null}
-    </View>
-  );
-}
+/** Ink for controls and chips sitting on top of a photo, readable in both themes. */
+const OVERLAY_INK = '#173f35';
 
 function TripSkeleton() {
   return (
     <View style={styles.page}>
-      <Skeleton height={190} radius={radius.xxl} />
-      <View style={styles.titleBlock}>
-        <Skeleton width="85%" height={30} />
-        <Skeleton width="60%" height={30} />
-        <Skeleton height={14} />
-        <Skeleton width="55%" height={14} />
+      <Skeleton height={240} radius={radius.xxl} />
+      <View style={styles.chipSkeletons}>
+        <Skeleton width={62} height={30} radius={radius.pill} />
+        <Skeleton width={62} height={30} radius={radius.pill} />
+        <Skeleton width={62} height={30} radius={radius.pill} />
       </View>
+      <Card style={styles.skeletonCard}>
+        <Skeleton width="35%" height={20} />
+        <Skeleton height={90} radius={radius.lg} />
+      </Card>
       <Card style={styles.skeletonCard}>
         <Skeleton width="45%" height={20} />
         <Skeleton height={13} />
         <Skeleton width="80%" height={13} />
-      </Card>
-      <Card style={styles.skeletonCard}>
-        <Skeleton width="35%" height={20} />
-        <Skeleton height={90} radius={radius.lg} />
       </Card>
     </View>
   );
@@ -104,6 +75,13 @@ export default function MyTripScreen() {
   const itinerary: TripItinerary = trip?.tripDetails ?? {};
   const days = useMemo(() => toGalleryDays(trip?.tripDetails?.day_by_day_itinerary), [trip]);
   const routes = useMemo(() => toGalleryRoutes(trip?.customRoutes), [trip]);
+
+  // One day open at a time: the chips act as a switcher for the plan, so a
+  // ten-day trip never becomes a wall of open cards.
+  const [openDay, setOpenDay] = useState<number | null>(0);
+  const toggleDay = (index: number) => {
+    setOpenDay((current) => (current === index ? null : index));
+  };
 
   // Owners see how many people are waiting on them before they open People.
   const joinQueueQuery = useQuery({
@@ -147,6 +125,23 @@ export default function MyTripScreen() {
         <Ionicons name="chevron-back" size={18} color={palette.foreground} />
       </Pressable>
       <AppText variant="heading" tone="primary" style={styles.wordmark}>
+        waytowalk
+      </AppText>
+      {right ?? null}
+    </View>
+  );
+
+  const heroTopRow = (right?: ReactNode) => (
+    <View style={styles.heroTopRow}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Back"
+        onPress={goBack}
+        style={({ pressed }) => [styles.heroBack, { opacity: pressed ? 0.8 : 1 }]}
+      >
+        <Ionicons name="chevron-back" size={20} color={OVERLAY_INK} />
+      </Pressable>
+      <AppText variant="heading" numberOfLines={1} style={styles.heroWordmark}>
         waytowalk
       </AppText>
       {right ?? null}
@@ -226,152 +221,62 @@ export default function MyTripScreen() {
     0
   );
   const expenseBase = (trip.finance?.baseCurrency ?? 'INR').toUpperCase();
-  const facts = [
-    duration > 0 ? { icon: 'calendar-outline' as IconName, label: formatDuration(duration) } : null,
-    itinerary.group_type
-      ? { icon: 'people-outline' as IconName, label: itinerary.group_type }
-      : null,
-    itinerary.season ? { icon: 'leaf-outline' as IconName, label: itinerary.season } : null,
-  ].filter((fact): fact is { icon: IconName; label: string } => fact !== null);
-
-  const peopleLine = isOwner
-    ? memberCount > 1
-      ? `You own this trip · ${memberCount} travellers`
-      : 'You own this trip · just you so far'
-    : `You’re ${rolePhrase(tripRole)} here · ${memberCount} ${
-        memberCount === 1 ? 'traveller' : 'travellers'
-      }`;
-
-  const daysLine =
-    days.length === 0
-      ? undefined
-      : isOwner
-        ? `${formatDuration(days.length)}, laid out the way you planned ${
-            days.length === 1 ? 'it' : 'them'
-          }.`
-        : `${formatDuration(days.length)}, exactly as they were planned.`;
+  const heroMeta = [destination, `${memberCount} ${memberCount === 1 ? 'traveller' : 'travellers'}`, TRIP_STATUS_LABEL[status]]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
     <View style={styles.root}>
-      <Screen scroll edges={['top', 'bottom']} contentContainerStyle={styles.content}>
-        {topRow(
-          canEdit ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Edit plan"
-              onPress={() => router.navigate(`/edit-trip/${tripId}`)}
-              style={({ pressed }) => [
-                styles.editAction,
-                { backgroundColor: palette.muted, opacity: pressed ? 0.7 : 1 },
-              ]}
-            >
-              <Ionicons name="create-outline" size={14} color={palette.primary} />
-              <AppText variant="label" tone="primary">
-                Edit plan
-              </AppText>
-            </Pressable>
-          ) : undefined
-        )}
-
-        <View style={styles.page}>
-          <Card padded={false}>
-            <View style={styles.heroClip}>
-              <View style={[styles.hero, { backgroundColor: palette.muted }]}>
-                <Image
-                  source={{ uri: tripCoverUrl(destination || title, 1000) }}
-                  style={StyleSheet.absoluteFill}
-                  contentFit="cover"
-                  transition={250}
-                />
-                <LinearGradient
-                  colors={['rgba(12,26,21,0)', 'rgba(12,26,21,0.66)']}
-                  locations={[0.4, 1]}
-                  style={StyleSheet.absoluteFill}
-                />
-                <View style={styles.heroChipRow}>
-                  <View style={[styles.heroChip, styles.glass]}>
-                    <AppText variant="caption" style={styles.heroChipText}>
-                      {TRIP_STATUS_LABEL[status]}
-                    </AppText>
-                  </View>
-                  {duration > 0 ? (
-                    <View style={[styles.heroChip, styles.glass]}>
-                      <Ionicons name="time-outline" size={12} color="#ffffff" />
-                      <AppText variant="caption" style={styles.heroChipText}>
-                        {formatDuration(duration)}
-                      </AppText>
-                    </View>
-                  ) : null}
-                </View>
-                <View style={styles.heroDestination}>
-                  <Ionicons name="location-outline" size={14} color="#ffffff" />
-                  <AppText variant="label" numberOfLines={1} style={styles.heroChipText}>
-                    {destination || (isOwner ? 'Your plan' : 'A shared plan')}
+      <Screen
+        scroll
+        edges={['top', 'bottom']}
+        padded={false}
+        contentContainerStyle={styles.content}
+      >
+        <View style={styles.heroSection}>
+          <View style={[styles.hero, { backgroundColor: palette.muted }]}>
+            <Image
+              source={{ uri: tripCoverUrl(destination || title, 1000) }}
+              style={StyleSheet.absoluteFill}
+              contentFit="cover"
+              transition={250}
+            />
+            <LinearGradient
+              colors={['rgba(12,26,21,0.35)', 'rgba(12,26,21,0)', 'rgba(12,26,21,0.72)']}
+              locations={[0, 0.35, 1]}
+              style={StyleSheet.absoluteFill}
+            />
+            {heroTopRow(
+              canEdit ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Edit plan"
+                  onPress={() => router.navigate(`/edit-trip/${tripId}`)}
+                  style={({ pressed }) => [styles.heroEdit, { opacity: pressed ? 0.8 : 1 }]}
+                >
+                  <Ionicons name="create-outline" size={14} color={OVERLAY_INK} />
+                  <AppText variant="label" style={styles.overlayChipText}>
+                    Edit plan
                   </AppText>
-                </View>
-              </View>
-            </View>
-          </Card>
-
-          <View style={styles.titleBlock}>
-            <AppText variant="display">{title}</AppText>
-
-            <View style={styles.metaRow}>
-              <Ionicons name="calendar-outline" size={14} color={palette.mutedForeground} />
-              <AppText variant="caption" tone="muted">
+                </Pressable>
+              ) : undefined
+            )}
+            <View style={styles.heroBottom}>
+              <AppText variant="title" numberOfLines={2} style={styles.heroTitle}>
+                {title}
+              </AppText>
+              <AppText variant="caption" style={styles.heroMeta} numberOfLines={1}>
+                {duration > 0 ? `${formatDuration(duration)} · ` : ''}
                 {formatTripDates(trip.startDate, trip.endDate)}
               </AppText>
-            </View>
-
-            {facts.length > 0 ? (
-              <View style={styles.factRow}>
-                {facts.map((fact) => (
-                  <View
-                    key={fact.label}
-                    style={[styles.factChip, { backgroundColor: palette.muted }]}
-                  >
-                    <Ionicons name={fact.icon} size={12} color={palette.primary} />
-                    <AppText variant="caption" numberOfLines={1} style={styles.factText}>
-                      {fact.label}
-                    </AppText>
-                  </View>
-                ))}
-              </View>
-            ) : null}
-
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={
-                isOwner && pendingJoinCount > 0
-                  ? `People on this trip, ${pendingJoinCount} join ${
-                      pendingJoinCount === 1 ? 'request' : 'requests'
-                    } waiting`
-                  : 'People on this trip'
-              }
-              onPress={() => router.navigate(`/my-trip/${tripId}/people`)}
-              style={({ pressed }) => [
-                styles.people,
-                { borderTopColor: palette.border },
-                pressed ? { opacity: 0.68 } : null,
-              ]}
-            >
-              <Ionicons name="people-outline" size={15} color={palette.primary} />
-              <AppText variant="bodyStrong" numberOfLines={1} style={styles.peopleText}>
-                {peopleLine}
+              <AppText variant="caption" style={styles.heroMeta} numberOfLines={1}>
+                {heroMeta}
               </AppText>
-              {isOwner && pendingJoinCount > 0 ? (
-                <View style={[styles.peopleBadge, { backgroundColor: palette.accent }]}>
-                  <AppText
-                    variant="label"
-                    style={[styles.peopleBadgeText, { color: palette.accentForeground }]}
-                  >
-                    {pendingJoinCount}
-                  </AppText>
-                </View>
-              ) : null}
-              <Ionicons name="chevron-forward" size={15} color={palette.mutedForeground} />
-            </Pressable>
+            </View>
           </View>
+        </View>
+
+        <View style={[styles.page, styles.pagePadded]}>
 
           {highlights.length > 0 ? (
             <Card style={styles.highlights}>
@@ -391,7 +296,45 @@ export default function MyTripScreen() {
           ) : null}
 
           <View style={styles.days}>
-            <SectionHeading eyebrow="THE PLAN" title="Day by day" body={daysLine} />
+            {days.length > 0 ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.chipScroller}
+                contentContainerStyle={styles.chipRow}
+              >
+                {days.map((day, index) => {
+                  const active = openDay === index;
+                  return (
+                    <Pressable
+                      key={`chip-${day.day}-${index}`}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Show day ${day.day}`}
+                      accessibilityState={{ selected: active }}
+                      onPress={() => toggleDay(index)}
+                      style={({ pressed }) => [
+                        styles.dayChip,
+                        {
+                          backgroundColor: active ? palette.primary : palette.card,
+                          borderColor: active ? palette.primary : palette.border,
+                        },
+                        pressed && { opacity: 0.75 },
+                      ]}
+                    >
+                      <AppText
+                        variant="label"
+                        style={{
+                          color: active ? palette.primaryForeground : palette.mutedForeground,
+                        }}
+                      >
+                        Day {day.day}
+                      </AppText>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            ) : null}
+
             {days.length > 0 ? (
               days.map((day, index) => (
                 <DayCard
@@ -400,16 +343,16 @@ export default function MyTripScreen() {
                   routes={routes}
                   first={index === 0}
                   tripId={tripId}
+                  open={openDay === index}
+                  onToggle={() => toggleDay(index)}
                 />
               ))
             ) : (
-              <Card style={styles.emptyDays}>
-                <Ionicons name="map-outline" size={22} color={palette.mutedForeground} />
-                <AppText variant="bodyStrong">No day-by-day plan yet</AppText>
-                <AppText variant="caption" tone="muted">
-                  This trip is still taking shape. The itinerary will appear here once it has one.
-                </AppText>
-              </Card>
+              <EmptyState
+                icon="map-outline"
+                title="No day-by-day plan yet"
+                body="This trip is still taking shape. The itinerary will appear here once it has one."
+              />
             )}
           </View>
 
@@ -419,100 +362,60 @@ export default function MyTripScreen() {
             footnotes={itinerary.footnotes_safety_tips}
           />
 
-          <Card
-            onPress={() => router.navigate(`/my-trip/${tripId}/discussion`)}
-            accessibilityLabel={
-              unreadCount > 0
-                ? `Trip conversation, ${unreadCount} unread ${
-                    unreadCount === 1 ? 'message' : 'messages'
-                  }`
-                : 'Trip conversation'
-            }
-            style={styles.discussionEntry}
-          >
-            <View style={styles.budgetRow}>
-              <View style={styles.budgetText}>
-                <AppText variant="caption" tone="muted" style={styles.budgetLabel}>
-                  THE CONVERSATION
-                </AppText>
-                <View style={styles.discussionTitleRow}>
-                  <AppText variant="title">
-                    {unreadCount > 0
-                      ? `${unreadCount} new ${unreadCount === 1 ? 'message' : 'messages'}`
-                      : 'Talk it through'}
-                  </AppText>
-                  {unreadCount > 0 ? (
-                    <View style={[styles.peopleBadge, { backgroundColor: palette.accent }]}>
-                      <AppText
-                        variant="label"
-                        style={[styles.peopleBadgeText, { color: palette.accentForeground }]}
-                      >
-                        {unreadCount}
-                      </AppText>
-                    </View>
-                  ) : null}
-                </View>
-                <AppText variant="caption" tone="muted">
-                  {unreadCount > 0
-                    ? 'Questions, polls and what you agreed — pick up where the group left off.'
-                    : 'Polls, decisions and the group’s back-and-forth, sealed end to end.'}
-                </AppText>
-              </View>
-              <View style={styles.expenseIcons}>
-                <View style={[styles.budgetIcon, { backgroundColor: palette.muted }]}>
-                  <Ionicons name="chatbubbles-outline" size={18} color={palette.primary} />
-                </View>
-                <Ionicons name="chevron-forward" size={15} color={palette.mutedForeground} />
-              </View>
-            </View>
-          </Card>
-
-          <Card
-            onPress={() => router.navigate(`/my-trip/${tripId}/expenses`)}
-            accessibilityLabel="Trip expenses"
-            style={styles.expenseEntry}
-          >
-            <View style={styles.budgetRow}>
-              <View style={styles.budgetText}>
-                <AppText variant="caption" tone="muted" style={styles.budgetLabel}>
-                  TRIP EXPENSES
-                </AppText>
-                <AppText variant="title">
-                  {expenseCount > 0 ? formatMoney(expenseTotal, expenseBase) : 'Start the ledger'}
-                </AppText>
-                <AppText variant="caption" tone="muted">
-                  {expenseCount > 0
-                    ? `${expenseCount} ${expenseCount === 1 ? 'entry' : 'entries'} logged · see who owes whom`
-                    : 'Track what you spend, and split it fairly.'}
-                </AppText>
-              </View>
-              <View style={styles.expenseIcons}>
-                <View style={[styles.budgetIcon, { backgroundColor: palette.muted }]}>
-                  <Ionicons name="wallet-outline" size={18} color={palette.primary} />
-                </View>
-                <Ionicons name="chevron-forward" size={15} color={palette.mutedForeground} />
-              </View>
-            </View>
-          </Card>
-
-          {typeof budget === 'number' && budget > 0 ? (
-            <Card style={styles.budget}>
-              <View style={styles.budgetRow}>
-                <View style={styles.budgetText}>
-                  <AppText variant="caption" tone="muted" style={styles.budgetLabel}>
-                    PLANNED BUDGET
-                  </AppText>
-                  <AppText variant="title">₹{budget.toLocaleString('en-IN')} per person</AppText>
-                </View>
-                <View style={[styles.budgetIcon, { backgroundColor: palette.muted }]}>
-                  <Ionicons name="wallet-outline" size={18} color={palette.primary} />
-                </View>
-              </View>
-              <AppText variant="caption" tone="muted">
-                A planning figure, not a ledger.
-              </AppText>
-            </Card>
-          ) : null}
+          <View style={styles.tiles}>
+            {typeof budget === 'number' && budget > 0 ? (
+              <StatTile
+                icon="wallet-outline"
+                value={`₹${budget.toLocaleString('en-IN')}`}
+                label="planned per person"
+              />
+            ) : null}
+            <StatTile
+              icon="receipt-outline"
+              value={expenseCount > 0 ? formatMoney(expenseTotal, expenseBase) : 'Start the ledger'}
+              label={
+                expenseCount > 0
+                  ? `${expenseCount} ${expenseCount === 1 ? 'entry' : 'entries'} · settle up`
+                  : 'Track and split'
+              }
+              onPress={() => router.navigate(`/my-trip/${tripId}/expenses`)}
+              accessibilityLabel="Trip expenses"
+            />
+            <StatTile
+              icon="chatbubbles-outline"
+              value={unreadCount > 0 ? `${unreadCount} new` : 'All caught up'}
+              label={unreadCount > 0 ? 'questions and polls' : 'trip conversation'}
+              onPress={() => router.navigate(`/my-trip/${tripId}/discussion`)}
+              accessibilityLabel={
+                unreadCount > 0
+                  ? `Trip conversation, ${unreadCount} unread ${
+                      unreadCount === 1 ? 'message' : 'messages'
+                    }`
+                  : 'Trip conversation'
+              }
+            />
+            <StatTile
+              icon="people-outline"
+              value={`${memberCount} ${memberCount === 1 ? 'traveller' : 'travellers'}`}
+              label={isOwner ? 'you own this trip' : `you’re ${rolePhrase(tripRole)}`}
+              badge={isOwner ? pendingJoinCount : undefined}
+              onPress={() => router.navigate(`/my-trip/${tripId}/people`)}
+              accessibilityLabel={
+                isOwner && pendingJoinCount > 0
+                  ? `People on this trip, ${pendingJoinCount} join ${
+                      pendingJoinCount === 1 ? 'request' : 'requests'
+                    } waiting`
+                  : 'People on this trip'
+              }
+            />
+            <StatTile
+              icon="share-outline"
+              value={isOwner ? 'Link, gallery, PDF' : 'Save it as a PDF'}
+              label="share & export"
+              onPress={() => router.navigate(`/my-trip/${tripId}/share`)}
+              accessibilityLabel="Share or export this trip"
+            />
+          </View>
 
           <View style={styles.footer}>
             <Button
@@ -530,8 +433,9 @@ export default function MyTripScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  content: { paddingTop: space.sm, paddingBottom: space.xxxl },
+  content: { paddingBottom: space.xxxl, gap: space.xl },
   page: { width: '100%', maxWidth: 560, alignSelf: 'center', gap: space.xl },
+  pagePadded: { paddingHorizontal: space.xl },
   topRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   back: {
     width: 36,
@@ -541,90 +445,52 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   wordmark: { letterSpacing: -0.4, flex: 1 },
-  editAction: {
+  heroSection: { width: '100%', maxWidth: 560, alignSelf: 'center' },
+  hero: { height: 248, justifyContent: 'space-between' },
+  heroTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: radius.pill,
-  },
-  heroClip: { borderRadius: radius.xxl, overflow: 'hidden' },
-  hero: { height: 190, justifyContent: 'space-between', padding: space.lg },
-  heroChipRow: { flexDirection: 'row', justifyContent: 'space-between', gap: space.sm },
-  heroChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: radius.pill,
-  },
-  heroChipText: { color: '#ffffff', flexShrink: 1 },
-  glass: { backgroundColor: 'rgba(17,32,27,0.55)' },
-  heroDestination: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  titleBlock: { gap: space.sm },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
-  factRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  factChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: radius.pill,
-    maxWidth: '100%',
-  },
-  factText: { flexShrink: 1 },
-  people: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.sm,
-    marginTop: space.xs,
+    gap: space.md,
+    paddingHorizontal: space.xl,
     paddingTop: space.md,
-    borderTopWidth: 1,
   },
-  peopleText: { flex: 1 },
-  peopleBadge: {
-    minWidth: 22,
-    height: 22,
-    paddingHorizontal: 7,
+  heroBack: {
+    width: 40,
+    height: 40,
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.92)',
   },
-  peopleBadgeText: { fontSize: 12, lineHeight: 16 },
+  heroWordmark: { letterSpacing: -0.4, flex: 1, color: '#ffffff' },
+  heroEdit: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    height: 40,
+    paddingHorizontal: 14,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+  },
+  heroBottom: { paddingHorizontal: space.xl, paddingBottom: space.lg, gap: 3 },
+  heroTitle: { color: '#ffffff', letterSpacing: -0.4 },
+  heroMeta: { color: 'rgba(255,255,255,0.88)' },
+  overlayChipText: { color: OVERLAY_INK },
   highlights: { gap: space.sm },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   bulletRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   bulletDot: { width: 5, height: 5, borderRadius: radius.pill, marginTop: 9 },
   bulletText: { flex: 1 },
   days: { gap: space.lg },
-  sectionHeading: { gap: 2 },
-  eyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  eyebrowTick: { width: 12, height: 2, borderRadius: radius.pill },
-  eyebrow: { letterSpacing: 1.2 },
-  emptyDays: { alignItems: 'flex-start', gap: space.sm },
-  budget: { gap: space.sm },
-  expenseEntry: { gap: space.xs },
-  discussionEntry: { gap: space.xs },
-  discussionTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.sm,
-    flexWrap: 'wrap',
-  },
-  expenseIcons: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  budgetRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  budgetText: { flex: 1 },
-  budgetLabel: { letterSpacing: 0.8, fontSize: 11 },
-  budgetIcon: {
-    width: 40,
-    height: 40,
+  chipScroller: { marginHorizontal: -space.xl, flexGrow: 0 },
+  chipRow: { paddingHorizontal: space.xl, gap: space.sm },
+  dayChip: {
+    borderWidth: 1,
     borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
   },
+  tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   footer: { alignItems: 'stretch' },
   errorCard: { alignItems: 'flex-start', gap: space.sm },
   errorIcon: {
@@ -637,4 +503,5 @@ const styles = StyleSheet.create({
   },
   errorActions: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.sm },
   skeletonCard: { gap: space.sm },
+  chipSkeletons: { flexDirection: 'row', gap: space.sm },
 });

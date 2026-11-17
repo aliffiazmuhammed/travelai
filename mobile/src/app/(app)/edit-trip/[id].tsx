@@ -102,36 +102,18 @@ function EditDayCard({
         onPress={() => setOpen((value) => !value)}
         style={({ pressed }) => [styles.dayHead, pressed && styles.pressed]}
       >
-        <View
-          style={[
-            styles.dayBadge,
-            {
-              backgroundColor: open ? palette.primary : palette.muted,
-              borderColor: open ? palette.primary : palette.border,
-            },
-          ]}
-        >
-          <AppText
-            variant="label"
-            style={{ color: open ? palette.primaryForeground : palette.primary }}
-          >
-            {day.day}
-          </AppText>
-        </View>
         <View style={styles.dayHeadText}>
-          <View style={styles.dayTitleRow}>
-            <AppText variant="bodyStrong">Day {day.day}</AppText>
-            <AppText variant="caption" tone="muted">
-              {entries.length === 0
-                ? 'No stops yet'
-                : `${entries.length} ${entries.length === 1 ? 'stop' : 'stops'}`}
-            </AppText>
-          </View>
-          {!open && title ? (
-            <AppText tone="muted" numberOfLines={1}>
-              {title}
-            </AppText>
-          ) : null}
+          <AppText variant="caption" tone="primary" style={styles.dayEyebrow}>
+            DAY {day.day}
+          </AppText>
+          <AppText variant="heading" numberOfLines={1}>
+            {title || `Day ${day.day}`}
+          </AppText>
+          <AppText variant="caption" tone="muted">
+            {entries.length === 0
+              ? 'No stops yet'
+              : `${entries.length} ${entries.length === 1 ? 'stop' : 'stops'}`}
+          </AppText>
         </View>
         <Ionicons
           name={open ? 'chevron-up' : 'chevron-down'}
@@ -651,7 +633,7 @@ function EditTripForm({
 }
 
 const styles = StyleSheet.create({
-  content: { paddingTop: space.sm, paddingBottom: space.xxxl },
+  content: { paddingTop: space.sm, paddingBottom: space.xxxl, gap: space.lg },
   page: { width: '100%', maxWidth: 560, alignSelf: 'center', gap: space.xl },
   topRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   back: {
@@ -689,16 +671,8 @@ const styles = StyleSheet.create({
   dayCard: { gap: space.lg },
   dayHead: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   pressed: { opacity: 0.7 },
-  dayBadge: {
-    width: 38,
-    height: 38,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   dayHeadText: { flex: 1, gap: 2 },
-  dayTitleRow: { flexDirection: 'row', alignItems: 'baseline', gap: space.sm },
+  dayEyebrow: { letterSpacing: 1.2, fontSize: 11 },
   stopRow: {
     flexDirection: 'row',
     alignItems: 'center',

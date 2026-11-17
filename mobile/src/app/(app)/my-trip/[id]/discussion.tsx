@@ -50,7 +50,6 @@ import { AppText, Avatar, Button, Card, InlineError, Screen, Skeleton } from '@/
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
-const COMMENT_PAGE = 6;
 const DECISION_PAGE = 4;
 const POLL_PAGE = 3;
 const COMMENTS_PER_REQUEST = 50;
@@ -491,7 +490,7 @@ function CommentBubble({
             : bot
               ? { backgroundColor: `${palette.accent}16`, borderColor: `${palette.accent}40`, borderBottomLeftRadius: radius.sm }
               : {
-                  backgroundColor: palette.muted,
+                  backgroundColor: palette.card,
                   borderColor: palette.border,
                   borderBottomLeftRadius: radius.sm,
                 },
@@ -597,7 +596,6 @@ export default function DiscussionScreen() {
   const [dayFilterOpen, setDayFilterOpen] = useState(false);
   const [anchorDay, setAnchorDay] = useState<number | null>(null);
   const [anchorOpen, setAnchorOpen] = useState(false);
-  const [commentPage, setCommentPage] = useState(1);
   const [decisionPage, setDecisionPage] = useState(1);
   const [pollPage, setPollPage] = useState(1);
   const [actionsComment, setActionsComment] = useState<DiscussionComment | null>(null);
@@ -709,7 +707,6 @@ export default function DiscussionScreen() {
     onSuccess: () => {
       setDraft('');
       setComposeError(null);
-      setCommentPage(1);
       void invalidateComments();
     },
     onError: (error) => setComposeError(messageOf(error)),
@@ -911,13 +908,6 @@ export default function DiscussionScreen() {
         ? comments
         : comments.filter((comment) => comment.day === dayFilter),
     [comments, dayFilter]
-  );
-
-  const commentPageCount = Math.max(1, Math.ceil(visibleComments.length / COMMENT_PAGE));
-  const safeCommentPage = Math.min(commentPage, commentPageCount);
-  const pageComments = visibleComments.slice(
-    (safeCommentPage - 1) * COMMENT_PAGE,
-    safeCommentPage * COMMENT_PAGE
   );
 
   const decisionPageCount = Math.max(1, Math.ceil(decisions.length / DECISION_PAGE));
@@ -1263,7 +1253,7 @@ export default function DiscussionScreen() {
           <Card style={styles.card}>
             <CardHead
               icon="chatbubbles-outline"
-              title="The back-and-forth"
+              title="Back-and-forth"
               count={visibleComments.length}
               right={
                 <Pressable
@@ -1326,7 +1316,7 @@ export default function DiscussionScreen() {
               </View>
             ) : (
               <View style={styles.thread}>
-                {pageComments.map((comment) => {
+                {visibleComments.map((comment) => {
                   const text = plaintextOf(comment);
                   const owns = comment.isYou && !comment.bot;
                   const canDecide =
@@ -1356,12 +1346,6 @@ export default function DiscussionScreen() {
                 })}
               </View>
             )}
-
-            <Pager
-              page={safeCommentPage}
-              pageCount={commentPageCount}
-              onChange={setCommentPage}
-            />
           </Card>
         </View>
       </Screen>
@@ -1479,7 +1463,6 @@ export default function DiscussionScreen() {
           selectedKey={dayFilter === 'all' ? 'all' : String(dayFilter)}
           onSelect={(key) => {
             setDayFilter(key === 'all' ? 'all' : Number(key));
-            setCommentPage(1);
             setDayFilterOpen(false);
           }}
           onClose={() => setDayFilterOpen(false)}
@@ -1566,7 +1549,7 @@ export default function DiscussionScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  content: { paddingTop: space.sm, paddingBottom: space.xl },
+  content: { paddingTop: space.sm, paddingBottom: space.xl, gap: space.lg },
   page: { width: '100%', maxWidth: 560, alignSelf: 'center', gap: space.xl },
   topRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   back: {
@@ -1704,7 +1687,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   sealedRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
-  sealedText: { flex: 1 },
+  sealedText: { flexShrink: 1 },
   thread: { gap: space.md },
   messageRow: { flexDirection: 'row', alignItems: 'flex-end', gap: space.sm },
   messageRowMine: { justifyContent: 'flex-end' },

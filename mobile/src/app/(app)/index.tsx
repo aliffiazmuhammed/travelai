@@ -11,15 +11,19 @@ import {
 } from 'react-native';
 
 import {
-  fetchAgencies,
+  fetchAgencyDirectory,
+  fetchAgencyFacets,
   fetchExplore,
+  type AgencyFacet,
   type ExploreWhen,
   type GalleryDuration,
 } from '@/api/explore';
+import { fetchPublicEvents } from '@/api/events';
 import { useSession } from '@/auth/SessionProvider';
-import { AgencyCard } from '@/components/AgencyCard';
+import { AgencyRowCard, AgencyRowSkeleton } from '@/components/AgencyCard';
+import { EventCard, EventCardSkeleton } from '@/components/EventCard';
 import { FilterSheet } from '@/components/FilterSheet';
-import { TripCard, TripCardSkeleton } from '@/components/TripCard';
+import { TripRowCard, TripRowSkeleton } from '@/components/TripCard';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { DURATION_LABELS } from '@/lib/galleryFormat';
 import { goToCreate, goToTab } from '@/navigation/tabs';
@@ -36,10 +40,21 @@ import {
   PillTabs,
   Screen,
   SearchBar,
+  SectionHeader,
+  Segmented,
   type PillTabItem,
+  type SegmentItem,
 } from '@/ui';
 
 const PAGE_SIZE = 8;
+const AGENCY_PAGE_SIZE = 12;
+
+type ExploreMode = 'trips' | 'agencies';
+
+const MODE_TABS: readonly SegmentItem<ExploreMode>[] = [
+  { key: 'trips', label: 'Trips' },
+  { key: 'agencies', label: 'Agencies' },
+];
 
 const WHEN_TABS: readonly PillTabItem<ExploreWhen>[] = [
   { key: 'live', label: 'Live trips', icon: 'compass-outline' },
@@ -66,16 +81,25 @@ const DURATION_LABEL_BY_VALUE = new Map(
   DURATION_OPTIONS.map((option) => [option.value, option.label])
 );
 
-function FilterButton({ active, onPress }: { active: boolean; onPress: () => void }) {
+function FilterPill({
+  label,
+  value,
+  onPress,
+}: {
+  label: string;
+  value?: string;
+  onPress: () => void;
+}) {
   const { palette } = useTheme();
+  const active = Boolean(value);
 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={active ? 'Filters, some applied' : 'Filters'}
+      accessibilityLabel={active ? `${label}: ${value}` : label}
       onPress={onPress}
       style={({ pressed }) => [
-        styles.filterButton,
+        styles.filterPill,
         {
           backgroundColor: palette.card,
           borderColor: active ? palette.primary : palette.border,
@@ -83,14 +107,18 @@ function FilterButton({ active, onPress }: { active: boolean; onPress: () => voi
         },
       ]}
     >
+      <AppText
+        variant="label"
+        numberOfLines={1}
+        style={[styles.filterPillText, { color: active ? palette.primary : palette.foreground }]}
+      >
+        {value || label}
+      </AppText>
       <Ionicons
-        name="options-outline"
-        size={20}
-        color={active ? palette.primary : palette.foreground}
+        name="chevron-down"
+        size={14}
+        color={active ? palette.primary : palette.mutedForeground}
       />
-      {active ? (
-        <View style={[styles.filterDot, { backgroundColor: palette.accent }]} />
-      ) : null}
     </Pressable>
   );
 }
@@ -109,11 +137,33 @@ export default function ExploreScreen() {
   const [groupType, setGroupType] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
 
+  const [mode, setMode] = useState<ExploreMode>('trips');
+  const [agencySearchInput, setAgencySearchInput] = useState('');
+  const agencySearch = useDebouncedValue(agencySearchInput.trim(), 350);
+  const [agencyCity, setAgencyCity] = useState('');
+  const [agencySpecialty, setAgencySpecialty] = useState('');
+  const [agencyLanguage, setAgencyLanguage] = useState('');
+  const [agencyFiltersOpen, setAgencyFiltersOpen] = useState(false);
+  const agencyResultsOffset = useRef(0);
+
   // Page N only means something for the filters that produced it, so any filter
   // change falls back to page one until the user pages again.
   const filtersKey = [when, search, duration, groupType].join('|');
   const [position, setPosition] = useState({ key: filtersKey, page: 1 });
   const page = position.key === filtersKey ? position.page : 1;
+
+  const agencyFiltersKey = [agencySearch, agencyCity, agencySpecialty, agencyLanguage].join('|');
+  const [agencyPosition, setAgencyPosition] = useState({
+    key: agencyFiltersKey,
+    index: 0,
+    cursors: [undefined] as (string | undefined)[],
+  });
+  const agencyPos =
+    agencyPosition.key === agencyFiltersKey
+      ? agencyPosition
+      : { key: agencyFiltersKey, index: 0, cursors: [undefined] as (string | undefined)[] };
+  const agencyPage = agencyPos.index + 1;
+  const agencyCursor = agencyPos.cursors[agencyPos.index];
 
   const tripsQuery = useQuery({
     queryKey: ['explore', when, search, duration, groupType, page],
@@ -129,21 +179,75 @@ export default function ExploreScreen() {
   });
 
   const agenciesQuery = useQuery({
-    queryKey: ['agencies', 'explore-strip'],
-    queryFn: () => fetchAgencies(6),
+    queryKey: [
+      'agencies',
+      'directory',
+      agencySearch,
+      agencyCity,
+      agencySpecialty,
+      agencyLanguage,
+      agencyCursor ?? '',
+    ],
+    queryFn: () =>
+      fetchAgencyDirectory({
+        q: agencySearch || undefined,
+        city: agencyCity || undefined,
+        specialty: agencySpecialty || undefined,
+        language: agencyLanguage || undefined,
+        cursor: agencyCursor,
+        limit: AGENCY_PAGE_SIZE,
+      }),
+    enabled: mode === 'agencies',
+  });
+
+  const facetsQuery = useQuery({
+    queryKey: ['agencies', 'facets'],
+    queryFn: fetchAgencyFacets,
+    enabled: mode === 'agencies',
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const eventsQuery = useQuery({
+    queryKey: ['events', 'upcoming'],
+    queryFn: () => fetchPublicEvents(6),
+    staleTime: 5 * 60 * 1000,
   });
 
   const tripsData = tripsQuery.data?.trips;
   const trips = useMemo(() => tripsData ?? [], [tripsData]);
   const total = tripsQuery.data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const hasMore = tripsQuery.data?.hasMore ?? false;
   const isPast = when === 'past';
   const hasFilters = Boolean(search || duration || groupType);
-  const agencies = agenciesQuery.data ?? [];
+  const events = eventsQuery.data?.events ?? [];
+  const showEvents = mode === 'trips' && when === 'live' && !hasFilters && events.length > 0;
   const activeFilterLabels = [
     duration ? DURATION_LABEL_BY_VALUE.get(duration) : null,
     groupType || null,
   ].filter((label): label is string => Boolean(label));
+
+  const agencies = agenciesQuery.data?.agencies ?? [];
+  const agencyTotal = agenciesQuery.data?.total ?? 0;
+  const agencyHasMore = agenciesQuery.data?.hasMore ?? false;
+  const agencyTotalPages = Math.max(
+    agencyPage,
+    Math.ceil(agencyTotal / AGENCY_PAGE_SIZE)
+  );
+  const agencyFacetLabel = (list: AgencyFacet[] | undefined, value: string) =>
+    list?.find((facet) => facet.value === value)?.label ?? value;
+  const agencyActiveLabels = [
+    agencyCity ? agencyFacetLabel(facetsQuery.data?.cities, agencyCity) : null,
+    agencySpecialty ? agencyFacetLabel(facetsQuery.data?.specialties, agencySpecialty) : null,
+    agencyLanguage ? agencyFacetLabel(facetsQuery.data?.languages, agencyLanguage) : null,
+  ].filter((label): label is string => Boolean(label));
+  const hasAgencyFilters = Boolean(
+    agencySearch || agencyCity || agencySpecialty || agencyLanguage
+  );
+  const agencyOptions = (list: AgencyFacet[] | undefined, anyLabel: string) => [
+    { value: '', label: anyLabel },
+    ...(list ?? []).map((facet) => ({ value: facet.value, label: facet.label })),
+  ];
 
   const goToPage = (nextPage: number) => {
     setPosition({ key: filtersKey, page: nextPage });
@@ -156,21 +260,62 @@ export default function ExploreScreen() {
     setGroupType('');
   };
 
+  const goToAgencyPage = (delta: number) => {
+    if (delta > 0) {
+      const next = agenciesQuery.data?.nextCursor;
+      if (!next || !agencyHasMore) return;
+      setAgencyPosition({
+        key: agencyFiltersKey,
+        index: agencyPos.index + 1,
+        cursors: [...agencyPos.cursors.slice(0, agencyPos.index + 1), next],
+      });
+    } else {
+      if (agencyPos.index === 0) return;
+      setAgencyPosition({ ...agencyPos, index: agencyPos.index - 1 });
+    }
+    scrollRef.current?.scrollTo({
+      y: Math.max(agencyResultsOffset.current - 12, 0),
+      animated: true,
+    });
+  };
+
+  const resetAgencyFilters = () => {
+    setAgencySearchInput('');
+    setAgencyCity('');
+    setAgencySpecialty('');
+    setAgencyLanguage('');
+  };
+
   const errorMessage = tripsQuery.isError
     ? tripsQuery.error instanceof Error && tripsQuery.error.message
       ? tripsQuery.error.message
       : "We couldn't load shared trips right now."
     : null;
 
+  const agencyErrorMessage = agenciesQuery.isError
+    ? agenciesQuery.error instanceof Error && agenciesQuery.error.message
+      ? agenciesQuery.error.message
+      : "We couldn't load the agency directory right now."
+    : null;
+
+  const refreshing =
+    mode === 'trips'
+      ? tripsQuery.isRefetching && !tripsQuery.isPending
+      : agenciesQuery.isRefetching && !agenciesQuery.isPending;
+
   return (
     <View style={styles.root}>
       <Screen
         scroll
         scrollRef={scrollRef}
-        refreshing={tripsQuery.isRefetching && !tripsQuery.isPending}
+        refreshing={refreshing}
         onRefresh={() => {
-          tripsQuery.refetch();
-          agenciesQuery.refetch();
+          if (mode === 'trips') {
+            tripsQuery.refetch();
+            eventsQuery.refetch();
+          } else {
+            agenciesQuery.refetch();
+          }
         }}
         contentContainerStyle={{ paddingTop: space.sm, paddingBottom: NAV_BOTTOM_SPACE + space.xl }}
       >
@@ -190,158 +335,362 @@ export default function ExploreScreen() {
           </View>
 
           <View style={styles.intro}>
-            <AppText variant="title">Find your next trip.</AppText>
+            <AppText variant="display">Find your next trip.</AppText>
             <AppText variant="caption" tone="muted">
               Real trips, shared by real travellers.
             </AppText>
           </View>
 
-          <View style={styles.controls}>
-            <View style={styles.searchRow}>
-              <View style={styles.searchField}>
+          <Segmented
+            accessibilityLabel="Browse trips or agencies"
+            items={MODE_TABS}
+            value={mode}
+            onChange={setMode}
+          />
+
+          {mode === 'trips' ? (
+            <>
+              <View style={styles.controls}>
                 <SearchBar value={searchInput} onChangeText={setSearchInput} />
-              </View>
-              <FilterButton
-                active={activeFilterLabels.length > 0}
-                onPress={() => setFiltersOpen(true)}
-              />
-            </View>
-            <PillTabs items={WHEN_TABS} value={when} onChange={setWhen} />
-            {activeFilterLabels.length > 0 ? (
-              <View style={styles.activeFilters}>
-                <AppText variant="caption" tone="muted" numberOfLines={1} style={styles.activeText}>
-                  {activeFilterLabels.join(' · ')}
-                </AppText>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Clear filters"
-                  onPress={() => {
-                    setDuration('');
-                    setGroupType('');
-                  }}
-                  hitSlop={8}
-                >
-                  <AppText variant="caption" tone="primary">
-                    Clear
-                  </AppText>
-                </Pressable>
-              </View>
-            ) : null}
-          </View>
-
-          <View
-            style={styles.results}
-            onLayout={(event) => {
-              resultsOffset.current = event.nativeEvent.layout.y;
-            }}
-          >
-            <View style={styles.resultsHeader}>
-              <AppText variant="label">{isPast ? 'Plans to borrow' : 'Trips to join'}</AppText>
-              {tripsQuery.data ? (
-                <AppText variant="caption" tone="muted">
-                  {total} shared {total === 1 ? 'trip' : 'trips'}
-                </AppText>
-              ) : null}
-            </View>
-
-            {errorMessage ? (
-              <View style={styles.errorBlock}>
-                <InlineError message={errorMessage} />
-                <Button
-                  label="Try again"
-                  variant="secondary"
-                  size="sm"
-                  onPress={() => tripsQuery.refetch()}
-                />
-              </View>
-            ) : null}
-
-            {tripsQuery.isPending ? (
-              <>
-                <TripCardSkeleton />
-                <TripCardSkeleton />
-              </>
-            ) : null}
-
-            {!tripsQuery.isPending && !errorMessage && trips.length === 0 ? (
-              <Card style={styles.empty}>
-                <View style={[styles.emptyIcon, { backgroundColor: palette.muted }]}>
-                  <Ionicons name="compass-outline" size={24} color={palette.primary} />
+                <PillTabs items={WHEN_TABS} value={when} onChange={setWhen} />
+                <View style={styles.filterRow}>
+                  <FilterPill
+                    label="Duration"
+                    value={duration ? DURATION_LABEL_BY_VALUE.get(duration) : undefined}
+                    onPress={() => setFiltersOpen(true)}
+                  />
+                  <FilterPill
+                    label="Group"
+                    value={groupType || undefined}
+                    onPress={() => setFiltersOpen(true)}
+                  />
                 </View>
-                <AppText variant="heading">Nothing matches that yet</AppText>
-                <AppText tone="muted">
-                  Try a nearby place or widen the dates — people share new plans every week.
-                </AppText>
-                {hasFilters ? (
-                  <Button
-                    label="Reset filters"
-                    variant="secondary"
-                    size="sm"
-                    onPress={resetFilters}
-                  />
+                {activeFilterLabels.length > 0 ? (
+                  <View style={styles.activeFilters}>
+                    <AppText
+                      variant="caption"
+                      tone="muted"
+                      numberOfLines={1}
+                      style={styles.activeText}
+                    >
+                      {activeFilterLabels.join(' · ')}
+                    </AppText>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Clear filters"
+                      onPress={() => {
+                        setDuration('');
+                        setGroupType('');
+                      }}
+                      hitSlop={8}
+                    >
+                      <AppText variant="caption" tone="primary">
+                        Clear
+                      </AppText>
+                    </Pressable>
+                  </View>
                 ) : null}
-              </Card>
-            ) : null}
-
-            {!tripsQuery.isPending && !errorMessage
-              ? trips.map((trip) => (
-                  <TripCard
-                    key={trip._id}
-                    trip={trip}
-                    past={isPast}
-                    onPress={() =>
-                      router.push({ pathname: '/trip/[id]', params: { id: trip._id } })
-                    }
-                  />
-                ))
-              : null}
-
-            {!tripsQuery.isPending && !errorMessage && (page > 1 || hasMore) ? (
-              <View style={styles.pager}>
-                <Button
-                  label="Previous"
-                  variant="ghost"
-                  size="sm"
-                  disabled={page <= 1}
-                  onPress={() => goToPage(page - 1)}
-                />
-                <AppText variant="caption" tone="muted">
-                  Page {page}
-                </AppText>
-                <Button
-                  label="Next"
-                  variant="secondary"
-                  size="sm"
-                  disabled={!hasMore}
-                  onPress={() => goToPage(page + 1)}
-                />
               </View>
-            ) : null}
-          </View>
 
-          {agencies.length > 0 ? (
-            <View style={styles.agencies}>
-              <AppText variant="heading">Let a local expert plan it</AppText>
-              <AppText variant="caption" tone="muted">
-                Small teams and travel companies with published plans.
-              </AppText>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.agencyRow}
-              >
-                {agencies.map((agency) => (
-                  <AgencyCard
-                    key={agency.slug}
-                    agency={agency}
-                    onPress={() =>
-                      router.push({ pathname: '/agency/[slug]', params: { slug: agency.slug } })
-                    }
+              {when === 'live' && !hasFilters && eventsQuery.isPending ? (
+                <View style={styles.events}>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.eventRail}
+                    scrollEnabled={false}
+                  >
+                    <EventCardSkeleton />
+                    <EventCardSkeleton />
+                  </ScrollView>
+                </View>
+              ) : showEvents ? (
+                <View style={styles.events}>
+                  <SectionHeader
+                    title="On the calendar"
+                    caption="Camps, retreats and group trips agencies are running."
                   />
-                ))}
-              </ScrollView>
-            </View>
-          ) : null}
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.eventRail}
+                  >
+                    {events.map((event) => (
+                      <EventCard
+                        key={event._id}
+                        event={event}
+                        onPress={() =>
+                          router.push({ pathname: '/events/[id]', params: { id: event._id } })
+                        }
+                      />
+                    ))}
+                  </ScrollView>
+                </View>
+              ) : null}
+
+              <View
+                style={styles.results}
+                onLayout={(event) => {
+                  resultsOffset.current = event.nativeEvent.layout.y;
+                }}
+              >
+                <SectionHeader
+                  title={isPast ? 'Plans to borrow' : 'Trips to join'}
+                  caption={
+                    tripsQuery.data
+                      ? `${total} shared ${total === 1 ? 'trip' : 'trips'}`
+                      : undefined
+                  }
+                />
+
+                {!tripsQuery.isPending && !errorMessage && (page > 1 || hasMore) ? (
+                  <View style={styles.pager}>
+                    <Button
+                      label="Previous"
+                      variant="ghost"
+                      size="sm"
+                      disabled={page <= 1}
+                      onPress={() => goToPage(page - 1)}
+                    />
+                    <AppText variant="caption" tone="muted">
+                      Page {page} of {totalPages}
+                    </AppText>
+                    <Button
+                      label="Next"
+                      variant="secondary"
+                      size="sm"
+                      disabled={!hasMore}
+                      onPress={() => goToPage(page + 1)}
+                    />
+                  </View>
+                ) : null}
+
+                {errorMessage ? (
+                  <View style={styles.errorBlock}>
+                    <InlineError message={errorMessage} />
+                    <Button
+                      label="Try again"
+                      variant="secondary"
+                      size="sm"
+                      onPress={() => tripsQuery.refetch()}
+                    />
+                  </View>
+                ) : null}
+
+                {tripsQuery.isPending ? (
+                  <>
+                    <TripRowSkeleton />
+                    <TripRowSkeleton />
+                    <TripRowSkeleton />
+                    <TripRowSkeleton />
+                  </>
+                ) : null}
+
+                {!tripsQuery.isPending && !errorMessage && trips.length === 0 ? (
+                  <Card style={styles.empty}>
+                    <View style={[styles.emptyIcon, { backgroundColor: palette.muted }]}>
+                      <Ionicons name="compass-outline" size={24} color={palette.primary} />
+                    </View>
+                    <AppText variant="heading">Nothing matches that yet</AppText>
+                    <AppText tone="muted">
+                      Try a nearby place or widen the dates — people share new plans every week.
+                    </AppText>
+                    {hasFilters ? (
+                      <Button
+                        label="Reset filters"
+                        variant="secondary"
+                        size="sm"
+                        onPress={resetFilters}
+                      />
+                    ) : null}
+                  </Card>
+                ) : null}
+
+                {!tripsQuery.isPending && !errorMessage && trips.length > 0 ? (
+                  <View style={styles.list}>
+                    {trips.map((trip) => (
+                      <TripRowCard
+                        key={trip._id}
+                        trip={trip}
+                        past={isPast}
+                        onPress={() =>
+                          router.push({ pathname: '/trip/[id]', params: { id: trip._id } })
+                        }
+                      />
+                    ))}
+                  </View>
+                ) : null}
+              </View>
+            </>
+          ) : (
+            <>
+              <View style={styles.controls}>
+                <SearchBar
+                  value={agencySearchInput}
+                  onChangeText={setAgencySearchInput}
+                  placeholder="Search local experts"
+                  accessibilityLabel="Search travel agencies"
+                />
+                <View style={styles.filterRow}>
+                  <FilterPill
+                    label="City"
+                    value={
+                      agencyCity
+                        ? agencyFacetLabel(facetsQuery.data?.cities, agencyCity)
+                        : undefined
+                    }
+                    onPress={() => setAgencyFiltersOpen(true)}
+                  />
+                  <FilterPill
+                    label="Speciality"
+                    value={
+                      agencySpecialty
+                        ? agencyFacetLabel(facetsQuery.data?.specialties, agencySpecialty)
+                        : undefined
+                    }
+                    onPress={() => setAgencyFiltersOpen(true)}
+                  />
+                  <FilterPill
+                    label="Language"
+                    value={
+                      agencyLanguage
+                        ? agencyFacetLabel(facetsQuery.data?.languages, agencyLanguage)
+                        : undefined
+                    }
+                    onPress={() => setAgencyFiltersOpen(true)}
+                  />
+                </View>
+                {agencyActiveLabels.length > 0 ? (
+                  <View style={styles.activeFilters}>
+                    <AppText
+                      variant="caption"
+                      tone="muted"
+                      numberOfLines={1}
+                      style={styles.activeText}
+                    >
+                      {agencyActiveLabels.join(' · ')}
+                    </AppText>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Clear agency filters"
+                      onPress={() => {
+                        setAgencyCity('');
+                        setAgencySpecialty('');
+                        setAgencyLanguage('');
+                      }}
+                      hitSlop={8}
+                    >
+                      <AppText variant="caption" tone="primary">
+                        Clear
+                      </AppText>
+                    </Pressable>
+                  </View>
+                ) : null}
+              </View>
+
+              <View
+                style={styles.results}
+                onLayout={(event) => {
+                  agencyResultsOffset.current = event.nativeEvent.layout.y;
+                }}
+              >
+                <SectionHeader
+                  title="Local experts"
+                  caption={
+                    agenciesQuery.data
+                      ? `${agencyTotal} ${agencyTotal === 1 ? 'agency' : 'agencies'}`
+                      : undefined
+                  }
+                />
+
+                {!agenciesQuery.isPending &&
+                !agencyErrorMessage &&
+                (agencyPage > 1 || agencyHasMore) ? (
+                  <View style={styles.pager}>
+                    <Button
+                      label="Previous"
+                      variant="ghost"
+                      size="sm"
+                      disabled={agencyPage <= 1}
+                      onPress={() => goToAgencyPage(-1)}
+                    />
+                    <AppText variant="caption" tone="muted">
+                      Page {agencyPage} of {agencyTotalPages}
+                    </AppText>
+                    <Button
+                      label="Next"
+                      variant="secondary"
+                      size="sm"
+                      disabled={!agencyHasMore}
+                      onPress={() => goToAgencyPage(1)}
+                    />
+                  </View>
+                ) : null}
+
+                {agencyErrorMessage ? (
+                  <View style={styles.errorBlock}>
+                    <InlineError message={agencyErrorMessage} />
+                    <Button
+                      label="Try again"
+                      variant="secondary"
+                      size="sm"
+                      onPress={() => agenciesQuery.refetch()}
+                    />
+                  </View>
+                ) : null}
+
+                {agenciesQuery.isPending ? (
+                  <>
+                    <AgencyRowSkeleton />
+                    <AgencyRowSkeleton />
+                    <AgencyRowSkeleton />
+                    <AgencyRowSkeleton />
+                  </>
+                ) : null}
+
+                {!agenciesQuery.isPending &&
+                !agencyErrorMessage &&
+                agencies.length === 0 ? (
+                  <Card style={styles.empty}>
+                    <View style={[styles.emptyIcon, { backgroundColor: palette.muted }]}>
+                      <Ionicons name="briefcase-outline" size={24} color={palette.primary} />
+                    </View>
+                    <AppText variant="heading">No experts match that yet</AppText>
+                    <AppText tone="muted">
+                      Try another city or clear a filter — the directory grows every week.
+                    </AppText>
+                    {hasAgencyFilters ? (
+                      <Button
+                        label="Reset filters"
+                        variant="secondary"
+                        size="sm"
+                        onPress={resetAgencyFilters}
+                      />
+                    ) : null}
+                  </Card>
+                ) : null}
+
+                {!agenciesQuery.isPending &&
+                !agencyErrorMessage &&
+                agencies.length > 0 ? (
+                  <View style={styles.list}>
+                    {agencies.map((agency) => (
+                      <AgencyRowCard
+                        key={agency.slug}
+                        agency={agency}
+                        onPress={() =>
+                          router.push({
+                            pathname: '/agency/[slug]',
+                            params: { slug: agency.slug },
+                          })
+                        }
+                      />
+                    ))}
+                  </View>
+                ) : null}
+              </View>
+            </>
+          )}
         </View>
       </Screen>
 
@@ -359,7 +708,7 @@ export default function ExploreScreen() {
 
       <FilterSheet
         visible={filtersOpen}
-        title="Filters"
+        title="Trip filters"
         sections={[
           { key: 'duration', label: 'How long?', options: DURATION_OPTIONS, value: duration },
           { key: 'group', label: 'Who’s going?', options: GROUP_OPTIONS, value: groupType },
@@ -374,6 +723,43 @@ export default function ExploreScreen() {
         }}
         onClose={() => setFiltersOpen(false)}
       />
+
+      <FilterSheet
+        visible={agencyFiltersOpen}
+        title="Agency filters"
+        confirmLabel="Show agencies"
+        sections={[
+          {
+            key: 'city',
+            label: 'Where are they based?',
+            options: agencyOptions(facetsQuery.data?.cities, 'Anywhere in India'),
+            value: agencyCity,
+          },
+          {
+            key: 'specialty',
+            label: 'What are they good at?',
+            options: agencyOptions(facetsQuery.data?.specialties, 'Any speciality'),
+            value: agencySpecialty,
+          },
+          {
+            key: 'language',
+            label: 'Which language?',
+            options: agencyOptions(facetsQuery.data?.languages, 'Any language'),
+            value: agencyLanguage,
+          },
+        ]}
+        onChange={(key, value) => {
+          if (key === 'city') setAgencyCity(value);
+          else if (key === 'specialty') setAgencySpecialty(value);
+          else setAgencyLanguage(value);
+        }}
+        onReset={() => {
+          setAgencyCity('');
+          setAgencySpecialty('');
+          setAgencyLanguage('');
+        }}
+        onClose={() => setAgencyFiltersOpen(false)}
+      />
     </View>
   );
 }
@@ -386,33 +772,25 @@ const styles = StyleSheet.create({
   avatarButton: { borderRadius: radius.pill },
   intro: { gap: 2 },
   controls: { gap: space.md },
-  searchRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  searchField: { flex: 1 },
-  filterButton: {
-    width: 50,
-    height: 50,
-    borderRadius: radius.pill,
-    borderWidth: 1,
+  events: { gap: space.sm },
+  eventRail: { gap: space.md, paddingRight: space.md },
+  filterRow: { flexDirection: 'row', gap: space.sm },
+  filterPill: {
+    flex: 1,
+    height: 42,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  filterDot: {
-    position: 'absolute',
-    top: 11,
-    right: 11,
-    width: 8,
-    height: 8,
+    gap: 6,
+    paddingHorizontal: space.md,
     borderRadius: radius.pill,
+    borderWidth: 1,
   },
+  filterPillText: { flexShrink: 1 },
   activeFilters: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   activeText: { flex: 1 },
-  results: { gap: space.lg },
-  resultsHeader: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    gap: space.sm,
-  },
+  results: { gap: space.md },
+  list: { gap: space.md },
   errorBlock: { gap: space.md, alignItems: 'flex-start' },
   empty: { alignItems: 'flex-start', gap: space.sm },
   emptyIcon: {
@@ -424,6 +802,4 @@ const styles = StyleSheet.create({
     marginBottom: space.xs,
   },
   pager: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  agencies: { gap: space.sm },
-  agencyRow: { gap: space.md, paddingVertical: 2, paddingRight: space.xs },
 });

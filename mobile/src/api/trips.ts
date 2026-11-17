@@ -107,6 +107,27 @@ export interface TripCustomRoute {
   distanceKm: number;
 }
 
+export type TripVisibility = 'private' | 'unlisted' | 'public';
+
+export interface TripGallerySettings {
+  hideExactDates: boolean;
+  summary: string;
+  tags: string[];
+}
+
+/** `PATCH /itinerary/:id/publish` payload and the owner-detail publication fields. */
+export interface TripPublicationState {
+  visibility: TripVisibility;
+  publishedAt: string | null;
+  gallery: TripGallerySettings;
+}
+
+export interface TripModerationState {
+  hiddenAt?: string | null;
+  source?: string | null;
+  reason?: string | null;
+}
+
 /** Full document from `GET /itinerary/:id`, role-annotated for the caller. */
 export interface MyTripDetail extends Omit<MyTripSummary, 'tripDetails'> {
   tripDetails?: TripItinerary;
@@ -114,6 +135,13 @@ export interface MyTripDetail extends Omit<MyTripSummary, 'tripDetails'> {
   expenses?: TripExpense[];
   participants?: TripParticipant[];
   finance?: TripFinance;
+  /** Owner-only publication surface; the API strips these for collaborators. */
+  shareId?: string;
+  isPublic?: boolean;
+  visibility?: TripVisibility;
+  publishedAt?: string | null;
+  gallery?: TripGallerySettings;
+  moderation?: TripModerationState | null;
 }
 
 export function fetchMyTrips(): Promise<MyTripSummary[]> {
@@ -141,4 +169,40 @@ export function savePlanChanges(tripId: string, input: PlanEditInput): Promise<M
   const id = encodeURIComponent(tripId);
   const path = input.title !== undefined ? `/itinerary/${id}` : `/itinerary/${id}/itinerary`;
   return apiRequest<MyTripDetail>(path, { method: 'PUT', body: input });
+}
+
+export interface PublicationInput {
+  published: boolean;
+  hideExactDates?: boolean;
+  summary?: string;
+  tags?: string[];
+}
+
+/**
+ * Gallery publish/unpublish. The server refuses to publish without a traveller
+ * handle and rejects agency trips; the message from the API is user-facing.
+ */
+export function setTripPublication(
+  tripId: string,
+  input: PublicationInput
+): Promise<TripPublicationState> {
+  return apiRequest<{ success: boolean; publication: TripPublicationState }>(
+    `/itinerary/${encodeURIComponent(tripId)}/publish`,
+    { method: 'PATCH', body: input }
+  ).then((res) => res.publication);
+}
+
+/** Creates the public read-only link, or returns the existing one. */
+export function createShareLink(tripId: string): Promise<string> {
+  return apiRequest<{ success: boolean; shareId: string }>(
+    `/itinerary/${encodeURIComponent(tripId)}/share`,
+    { method: 'POST' }
+  ).then((res) => res.shareId);
+}
+
+/** Revokes permanently: the old URL 404s and re-sharing mints a new id. */
+export function revokeShareLink(tripId: string): Promise<void> {
+  return apiRequest<{ success: boolean }>(`/itinerary/${encodeURIComponent(tripId)}/share`, {
+    method: 'DELETE',
+  }).then(() => undefined);
 }

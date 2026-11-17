@@ -1,5 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useQuery } from '@tanstack/react-query';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -7,6 +9,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { ApiError } from '@/api/client';
 import { fetchTravelerProfile } from '@/api/discovery';
 import { TripCard, TripCardSkeleton } from '@/components/TripCard';
+import { tripCoverUrl } from '@/lib/tripCover';
 import { radius, space } from '@/theme/tokens';
 import { useTheme } from '@/theme/useTheme';
 import { AppText, Avatar, Button, Card, Screen, Skeleton } from '@/ui';
@@ -151,43 +154,61 @@ export default function TravelerProfileScreen() {
       {topRow}
 
       <View style={styles.page}>
-        <Card style={styles.hero}>
-          <View style={styles.identityRow}>
-            <Avatar name={traveler.name || traveler.handle} size={72} uri={traveler.avatarUrl} />
+        <Card padded={false} style={styles.hero}>
+          <View style={[styles.cover, { backgroundColor: palette.muted }]}>
+            {trips[0] ? (
+              <Image
+                source={{ uri: tripCoverUrl(trips[0].destination || trips[0].title, 900) }}
+                style={StyleSheet.absoluteFill}
+                contentFit="cover"
+                transition={250}
+              />
+            ) : null}
+            <LinearGradient
+              colors={['rgba(12,26,21,0)', 'rgba(12,26,21,0.35)']}
+              style={StyleSheet.absoluteFill}
+            />
+          </View>
+
+          <View style={styles.heroBody}>
+            <View style={[styles.avatarRing, { backgroundColor: palette.card }]}>
+              <Avatar name={traveler.name || traveler.handle} size={88} uri={traveler.avatarUrl} />
+            </View>
+
             <View style={styles.identityText}>
-              <AppText variant="title" numberOfLines={2}>
+              <AppText variant="title" numberOfLines={2} style={styles.center}>
                 {traveler.name}
               </AppText>
-              <AppText variant="caption" tone="muted">
+              <AppText variant="caption" tone="muted" style={styles.center}>
                 @{traveler.handle}
               </AppText>
             </View>
-          </View>
 
-          {traveler.bio ? (
-            <AppText tone="muted" style={styles.bio}>
-              {traveler.bio}
-            </AppText>
-          ) : null}
-
-          <View style={[styles.stats, { borderTopColor: palette.border }]}>
-            <View style={styles.stat}>
-              <AppText variant="heading">{trips.length}</AppText>
-              <AppText variant="caption" tone="muted">
-                {trips.length === 1 ? 'trip shared' : 'trips shared'}
+            {traveler.bio ? (
+              <AppText tone="muted" style={[styles.bio, styles.center]}>
+                {traveler.bio}
               </AppText>
-            </View>
-            {lastShared ? (
-              <>
-                <View style={[styles.statDivider, { backgroundColor: palette.border }]} />
-                <View style={styles.stat}>
-                  <AppText variant="heading">{lastShared}</AppText>
-                  <AppText variant="caption" tone="muted">
-                    Last shared
-                  </AppText>
-                </View>
-              </>
             ) : null}
+
+            <View style={[styles.stats, { borderTopColor: palette.border }]}>
+              <View style={styles.stat}>
+                <AppText variant="heading">{trips.length}</AppText>
+                <AppText variant="caption" tone="muted">
+                  {trips.length === 1 ? 'trip shared' : 'trips shared'}
+                </AppText>
+              </View>
+              {lastShared ? (
+                <>
+                  <View style={[styles.statDivider, { backgroundColor: palette.border }]} />
+                  <View style={styles.stat}>
+                    <AppText variant="heading">{lastShared}</AppText>
+                    <AppText variant="caption" tone="muted">
+                      Last shared
+                    </AppText>
+                  </View>
+                </>
+              ) : null}
+            </View>
           </View>
         </Card>
 
@@ -229,7 +250,7 @@ export default function TravelerProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { paddingTop: space.sm, paddingBottom: space.xxl },
+  content: { paddingTop: space.sm, paddingBottom: space.xxl, gap: space.lg },
   page: { width: '100%', maxWidth: 560, alignSelf: 'center', gap: space.xl },
   topRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   back: {
@@ -240,18 +261,31 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   wordmark: { letterSpacing: -0.4 },
-  hero: { gap: space.lg },
+  hero: { overflow: 'hidden' },
+  cover: { height: 150 },
+  heroBody: { paddingHorizontal: space.lg, paddingBottom: space.lg, gap: space.sm },
+  avatarRing: {
+    alignSelf: 'center',
+    width: 96,
+    height: 96,
+    borderRadius: radius.pill,
+    padding: 4,
+    marginTop: -48,
+    marginBottom: space.xs,
+  },
+  identityText: { gap: 2 },
+  center: { textAlign: 'center' },
   identityRow: { flexDirection: 'row', alignItems: 'center', gap: space.lg },
-  identityText: { flex: 1, gap: 2 },
   bio: { lineHeight: 22 },
   stats: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: space.lg,
-    paddingTop: space.md,
+    justifyContent: 'center',
+    gap: space.xl,
+    paddingTop: space.lg,
     borderTopWidth: 1,
   },
-  stat: { gap: 1 },
+  stat: { gap: 1, alignItems: 'center' },
   statDivider: { width: 1, height: 30 },
   section: { gap: space.lg },
   sectionHead: { gap: space.xs },

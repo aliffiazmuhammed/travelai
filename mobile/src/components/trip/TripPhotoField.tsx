@@ -148,7 +148,7 @@ export function TripPhotoField({
           <TripPhoto
             photo={photo}
             tripId={tripId}
-            style={styles.banner}
+            style={[styles.banner, { backgroundColor: palette.muted }]}
             accessibilityLabel={label}
           />
           {busy ? (
@@ -233,7 +233,7 @@ const styles = StyleSheet.create({
   field: { gap: space.sm },
   label: { letterSpacing: 0.9, fontSize: 11 },
   bannerWrap: { borderRadius: radius.xl, overflow: 'hidden' },
-  banner: { width: '100%', height: 150, backgroundColor: '#e4eae7' },
+  banner: { width: '100%', height: 150 },
   bannerBusy: {
     position: 'absolute',
     top: 0,

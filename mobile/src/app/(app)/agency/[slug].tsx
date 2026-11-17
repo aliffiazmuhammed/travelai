@@ -1,6 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useQuery } from '@tanstack/react-query';
 import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
 
@@ -8,6 +9,7 @@ import { ApiError } from '@/api/client';
 import { fetchAgencyProfile, type AgencyPackage } from '@/api/discovery';
 import { assetUrl } from '@/config';
 import { formatMoney } from '@/lib/expenses';
+import { tripCoverUrl } from '@/lib/tripCover';
 import { radius, space } from '@/theme/tokens';
 import { useTheme } from '@/theme/useTheme';
 import { AppText, Button, Card, Screen, Skeleton } from '@/ui';
@@ -27,12 +29,12 @@ function nightsLabel(nights: number): string {
   return `${nights} ${nights === 1 ? 'night' : 'nights'}`;
 }
 
-function PlanCard({ plan }: { plan: AgencyPackage }) {
+function PlanCard({ plan, onPress }: { plan: AgencyPackage; onPress: () => void }) {
   const { palette } = useTheme();
   const meta = [`${nightsLabel(plan.nights)}`, plan.highlights[0]].filter(Boolean);
 
   return (
-    <Card padded={false} style={styles.planCard}>
+    <Card padded={false} style={styles.planCard} onPress={onPress} accessibilityLabel={`Open ${plan.title}`}>
       <View style={[styles.planCover, { backgroundColor: palette.muted }]}>
         {plan.coverUrl ? (
           <Image
@@ -66,6 +68,12 @@ function PlanCard({ plan }: { plan: AgencyPackage }) {
               ? `${formatMoney(plan.pricePerPerson, plan.currency || 'INR')} pp`
               : 'Price on request'}
           </AppText>
+        </View>
+        <View style={styles.planLink}>
+          <AppText variant="caption" tone="accent">
+            View the plan
+          </AppText>
+          <Ionicons name="arrow-forward" size={13} color={palette.accent} />
         </View>
       </View>
     </Card>
@@ -203,59 +211,99 @@ export default function AgencyProfileScreen() {
       {topRow}
 
       <View style={styles.page}>
-        <Card style={styles.hero}>
-          <View style={styles.identityRow}>
-            <View style={[styles.logo, { backgroundColor: palette.secondary }]}>
-              <AppText variant="label" style={{ color: palette.secondaryForeground }}>
-                {initials(agency.name)}
-              </AppText>
-              {agency.logoUrl ? (
-                <Image
-                  source={{ uri: assetUrl(agency.logoUrl) }}
-                  style={StyleSheet.absoluteFill}
-                  contentFit="cover"
-                  transition={200}
-                />
-              ) : null}
-            </View>
-            <View style={styles.identityText}>
-              <View style={styles.nameRow}>
-                <AppText variant="title" numberOfLines={2} style={styles.name}>
-                  {agency.name}
-                </AppText>
-                {agency.verified ? (
-                  <Ionicons name="checkmark-circle" size={18} color={palette.primary} />
-                ) : null}
-              </View>
-              {agency.baseCity ? (
-                <View style={styles.baseCity}>
-                  <Ionicons name="location-outline" size={13} color={palette.mutedForeground} />
-                  <AppText variant="caption" tone="muted">
-                    {agency.baseCity}
-                  </AppText>
-                </View>
-              ) : null}
-              {replyLine ? (
-                <AppText variant="caption" tone="primary">
-                  {replyLine}
-                </AppText>
-              ) : null}
-            </View>
+        <Card padded={false} style={styles.hero}>
+          <View style={[styles.cover, { backgroundColor: palette.muted }]}>
+            <Image
+              source={{
+                uri: tripCoverUrl(
+                  agency.destinations[0] || agency.baseCity || agency.name,
+                  1000
+                ),
+              }}
+              style={StyleSheet.absoluteFill}
+              contentFit="cover"
+              transition={250}
+            />
+            <LinearGradient
+              colors={['rgba(12,26,21,0)', 'rgba(12,26,21,0.35)']}
+              style={StyleSheet.absoluteFill}
+            />
           </View>
 
-          {agency.about ? <AppText style={styles.about}>{agency.about}</AppText> : null}
-
-          {agency.specialties.length > 0 ? (
-            <View style={styles.chips}>
-              {agency.specialties.map((specialty) => (
-                <View key={specialty} style={[styles.chip, { backgroundColor: palette.muted }]}>
-                  <AppText variant="caption" tone="muted">
-                    {specialty}
+          <View style={styles.heroBody}>
+            <View style={styles.identityRow}>
+              <View style={[styles.logoRing, { backgroundColor: palette.card }]}>
+                <View style={[styles.logo, { backgroundColor: palette.secondary }]}>
+                  <AppText variant="heading" style={{ color: palette.secondaryForeground }}>
+                    {initials(agency.name)}
                   </AppText>
+                  {agency.logoUrl ? (
+                    <Image
+                      source={{ uri: assetUrl(agency.logoUrl) }}
+                      style={StyleSheet.absoluteFill}
+                      contentFit="cover"
+                      transition={200}
+                    />
+                  ) : null}
                 </View>
-              ))}
+              </View>
+              <View style={styles.identityText}>
+                <View style={styles.nameRow}>
+                  <AppText variant="title" numberOfLines={2} style={styles.name}>
+                    {agency.name}
+                  </AppText>
+                  {agency.verified ? (
+                    <Ionicons name="checkmark-circle" size={18} color={palette.primary} />
+                  ) : null}
+                </View>
+                {agency.baseCity ? (
+                  <View style={styles.baseCity}>
+                    <Ionicons name="location-outline" size={13} color={palette.mutedForeground} />
+                    <AppText variant="caption" tone="muted">
+                      {agency.baseCity}
+                    </AppText>
+                  </View>
+                ) : null}
+                {replyLine ? (
+                  <AppText variant="caption" tone="primary">
+                    {replyLine}
+                  </AppText>
+                ) : null}
+              </View>
             </View>
-          ) : null}
+
+            {agency.about ? <AppText style={styles.about}>{agency.about}</AppText> : null}
+
+            {agency.specialties.length > 0 ? (
+              <View style={styles.chips}>
+                {agency.specialties.map((specialty) => (
+                  <View key={specialty} style={[styles.chip, { backgroundColor: palette.muted }]}>
+                    <AppText variant="caption" tone="muted">
+                      {specialty}
+                    </AppText>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+
+            <Button
+              label="Send an enquiry"
+              variant="accent"
+              icon={
+                <Ionicons
+                  name="chatbubble-ellipses-outline"
+                  size={17}
+                  color={palette.accentForeground}
+                />
+              }
+              onPress={() =>
+                router.push({
+                  pathname: '/enquiry/[slug]',
+                  params: { slug: agency.slug, agencyName: agency.name },
+                })
+              }
+            />
+          </View>
         </Card>
 
         <View style={styles.section}>
@@ -280,7 +328,18 @@ export default function AgencyProfileScreen() {
               </AppText>
             </Card>
           ) : (
-            agency.packages.map((plan) => <PlanCard key={plan.id} plan={plan} />)
+            agency.packages.map((plan) => (
+              <PlanCard
+                key={plan.id}
+                plan={plan}
+                onPress={() =>
+                  router.push({
+                    pathname: '/agency/[slug]/package/[packageId]',
+                    params: { slug: agency.slug, packageId: plan.id },
+                  })
+                }
+              />
+            ))
           )}
         </View>
 
@@ -352,7 +411,7 @@ export default function AgencyProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { paddingTop: space.sm, paddingBottom: space.xxl },
+  content: { paddingTop: space.sm, paddingBottom: space.xxl, gap: space.lg },
   page: { width: '100%', maxWidth: 560, alignSelf: 'center', gap: space.xl },
   topRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   back: {
@@ -363,17 +422,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   wordmark: { letterSpacing: -0.4 },
-  hero: { gap: space.lg },
-  identityRow: { flexDirection: 'row', alignItems: 'center', gap: space.lg },
+  hero: { overflow: 'hidden' },
+  cover: { height: 140 },
+  heroBody: { paddingHorizontal: space.lg, paddingBottom: space.lg, gap: space.md },
+  identityRow: { flexDirection: 'row', alignItems: 'flex-end', gap: space.md },
+  logoRing: {
+    width: 84,
+    height: 84,
+    borderRadius: radius.xl,
+    padding: 4,
+    marginTop: -42,
+  },
   logo: {
-    width: 56,
-    height: 56,
-    borderRadius: radius.md,
+    flex: 1,
+    borderRadius: radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  identityText: { flex: 1, gap: 3 },
+  identityText: { flex: 1, gap: 3, paddingBottom: 2 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   name: { flexShrink: 1 },
   baseCity: { flexDirection: 'row', alignItems: 'center', gap: 4 },
@@ -398,6 +465,7 @@ const styles = StyleSheet.create({
     marginTop: space.xs,
   },
   planMeta: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 },
+  planLink: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   facts: { gap: space.md },
   factRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm },
   factText: { flex: 1, gap: 1 },

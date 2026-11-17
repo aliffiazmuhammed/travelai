@@ -26,8 +26,13 @@ interface SessionValue {
   user: SessionUser | null;
   /** True when the server rejected a stored token, so sign-in can say why. */
   sessionExpired: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
-  signUp: (input: { email: string; password: string; name?: string }) => Promise<void>;
+  /** Where the auth layout sends a fresh session (an invite or reset link). */
+  nextRoute: string | null;
+  signIn: (email: string, password: string, nextRoute?: string) => Promise<void>;
+  signUp: (
+    input: { email: string; password: string; name?: string },
+    nextRoute?: string
+  ) => Promise<void>;
   signOut: () => Promise<void>;
   /** Apply the server's projection after the owner edits their own profile. */
   updateUser: (next: SessionUser) => void;
@@ -39,6 +44,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<SessionStatus>('loading');
   const [user, setUser] = useState<SessionUser | null>(null);
   const [expired, setExpired] = useState(false);
+  const [nextRoute, setNextRoute] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -84,19 +90,21 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const signIn = useCallback(async (email: string, password: string) => {
+  const signIn = useCallback(async (email: string, password: string, next?: string) => {
     const nextUser = await apiSignin(email, password);
     queryClient.clear();
     setExpired(false);
+    setNextRoute(next && next.startsWith('/') ? next : null);
     setUser(nextUser);
     setStatus('signedIn');
   }, []);
 
   const signUp = useCallback(
-    async (input: { email: string; password: string; name?: string }) => {
+    async (input: { email: string; password: string; name?: string }, next?: string) => {
       const nextUser = await apiSignup(input.email, input.password, input.name);
       queryClient.clear();
       setExpired(false);
+      setNextRoute(next && next.startsWith('/') ? next : null);
       setUser(nextUser);
       setStatus('signedIn');
     },
@@ -109,6 +117,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     } finally {
       queryClient.clear();
       setExpired(false);
+      setNextRoute(null);
       setUser(null);
       setStatus('signedOut');
     }
@@ -119,8 +128,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ status, user, sessionExpired: expired, signIn, signUp, signOut, updateUser }),
-    [status, user, expired, signIn, signUp, signOut, updateUser]
+    () => ({
+      status,
+      user,
+      sessionExpired: expired,
+      nextRoute,
+      signIn,
+      signUp,
+      signOut,
+      updateUser,
+    }),
+    [status, user, expired, nextRoute, signIn, signUp, signOut, updateUser]
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

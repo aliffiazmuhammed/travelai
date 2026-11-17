@@ -1,7 +1,6 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import { useRef, useState, type ComponentProps, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import {
   Pressable,
   StyleSheet,
@@ -10,23 +9,32 @@ import {
 } from 'react-native';
 
 import { fetchMyTrips } from '@/api/trips';
+import { fetchEnquirySummary } from '@/api/enquiries';
 import { useSession } from '@/auth/SessionProvider';
 import { matchesTripTab } from '@/lib/personalTrip';
 import { goToCreate, goToTab } from '@/navigation/tabs';
 import { radius, space } from '@/theme/tokens';
+import { useThemePreference, type ThemePreference } from '@/theme/ThemeProvider';
 import { useTheme } from '@/theme/useTheme';
 import {
   AppText,
   Avatar,
-  Button,
   Card,
+  ListGroup,
+  ListRow,
   NAV_BOTTOM_SPACE,
   NavShell,
   Screen,
+  SectionHeader,
+  Segmented,
   Skeleton,
 } from '@/ui';
 
-type IconName = ComponentProps<typeof Ionicons>['name'];
+const APPEARANCE: readonly { key: ThemePreference; label: string }[] = [
+  { key: 'system', label: 'System' },
+  { key: 'light', label: 'Light' },
+  { key: 'dark', label: 'Dark' },
+];
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -52,48 +60,9 @@ function Stat({ value, label }: { value: ReactNode; label: string }) {
   );
 }
 
-function MenuRow({
-  icon,
-  label,
-  caption,
-  onPress,
-  divided = false,
-}: {
-  icon: IconName;
-  label: string;
-  caption: string;
-  onPress: () => void;
-  divided?: boolean;
-}) {
-  const { palette } = useTheme();
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.menuRow,
-        divided && { borderTopWidth: 1, borderTopColor: palette.border },
-        pressed && { opacity: 0.7 },
-      ]}
-    >
-      <View style={[styles.menuIcon, { backgroundColor: palette.muted }]}>
-        <Ionicons name={icon} size={17} color={palette.primary} />
-      </View>
-      <View style={styles.menuText}>
-        <AppText variant="bodyStrong">{label}</AppText>
-        <AppText variant="caption" tone="muted">
-          {caption}
-        </AppText>
-      </View>
-      <Ionicons name="chevron-forward" size={17} color={palette.mutedForeground} />
-    </Pressable>
-  );
-}
-
 export default function ProfileScreen() {
   const { palette } = useTheme();
+  const { preference, setPreference } = useThemePreference();
   const { user, signOut } = useSession();
   const [signingOut, setSigningOut] = useState(false);
   const scrollRef = useRef<ScrollViewInstance>(null);
@@ -102,6 +71,11 @@ export default function ProfileScreen() {
     queryKey: ['my-trips'],
     queryFn: fetchMyTrips,
   });
+  const summaryQuery = useQuery({
+    queryKey: ['enquiry-summary'],
+    queryFn: fetchEnquirySummary,
+  });
+  const summary = summaryQuery.data;
 
   const trips = tripsQuery.data ?? [];
   const total = trips.length;
@@ -156,31 +130,41 @@ export default function ProfileScreen() {
           </View>
 
           <Card style={styles.identity}>
-            <View style={styles.identityRow}>
-              <Avatar name={name} size={64} uri={user?.avatarUrl} />
-              <View style={styles.identityText}>
-                <AppText variant="title" numberOfLines={1}>
-                  {name}
-                </AppText>
-                <AppText variant="caption" tone="muted" numberOfLines={1}>
+            <Avatar name={name} size={88} uri={user?.avatarUrl} />
+            <View style={styles.identityText}>
+              <AppText variant="title" numberOfLines={1} style={styles.name}>
+                {name}
+              </AppText>
+              <View style={styles.identityMeta}>
+                <AppText variant="caption" tone="muted" numberOfLines={1} style={styles.handle}>
                   {handleLine}
                 </AppText>
-                {joined ? (
-                  <AppText variant="caption" tone="muted">
-                    {joined}
+                <View style={[styles.roleChip, { backgroundColor: palette.primary }]}>
+                  <AppText variant="caption" style={{ color: palette.primaryForeground }}>
+                    Traveller
                   </AppText>
-                ) : null}
+                </View>
               </View>
+              <Pressable
+                accessibilityRole="link"
+                accessibilityLabel="Edit profile"
+                onPress={() => router.push('/account')}
+                hitSlop={8}
+              >
+                <AppText variant="label" tone="accent">
+                  Edit profile
+                </AppText>
+              </Pressable>
             </View>
-            {user?.bio ? (
-              <AppText variant="caption" tone="muted" style={styles.bio}>
-                {user.bio}
+            {joined ? (
+              <AppText variant="caption" tone="muted">
+                {joined}
               </AppText>
-            ) : (
-              <AppText variant="caption" tone="muted" style={styles.bio}>
-                A line about how you travel helps people know who they’re joining.
-              </AppText>
-            )}
+            ) : null}
+            <AppText variant="caption" tone="muted" style={styles.bio}>
+              {user?.bio ||
+                'A line about how you travel helps people know who they’re joining.'}
+            </AppText>
           </Card>
 
           <View style={styles.stats}>
@@ -189,72 +173,124 @@ export default function ProfileScreen() {
             <Stat value={statValue(shared)} label="Shared" />
           </View>
 
-          <Card padded={false} style={styles.menu}>
-            <MenuRow
-              icon="person-circle-outline"
-              label="Edit profile"
-              caption="Your name, photo, username and password."
-              onPress={() => router.push('/account')}
-            />
-            <MenuRow
-              icon="map-outline"
-              label="Your trips"
-              caption={
-                statsReady
-                  ? total === 0
-                    ? 'Nothing planned yet — start with a place.'
-                    : `${total} ${total === 1 ? 'trip' : 'trips'} in your library.`
-                  : 'Everything you’re planning or part of.'
-              }
-              onPress={() => goToTab('trips')}
-              divided
-            />
-            <MenuRow
-              icon="compass-outline"
-              label="Find a trip to join"
-              caption="See what other travellers are sharing right now."
-              onPress={() => goToTab('explore')}
-              divided
-            />
-            <MenuRow
-              icon="add-circle-outline"
-              label="Plan a trip"
-              caption="Start something new for the road ahead."
-              onPress={goToCreate}
-              divided
-            />
-          </Card>
+          <View style={styles.group}>
+            <SectionHeader title="Your travel" />
+            <ListGroup>
+              <ListRow
+                icon="map-outline"
+                title="Your trips"
+                subtitle={
+                  statsReady
+                    ? total === 0
+                      ? 'Nothing planned yet — start with a place.'
+                      : `${total} ${total === 1 ? 'trip' : 'trips'} in your library.`
+                    : 'Everything you’re planning or part of.'
+                }
+                onPress={() => goToTab('trips')}
+              />
+              <ListRow
+                icon="chatbubbles-outline"
+                title="Enquiries"
+                subtitle={
+                  summary && summary.unread > 0
+                    ? `${summary.unread} new ${
+                        summary.unread === 1 ? 'reply' : 'replies'
+                      } waiting for you.`
+                    : 'Conversations with agencies, in one place.'
+                }
+                onPress={() => router.push('/enquiries')}
+              />
+              <ListRow
+                icon="document-text-outline"
+                title="Proposals"
+                subtitle={
+                  summary && summary.liveProposals > 0
+                    ? `${summary.liveProposals} ${
+                        summary.liveProposals === 1 ? 'proposal is' : 'proposals are'
+                      } waiting for your answer.`
+                    : 'Quotes agencies send you, side by side.'
+                }
+                onPress={() => router.push('/proposals')}
+              />
+              <ListRow
+                icon="compass-outline"
+                title="Find a trip to join"
+                subtitle="See what other travellers are sharing right now."
+                onPress={() => goToTab('explore')}
+              />
+              <ListRow
+                icon="add-circle-outline"
+                title="Plan a trip"
+                subtitle="Start something new for the road ahead."
+                onPress={goToCreate}
+              />
+            </ListGroup>
+          </View>
 
-          <Card style={styles.account}>
-            <View style={styles.accountHead}>
-              <Ionicons name="mail-outline" size={15} color={palette.mutedForeground} />
-              <AppText variant="label">Account</AppText>
-            </View>
-            <View style={styles.accountRow}>
+          <View style={styles.group}>
+            <SectionHeader title="Appearance" />
+            <Card style={styles.appearance}>
+              <Segmented
+                accessibilityLabel="Appearance"
+                items={APPEARANCE}
+                value={preference}
+                onChange={setPreference}
+              />
               <AppText variant="caption" tone="muted">
-                Email
+                {preference === 'system'
+                  ? 'Following your phone’s light or dark setting.'
+                  : `Always using the ${preference} theme.`}
               </AppText>
-              <AppText variant="caption" numberOfLines={1} style={styles.accountValue}>
-                {user?.email}
-              </AppText>
-            </View>
-            <View style={styles.accountRow}>
-              <AppText variant="caption" tone="muted">
-                Username
-              </AppText>
-              <AppText variant="caption" numberOfLines={1} style={styles.accountValue}>
-                {user?.handle ? `@${user.handle}` : 'Not chosen yet'}
-              </AppText>
-            </View>
-          </Card>
+            </Card>
+          </View>
 
-          <Button
-            label="Sign out"
-            variant="ghost"
-            loading={signingOut}
-            onPress={handleSignOut}
-            style={styles.signOut}
-          />
+          <View style={styles.group}>
+            <SectionHeader title="Community" />
+            <ListGroup>
+              <ListRow
+                icon="leaf-outline"
+                title="Community guidelines"
+                subtitle="What belongs in the gallery, and how reporting works."
+                onPress={() => router.push('/guidelines')}
+              />
+            </ListGroup>
+          </View>
+
+          <View style={styles.group}>
+            <SectionHeader title="Account" />
+            <Card style={styles.account}>
+              <View style={styles.accountRow}>
+                <AppText variant="caption" tone="muted">
+                  Email
+                </AppText>
+                <AppText variant="caption" numberOfLines={1} style={styles.accountValue}>
+                  {user?.email}
+                </AppText>
+              </View>
+              <View style={styles.accountRow}>
+                <AppText variant="caption" tone="muted">
+                  Username
+                </AppText>
+                <AppText variant="caption" numberOfLines={1} style={styles.accountValue}>
+                  {user?.handle ? `@${user.handle}` : 'Not chosen yet'}
+                </AppText>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ busy: signingOut }}
+                disabled={signingOut}
+                onPress={handleSignOut}
+                style={({ pressed }) => [
+                  styles.signOut,
+                  { borderTopColor: palette.border, opacity: pressed || signingOut ? 0.6 : 1 },
+                ]}
+              >
+                <AppText variant="label" tone="accent">
+                  {signingOut ? 'Signing out…' : 'Sign out'}
+                </AppText>
+              </Pressable>
+            </Card>
+          </View>
         </View>
       </Screen>
 
@@ -288,32 +324,24 @@ const styles = StyleSheet.create({
   },
   signedDot: { width: 6, height: 6, borderRadius: radius.pill },
   intro: { gap: 2 },
-  identity: { gap: space.md },
-  identityRow: { flexDirection: 'row', alignItems: 'center', gap: space.lg },
-  identityText: { flex: 1, gap: 2 },
-  bio: { lineHeight: 18 },
+  identity: { alignItems: 'center', gap: space.sm, paddingVertical: space.xl },
+  identityText: { alignItems: 'center', gap: 4 },
+  name: { textAlign: 'center' },
+  identityMeta: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  handle: { flexShrink: 1 },
+  roleChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+  },
+  bio: { lineHeight: 18, textAlign: 'center', paddingHorizontal: space.lg },
   stats: { flexDirection: 'row', gap: space.md },
   stat: { flex: 1, gap: 2 },
   statLabel: { letterSpacing: 0.6 },
-  menu: { overflow: 'hidden' },
-  menuRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.md,
-    paddingHorizontal: space.lg,
-    paddingVertical: space.md,
-  },
-  menuIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  menuText: { flex: 1, gap: 2 },
+  group: { gap: space.md },
   account: { gap: space.sm },
-  accountHead: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  appearance: { gap: space.sm },
   accountRow: { flexDirection: 'row', justifyContent: 'space-between', gap: space.lg },
   accountValue: { flexShrink: 1, textAlign: 'right' },
-  signOut: { alignSelf: 'flex-start' },
+  signOut: { borderTopWidth: 1, paddingTop: space.md, marginTop: space.xs },
 });

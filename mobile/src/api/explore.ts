@@ -161,6 +161,37 @@ interface AgencyDirectoryResponse {
   total: number;
 }
 
+export interface AgencyDirectoryPage {
+  agencies: AgencyDirectoryCard[];
+  nextCursor: string | null;
+  hasMore: boolean;
+  total: number;
+}
+
+export interface AgencyDirectoryFilters {
+  q?: string;
+  city?: string;
+  destination?: string;
+  specialty?: string;
+  language?: string;
+  cursor?: string;
+  limit?: number;
+}
+
+export interface AgencyFacet {
+  value: string;
+  label: string;
+  count: number;
+}
+
+/** Counts behind the directory filter sheet — `GET /api/agencies/facets`. */
+export interface AgencyFacets {
+  destinations: AgencyFacet[];
+  specialties: AgencyFacet[];
+  cities: AgencyFacet[];
+  languages: AgencyFacet[];
+}
+
 function toQueryString(params: Record<string, string | number | undefined>): string {
   const entries = Object.entries(params).filter(
     (entry): entry is [string, string | number] => entry[1] !== undefined && entry[1] !== ''
@@ -184,11 +215,21 @@ export function fetchGalleryTrip(tripId: string): Promise<GalleryTrip> {
   ).then((response) => response.trip);
 }
 
-/** GET /api/agencies — the public directory strip on Explore. */
-export async function fetchAgencies(limit = 6): Promise<AgencyDirectoryCard[]> {
-  const page = await apiRequest<AgencyDirectoryResponse>(
-    `/agencies${toQueryString({ limit })}`,
+/** GET /api/agencies — the cursor-paged public directory behind the Explore segment. */
+export function fetchAgencyDirectory(
+  filters: AgencyDirectoryFilters = {}
+): Promise<AgencyDirectoryPage> {
+  return apiRequest<AgencyDirectoryResponse>(
+    `/agencies${toQueryString({ ...filters })}`,
     { auth: false }
   );
-  return page.agencies;
+}
+
+/** GET /api/agencies/facets — filter choices with counts. */
+export async function fetchAgencyFacets(): Promise<AgencyFacets> {
+  const response = await apiRequest<{ success: true; facets: AgencyFacets }>(
+    '/agencies/facets',
+    { auth: false }
+  );
+  return response.facets;
 }

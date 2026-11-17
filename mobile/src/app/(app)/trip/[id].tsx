@@ -26,9 +26,12 @@ import { tripCoverUrl } from '@/lib/tripCover';
 import { goToCreate } from '@/navigation/tabs';
 import { radius, space } from '@/theme/tokens';
 import { useTheme } from '@/theme/useTheme';
-import { AppText, Avatar, Button, Card, InlineError, Screen, Skeleton } from '@/ui';
+import { AppText, Avatar, Button, Card, EmptyState, InlineError, Screen, Skeleton } from '@/ui';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
+
+/** Ink for controls and chips sitting on top of a photo, readable in both themes. */
+const OVERLAY_INK = '#173f35';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -88,7 +91,7 @@ function SectionHeading({
           {eyebrow}
         </AppText>
       </View>
-      <AppText variant="heading">{title}</AppText>
+      <AppText variant="title">{title}</AppText>
       {body ? (
         <AppText variant="caption" tone="muted">
           {body}
@@ -187,9 +190,10 @@ function JoinAction({
       <View style={styles.ask}>
         <Button
           label="Ask to join"
+          variant="accent"
           onPress={onAsk}
           disabled={sheetOpen}
-          icon={<Ionicons name="person-add-outline" size={17} color="#ffffff" />}
+          icon={<Ionicons name="person-add-outline" size={17} color={palette.accentForeground} />}
         />
         <AppText variant="caption" tone="muted">
           Asking sends {hostName} a note. If they say yes, you can follow the trip and comment.
@@ -397,58 +401,58 @@ export default function TripScreen() {
 
   return (
     <View style={styles.root}>
-      <Screen scroll edges={['top', 'bottom']} contentContainerStyle={styles.content}>
-        {topRow}
-
-        <View style={styles.page}>
-          <Card padded={false}>
-            <View style={styles.heroClip}>
-              <View style={[styles.hero, { backgroundColor: palette.muted }]}>
-                <Image
-                  source={{ uri: tripCoverUrl(trip.destination || trip.title, 1200) }}
-                  style={StyleSheet.absoluteFill}
-                  contentFit="cover"
-                  transition={250}
-                />
-                <LinearGradient
-                  colors={['rgba(12,26,21,0)', 'rgba(12,26,21,0.66)']}
-                  locations={[0.4, 1]}
-                  style={StyleSheet.absoluteFill}
-                />
-                <View style={styles.heroChipRow}>
-                  <View style={[styles.heroChip, styles.glass]}>
-                    <Ionicons name="time-outline" size={12} color="#ffffff" />
-                    <AppText variant="caption" style={styles.heroChipText}>
-                      {formatDuration(trip.durationDays)}
-                    </AppText>
-                  </View>
-                  {tripHasStarted ? (
-                    <View style={[styles.heroChip, styles.glass]}>
-                      <Ionicons name="checkmark-done-outline" size={12} color="#ffffff" />
-                      <AppText variant="caption" style={styles.heroChipText}>
-                        Finished
-                      </AppText>
-                    </View>
-                  ) : trip.groupType ? (
-                    <View style={[styles.heroChip, styles.glass]}>
-                      <AppText variant="caption" style={styles.heroChipText}>
-                        {trip.groupType}
-                      </AppText>
-                    </View>
-                  ) : null}
-                </View>
-                <View style={styles.heroDestination}>
-                  <Ionicons name="location-outline" size={14} color="#ffffff" />
-                  <AppText variant="label" numberOfLines={1} style={styles.heroChipText}>
-                    {trip.destination || 'Somewhere new'}
-                  </AppText>
-                </View>
+      <Screen
+        scroll
+        edges={['top', 'bottom']}
+        padded={false}
+        contentContainerStyle={styles.content}
+      >
+        <View style={styles.heroSection}>
+          <View style={[styles.hero, { backgroundColor: palette.muted }]}>
+            <Image
+              source={{ uri: tripCoverUrl(trip.destination || trip.title, 1200) }}
+              style={StyleSheet.absoluteFill}
+              contentFit="cover"
+              transition={250}
+            />
+            <LinearGradient
+              colors={['rgba(12,26,21,0.5)', 'rgba(12,26,21,0)', 'rgba(12,26,21,0.55)']}
+              locations={[0, 0.4, 1]}
+              style={StyleSheet.absoluteFill}
+            />
+            <View style={styles.heroTopRow}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Back"
+                onPress={goBack}
+                style={({ pressed }) => [styles.heroBack, { opacity: pressed ? 0.8 : 1 }]}
+              >
+                <Ionicons name="chevron-back" size={20} color={OVERLAY_INK} />
+              </Pressable>
+              <AppText variant="heading" numberOfLines={1} style={styles.heroWordmark}>
+                waytowalk
+              </AppText>
+            </View>
+            <View style={styles.heroBottom}>
+              <View style={styles.overlayChip}>
+                <Ionicons name="time-outline" size={12} color={OVERLAY_INK} />
+                <AppText variant="caption" style={styles.overlayChipText}>
+                  {formatDuration(trip.durationDays)}
+                  {tripHasStarted ? ' · Finished' : ''}
+                </AppText>
               </View>
             </View>
-          </Card>
+          </View>
+        </View>
 
+        <View style={[styles.page, styles.pagePadded]}>
           <View style={styles.titleBlock}>
             <AppText variant="display">{trip.title}</AppText>
+            {trip.destination ? (
+              <AppText variant="caption" tone="muted">
+                {trip.destination}
+              </AppText>
+            ) : null}
             {trip.summary ? <AppText tone="muted">{trip.summary}</AppText> : null}
 
             <View style={styles.metaRow}>
@@ -473,45 +477,45 @@ export default function TripScreen() {
             </View>
 
             {trip.publisher.handle ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Open ${hostName}’s profile`}
+              <Card
                 onPress={() =>
                   router.push({
                     pathname: '/traveler/[handle]',
                     params: { handle: trip.publisher.handle },
                   })
                 }
-                style={({ pressed }) => [
-                  styles.publisher,
-                  { borderTopColor: palette.border, opacity: pressed ? 0.7 : 1 },
-                ]}
+                accessibilityLabel={`Open ${hostName}’s profile`}
+                style={styles.publisherCard}
               >
-                <Avatar name={hostName} size={40} uri={trip.publisher.avatarUrl} />
-                <View style={styles.publisherText}>
-                  <AppText variant="bodyStrong" numberOfLines={1}>
-                    Shared by {hostName}
-                  </AppText>
-                  <AppText variant="caption" tone="muted" numberOfLines={1}>
-                    @{trip.publisher.handle}
-                    {sharedOn ? ` · ${sharedOn}` : ''}
-                  </AppText>
+                <View style={styles.publisher}>
+                  <Avatar name={hostName} size={44} uri={trip.publisher.avatarUrl} />
+                  <View style={styles.publisherText}>
+                    <AppText variant="bodyStrong" numberOfLines={1}>
+                      Shared by {hostName}
+                    </AppText>
+                    <AppText variant="caption" tone="muted" numberOfLines={1}>
+                      @{trip.publisher.handle}
+                      {sharedOn ? ` · ${sharedOn}` : ''}
+                    </AppText>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={palette.mutedForeground} />
                 </View>
-                <Ionicons name="chevron-forward" size={16} color={palette.mutedForeground} />
-              </Pressable>
+              </Card>
             ) : (
-              <View style={[styles.publisher, { borderTopColor: palette.border }]}>
-                <Avatar name={hostName} size={40} uri={trip.publisher.avatarUrl} />
-                <View style={styles.publisherText}>
-                  <AppText variant="bodyStrong" numberOfLines={1}>
-                    Shared by {hostName}
-                  </AppText>
-                  <AppText variant="caption" tone="muted" numberOfLines={1}>
-                    Trip host
-                    {sharedOn ? ` · ${sharedOn}` : ''}
-                  </AppText>
+              <Card style={styles.publisherCard}>
+                <View style={styles.publisher}>
+                  <Avatar name={hostName} size={44} uri={trip.publisher.avatarUrl} />
+                  <View style={styles.publisherText}>
+                    <AppText variant="bodyStrong" numberOfLines={1}>
+                      Shared by {hostName}
+                    </AppText>
+                    <AppText variant="caption" tone="muted" numberOfLines={1}>
+                      Trip host
+                      {sharedOn ? ` · ${sharedOn}` : ''}
+                    </AppText>
+                  </View>
                 </View>
-              </View>
+              </Card>
             )}
           </View>
 
@@ -585,13 +589,11 @@ export default function TripScreen() {
                 />
               ))
             ) : (
-              <Card style={styles.emptyDays}>
-                <Ionicons name="map-outline" size={22} color={palette.mutedForeground} />
-                <AppText variant="bodyStrong">No day-by-day plan was shared</AppText>
-                <AppText variant="caption" tone="muted">
-                  {hostName} shared the trip without the day-by-day details.
-                </AppText>
-              </Card>
+              <EmptyState
+                icon="map-outline"
+                title="No day-by-day plan was shared"
+                body={`${hostName} shared the trip without the day-by-day details.`}
+              />
             )}
           </View>
 
@@ -703,8 +705,9 @@ export default function TripScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  content: { paddingTop: space.sm, paddingBottom: space.xxxl },
+  content: { paddingBottom: space.xxxl, gap: space.xl },
   page: { width: '100%', maxWidth: 560, alignSelf: 'center', gap: space.xl },
+  pagePadded: { paddingHorizontal: space.xl },
   topRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   back: {
     width: 36,
@@ -714,20 +717,35 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   wordmark: { letterSpacing: -0.4 },
-  heroClip: { borderRadius: radius.xxl, overflow: 'hidden' },
-  hero: { height: 190, justifyContent: 'space-between', padding: space.lg },
-  heroChipRow: { flexDirection: 'row', justifyContent: 'space-between', gap: space.sm },
-  heroChip: {
+  heroSection: { width: '100%', maxWidth: 560, alignSelf: 'center' },
+  hero: { height: 300, justifyContent: 'space-between' },
+  heroTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: radius.pill,
+    gap: space.md,
+    paddingHorizontal: space.xl,
+    paddingTop: space.md,
   },
-  heroChipText: { color: '#ffffff', flexShrink: 1 },
-  glass: { backgroundColor: 'rgba(17,32,27,0.55)' },
-  heroDestination: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  heroBack: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.92)',
+  },
+  heroWordmark: { letterSpacing: -0.4, flex: 1, color: '#ffffff' },
+  heroBottom: { paddingHorizontal: space.xl, paddingBottom: space.lg, alignItems: 'flex-start' },
+  overlayChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.94)',
+  },
+  overlayChipText: { color: OVERLAY_INK },
   titleBlock: { gap: space.sm },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
   factRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
@@ -741,14 +759,8 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
   },
   factText: { flexShrink: 1 },
-  publisher: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.md,
-    marginTop: space.xs,
-    paddingTop: space.md,
-    borderTopWidth: 1,
-  },
+  publisherCard: { paddingVertical: space.md },
+  publisher: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   publisherText: { flex: 1 },
   joinBlock: { gap: space.sm },
   ask: { gap: space.sm },
@@ -774,7 +786,6 @@ const styles = StyleSheet.create({
   eyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   eyebrowTick: { width: 12, height: 2, borderRadius: radius.pill },
   eyebrow: { letterSpacing: 1.2 },
-  emptyDays: { alignItems: 'flex-start', gap: space.sm },
   listCard: { gap: space.md },
   listRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm },
   listIcon: {

@@ -13,6 +13,19 @@ export function cleanDayTitle(title: string): string {
   return title.replace(/^day\s*\d+\s*[:\-–]\s*/i, '').trim();
 }
 
+const TIME_RE = /(\d{1,2}:\d{2})\s*([AP]M)/i;
+
+/**
+ * The rail only has room for a start time, so free-form values such as
+ * "Morning (09:00 AM - 12:00 PM)" collapse to "09:00 / AM".
+ */
+function timeParts(value?: string): { clock: string; meridiem: string } | null {
+  if (!value || !value.trim()) return null;
+  const match = value.match(TIME_RE);
+  if (match) return { clock: match[1], meridiem: match[2].toUpperCase() };
+  return { clock: value.trim(), meridiem: '' };
+}
+
 function DayLabel({ children }: { children: string }) {
   const { palette } = useTheme();
   return (
@@ -30,23 +43,28 @@ function StayRow({ stay, tripId }: { stay: GalleryStay; tripId?: string }) {
   const detail = [stay.location, stay.vibe || stay.description].filter(Boolean).join(' · ');
 
   return (
-    <View style={styles.row}>
+    <View style={[styles.stayBand, { backgroundColor: palette.muted }]}>
       {stay.image ? (
         <TripPhoto
           photo={stay.image}
           tripId={tripId}
-          style={styles.stayPhoto}
+          style={[styles.stayPhoto, { backgroundColor: palette.muted }]}
           accessibilityLabel={`${stay.name} photo`}
         />
       ) : (
-        <View style={[styles.rowIcon, { backgroundColor: palette.muted }]}>
-          <Ionicons name="bed-outline" size={15} color={palette.primary} />
+        <View style={[styles.stayIcon, { backgroundColor: palette.card }]}>
+          <Ionicons name="bed-outline" size={16} color={palette.primary} />
         </View>
       )}
       <View style={styles.rowBody}>
-        <AppText variant="label">{stay.name}</AppText>
+        <AppText variant="caption" tone="muted" style={styles.stayEyebrow}>
+          STAY
+        </AppText>
+        <AppText variant="bodyStrong" numberOfLines={2}>
+          {stay.name}
+        </AppText>
         {detail ? (
-          <AppText variant="caption" tone="muted">
+          <AppText variant="caption" tone="muted" numberOfLines={2}>
             {detail}
           </AppText>
         ) : null}
@@ -56,11 +74,11 @@ function StayRow({ stay, tripId }: { stay: GalleryStay; tripId?: string }) {
 }
 
 /**
- * The in-day "map treatment" from concept B, without a map SDK: the day's
- * first-to-last activity location, the shared transport note, and the distance
- * of any route the owner drew for that day.
+ * One quiet line for the day's shape: first stop → last stop, then the shared
+ * transport note. Place names already appear on the stops, so this is a
+ * summary rather than a second copy of the plan.
  */
-function DayRouteBand({
+function DayRouteLine({
   day,
   routes,
   places,
@@ -77,12 +95,7 @@ function DayRouteBand({
   if (!from && !transport && routes.length === 0) return null;
 
   return (
-    <View
-      style={[
-        styles.routeBand,
-        { backgroundColor: `${palette.primary}0A`, borderColor: palette.border },
-      ]}
-    >
+    <View style={styles.route}>
       {from ? (
         <View style={styles.routeRow}>
           <View style={[styles.routeDot, { backgroundColor: palette.primary }]} />
@@ -91,7 +104,7 @@ function DayRouteBand({
           </AppText>
           {to ? (
             <>
-              <View style={[styles.routeLine, { borderColor: palette.mutedForeground }]} />
+              <View style={[styles.routeDash, { borderColor: palette.mutedForeground }]} />
               <View style={[styles.routeDot, { backgroundColor: palette.accent }]} />
               <AppText variant="label" numberOfLines={1} style={styles.routePlace}>
                 {to}
@@ -102,18 +115,18 @@ function DayRouteBand({
       ) : null}
 
       {transport ? (
-        <View style={styles.routeMeta}>
+        <View style={styles.routeMetaRow}>
           <Ionicons name="bus-outline" size={13} color={palette.mutedForeground} />
-          <AppText variant="caption" tone="muted" style={styles.routeMetaText}>
+          <AppText variant="caption" tone="muted" numberOfLines={2} style={styles.routeMetaText}>
             {transport}
           </AppText>
         </View>
       ) : null}
 
       {routes.map((route) => (
-        <View key={`${route.name}-${route.day ?? 'any'}`} style={styles.routeMeta}>
-          <Ionicons name="navigate-outline" size={13} color={palette.mutedForeground} />
-          <AppText variant="caption" tone="muted" style={styles.routeMetaText}>
+        <View key={`${route.name}-${route.day ?? 'any'}`} style={styles.routeMetaRow}>
+          <Ionicons name="navigate-outline" size={12} color={palette.mutedForeground} />
+          <AppText variant="caption" tone="muted" numberOfLines={1} style={styles.routeMetaText}>
             {route.name}
             {route.distanceKm > 0 ? ` · ${route.distanceKm.toFixed(1)} km` : ''}
             {route.mode ? ` · ${route.mode}` : ''}
@@ -125,24 +138,36 @@ function DayRouteBand({
 }
 
 /**
- * One day of the plan. The first day opens by itself; later days stay as a
- * single header row until someone taps them, so a ten-day trip reads as a
- * short list instead of a wall of cards.
+ * One day of the plan as a time rail: the start time sits in a left gutter and
+ * the stops share hairline dividers instead of one bordered card each, so a
+ * four-stop day reads as a single schedule rather than a stack of boxes.
+ *
+ * Uncontrolled by default (first day open); the trip page controls `open` so
+ * the day chips can switch which sheet is showing.
  */
 export function DayCard({
   day,
   routes,
   first,
   tripId,
+  open: openProp,
+  onToggle,
 }: {
   day: GalleryDay;
   routes: GalleryRoute[];
   first: boolean;
   /** Member context: enables the authenticated photo route. */
   tripId?: string;
+  open?: boolean;
+  onToggle?: () => void;
 }) {
   const { palette } = useTheme();
-  const [open, setOpen] = useState(first);
+  const [selfOpen, setSelfOpen] = useState(first);
+  const open = openProp ?? selfOpen;
+  const toggle = () => {
+    setSelfOpen((value) => !value);
+    onToggle?.();
+  };
   const title = cleanDayTitle(day.title);
   const stopCount = day.activities.length;
   const places = day.activities
@@ -158,48 +183,22 @@ export function DayCard({
         accessibilityLabel={`Day ${day.day}${title ? `: ${title}` : ''}`}
         accessibilityState={{ expanded: open }}
         aria-expanded={open}
-        onPress={() => setOpen((value) => !value)}
+        onPress={toggle}
         style={({ pressed }) => [styles.header, pressed && styles.headerPressed]}
       >
-        <View
-          style={[
-            styles.dayBadge,
-            {
-              backgroundColor: open ? palette.primary : palette.muted,
-              borderColor: open ? palette.primary : palette.border,
-            },
-          ]}
-        >
-          <AppText
-            variant="label"
-            style={{ color: open ? palette.primaryForeground : palette.primary }}
-          >
-            {day.day}
+        <View style={styles.headerText}>
+          <AppText variant="caption" tone="primary" style={styles.dayEyebrow}>
+            DAY {day.day}
+          </AppText>
+          <AppText variant="heading" numberOfLines={open ? 2 : 1}>
+            {title || `Day ${day.day}`}
+          </AppText>
+          <AppText variant="caption" tone="muted" numberOfLines={1}>
+            {stopCount > 0 ? `${stopCount} ${stopCount === 1 ? 'stop' : 'stops'}` : 'A day to wander'}
+            {places.length > 1 ? ` · ${places[0]} to ${places[places.length - 1]}` : ''}
+            {day.permit_required ? ' · Permit needed' : ''}
           </AppText>
         </View>
-        <View style={styles.headerText}>
-          <View style={styles.headerTitleRow}>
-            <AppText variant="bodyStrong">Day {day.day}</AppText>
-            {!open && stopCount > 0 ? (
-              <AppText variant="caption" tone="muted">
-                {stopCount} {stopCount === 1 ? 'stop' : 'stops'}
-              </AppText>
-            ) : null}
-          </View>
-          {title ? (
-            <AppText tone="muted" numberOfLines={open ? 2 : 1}>
-              {title}
-            </AppText>
-          ) : null}
-        </View>
-        {day.permit_required ? (
-          <View style={[styles.permit, { backgroundColor: `${palette.accent}1F` }]}>
-            <Ionicons name="ticket-outline" size={12} color={palette.accent} />
-            <AppText variant="caption" style={{ color: palette.accent }}>
-              Permit
-            </AppText>
-          </View>
-        ) : null}
         <Ionicons
           name={open ? 'chevron-up' : 'chevron-down'}
           size={16}
@@ -209,68 +208,99 @@ export function DayCard({
 
       {open ? (
         <>
-          {day.image ? (
-            <TripPhoto
-              photo={day.image}
-              tripId={tripId}
-              style={styles.dayPhoto}
-              accessibilityLabel={`Photo for day ${day.day}`}
-            />
-          ) : null}
-
-          <DayRouteBand day={day} routes={dayRoutes} places={places} />
+          <DayRouteLine day={day} routes={dayRoutes} places={places} />
 
           {day.activities.length > 0 ? (
-            <View style={styles.section}>
-              {day.activities.map((activity, index) => (
-                <View key={`${activity.name}-${index}`} style={styles.activity}>
-                  <View style={styles.timeColumn}>
-                    {activity.time ? (
-                      <View style={[styles.timePill, { backgroundColor: palette.muted }]}>
-                        <AppText variant="caption" tone="primary" style={styles.timeText}>
-                          {activity.time}
-                        </AppText>
-                      </View>
-                    ) : (
-                      <View style={[styles.activityDot, { backgroundColor: palette.primary }]} />
-                    )}
-                  </View>
-                  {activity.image ? (
-                    <TripPhoto
-                      photo={activity.image}
-                      tripId={tripId}
-                      style={styles.activityPhoto}
-                      accessibilityLabel={`${activity.name} photo`}
-                    />
-                  ) : null}
-                  <View style={styles.rowBody}>
-                    <AppText variant="bodyStrong">{activity.name}</AppText>
-                    {activity.description ? (
-                      <AppText variant="caption" tone="muted" style={styles.description}>
-                        {activity.description}
+            <View style={styles.rail}>
+              {day.activities.map((activity, index) => {
+                const time = timeParts(activity.time);
+                const isFirst = index === 0;
+                const isLast = index === day.activities.length - 1;
+                return (
+                  <View
+                    key={`${activity.name}-${index}`}
+                    style={[
+                      styles.stop,
+                      !isFirst && {
+                        borderTopWidth: StyleSheet.hairlineWidth,
+                        borderTopColor: palette.border,
+                      },
+                    ]}
+                  >
+                    <View style={styles.timeCol}>
+                      {time ? (
+                        <>
+                          <AppText variant="caption" style={styles.clock} numberOfLines={1}>
+                            {time.clock}
+                          </AppText>
+                          {time.meridiem ? (
+                            <AppText variant="caption" tone="muted" style={styles.meridiem}>
+                              {time.meridiem}
+                            </AppText>
+                          ) : null}
+                        </>
+                      ) : null}
+                    </View>
+
+                    <View style={styles.track}>
+                      <View
+                        style={[
+                          styles.trackLine,
+                          {
+                            backgroundColor: palette.border,
+                            top: isFirst ? 16 : 0,
+                            ...(isLast ? { height: 10 } : { bottom: 0 }),
+                          },
+                        ]}
+                      />
+                      <View
+                        style={[
+                          styles.stopDot,
+                          {
+                            borderColor: isLast ? palette.accent : palette.primary,
+                            backgroundColor: palette.card,
+                          },
+                        ]}
+                      />
+                    </View>
+
+                    <View style={styles.stopBody}>
+                      <AppText variant="bodyStrong" numberOfLines={2}>
+                        {activity.name}
                       </AppText>
-                    ) : null}
-                    {activity.location ? (
-                      <View style={styles.locationRow}>
-                        <Ionicons
-                          name="location-outline"
-                          size={12}
-                          color={palette.mutedForeground}
-                        />
-                        <AppText variant="caption" tone="muted">
+                      {activity.location ? (
+                        <AppText variant="caption" tone="muted" numberOfLines={1}>
                           {activity.location}
                         </AppText>
-                      </View>
+                      ) : null}
+                      {activity.description ? (
+                        <AppText
+                          variant="caption"
+                          tone="muted"
+                          numberOfLines={2}
+                          style={styles.stopDesc}
+                        >
+                          {activity.description}
+                        </AppText>
+                      ) : null}
+                    </View>
+
+                    {activity.image ? (
+                      <TripPhoto
+                        photo={activity.image}
+                        tripId={tripId}
+                        style={[styles.thumb, { backgroundColor: palette.muted }]}
+                        accessibilityLabel={`${activity.name} photo`}
+                      />
                     ) : null}
                   </View>
-                </View>
-              ))}
+                );
+              })}
             </View>
           ) : null}
 
           {day.stay_recommendations.length > 0 ? (
             <View style={styles.section}>
-              <DayLabel>WHERE YOU SLEEP</DayLabel>
               {day.stay_recommendations.map((stay, index) => (
                 <StayRow key={`${stay.name}-${index}`} stay={stay} tripId={tripId} />
               ))}
@@ -325,68 +355,55 @@ const styles = StyleSheet.create({
   card: { gap: space.lg },
   header: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   headerPressed: { opacity: 0.7 },
-  dayBadge: {
-    width: 38,
-    height: 38,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   headerText: { flex: 1, gap: 2 },
-  headerTitleRow: { flexDirection: 'row', alignItems: 'baseline', gap: space.sm },
-  permit: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: radius.pill,
-  },
-  routeBand: {
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    padding: space.md,
-    gap: space.sm,
-  },
+  dayEyebrow: { letterSpacing: 1.2, fontSize: 11 },
+  route: { gap: 5, marginTop: -2 },
   routeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  routeDot: { width: 7, height: 7, borderRadius: radius.pill },
+  routeDot: { width: 6, height: 6, borderRadius: radius.pill },
   routePlace: { flexShrink: 1 },
-  routeLine: { flex: 1, borderBottomWidth: 1, borderStyle: 'dashed', marginHorizontal: 2 },
-  routeMeta: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
-  routeMetaText: { flex: 1, lineHeight: 17 },
-  section: { gap: space.sm },
-  dayPhoto: {
-    width: '100%',
-    height: 168,
-    borderRadius: radius.xl,
-    backgroundColor: '#e4eae7',
+  routeDash: { flex: 1, borderBottomWidth: 1, borderStyle: 'dashed', marginHorizontal: 2 },
+  routeMetaRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
+  routeMetaText: { flex: 1, lineHeight: 16 },
+  rail: { marginTop: -4 },
+  stop: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: space.sm },
+  timeCol: { width: 46, alignItems: 'flex-end', paddingTop: 1 },
+  clock: { fontSize: 11, fontWeight: '600', letterSpacing: 0.2 },
+  meridiem: { fontSize: 8, letterSpacing: 1 },
+  track: { width: 16, alignSelf: 'stretch' },
+  trackLine: { position: 'absolute', left: 7, width: 1 },
+  stopDot: {
+    position: 'absolute',
+    left: 3,
+    top: 7,
+    width: 9,
+    height: 9,
+    borderRadius: radius.pill,
+    borderWidth: 2,
   },
+  stopBody: { flex: 1, gap: 2 },
+  stopDesc: { lineHeight: 17 },
+  section: { gap: space.sm },
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   labelTick: { width: 12, height: 2, borderRadius: radius.pill },
   label: { letterSpacing: 0.8, fontSize: 11 },
-  row: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm },
-  rowIcon: {
-    width: 30,
-    height: 30,
+  rowBody: { flex: 1, gap: 3, justifyContent: 'center' },
+  stayBand: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    borderRadius: radius.xl,
+    padding: space.md,
+  },
+  stayPhoto: { width: 44, height: 44, borderRadius: radius.md },
+  stayIcon: {
+    width: 44,
+    height: 44,
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  rowBody: { flex: 1, gap: 2 },
-  stayPhoto: { width: 40, height: 40, borderRadius: radius.lg, backgroundColor: '#e4eae7' },
-  activityPhoto: { width: 52, height: 52, borderRadius: radius.lg, backgroundColor: '#e4eae7' },
-  activity: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md },
-  timeColumn: { width: 54, alignItems: 'flex-start', paddingTop: 2 },
-  timePill: {
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: radius.sm,
-  },
-  timeText: { fontSize: 12, lineHeight: 16 },
-  activityDot: { width: 7, height: 7, borderRadius: radius.pill, marginTop: 7, marginLeft: 6 },
-  description: { lineHeight: 18 },
-  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 1 },
+  stayEyebrow: { letterSpacing: 1.1, fontSize: 10 },
+  thumb: { width: 44, height: 44, borderRadius: radius.md },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   foodChip: {
     flexDirection: 'row',
@@ -401,7 +418,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: space.sm,
     padding: space.md,
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
     borderWidth: 1,
   },
   tipText: { lineHeight: 18 },

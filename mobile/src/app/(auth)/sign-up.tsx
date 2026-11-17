@@ -1,17 +1,20 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useRef, useState, type ComponentRef } from 'react';
-import { Keyboard, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Keyboard, StyleSheet, TextInput } from 'react-native';
 
 import { ApiError } from '@/api/client';
 import { useSession } from '@/auth/SessionProvider';
+import { AuthFooter, AuthShell } from '@/components/auth/AuthShell';
 import { space } from '@/theme/tokens';
-import { AppText, Button, InlineError, Screen, TextField } from '@/ui';
+import { Button, InlineError, TextField } from '@/ui';
 
 const EMAIL = /^\S+@\S+\.\S+$/;
 
 export default function SignUpScreen() {
   const { signUp } = useSession();
   const router = useRouter();
+  const params = useLocalSearchParams<{ next?: string | string[] }>();
+  const next = Array.isArray(params.next) ? params.next[0] : params.next;
   const emailRef = useRef<ComponentRef<typeof TextInput>>(null);
   const passwordRef = useRef<ComponentRef<typeof TextInput>>(null);
   const [name, setName] = useState('');
@@ -34,11 +37,14 @@ export default function SignUpScreen() {
     setError(null);
     setSubmitting(true);
     try {
-      await signUp({
-        email: trimmedEmail,
-        password,
-        ...(trimmedName ? { name: trimmedName } : {}),
-      });
+      await signUp(
+        {
+          email: trimmedEmail,
+          password,
+          ...(trimmedName ? { name: trimmedName } : {}),
+        },
+        next
+      );
     } catch (nextError) {
       setError(
         nextError instanceof ApiError
@@ -50,104 +56,75 @@ export default function SignUpScreen() {
     }
   }
 
+  function openSignIn() {
+    router.replace({ pathname: '/sign-in', params: next ? { next } : {} });
+  }
+
   return (
-    <Screen scroll avoidKeyboard contentContainerStyle={styles.content}>
-      <View style={styles.top}>
-        <View style={styles.head}>
-          <AppText variant="title" tone="primary" style={styles.wordmark}>
-            waytowalk
-          </AppText>
-          <AppText variant="display">Make yourself at home.</AppText>
-          <AppText tone="muted">
-            One account for the trips you join, the trips you plan and the people you meet along
-            the way.
-          </AppText>
-        </View>
-
-        <View style={styles.form}>
-          <InlineError message={error} />
-          <TextField
-            label="Name"
-            value={name}
-            onChangeText={setName}
-            placeholder="Mira Chen"
-            hint="Optional — people see this on your trips."
-            autoCapitalize="words"
-            autoComplete="name"
-            textContentType="name"
-            returnKeyType="next"
-            onSubmitEditing={() => emailRef.current?.focus()}
-          />
-          <TextField
-            ref={emailRef}
-            label="Email"
-            value={email}
-            onChangeText={setEmail}
-            placeholder="you@example.com"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoComplete="email"
-            textContentType="emailAddress"
-            returnKeyType="next"
-            onSubmitEditing={() => passwordRef.current?.focus()}
-          />
-          <TextField
-            ref={passwordRef}
-            label="Password"
-            value={password}
-            onChangeText={setPassword}
-            placeholder="At least 6 characters"
-            hint="At least 6 characters."
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoComplete="new-password"
-            textContentType="newPassword"
-            returnKeyType="go"
-            onSubmitEditing={submit}
-          />
-          <Button
-            label="Create account"
-            size="lg"
-            loading={submitting}
-            onPress={submit}
-            style={styles.submit}
-          />
-        </View>
-      </View>
-
-      <View style={styles.footer}>
-        <AppText tone="muted">Already have an account?</AppText>
-        <Pressable
-          accessibilityRole="link"
-          hitSlop={8}
-          onPress={() => router.replace('/sign-in')}
-        >
-          <AppText variant="bodyStrong" tone="primary">
-            Sign in
-          </AppText>
-        </Pressable>
-      </View>
-    </Screen>
+    <AuthShell
+      title="Make yourself at home."
+      subtitle="One account for the trips you join, the trips you plan and the people you meet along the way."
+      footer={
+        <AuthFooter prompt="Already have an account?" action="Sign in" onPress={openSignIn} />
+      }
+    >
+      <InlineError message={error} />
+      <TextField
+        label="Name"
+        filled
+        value={name}
+        onChangeText={setName}
+        placeholder="Mira Chen"
+        hint="Optional — people see this on your trips."
+        autoCapitalize="words"
+        autoComplete="name"
+        textContentType="name"
+        returnKeyType="next"
+        onSubmitEditing={() => emailRef.current?.focus()}
+      />
+      <TextField
+        ref={emailRef}
+        label="Email"
+        filled
+        value={email}
+        onChangeText={setEmail}
+        placeholder="you@example.com"
+        keyboardType="email-address"
+        autoCapitalize="none"
+        autoCorrect={false}
+        autoComplete="email"
+        textContentType="emailAddress"
+        returnKeyType="next"
+        onSubmitEditing={() => passwordRef.current?.focus()}
+      />
+      <TextField
+        ref={passwordRef}
+        label="Password"
+        filled
+        value={password}
+        onChangeText={setPassword}
+        placeholder="At least 6 characters"
+        hint="At least 6 characters."
+        secureTextEntry
+        autoCapitalize="none"
+        autoCorrect={false}
+        autoComplete="new-password"
+        textContentType="newPassword"
+        returnKeyType="go"
+        onSubmitEditing={submit}
+      />
+      <Button
+        label="Create account"
+        size="lg"
+        variant="accent"
+        loading={submitting}
+        onPress={submit}
+        style={styles.submit}
+      />
+    </AuthShell>
   );
 }
 
 const styles = StyleSheet.create({
-  content: {
-    flexGrow: 1,
-    paddingTop: space.xl,
-    paddingBottom: space.xl,
-  },
-  top: { gap: space.xxxl },
-  head: { gap: space.sm },
-  wordmark: { letterSpacing: -0.4, marginBottom: space.md },
-  form: { gap: 14 },
   submit: { marginTop: space.sm },
-  footer: {
-    marginTop: 'auto',
-    paddingTop: space.xxl,
-    alignItems: 'center',
-    gap: space.xs,
-  },
 });

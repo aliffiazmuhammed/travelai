@@ -2,16 +2,19 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState, type ComponentProps, type ReactNode } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { ApiError } from '@/api/client';
 import {
   createTripExpense,
+  deleteExpenseReceipt,
   deleteTripExpense,
   fetchExpenseLedger,
   saveTripTravellers,
   updateTripExpense,
+  uploadExpenseReceipt,
   type ExpenseInput,
+  type ReceiptFile,
   type TripExpense,
   type TravellerInput,
 } from '@/api/expenses';
@@ -26,7 +29,9 @@ import {
   expenseDay,
   formatMoney,
   getCategoryMeta,
+  isPdfReceipt,
   payerName,
+  receiptLink,
   settleTransfers,
   splitLabel,
 } from '@/lib/expenses';
@@ -41,6 +46,21 @@ const EXPENSE_PAGE = 6;
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : 'Something went wrong. Try again.';
+}
+
+/** The server pushes new expenses at the end; `createdAt` settles any reordering. */
+function newestExpenseId(rows: TripExpense[]): string | null {
+  if (rows.length === 0) return null;
+  let newest = rows[rows.length - 1];
+  let newestTime = new Date(newest.createdAt ?? 0).getTime() || 0;
+  for (const row of rows) {
+    const time = new Date(row.createdAt ?? 0).getTime() || 0;
+    if (time >= newestTime) {
+      newest = row;
+      newestTime = time;
+    }
+  }
+  return newest._id;
 }
 
 function CardHead({ icon, title, count }: { icon: IconName; title: string; count?: number }) {
@@ -135,6 +155,7 @@ export default function ExpensesScreen() {
   const [sheetError, setSheetError] = useState<string | null>(null);
   const [travellersOpen, setTravellersOpen] = useState(false);
   const [travellersError, setTravellersError] = useState<string | null>(null);
+  const [ledgerNote, setLedgerNote] = useState<{ text: string; error: boolean } | null>(null);
 
   const tripQuery = useQuery({
     queryKey: ['my-trip', tripId],
@@ -212,13 +233,41 @@ export default function ExpensesScreen() {
   };
 
   const saveExpense = useMutation({
-    mutationFn: (input: ExpenseInput) =>
-      editingExpense
-        ? updateTripExpense(id, editingExpense._id, input)
-        : createTripExpense(id, input),
-    onSuccess: () => {
+    mutationFn: async ({
+      input,
+      receipt,
+    }: {
+      input: ExpenseInput;
+      receipt?: { file?: ReceiptFile | null; remove?: boolean };
+    }): Promise<{ text: string; error: boolean } | null> => {
+      const rows = editingExpense
+        ? await updateTripExpense(id, editingExpense._id, input)
+        : await createTripExpense(id, input);
+
+      if (!receipt?.file && !receipt?.remove) return null;
+      // The expense itself is saved; a receipt problem must not lose it, so it
+      // is reported instead of rethrowing (a retry would add a duplicate).
+      const expenseId = editingExpense?._id ?? newestExpenseId(rows);
+      if (!expenseId) return null;
+
+      try {
+        if (receipt.file) {
+          await uploadExpenseReceipt(id, expenseId, receipt.file);
+          return { text: 'Receipt attached.', error: false };
+        }
+        await deleteExpenseReceipt(id, expenseId);
+        return { text: 'Receipt removed.', error: false };
+      } catch (error) {
+        return {
+          text: `Saved, but the receipt didn’t go through: ${messageOf(error)}`,
+          error: true,
+        };
+      }
+    },
+    onSuccess: (note) => {
       refresh();
       closeSheet();
+      setLedgerNote(note);
     },
     onError: (error) => setSheetError(messageOf(error)),
   });
@@ -254,13 +303,23 @@ export default function ExpensesScreen() {
   const openAdd = () => {
     setEditingExpense(null);
     setSheetError(null);
+    setLedgerNote(null);
     setSheetOpen(true);
   };
 
   const openEdit = (expense: TripExpense) => {
     setEditingExpense(expense);
     setSheetError(null);
+    setLedgerNote(null);
     setSheetOpen(true);
+  };
+
+  const openReceipt = (url?: string | null) => {
+    const target = receiptLink(url);
+    if (!target) return;
+    Linking.openURL(target).catch(() => {
+      setLedgerNote({ text: 'That receipt couldn’t be opened on this device.', error: true });
+    });
   };
 
   const topRow = (right?: ReactNode) => (
@@ -356,6 +415,12 @@ export default function ExpensesScreen() {
 
   const budget = trip.tripDetails?.budget_per_person;
   const readOnlyLine = `Only the owner and editors change the ledger for ${tripTitle(trip)}.`;
+  const plannedTotal =
+    typeof budget === 'number' && budget > 0 && participants.length > 0
+      ? budget * participants.length
+      : null;
+  const budgetPct =
+    plannedTotal && plannedTotal > 0 ? Math.round((total / plannedTotal) * 100) : null;
 
   return (
     <View style={styles.root}>
@@ -405,14 +470,27 @@ export default function ExpensesScreen() {
             </Card>
           ) : (
             <>
-              <Card style={styles.summaryCard}>
+              <Card
+                style={[
+                  styles.summaryCard,
+                  { backgroundColor: palette.primary, borderColor: palette.primary },
+                ]}
+              >
                 <View style={styles.summaryTop}>
                   <View style={styles.summaryText}>
-                    <AppText variant="caption" tone="muted" style={styles.summaryLabel}>
+                    <AppText
+                      variant="caption"
+                      style={[styles.summaryLabel, { color: palette.primaryForeground, opacity: 0.72 }]}
+                    >
                       TOTAL SPENT
                     </AppText>
-                    <AppText variant="display">{formatMoney(total, base)}</AppText>
-                    <AppText variant="caption" tone="muted">
+                    <AppText variant="display" style={{ color: palette.primaryForeground }}>
+                      {formatMoney(total, base)}
+                    </AppText>
+                    <AppText
+                      variant="caption"
+                      style={{ color: palette.primaryForeground, opacity: 0.8 }}
+                    >
                       {expenses.length === 0
                         ? 'Nothing logged yet.'
                         : `${expenses.length} ${expenses.length === 1 ? 'entry' : 'entries'} · ${
@@ -420,26 +498,41 @@ export default function ExpensesScreen() {
                           } ${participants.length === 1 ? 'traveller' : 'travellers'}`}
                     </AppText>
                   </View>
-                  <View style={[styles.summaryIcon, { backgroundColor: palette.muted }]}>
-                    <Ionicons name="wallet-outline" size={20} color={palette.primary} />
+                  <View style={[styles.summaryIcon, { backgroundColor: 'rgba(255,255,255,0.14)' }]}>
+                    <Ionicons name="wallet-outline" size={20} color={palette.primaryForeground} />
                   </View>
                 </View>
 
                 {myBalance ? (
-                  <View style={[styles.myStrip, { borderTopColor: palette.border }]}>
+                  <View style={[styles.myStrip, { borderTopColor: 'rgba(255,255,255,0.22)' }]}>
                     <View style={styles.myStripItem}>
-                      <AppText variant="caption" tone="muted">
+                      <AppText
+                        variant="caption"
+                        style={{ color: palette.primaryForeground, opacity: 0.72 }}
+                      >
                         Your share
                       </AppText>
-                      <AppText variant="bodyStrong">{formatMoney(myBalance.share, base)}</AppText>
+                      <AppText variant="bodyStrong" style={{ color: palette.primaryForeground }}>
+                        {formatMoney(myBalance.share, base)}
+                      </AppText>
                     </View>
                     <View style={[styles.myStripItem, styles.myStripRight]}>
-                      <AppText variant="caption" tone="muted">
+                      <AppText
+                        variant="caption"
+                        style={{ color: palette.primaryForeground, opacity: 0.72 }}
+                      >
                         Standing
                       </AppText>
                       <AppText
                         variant="bodyStrong"
-                        tone={myBalance.net > 0 ? 'primary' : myBalance.net < 0 ? 'danger' : 'muted'}
+                        style={{
+                          color:
+                            myBalance.net > 0
+                              ? palette.accent
+                              : myBalance.net < 0
+                                ? '#ffd0c2'
+                                : palette.primaryForeground,
+                        }}
                       >
                         {myBalance.net > 0
                           ? `Owed ${formatMoney(myBalance.net, base)}`
@@ -451,8 +544,28 @@ export default function ExpensesScreen() {
                   </View>
                 ) : null}
 
-                {typeof budget === 'number' && budget > 0 ? (
-                  <AppText variant="caption" tone="muted">
+                {plannedTotal && budgetPct !== null ? (
+                  <View style={styles.budgetBarBlock}>
+                    <View style={styles.budgetTrack}>
+                      <View
+                        style={[
+                          styles.budgetFill,
+                          { width: `${Math.min(budgetPct, 100)}%` as `${number}%` },
+                        ]}
+                      />
+                    </View>
+                    <AppText
+                      variant="caption"
+                      style={{ color: palette.primaryForeground, opacity: 0.8 }}
+                    >
+                      {budgetPct}% of the {formatMoney(plannedTotal, 'INR')} plan
+                    </AppText>
+                  </View>
+                ) : typeof budget === 'number' && budget > 0 ? (
+                  <AppText
+                    variant="caption"
+                    style={{ color: palette.primaryForeground, opacity: 0.75 }}
+                  >
                     Planned at {formatMoney(budget, 'INR')} per person. The ledger tracks what was
                     actually spent.
                   </AppText>
@@ -524,6 +637,12 @@ export default function ExpensesScreen() {
                     : 'Newest first, exactly as they were logged.'}
                 </AppText>
 
+                {ledgerNote ? (
+                  <AppText variant="caption" tone={ledgerNote.error ? 'danger' : 'primary'}>
+                    {ledgerNote.text}
+                  </AppText>
+                ) : null}
+
                 {expenses.length === 0 ? (
                   <View style={styles.empty}>
                     <Ionicons name="receipt-outline" size={22} color={palette.mutedForeground} />
@@ -583,6 +702,25 @@ export default function ExpensesScreen() {
                               </AppText>
                             ) : null}
                           </View>
+                          {expense.receiptUrl ? (
+                            <Pressable
+                              accessibilityRole="button"
+                              accessibilityLabel="View receipt"
+                              hitSlop={8}
+                              onPress={() => openReceipt(expense.receiptUrl)}
+                              style={[styles.receiptBadge, { backgroundColor: palette.muted }]}
+                            >
+                              <Ionicons
+                                name={
+                                  isPdfReceipt(expense.receiptUrl)
+                                    ? 'document-text-outline'
+                                    : 'image-outline'
+                                }
+                                size={14}
+                                color={palette.primary}
+                              />
+                            </Pressable>
+                          ) : null}
                           <View style={styles.expenseAmount}>
                             <AppText variant="bodyStrong">
                               {formatMoney(baseAmountOf(expense), base)}
@@ -678,7 +816,8 @@ export default function ExpensesScreen() {
           deleteBusy={removeExpense.isPending}
           error={sheetError}
           onClose={closeSheet}
-          onSubmit={(input) => saveExpense.mutate(input)}
+          onSubmit={(input, receipt) => saveExpense.mutate({ input, receipt })}
+          onViewReceipt={openReceipt}
           onDelete={
             editingExpense ? () => removeExpense.mutate(editingExpense._id) : undefined
           }
@@ -704,7 +843,7 @@ export default function ExpensesScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  content: { paddingTop: space.sm, paddingBottom: space.xxxl },
+  content: { paddingTop: space.sm, paddingBottom: space.xxxl, gap: space.lg },
   page: { width: '100%', maxWidth: 560, alignSelf: 'center', gap: space.xl },
   topRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   back: {
@@ -758,6 +897,14 @@ const styles = StyleSheet.create({
   },
   myStripItem: { gap: 2 },
   myStripRight: { alignItems: 'flex-end' },
+  budgetBarBlock: { gap: 6, marginTop: space.xs },
+  budgetTrack: {
+    height: 6,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    overflow: 'hidden',
+  },
+  budgetFill: { height: '100%', borderRadius: radius.pill, backgroundColor: '#e87656' },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   cardTitle: { flex: 1 },
   countPill: {
@@ -802,6 +949,13 @@ const styles = StyleSheet.create({
   },
   expenseText: { flex: 1, gap: 1 },
   expenseAmount: { alignItems: 'flex-end', gap: 1 },
+  receiptBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   empty: { alignItems: 'flex-start', gap: space.sm, paddingVertical: space.sm },
   pager: {
     flexDirection: 'row',

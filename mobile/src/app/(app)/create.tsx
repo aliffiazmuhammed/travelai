@@ -106,7 +106,7 @@ function ChoiceChip({
       style={({ pressed }) => [
         styles.chip,
         {
-          backgroundColor: active ? `${palette.primary}12` : palette.card,
+          backgroundColor: active ? palette.primary : palette.card,
           borderColor: active ? palette.primary : palette.border,
           opacity: pressed ? 0.8 : 1,
         },
@@ -116,15 +116,22 @@ function ChoiceChip({
         <Ionicons
           name={icon}
           size={16}
-          color={active ? palette.primary : palette.mutedForeground}
+          color={active ? palette.primaryForeground : palette.mutedForeground}
         />
       ) : null}
       <View style={styles.chipText}>
-        <AppText variant="label" tone={active ? 'primary' : 'default'}>
+        <AppText
+          variant="label"
+          style={active ? { color: palette.primaryForeground } : undefined}
+        >
           {label}
         </AppText>
         {caption ? (
-          <AppText variant="caption" tone="muted">
+          <AppText
+            variant="caption"
+            style={active ? { color: palette.primaryForeground, opacity: 0.8 } : undefined}
+            tone={active ? 'default' : 'muted'}
+          >
             {caption}
           </AppText>
         ) : null}
@@ -341,16 +348,13 @@ export default function CreateScreen() {
 
       <View style={styles.page}>
         <View style={styles.progress}>
-          <View style={styles.track}>
-            {([1, 2, 3] as const).map((value) => (
-              <View
-                key={value}
-                style={[
-                  styles.segment,
-                  { backgroundColor: value <= step ? palette.primary : palette.muted },
-                ]}
-              />
-            ))}
+          <View style={[styles.track, { backgroundColor: palette.muted }]}>
+            <View
+              style={[
+                styles.trackFill,
+                { width: `${(step / 3) * 100}%` as `${number}%`, backgroundColor: palette.primary },
+              ]}
+            />
           </View>
           <AppText variant="caption" tone="muted" style={styles.progressLabel}>
             Step {step} of 3
@@ -385,13 +389,16 @@ export default function CreateScreen() {
                     style={({ pressed }) => [
                       styles.pillChip,
                       {
-                        backgroundColor: active ? `${palette.primary}12` : palette.muted,
+                        backgroundColor: active ? palette.primary : palette.muted,
                         borderColor: active ? palette.primary : 'transparent',
                         opacity: pressed ? 0.8 : 1,
                       },
                     ]}
                   >
-                    <AppText variant="caption" tone={active ? 'primary' : 'default'}>
+                    <AppText
+                      variant="caption"
+                      style={active ? { color: palette.primaryForeground } : undefined}
+                    >
                       {idea.label}
                     </AppText>
                   </Pressable>
@@ -523,13 +530,16 @@ export default function CreateScreen() {
                       style={({ pressed }) => [
                         styles.pillChip,
                         {
-                          backgroundColor: active ? `${palette.primary}12` : palette.muted,
+                          backgroundColor: active ? palette.primary : palette.muted,
                           borderColor: active ? palette.primary : 'transparent',
                           opacity: pressed ? 0.8 : 1,
                         },
                       ]}
                     >
-                      <AppText variant="caption" tone={active ? 'primary' : 'default'}>
+                      <AppText
+                        variant="caption"
+                        style={active ? { color: palette.primaryForeground } : undefined}
+                      >
                         ₹{preset >= 100000 ? `${preset / 100000}L` : `${preset / 1000}k`}
                       </AppText>
                     </Pressable>
@@ -594,16 +604,19 @@ export default function CreateScreen() {
                         styles.pillChip,
                         styles.interestChip,
                         {
-                          backgroundColor: active ? `${palette.primary}12` : palette.muted,
+                          backgroundColor: active ? palette.primary : palette.muted,
                           borderColor: active ? palette.primary : 'transparent',
                           opacity: atLimit ? 0.4 : pressed ? 0.8 : 1,
                         },
                       ]}
                     >
                       {active ? (
-                        <Ionicons name="checkmark" size={13} color={palette.primary} />
+                        <Ionicons name="checkmark" size={13} color={palette.primaryForeground} />
                       ) : null}
-                      <AppText variant="caption" tone={active ? 'primary' : 'default'}>
+                      <AppText
+                        variant="caption"
+                        style={active ? { color: palette.primaryForeground } : undefined}
+                      >
                         {option.label}
                       </AppText>
                     </Pressable>
@@ -655,7 +668,8 @@ export default function CreateScreen() {
               <Button
                 label="Build my plan"
                 size="lg"
-                icon={<Ionicons name="sparkles" size={17} color="#ffffff" />}
+                variant="accent"
+                icon={<Ionicons name="sparkles" size={17} color={palette.accentForeground} />}
                 onPress={start}
               />
               <AppText variant="caption" tone="muted" style={styles.footerNote}>
@@ -666,7 +680,8 @@ export default function CreateScreen() {
             <Button
               label="Continue"
               size="lg"
-              icon={<Ionicons name="arrow-forward" size={17} color="#ffffff" />}
+              variant="accent"
+              icon={<Ionicons name="arrow-forward" size={17} color={palette.accentForeground} />}
               onPress={advance}
             />
           )}
@@ -706,8 +721,8 @@ const styles = StyleSheet.create({
   wordmark: { letterSpacing: -0.4 },
   page: { width: '100%', maxWidth: 560, alignSelf: 'center', gap: space.xl },
   progress: { flexDirection: 'row', alignItems: 'center', gap: space.md },
-  track: { flex: 1, flexDirection: 'row', gap: 6 },
-  segment: { flex: 1, height: 4, borderRadius: radius.pill },
+  track: { flex: 1, height: 6, borderRadius: radius.pill, overflow: 'hidden' },
+  trackFill: { height: '100%', borderRadius: radius.pill },
   progressLabel: { fontFamily: fontFamily.semibold, letterSpacing: 0.4 },
   hero: { gap: space.sm },
   stepBody: { gap: space.xl },

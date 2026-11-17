@@ -1,20 +1,20 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useRef, useState, type ComponentRef } from 'react';
-import { Keyboard, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Keyboard, Pressable, StyleSheet, TextInput } from 'react-native';
 
 import { ApiError } from '@/api/client';
 import { useSession } from '@/auth/SessionProvider';
-import { radius, space } from '@/theme/tokens';
-import { useTheme } from '@/theme/useTheme';
-import { AppText, Button, InlineError, Screen, TextField } from '@/ui';
+import { AuthFooter, AuthNotice, AuthShell } from '@/components/auth/AuthShell';
+import { space } from '@/theme/tokens';
+import { AppText, Button, InlineError, TextField } from '@/ui';
 
 const EMAIL = /^\S+@\S+\.\S+$/;
 
 export default function SignInScreen() {
   const { signIn, sessionExpired } = useSession();
-  const { palette } = useTheme();
   const router = useRouter();
+  const params = useLocalSearchParams<{ next?: string | string[] }>();
+  const next = Array.isArray(params.next) ? params.next[0] : params.next;
   const passwordRef = useRef<ComponentRef<typeof TextInput>>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -33,7 +33,7 @@ export default function SignInScreen() {
     setError(null);
     setSubmitting(true);
     try {
-      await signIn(trimmedEmail, password);
+      await signIn(trimmedEmail, password, next);
     } catch (nextError) {
       setError(
         nextError instanceof ApiError
@@ -45,100 +45,79 @@ export default function SignInScreen() {
     }
   }
 
+  function openSignUp() {
+    router.push({ pathname: '/sign-up', params: next ? { next } : {} });
+  }
+
   return (
-    <Screen scroll avoidKeyboard contentContainerStyle={styles.content}>
-      <View style={styles.top}>
-        <View style={styles.head}>
-          <AppText variant="title" tone="primary" style={styles.wordmark}>
-            waytowalk
-          </AppText>
-          <AppText variant="display">Welcome back.</AppText>
-          <AppText tone="muted">
-            Your trips, your crew and the next slow morning are right where you left them.
-          </AppText>
-        </View>
-
-        <View style={styles.form}>
-          {sessionExpired ? (
-            <View style={[styles.expired, { backgroundColor: palette.muted }]}>
-              <Ionicons name="time-outline" size={16} color={palette.primary} />
-              <AppText variant="caption" tone="muted" style={styles.expiredText}>
-                Your session timed out, so we signed you out. Sign in and your trips are right
-                where you left them.
-              </AppText>
-            </View>
-          ) : null}
-          <InlineError message={error} />
-          <TextField
-            label="Email"
-            value={email}
-            onChangeText={setEmail}
-            placeholder="you@example.com"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoComplete="email"
-            textContentType="emailAddress"
-            returnKeyType="next"
-            onSubmitEditing={() => passwordRef.current?.focus()}
-          />
-          <TextField
-            ref={passwordRef}
-            label="Password"
-            value={password}
-            onChangeText={setPassword}
-            placeholder="Your password"
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoComplete="current-password"
-            textContentType="password"
-            returnKeyType="go"
-            onSubmitEditing={submit}
-          />
-          <Button label="Sign in" size="lg" loading={submitting} onPress={submit} style={styles.submit} />
-        </View>
-      </View>
-
-      <View style={styles.footer}>
-        <AppText tone="muted">New to waytowalk?</AppText>
-        <Pressable
-          accessibilityRole="link"
-          hitSlop={8}
-          onPress={() => router.push('/sign-up')}
-        >
-          <AppText variant="bodyStrong" tone="primary">
-            Create an account
-          </AppText>
-        </Pressable>
-      </View>
-    </Screen>
+    <AuthShell
+      title="Welcome back."
+      subtitle="Your trips, your crew and the next slow morning are right where you left them."
+      notice={
+        sessionExpired ? (
+          <AuthNotice icon="time-outline" compact>
+            Your session timed out, so we signed you out. Sign in and your trips are right where
+            you left them.
+          </AuthNotice>
+        ) : undefined
+      }
+      footer={
+        <AuthFooter prompt="New to waytowalk?" action="Create an account" onPress={openSignUp} />
+      }
+    >
+      <InlineError message={error} />
+      <TextField
+        label="Email"
+        filled
+        value={email}
+        onChangeText={setEmail}
+        placeholder="you@example.com"
+        keyboardType="email-address"
+        autoCapitalize="none"
+        autoCorrect={false}
+        autoComplete="email"
+        textContentType="emailAddress"
+        returnKeyType="next"
+        onSubmitEditing={() => passwordRef.current?.focus()}
+      />
+      <TextField
+        ref={passwordRef}
+        label="Password"
+        filled
+        value={password}
+        onChangeText={setPassword}
+        placeholder="Your password"
+        secureTextEntry
+        autoCapitalize="none"
+        autoCorrect={false}
+        autoComplete="current-password"
+        textContentType="password"
+        returnKeyType="go"
+        onSubmitEditing={submit}
+      />
+      <Pressable
+        accessibilityRole="link"
+        hitSlop={8}
+        onPress={() => router.push('/forgot-password')}
+        style={styles.forgot}
+      >
+        <AppText variant="label" tone="primary">
+          Forgot password?
+        </AppText>
+      </Pressable>
+      <Button
+        label="Sign in"
+        size="lg"
+        variant="accent"
+        loading={submitting}
+        onPress={submit}
+        style={styles.submit}
+      />
+    </AuthShell>
   );
 }
 
 const styles = StyleSheet.create({
-  content: {
-    flexGrow: 1,
-    paddingTop: space.xl,
-    paddingBottom: space.xl,
-  },
-  top: { gap: space.xxxl },
-  head: { gap: space.sm },
-  wordmark: { letterSpacing: -0.4, marginBottom: space.md },
-  form: { gap: 14 },
-  expired: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: space.sm,
-    padding: space.md,
-    borderRadius: radius.lg,
-  },
-  expiredText: { flex: 1, lineHeight: 18 },
+  forgot: { alignSelf: 'flex-end', marginTop: -4 },
   submit: { marginTop: space.sm },
-  footer: {
-    marginTop: 'auto',
-    paddingTop: space.xxl,
-    alignItems: 'center',
-    gap: space.xs,
-  },
 });

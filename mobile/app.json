@@ -47,7 +47,8 @@
           "cameraPermission": "Take a photo for your trip. waytowalk only opens the camera when you ask it to.",
           "microphonePermission": false
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "extra": {
       "router": {

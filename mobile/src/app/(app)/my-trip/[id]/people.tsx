@@ -818,7 +818,7 @@ export default function PeopleScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  content: { paddingTop: space.sm, paddingBottom: space.xxxl },
+  content: { paddingTop: space.sm, paddingBottom: space.xxxl, gap: space.lg },
   page: { width: '100%', maxWidth: 560, alignSelf: 'center', gap: space.xl },
   topRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, marginBottom: space.lg },
   back: {

@@ -18,6 +18,8 @@ interface TextFieldProps extends TextInputProps {
   label: string;
   hint?: string;
   error?: string;
+  /** Tinted field for surfaces that are already elevated, such as the auth sheet. */
+  filled?: boolean;
   containerStyle?: StyleProp<ViewStyle>;
   ref?: Ref<ComponentRef<typeof TextInput>>;
 }
@@ -26,6 +28,7 @@ export function TextField({
   label,
   hint,
   error,
+  filled = false,
   containerStyle,
   secureTextEntry,
   style,
@@ -38,14 +41,25 @@ export function TextField({
   const [focused, setFocused] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const canReveal = secureTextEntry === true;
-  const borderColor = error ? palette.destructive : focused ? palette.primary : palette.border;
+  const borderColor = error
+    ? palette.destructive
+    : filled && !focused
+      ? 'transparent'
+      : focused
+        ? palette.primary
+        : palette.border;
 
   return (
     <View style={containerStyle}>
       <AppText variant="label" style={styles.label}>
         {label}
       </AppText>
-      <View style={[styles.field, { backgroundColor: palette.card, borderColor }]}>
+      <View
+        style={[
+          styles.field,
+          { backgroundColor: filled ? palette.muted : palette.card, borderColor },
+        ]}
+      >
         <TextInput
           ref={ref}
           {...rest}

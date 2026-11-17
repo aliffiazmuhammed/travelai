@@ -10,8 +10,7 @@ import {
 } from 'react-native';
 
 import { fetchMyTrips, type MyTripSummary } from '@/api/trips';
-import { useSession } from '@/auth/SessionProvider';
-import { TripLibraryCard, TripLibraryCardSkeleton } from '@/components/TripLibraryCard';
+import { TripLibraryRow, TripLibraryRowSkeleton } from '@/components/TripLibraryRow';
 import {
   matchesTripTab,
   sortMyTrips,
@@ -19,28 +18,29 @@ import {
   type TripTab,
 } from '@/lib/personalTrip';
 import { goToCreate, goToTab } from '@/navigation/tabs';
-import { fontFamily, radius, space } from '@/theme/tokens';
+import { radius, space } from '@/theme/tokens';
 import { useTheme } from '@/theme/useTheme';
 import {
   AppText,
-  Avatar,
   Button,
   Card,
   InlineError,
+  ListGroup,
   NAV_BOTTOM_SPACE,
   NavShell,
-  PillTabs,
   Screen,
   SearchBar,
-  type PillTabItem,
+  SectionHeader,
+  Segmented,
+  type SegmentItem,
 } from '@/ui';
 
 const PAGE_SIZE = 8;
 
-const TABS: readonly PillTabItem<TripTab>[] = [
-  { key: 'upcoming', label: 'Coming up', icon: 'calendar-outline' },
-  { key: 'drafts', label: 'Drafts', icon: 'create-outline' },
-  { key: 'past', label: 'Past', icon: 'time-outline' },
+const TABS: readonly SegmentItem<TripTab>[] = [
+  { key: 'upcoming', label: 'Upcoming' },
+  { key: 'drafts', label: 'Drafts' },
+  { key: 'past', label: 'Past' },
 ];
 
 const RESULT_LABEL: Record<TripTab, string> = {
@@ -68,7 +68,6 @@ type Row = { trip: MyTripSummary; shared: boolean };
 
 export default function TripsScreen() {
   const { palette } = useTheme();
-  const { user } = useSession();
   const router = useRouter();
   const scrollRef = useRef<ScrollViewInstance>(null);
   const resultsOffset = useRef(0);
@@ -129,7 +128,6 @@ export default function TripsScreen() {
 
   const visibleOwned = pageRows.filter((row) => !row.shared);
   const visibleShared = pageRows.filter((row) => row.shared);
-  const hasShared = groups.shared.length > 0;
   const hasQuery = search.trim().length > 0;
   const pending = tripsQuery.isPending;
   const errorMessage = tripsQuery.isError
@@ -144,10 +142,9 @@ export default function TripsScreen() {
   };
 
   const renderRow = (row: Row) => (
-    <TripLibraryCard
+    <TripLibraryRow
       key={row.trip._id}
       trip={row.trip}
-      shared={row.shared}
       onPress={() =>
         router.push({ pathname: '/my-trip/[id]', params: { id: row.trip._id } })
       }
@@ -165,25 +162,31 @@ export default function TripsScreen() {
       >
         <View style={styles.page}>
           <View style={styles.topRow}>
-            <AppText variant="heading" tone="primary" style={styles.wordmark}>
-              waytowalk
-            </AppText>
+            <View style={styles.intro}>
+              <AppText variant="display">My trips</AppText>
+              <AppText variant="caption" tone="muted">
+                Shaping, going, or already behind you.
+              </AppText>
+            </View>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Open your profile"
-              onPress={() => goToTab('profile')}
-              style={({ pressed }) => [styles.avatarButton, { opacity: pressed ? 0.75 : 1 }]}
+              accessibilityLabel="Plan a new trip"
+              onPress={goToCreate}
+              style={({ pressed }) => [
+                styles.newTrip,
+                { backgroundColor: palette.accent, opacity: pressed ? 0.85 : 1 },
+              ]}
             >
-              <Avatar name={user?.name || user?.email || 'You'} size={36} uri={user?.avatarUrl} />
+              <Ionicons name="add" size={24} color={palette.accentForeground} />
             </Pressable>
           </View>
 
-          <View style={styles.intro}>
-            <AppText variant="title">The plans you’re part of.</AppText>
-            <AppText variant="caption" tone="muted">
-              Shaping, going, or already behind you.
-            </AppText>
-          </View>
+          <Segmented
+            accessibilityLabel="Trip state"
+            items={TABS}
+            value={tab}
+            onChange={changeTab}
+          />
 
           <View style={styles.controls}>
             <SearchBar
@@ -192,7 +195,6 @@ export default function TripsScreen() {
               placeholder="Search your trips"
               accessibilityLabel="Search your trips"
             />
-            <PillTabs items={TABS} value={tab} onChange={changeTab} />
           </View>
 
           <View
@@ -201,14 +203,14 @@ export default function TripsScreen() {
               resultsOffset.current = event.nativeEvent.layout.y;
             }}
           >
-            <View style={styles.resultsHeader}>
-              <AppText variant="label">{RESULT_LABEL[tab]}</AppText>
-              {tripsQuery.data ? (
-                <AppText variant="caption" tone="muted">
-                  {groups.all.length} {groups.all.length === 1 ? 'trip' : 'trips'}
-                </AppText>
-              ) : null}
-            </View>
+            <SectionHeader
+              title={RESULT_LABEL[tab]}
+              caption={
+                tripsQuery.data
+                  ? `${groups.all.length} ${groups.all.length === 1 ? 'trip' : 'trips'}`
+                  : undefined
+              }
+            />
 
             {errorMessage ? (
               <View style={styles.errorBlock}>
@@ -223,11 +225,12 @@ export default function TripsScreen() {
             ) : null}
 
             {pending ? (
-              <>
-                <TripLibraryCardSkeleton />
-                <TripLibraryCardSkeleton />
-                <TripLibraryCardSkeleton />
-              </>
+              <ListGroup>
+                <TripLibraryRowSkeleton />
+                <TripLibraryRowSkeleton />
+                <TripLibraryRowSkeleton />
+                <TripLibraryRowSkeleton />
+              </ListGroup>
             ) : null}
 
             {!pending && !errorMessage && groups.all.length === 0 ? (
@@ -266,22 +269,16 @@ export default function TripsScreen() {
             ) : null}
 
             {!pending && !errorMessage && visibleOwned.length > 0 ? (
-              <View style={styles.group}>
-                {hasShared ? (
-                  <AppText variant="caption" tone="muted" style={styles.groupLabel}>
-                    YOURS
-                  </AppText>
-                ) : null}
-                {visibleOwned.map(renderRow)}
-              </View>
+              <ListGroup>{visibleOwned.map(renderRow)}</ListGroup>
             ) : null}
 
             {!pending && !errorMessage && visibleShared.length > 0 ? (
               <View style={styles.group}>
-                <AppText variant="caption" tone="muted" style={styles.groupLabel}>
-                  SHARED WITH YOU
-                </AppText>
-                {visibleShared.map(renderRow)}
+                <SectionHeader
+                  title="Shared with you"
+                  caption="Trips other travellers brought you into"
+                />
+                <ListGroup>{visibleShared.map(renderRow)}</ListGroup>
               </View>
             ) : null}
 
@@ -306,6 +303,31 @@ export default function TripsScreen() {
                 />
               </View>
             ) : null}
+
+            {!pending && !errorMessage && groups.all.length > 0 ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Plan a new trip"
+                onPress={goToCreate}
+                style={({ pressed }) => [
+                  styles.planCard,
+                  { borderColor: palette.primary, opacity: pressed ? 0.8 : 1 },
+                ]}
+              >
+                <View style={[styles.planIcon, { backgroundColor: palette.accent }]}>
+                  <Ionicons name="add" size={22} color={palette.accentForeground} />
+                </View>
+                <View style={styles.planText}>
+                  <AppText variant="heading">Plan a new trip</AppText>
+                  <AppText variant="caption" tone="muted">
+                    Start with a blank page or let waytowalk suggest one.
+                  </AppText>
+                  <AppText variant="label" tone="accent">
+                    Start planning
+                  </AppText>
+                </View>
+              </Pressable>
+            ) : null}
           </View>
         </View>
       </Screen>
@@ -328,15 +350,18 @@ export default function TripsScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   page: { width: '100%', maxWidth: 560, alignSelf: 'center', gap: space.xl },
-  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  wordmark: { letterSpacing: -0.4 },
-  avatarButton: { borderRadius: radius.pill },
-  intro: { gap: 2 },
+  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md },
+  intro: { gap: 2, flex: 1 },
+  newTrip: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   controls: { gap: space.md },
   results: { gap: space.lg },
-  resultsHeader: { gap: 2 },
   group: { gap: space.md },
-  groupLabel: { fontFamily: fontFamily.semibold, letterSpacing: 1.2, fontSize: 10 },
   errorBlock: { gap: space.md, alignItems: 'flex-start' },
   empty: { alignItems: 'flex-start', gap: space.sm },
   emptyIcon: {
@@ -348,4 +373,21 @@ const styles = StyleSheet.create({
     marginBottom: space.xs,
   },
   pager: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  planCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    padding: space.lg,
+    borderRadius: radius.xxl,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+  },
+  planIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  planText: { flex: 1, gap: 2 },
 });

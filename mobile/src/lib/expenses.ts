@@ -4,6 +4,48 @@ import type {
   TripExpense,
   TripParticipant,
 } from '@/api/expenses';
+import { assetUrl } from '@/config';
+
+/** Mirrors `backend/src/services/finance/receipt.ts`; the server is the judge. */
+export const RECEIPT_MAX_MB = 5;
+export const RECEIPT_MAX_BYTES = RECEIPT_MAX_MB * 1024 * 1024;
+export const RECEIPT_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'application/pdf',
+] as const;
+
+export function isPdfReceipt(url?: string | null): boolean {
+  return /\.pdf(\?|#|$)/i.test(String(url ?? ''));
+}
+
+export function receiptKindLabel(url?: string | null): string {
+  return isPdfReceipt(url) ? 'PDF receipt' : 'Photo receipt';
+}
+
+/** Absolute URL for a stored receipt (relative `/uploads/...` or Cloudinary). */
+export function receiptLink(url?: string | null): string {
+  const value = String(url ?? '');
+  if (!value) return '';
+  return /^https?:\/\//i.test(value) ? value : assetUrl(value);
+}
+
+/** Pre-flight check so an obviously bad file never makes an upload round trip. */
+export function receiptError(file: {
+  name?: string;
+  type?: string;
+  size?: number;
+}): string | null {
+  const type = String(file.type ?? '').toLowerCase();
+  if (!(RECEIPT_MIME_TYPES as readonly string[]).includes(type)) {
+    return 'Receipts must be a JPEG, PNG, WebP image or PDF.';
+  }
+  const size = Number(file.size ?? 0);
+  if (!Number.isFinite(size) || size <= 0) return 'That file appears to be empty.';
+  if (size > RECEIPT_MAX_BYTES) return `Receipts must be smaller than ${RECEIPT_MAX_MB} MB.`;
+  return null;
+}
 
 export const EXPENSE_CATEGORIES = [
   { id: 'accommodation', label: 'Accommodation', icon: 'bed-outline', color: '#3b82f6' },

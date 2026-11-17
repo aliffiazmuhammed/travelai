@@ -1,9 +1,8 @@
-import { useColorScheme } from 'react-native';
+import type { Palette } from './tokens';
+import { useThemePreference } from './ThemeProvider';
 
-import { palettes, type Palette } from './tokens';
-
-/** System-driven palette. Components read colors from here, never from a constant. */
+/** Palette from the appearance preference (system by default). */
 export function useTheme(): { palette: Palette; isDark: boolean } {
-  const isDark = useColorScheme() === 'dark';
-  return { palette: isDark ? palettes.dark : palettes.light, isDark };
+  const { palette, isDark } = useThemePreference();
+  return { palette, isDark };
 }
