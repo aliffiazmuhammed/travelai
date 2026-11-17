@@ -42,7 +42,7 @@ import {
   PollSheet,
   type ChoiceOption,
 } from '@/components/discussion/DiscussionSheets';
-import { useDecodedPolls, type DecodedPoll } from '@/hooks/useDecodedPolls';
+import type { DecodedPoll } from '@/hooks/useDecodedPolls';
 import { useDiscussionCrypto, type DiscussionCrypto } from '@/hooks/useDiscussionCrypto';
 import { radius, space } from '@/theme/tokens';
 import { useTheme } from '@/theme/useTheme';
@@ -167,11 +167,13 @@ function Pager({
 
 function SealStrip({ crypto }: { crypto: DiscussionCrypto }) {
   const { palette } = useTheme();
-  const { status, keylessReason, error, retry } = crypto;
+  const router = useRouter();
+  const { status, keylessReason, error, backupError, backupStatus, retry } = crypto;
+  const recoveryLocked = backupStatus === 'locked' || backupStatus === 'recoveryNeeded';
 
   if (status === 'off') return null;
 
-  const pending = status === 'starting' || status === 'bootstrap';
+  const pending = status === 'starting' || status === 'bootstrap' || status === 'restoring';
   const tone =
     status === 'ready'
       ? palette.primary
@@ -185,21 +187,25 @@ function SealStrip({ crypto }: { crypto: DiscussionCrypto }) {
       : status === 'error'
         ? 'Sealing hit a snag'
         : status === 'keyless'
-          ? 'This phone is waiting for the key'
-          : 'Setting up sealed messages';
+          ? recoveryLocked ? 'Unlock your backed-up history' : 'This phone is waiting for the key'
+          : status === 'restoring' ? 'Restoring sealed messages' : 'Setting up sealed messages';
 
   const body =
     status === 'ready'
       ? 'Every message is locked on this phone before it leaves, and only people on this trip can open it.'
       : status === 'error'
-        ? error || 'The conversation key could not be loaded. Nothing you write will be sealed yet.'
+        ? error || 'The current conversation key could not be checked. Sending is paused; readable history stays available.'
         : status === 'keyless'
-          ? keylessReason === 'mismatch'
-            ? 'This phone hasn’t been recognised by the conversation key yet. When another member opens the trip, they can share it here. Until then, anything you send is visible to the server.'
-            : 'The key hasn’t reached this phone yet. When another member opens the trip, it will be shared here. Until then, anything you send is visible to the server.'
-          : status === 'bootstrap'
-            ? 'This phone is creating the conversation key and handing it to everyone on the trip.'
-            : 'Getting this phone’s key ready for the conversation.';
+          ? recoveryLocked
+            ? 'Open account recovery to unlock backed-up keys. Sending stays paused until the current key is available; readable older messages can still appear.'
+            : keylessReason === 'mismatch'
+              ? 'This phone cannot open the current device envelope yet. A key-holding member can share it by opening the trip. Sending is paused, not sent as plaintext.'
+              : 'The current key has not reached this phone. Restore a backup or ask a key-holding member to open the trip. Sending is paused.'
+          : status === 'restoring'
+            ? 'Checking device envelopes and account backups. Sending waits for the current key; older readable history can appear first.'
+            : status === 'bootstrap'
+              ? 'This phone is creating the conversation key and handing it to everyone on the trip.'
+              : 'Getting this phone’s key ready for the conversation. Sending is paused.';
 
   return (
     <Card style={styles.sealCard}>
@@ -221,13 +227,23 @@ function SealStrip({ crypto }: { crypto: DiscussionCrypto }) {
           {title}
         </AppText>
         {pending ? <ActivityIndicator size="small" color={palette.primary} /> : null}
-        {status === 'keyless' || status === 'error' ? (
+        {status === 'keyless' || status === 'error' || backupError || error ? (
           <Button label="Check again" variant="secondary" size="sm" onPress={retry} />
         ) : null}
       </View>
       <AppText variant="caption" tone="muted">
         {body}
       </AppText>
+      {status === 'ready' && error ? <InlineError message={error} /> : null}
+      <InlineError message={backupError ?? (backupStatus === 'error' ? 'Account backups are unavailable. Open account recovery to retry; existing chat keys are kept.' : null)} />
+      {backupStatus === 'disabled' ? (
+        <AppText variant="caption" tone="muted">Account backups are not enabled. Readable history is not yet protected by account recovery.</AppText>
+      ) : recoveryLocked && status === 'ready' ? (
+        <AppText variant="caption" tone="muted">This phone can chat, but account backups are locked. Unlock them to restore or back up more history.</AppText>
+      ) : null}
+      {recoveryLocked || backupStatus === 'disabled' || backupStatus === 'error' || backupError ? (
+        <Button label={backupStatus === 'disabled' ? 'Set up chat backup' : 'Open account recovery'} variant="secondary" size="sm" onPress={() => router.push('/account')} />
+      ) : null}
     </Card>
   );
 }
@@ -577,9 +593,54 @@ function CommentBubble({
   );
 }
 
+/* Historical polls use the same epoch keyring as comments, without a ready-only
+ * gate. The shared legacy hook caches failed polls forever, so keep this reader
+ * scoped here until it can be migrated separately. */
+function useHistoricalPolls(polls: TripPoll[], crypto: DiscussionCrypto, currentUserId?: string) {
+  const [decoded, setDecoded] = useState<Map<string, DecodedPoll>>(new Map());
+  const { openJson, isCurrent, keyRevision } = crypto;
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const next = new Map<string, DecodedPoll>();
+      for (const poll of polls) {
+        const payload = await openJson<{ q?: unknown; o?: unknown }>(poll.body, `poll:${poll._id}`);
+        if (!alive || !isCurrent()) return;
+        const options = Array.isArray(payload?.o) ? payload.o.slice(0, 8).map(String) : [];
+        const counts = options.map(() => 0);
+        const voters: DecodedPoll['voters'] = [];
+        // Sequential reads bound decryption work; each key search yields in batches.
+        for (const vote of poll.votes) {
+          const raw = await openJson<number>(vote.choice, `vote:${poll._id}:${vote.userId}`);
+          if (!alive || !isCurrent()) return;
+          const choice = typeof raw === 'number' && Number.isInteger(raw) && raw >= 0 && raw < options.length ? raw : null;
+          if (choice !== null) counts[choice] += 1;
+          voters.push({ userId: vote.userId, label: vote.label, choice });
+        }
+        next.set(poll._id, {
+          question: typeof payload?.q === 'string' ? payload.q : '', options, counts,
+          total: voters.length, voters,
+          myChoice: voters.find((vote) => vote.userId === currentUserId)?.choice ?? null,
+        });
+      }
+      if (alive && isCurrent()) setDecoded(next);
+    })();
+    return () => { alive = false; };
+  }, [polls, currentUserId, openJson, isCurrent, keyRevision]);
+  return isCurrent() ? decoded : new Map<string, DecodedPoll>();
+}
+
 /* Screen -------------------------------------------------------------------- */
 
 export default function DiscussionScreen() {
+  const { user } = useSession();
+  const params = useLocalSearchParams();
+  const tripId = Array.isArray(params.id) ? params.id[0] : params.id;
+  // Clear drafts, decoded polls and mutation UI as well as crypto on scope changes.
+  return <DiscussionContent key={`${user?._id ?? ''}:${tripId ?? ''}`} />;
+}
+
+function DiscussionContent() {
   const { palette } = useTheme();
   const { user } = useSession();
   const router = useRouter();
@@ -612,7 +673,7 @@ export default function DiscussionScreen() {
   const lastMarkedRef = useRef<string | null>(null);
 
   const tripQuery = useQuery({
-    queryKey: ['my-trip', tripId],
+    queryKey: ['my-trip', tripId, user?._id],
     queryFn: () => (tripId ? fetchMyTrip(tripId) : Promise.reject(new Error('No trip requested.'))),
     enabled: Boolean(tripId),
     retry: (failureCount, error) =>
@@ -623,7 +684,7 @@ export default function DiscussionScreen() {
     !(error instanceof ApiError && error.status >= 400 && error.status < 500) && failureCount < 1;
 
   const commentsQuery = useQuery({
-    queryKey: ['discussion-comments', tripId],
+    queryKey: ['discussion-comments', tripId, user?._id],
     queryFn: () => (tripId ? fetchEveryComment(tripId) : Promise.reject(new Error('No trip.'))),
     enabled: Boolean(tripId),
     retry: retryPolicy,
@@ -631,7 +692,7 @@ export default function DiscussionScreen() {
   });
 
   const decisionsQuery = useQuery({
-    queryKey: ['discussion-decisions', tripId],
+    queryKey: ['discussion-decisions', tripId, user?._id],
     queryFn: () => fetchDecisions(id),
     enabled: Boolean(tripId),
     retry: retryPolicy,
@@ -639,7 +700,7 @@ export default function DiscussionScreen() {
   });
 
   const pollsQuery = useQuery({
-    queryKey: ['discussion-polls', tripId],
+    queryKey: ['discussion-polls', tripId, user?._id],
     queryFn: () => fetchPolls(id),
     enabled: Boolean(tripId),
     retry: retryPolicy,
@@ -647,13 +708,13 @@ export default function DiscussionScreen() {
   });
 
   const crypto = useDiscussionCrypto(tripId, user?._id, Boolean(tripId && user?._id));
-  const { plaintextOf, syncRows, encryptOutgoing, sealJson, rememberPlaintext } = crypto;
-  const ready = crypto.status === 'ready';
+  const { plaintextOf, syncRows, encryptOutgoing, sealJson, rememberPlaintext, captureSession, isCurrent } = crypto;
+  const ready = crypto.canSend;
 
   const comments = useMemo(() => commentsQuery.data ?? [], [commentsQuery.data]);
   const decisions = useMemo(() => decisionsQuery.data ?? [], [decisionsQuery.data]);
   const polls = useMemo(() => pollsQuery.data ?? [], [pollsQuery.data]);
-  const decodedPolls = useDecodedPolls(polls, crypto, user?._id);
+  const decodedPolls = useHistoricalPolls(polls, crypto, user?._id);
 
   const trip = tripQuery.data;
   const role = trip?.role ?? 'owner';
@@ -669,7 +730,7 @@ export default function DiscussionScreen() {
   // late: decryption is cached by ciphertext, so repeat sweeps cost nothing.
   useEffect(() => {
     syncRows([...comments, ...decisions]);
-  }, [syncRows, comments, decisions]);
+  }, [syncRows, comments, decisions, crypto.keyRevision]);
 
   // Opening the conversation is reading it. Marking is throttled by the newest
   // row's timestamp, so the 20s refresh doesn't hammer the read marker.
@@ -677,90 +738,114 @@ export default function DiscussionScreen() {
   useEffect(() => {
     if (!tripId || !newestStamp || newestStamp === lastMarkedRef.current) return;
     lastMarkedRef.current = newestStamp;
-    void markDiscussionRead(tripId)
-      .then((state) => {
-        queryClient.setQueryData(['discussion-read', tripId], state);
-      })
-      .catch(() => {
-        lastMarkedRef.current = null;
-      });
-  }, [tripId, newestStamp, queryClient]);
+    let alive = true;
+    void (async () => {
+      const fence = await captureSession();
+      await fence.check();
+      const state = await markDiscussionRead(tripId, fence.sessionToken);
+      await fence.check();
+      if (alive) queryClient.setQueryData(['discussion-read', tripId], state);
+    })().catch(() => {
+      if (alive) lastMarkedRef.current = null;
+    });
+    return () => { alive = false; };
+  }, [tripId, newestStamp, queryClient, captureSession]);
 
   const invalidateComments = () =>
-    queryClient.invalidateQueries({ queryKey: ['discussion-comments', tripId] });
+    queryClient.invalidateQueries({ queryKey: ['discussion-comments', tripId, user?._id] });
   const invalidateDecisions = () =>
-    queryClient.invalidateQueries({ queryKey: ['discussion-decisions', tripId] });
+    queryClient.invalidateQueries({ queryKey: ['discussion-decisions', tripId, user?._id] });
   const invalidatePolls = () =>
-    queryClient.invalidateQueries({ queryKey: ['discussion-polls', tripId] });
+    queryClient.invalidateQueries({ queryKey: ['discussion-polls', tripId, user?._id] });
 
   const sendComment = useMutation({
     mutationFn: async (text: string) => {
+      const fence = await captureSession();
       const sealed = await encryptOutgoing(text);
+      await fence.check();
       const saved = await postComment(id, {
         body: sealed.body,
         e2ee: sealed.e2ee,
         day: anchorDay ?? undefined,
-      });
+      }, fence.sessionToken);
+      await fence.check();
       rememberPlaintext(saved, text);
       return saved;
     },
     onSuccess: () => {
+      if (!isCurrent()) return;
       setDraft('');
       setComposeError(null);
       void invalidateComments();
     },
-    onError: (error) => setComposeError(messageOf(error)),
+    onError: (error) => isCurrent() && setComposeError(messageOf(error)),
   });
 
   const saveEdit = useMutation({
     mutationFn: async (text: string) => {
       if (!editingComment) throw new Error('That message is no longer being edited.');
+      const fence = await captureSession();
       const sealed = await encryptOutgoing(text);
+      await fence.check();
       const saved = await editComment(id, editingComment._id, {
         body: sealed.body,
         e2ee: sealed.e2ee,
-      });
+      }, fence.sessionToken);
+      await fence.check();
       rememberPlaintext(saved, text);
       return saved;
     },
     onSuccess: () => {
+      if (!isCurrent()) return;
       setEditingComment(null);
       setEditError(null);
       void invalidateComments();
     },
-    onError: (error) => setEditError(messageOf(error)),
+    onError: (error) => isCurrent() && setEditError(messageOf(error)),
   });
 
+  const scopedWrite = async <T,>(write: (sessionToken: string) => Promise<T>): Promise<T> => {
+    const fence = await captureSession();
+    await fence.check();
+    const result = await write(fence.sessionToken);
+    await fence.check();
+    return result;
+  };
+
   const removeMessage = useMutation({
-    mutationFn: (commentId: string) => removeComment(id, commentId),
+    mutationFn: (commentId: string) => scopedWrite((token) => removeComment(id, commentId, token)),
     onSuccess: () => {
+      if (!isCurrent()) return;
       setActionsComment(null);
       setActionError(null);
       void invalidateComments();
     },
-    onError: (error) => setActionError(messageOf(error)),
+    onError: (error) => isCurrent() && setActionError(messageOf(error)),
   });
 
   const markDecision = useMutation({
-    mutationFn: (commentId: string) => promoteDecision(id, commentId),
+    mutationFn: (commentId: string) => scopedWrite((token) => promoteDecision(id, commentId, token)),
     onSuccess: () => {
+      if (!isCurrent()) return;
       setActionsComment(null);
       setActionError(null);
       void invalidateDecisions();
     },
-    onError: (error) => setActionError(messageOf(error)),
+    onError: (error) => isCurrent() && setActionError(messageOf(error)),
   });
 
   const unmarkDecision = useMutation({
     mutationFn: (decisionId: string) => {
       setUnmarkingId(decisionId);
-      return removeDecision(id, decisionId);
+      return scopedWrite((token) => removeDecision(id, decisionId, token));
     },
     onSuccess: () => {
+      if (!isCurrent()) return;
       setUnmarkingId(null);
       void invalidateDecisions();
     },
     onError: () => {
+      if (!isCurrent()) return;
       setUnmarkingId(null);
       void invalidateDecisions();
     },
@@ -774,60 +859,73 @@ export default function DiscussionScreen() {
       question: string;
       options: string[];
     }) => {
+      const fence = await captureSession();
       const sealed = await sealJson({ q: question, o: options });
       if (!sealed) {
         throw new Error('Polls can only start once this phone holds the trip key.');
       }
-      return createPoll(id, sealed);
+      await fence.check();
+      const poll = await createPoll(id, sealed, fence.sessionToken);
+      await fence.check();
+      return poll;
     },
     onSuccess: () => {
+      if (!isCurrent()) return;
       setPollSheetOpen(false);
       setPollSheetError(null);
       setPollError(null);
       setPollPage(1);
       void invalidatePolls();
     },
-    onError: (error) => setPollSheetError(messageOf(error)),
+    onError: (error) => isCurrent() && setPollSheetError(messageOf(error)),
   });
 
   const castVote = useMutation({
     mutationFn: async ({ pollId, choice }: { pollId: string; choice: number }) => {
+      const fence = await captureSession();
       const sealed = await sealJson(choice);
       if (!sealed) {
         throw new Error('This phone can’t seal a vote until it holds the trip key.');
       }
+      await fence.check();
       setVotingPollId(pollId);
-      return votePoll(id, pollId, sealed);
+      const poll = await votePoll(id, pollId, sealed, fence.sessionToken);
+      await fence.check();
+      return poll;
     },
     onSuccess: () => {
+      if (!isCurrent()) return;
       setVotingPollId(null);
       setPollError(null);
       void invalidatePolls();
     },
     onError: (error) => {
+      if (!isCurrent()) return;
       setVotingPollId(null);
       setPollError(messageOf(error));
     },
   });
 
   const shutPoll = useMutation({
-    mutationFn: (pollId: string) => closePoll(id, pollId),
+    mutationFn: (pollId: string) => scopedWrite((token) => closePoll(id, pollId, token)),
     onSuccess: () => {
+      if (!isCurrent()) return;
       setActionsPoll(null);
       setPollActionError(null);
       void invalidatePolls();
     },
-    onError: (error) => setPollActionError(messageOf(error)),
+    onError: (error) => isCurrent() && setPollActionError(messageOf(error)),
   });
 
   const dropPoll = useMutation({
-    mutationFn: (pollId: string) => deletePoll(id, pollId),
+    mutationFn: (pollId: string) => scopedWrite((token) => deletePoll(id, pollId, token)),
     onSuccess: () => {
+      if (!isCurrent()) return;
       setActionsPoll(null);
       setPollActionError(null);
       void invalidatePolls();
     },
-    onError: (error) => setPollActionError(messageOf(error)),
+    onError: (error) => isCurrent() && setPollActionError(messageOf(error)),
   });
 
   const dayNumbers = useMemo(() => {
@@ -1366,8 +1464,8 @@ export default function DiscussionScreen() {
               <View style={[styles.composerNotice, { backgroundColor: palette.muted }]}>
                 <Ionicons name="lock-open-outline" size={12} color={palette.mutedForeground} />
                 <AppText variant="caption" tone="muted" style={styles.composerNoticeText}>
-                  Sealing isn’t ready on this phone, so anything you send now is visible to the
-                  server.
+                  Sending is paused until this phone has the current trip key. Your draft stays here;
+                  nothing will be sent as plaintext.
                 </AppText>
               </View>
             ) : null}
@@ -1391,11 +1489,11 @@ export default function DiscussionScreen() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Send message"
-                accessibilityState={{ disabled: !draft.trim() || sendComment.isPending }}
-                disabled={!draft.trim() || sendComment.isPending}
+                accessibilityState={{ disabled: !ready || !draft.trim() || sendComment.isPending }}
+                disabled={!ready || !draft.trim() || sendComment.isPending}
                 onPress={() => {
                   const text = draft.trim();
-                  if (!text) return;
+                  if (!text || !ready) return;
                   setComposeError(null);
                   sendComment.mutate(text);
                 }}
@@ -1403,7 +1501,7 @@ export default function DiscussionScreen() {
                   styles.sendButton,
                   {
                     backgroundColor: palette.primary,
-                    opacity: !draft.trim() || sendComment.isPending ? 0.4 : pressed ? 0.8 : 1,
+                    opacity: !ready || !draft.trim() || sendComment.isPending ? 0.4 : pressed ? 0.8 : 1,
                   },
                 ]}
               >

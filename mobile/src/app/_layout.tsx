@@ -8,6 +8,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 
 import { SessionProvider } from '@/auth/SessionProvider';
+import { ChatRecoveryPrompt } from '@/components/ChatRecovery';
 import { queryClient } from '@/query/client';
 import { ThemeProvider, useThemePreference } from '@/theme/ThemeProvider';
 
@@ -17,6 +18,7 @@ function RootStack() {
     <>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerShown: false }} />
+      <ChatRecoveryPrompt />
     </>
   );
 }

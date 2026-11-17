@@ -20,14 +20,35 @@ const webStorage = {
 
 const storage = Platform.OS === 'web' ? webStorage : SecureStore;
 
-export function getSessionToken(): Promise<string | null> {
+let writes: Promise<unknown> = Promise.resolve();
+
+function serialize<T>(operation: () => Promise<T>): Promise<T> {
+  const result = writes.catch(() => undefined).then(operation);
+  writes = result.catch(() => undefined);
+  return result;
+}
+
+export async function getSessionToken(): Promise<string | null> {
+  await writes;
   return storage.getItemAsync(TOKEN_KEY);
 }
 
-export function setSessionToken(token: string): Promise<void> {
-  return storage.setItemAsync(TOKEN_KEY, token);
+export function setSessionToken(token: string, isCurrent: () => boolean): Promise<boolean> {
+  return serialize(async () => {
+    if (!isCurrent()) return false;
+    await storage.setItemAsync(TOKEN_KEY, token);
+    return isCurrent();
+  });
 }
 
 export function clearSessionToken(): Promise<void> {
-  return storage.deleteItemAsync(TOKEN_KEY);
+  return serialize(() => storage.deleteItemAsync(TOKEN_KEY));
+}
+
+export function replaceSessionToken(previous: string, next: string): Promise<boolean> {
+  return serialize(async () => {
+    if (await storage.getItemAsync(TOKEN_KEY) !== previous) return false;
+    await storage.setItemAsync(TOKEN_KEY, next);
+    return true;
+  });
 }

@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -16,7 +17,8 @@ import {
   type SessionUser,
 } from '@/api/auth';
 import { ApiError, setUnauthorizedHandler } from '@/api/client';
-import { clearSessionToken, getSessionToken } from '@/auth/tokenStorage';
+import { clearSessionToken, getSessionToken, setSessionToken } from '@/auth/tokenStorage';
+import { keyBackup } from '@/auth/chatKeyBackup';
 import { queryClient } from '@/query/client';
 
 export type SessionStatus = 'loading' | 'signedIn' | 'signedOut';
@@ -45,13 +47,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [expired, setExpired] = useState(false);
   const [nextRoute, setNextRoute] = useState<string | null>(null);
+  const sessionSequence = useRef(0);
 
   useEffect(() => {
     let active = true;
+    const ticket = ++sessionSequence.current;
 
     // A token can expire between launches; the API client reports that here so
     // the app returns to sign-in instead of showing errors on every screen.
     setUnauthorizedHandler(() => {
+      sessionSequence.current += 1;
+      void keyBackup.end().catch(() => {});
       clearSessionToken().catch(() => {});
       queryClient.clear();
       setUser(null);
@@ -63,15 +69,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       try {
         const token = await getSessionToken();
         if (!token) {
-          if (active) setStatus('signedOut');
+          if (active && ticket === sessionSequence.current) setStatus('signedOut');
           return;
         }
 
         const me = await getMe();
-        if (!active) return;
+        if (!active || ticket !== sessionSequence.current) return;
         setUser(me);
         setStatus('signedIn');
+        void keyBackup.begin(me._id, token).catch(() => {});
       } catch (error) {
+        if (!active || ticket !== sessionSequence.current) return;
         // A rejected token is worthless; a network failure is not, so keep it
         // for the next launch and just fall back to the sign-in screen.
         if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
@@ -90,41 +98,55 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const signIn = useCallback(async (email: string, password: string, next?: string) => {
-    const nextUser = await apiSignin(email, password);
+  const acceptSession = useCallback(async (
+    response: { user: SessionUser; token: string },
+    ticket: number,
+    password: string,
+    next?: string,
+  ) => {
+    if (!await setSessionToken(response.token, () => ticket === sessionSequence.current)) return;
+    if (ticket !== sessionSequence.current) return;
     queryClient.clear();
     setExpired(false);
     setNextRoute(next && next.startsWith('/') ? next : null);
-    setUser(nextUser);
+    setUser(response.user);
     setStatus('signedIn');
+    void keyBackup.begin(response.user._id, response.token, password).catch(() => {});
   }, []);
+
+  const signIn = useCallback(async (email: string, password: string, next?: string) => {
+    const ticket = ++sessionSequence.current;
+    await keyBackup.end().catch(() => {});
+    const response = await apiSignin(email, password);
+    await acceptSession(response, ticket, password, next);
+  }, [acceptSession]);
 
   const signUp = useCallback(
     async (input: { email: string; password: string; name?: string }, next?: string) => {
-      const nextUser = await apiSignup(input.email, input.password, input.name);
-      queryClient.clear();
-      setExpired(false);
-      setNextRoute(next && next.startsWith('/') ? next : null);
-      setUser(nextUser);
-      setStatus('signedIn');
+      const ticket = ++sessionSequence.current;
+      await keyBackup.end().catch(() => {});
+      const response = await apiSignup(input.email, input.password, input.name);
+      await acceptSession(response, ticket, input.password, next);
     },
-    []
+    [acceptSession]
   );
 
   const signOut = useCallback(async () => {
-    try {
-      await apiSignOut();
-    } finally {
-      queryClient.clear();
-      setExpired(false);
-      setNextRoute(null);
-      setUser(null);
-      setStatus('signedOut');
-    }
+    sessionSequence.current += 1;
+    const cleanup = keyBackup.end();
+    const tokenCleanup = apiSignOut();
+    queryClient.clear();
+    setExpired(false);
+    setNextRoute(null);
+    setUser(null);
+    setStatus('signedOut');
+    // Signing out is already complete in memory; a storage failure must not
+    // surface as a rejected action in the UI.
+    await Promise.allSettled([cleanup, tokenCleanup]);
   }, []);
 
   const updateUser = useCallback((next: SessionUser) => {
-    setUser(next);
+    setUser((previous) => previous?._id === next._id ? next : previous);
   }, []);
 
   const value = useMemo(

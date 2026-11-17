@@ -5,7 +5,7 @@ import { Platform } from 'react-native';
 import { bytesToBase64, createChatCrypto, type ChatIdentity } from '@/lib/chatCrypto';
 
 /** One chat crypto instance for the whole app; randomness comes from the OS. */
-export const chatCrypto = createChatCrypto((length) => Crypto.getRandomBytes(length));
+export const chatCrypto = createChatCrypto((length) => Crypto.getRandomValues(new Uint8Array(length)));
 
 /**
  * Chat identities are per account, not per device: the web client's one-key-

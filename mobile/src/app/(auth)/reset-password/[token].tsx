@@ -29,6 +29,8 @@ export default function ResetPasswordScreen() {
     setSubmitting(true);
     try {
       await resetPasswordWithToken(token, password);
+      setPassword('');
+      setConfirm('');
       setDone(true);
     } catch (nextError) {
       setError(
@@ -72,7 +74,7 @@ export default function ResetPasswordScreen() {
             <Button label="Sign in" variant="accent" onPress={() => router.replace('/sign-in')} />
           }
         >
-          Sign in with your new password to continue.
+          Sign in with your new password to continue. If you enabled chat backup, have your saved recovery code ready. Resetting your password does not erase backups, but it locks their password access.
         </AuthNotice>
       ) : (
         <>

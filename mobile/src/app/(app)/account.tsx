@@ -14,6 +14,7 @@ import {
   type ProfileChanges,
 } from '@/api/account';
 import { useSession } from '@/auth/SessionProvider';
+import { ChatRecoverySettings } from '@/components/ChatRecovery';
 import { radius, space } from '@/theme/tokens';
 import { useTheme } from '@/theme/useTheme';
 import { AppText, Avatar, Button, Card, InlineError, Screen, TextField } from '@/ui';
@@ -389,6 +390,8 @@ export default function AccountScreen() {
                 : 'Saves to your account right away.'}
           </AppText>
         </Card>
+
+        <ChatRecoverySettings key={user?._id} />
 
         <Card style={styles.passwordCard}>
           <View style={styles.cardHead}>

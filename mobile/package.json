@@ -8,7 +8,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "lint": "expo lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:chat-recovery": "tsx --test tests/chatKeyBackup.test.ts tests/keyBackupSession.test.ts"
   },
   "dependencies": {
     "@expo-google-fonts/cabin": "^0.4.2",
@@ -49,6 +50,7 @@
     "@types/react": "~19.3.0",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~58.0.4",
+    "tsx": "^4.23.15",
     "typescript": "~6.0.3"
   }
 }

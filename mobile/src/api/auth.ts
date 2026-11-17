@@ -1,5 +1,5 @@
 import { apiRequest } from '@/api/client';
-import { clearSessionToken, setSessionToken } from '@/auth/tokenStorage';
+import { clearSessionToken } from '@/auth/tokenStorage';
 
 /** Mirrors `PublicUser` from backend/src/services/user/profile.ts. */
 export interface SessionUser {
@@ -24,15 +24,14 @@ interface MeResponse {
   user: SessionUser;
 }
 
-async function startSession(response: AuthResponse): Promise<SessionUser> {
+function startSession(response: AuthResponse): { user: SessionUser; token: string } {
   if (!response.token) {
     throw new Error('The server did not return a mobile session token.');
   }
-  await setSessionToken(response.token);
-  return response.user;
+  return { user: response.user, token: response.token };
 }
 
-export async function signin(email: string, password: string): Promise<SessionUser> {
+export async function signin(email: string, password: string) {
   const response = await apiRequest<AuthResponse>('/auth/signin', {
     method: 'POST',
     body: { email, password },
@@ -45,7 +44,7 @@ export async function signup(
   email: string,
   password: string,
   name?: string
-): Promise<SessionUser> {
+) {
   const response = await apiRequest<AuthResponse>('/auth/signup', {
     method: 'POST',
     body: { email, password, ...(name ? { name } : {}) },

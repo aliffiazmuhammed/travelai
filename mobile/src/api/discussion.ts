@@ -1,4 +1,11 @@
-import { apiRequest } from './client';
+import { apiRequest, type RequestOptions } from './client';
+
+/** Pin account-sensitive work: a queued request must never pick up the next login. */
+function sessionOptions(sessionToken?: string): RequestOptions {
+  return sessionToken === undefined
+    ? {}
+    : { auth: false, handleUnauthorized: false, headers: { Authorization: `Bearer ${sessionToken}` } };
+}
 
 /**
  * The trip discussion, mirrored from `backend/src/services/collab/*`.
@@ -116,11 +123,12 @@ export function fetchComments(
 
 export async function postComment(
   tripId: string,
-  input: CommentInput
+  input: CommentInput,
+  sessionToken?: string
 ): Promise<DiscussionComment> {
   const response = await apiRequest<{ success: true; comment: DiscussionComment }>(
     tripPath(tripId, '/comments'),
-    { method: 'POST', body: input }
+    { ...sessionOptions(sessionToken), method: 'POST', body: input }
   );
   return response.comment;
 }
@@ -128,22 +136,24 @@ export async function postComment(
 export async function editComment(
   tripId: string,
   commentId: string,
-  input: CommentInput
+  input: CommentInput,
+  sessionToken?: string
 ): Promise<DiscussionComment> {
   const response = await apiRequest<{ success: true; comment: DiscussionComment }>(
     tripPath(tripId, `/comments/${encodeURIComponent(commentId)}`),
-    { method: 'PATCH', body: input }
+    { ...sessionOptions(sessionToken), method: 'PATCH', body: input }
   );
   return response.comment;
 }
 
 export async function removeComment(
   tripId: string,
-  commentId: string
+  commentId: string,
+  sessionToken?: string
 ): Promise<DiscussionComment> {
   const response = await apiRequest<{ success: true; comment: DiscussionComment }>(
     tripPath(tripId, `/comments/${encodeURIComponent(commentId)}`),
-    { method: 'DELETE' }
+    { ...sessionOptions(sessionToken), method: 'DELETE' }
   );
   return response.comment;
 }
@@ -156,8 +166,9 @@ export function fetchReadState(tripId: string): Promise<DiscussionReadState> {
   );
 }
 
-export function markDiscussionRead(tripId: string): Promise<DiscussionReadState> {
+export function markDiscussionRead(tripId: string, sessionToken?: string): Promise<DiscussionReadState> {
   return apiRequest<{ success: true } & DiscussionReadState>(tripPath(tripId, '/comments/read'), {
+    ...sessionOptions(sessionToken),
     method: 'POST',
   });
 }
@@ -173,22 +184,24 @@ export async function fetchDecisions(tripId: string): Promise<TripDecision[]> {
 
 export async function promoteDecision(
   tripId: string,
-  commentId: string
+  commentId: string,
+  sessionToken?: string
 ): Promise<TripDecision> {
   const response = await apiRequest<{ success: true; decision: TripDecision }>(
     tripPath(tripId, `/comments/${encodeURIComponent(commentId)}/decision`),
-    { method: 'POST' }
+    { ...sessionOptions(sessionToken), method: 'POST' }
   );
   return response.decision;
 }
 
 export async function removeDecision(
   tripId: string,
-  decisionId: string
+  decisionId: string,
+  sessionToken?: string
 ): Promise<TripDecision> {
   const response = await apiRequest<{ success: true; decision: TripDecision }>(
     tripPath(tripId, `/decisions/${encodeURIComponent(decisionId)}`),
-    { method: 'DELETE' }
+    { ...sessionOptions(sessionToken), method: 'DELETE' }
   );
   return response.decision;
 }
@@ -203,10 +216,10 @@ export async function fetchPolls(tripId: string): Promise<TripPoll[]> {
 }
 
 /** `body` is the sealed `{ q, o[] }` payload — this client can read it, the server cannot. */
-export async function createPoll(tripId: string, body: string): Promise<TripPoll> {
+export async function createPoll(tripId: string, body: string, sessionToken?: string): Promise<TripPoll> {
   const response = await apiRequest<{ success: true; poll: TripPoll }>(
     tripPath(tripId, '/polls'),
-    { method: 'POST', body: { body } }
+    { ...sessionOptions(sessionToken), method: 'POST', body: { body } }
   );
   return response.poll;
 }
@@ -215,43 +228,48 @@ export async function createPoll(tripId: string, body: string): Promise<TripPoll
 export async function votePoll(
   tripId: string,
   pollId: string,
-  choice: string
+  choice: string,
+  sessionToken?: string
 ): Promise<TripPoll> {
   const response = await apiRequest<{ success: true; poll: TripPoll }>(
     tripPath(tripId, `/polls/${encodeURIComponent(pollId)}/votes`),
-    { method: 'POST', body: { choice } }
+    { ...sessionOptions(sessionToken), method: 'POST', body: { choice } }
   );
   return response.poll;
 }
 
-export async function closePoll(tripId: string, pollId: string): Promise<TripPoll> {
+export async function closePoll(tripId: string, pollId: string, sessionToken?: string): Promise<TripPoll> {
   const response = await apiRequest<{ success: true; poll: TripPoll }>(
     tripPath(tripId, `/polls/${encodeURIComponent(pollId)}/close`),
-    { method: 'POST' }
+    { ...sessionOptions(sessionToken), method: 'POST' }
   );
   return response.poll;
 }
 
-export async function deletePoll(tripId: string, pollId: string): Promise<TripPoll> {
+export async function deletePoll(tripId: string, pollId: string, sessionToken?: string): Promise<TripPoll> {
   const response = await apiRequest<{ success: true; poll: TripPoll }>(
     tripPath(tripId, `/polls/${encodeURIComponent(pollId)}`),
-    { method: 'DELETE' }
+    { ...sessionOptions(sessionToken), method: 'DELETE' }
   );
   return response.poll;
 }
 
 /* Chat keys (E2EE distribution) -------------------------------------------- */
 
-export function fetchChatKeys(tripId: string): Promise<ChatKeysState> {
-  return apiRequest<{ success: true } & ChatKeysState>(tripPath(tripId, '/chat/keys'));
+export function fetchChatKeys(tripId: string, sessionToken?: string): Promise<ChatKeysState> {
+  return apiRequest<{ success: true } & ChatKeysState>(
+    tripPath(tripId, '/chat/keys'), sessionOptions(sessionToken)
+  );
 }
 
 export function putChatKeys(
   tripId: string,
   epoch: number,
-  envelopes: Record<string, string>
+  envelopes: Record<string, string>,
+  sessionToken?: string
 ): Promise<ChatKeysState> {
   return apiRequest<{ success: true } & ChatKeysState>(tripPath(tripId, '/chat/keys'), {
+    ...sessionOptions(sessionToken),
     method: 'PUT',
     body: { epoch, envelopes },
   });
@@ -259,17 +277,21 @@ export function putChatKeys(
 
 export function addChatEnvelopes(
   tripId: string,
-  envelopes: Record<string, string>
+  expectedEpoch: number,
+  envelopes: Record<string, string>,
+  sessionToken?: string
 ): Promise<ChatKeysState> {
   return apiRequest<{ success: true } & ChatKeysState>(tripPath(tripId, '/chat/envelopes'), {
+    ...sessionOptions(sessionToken),
     method: 'POST',
-    body: { envelopes },
+    body: { expectedEpoch, envelopes },
   });
 }
 
 /** Publishes this device's public half; the private half never leaves the device. */
-export async function publishChatKey(pubKey: string): Promise<void> {
+export async function publishChatKey(pubKey: string, sessionToken?: string): Promise<void> {
   await apiRequest<{ success: true }>('/auth/chat-key', {
+    ...sessionOptions(sessionToken),
     method: 'PUT',
     body: { pubKey },
   });

@@ -1,6 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import type { ReactNode } from 'react';
 import {
+  KeyboardAvoidingView,
   Modal,
   Pressable,
   ScrollView,
@@ -27,6 +28,7 @@ interface SheetProps {
   bodyStyle?: StyleProp<ViewStyle>;
   dismissLabel?: string;
   closeLabel?: string;
+  avoidKeyboard?: boolean;
 }
 
 /**
@@ -44,6 +46,7 @@ export function Sheet({
   bodyStyle,
   dismissLabel = 'Dismiss',
   closeLabel = 'Close',
+  avoidKeyboard = false,
 }: SheetProps) {
   const { palette } = useTheme();
   const insets = useSafeAreaInsets();
@@ -56,7 +59,7 @@ export function Sheet({
       statusBarTranslucent
       onRequestClose={onClose}
     >
-      <View style={styles.root}>
+      <KeyboardAvoidingView style={styles.root} enabled={avoidKeyboard} behavior="padding">
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={dismissLabel}
@@ -105,7 +108,7 @@ export function Sheet({
 
           {footer ? <View style={styles.footer}>{footer}</View> : null}
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

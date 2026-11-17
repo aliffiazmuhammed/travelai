@@ -47,7 +47,9 @@ export interface RequestOptions {
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', body, headers = {}, auth = true, handleUnauthorized = true, signal } =
     options;
-  const token = auth ? await getSessionToken() : null;
+  const token = headers.Authorization?.startsWith('Bearer ')
+    ? headers.Authorization.slice(7)
+    : auth ? await getSessionToken() : null;
   const isForm = typeof FormData !== 'undefined' && body instanceof FormData;
 
   let response: Response;
@@ -74,7 +76,9 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 
   const payload = (await response.json().catch(() => null)) as (T & ApiEnvelope) | null;
   if (!response.ok || payload === null || payload.success === false) {
-    if (response.status === 401 && token && handleUnauthorized) unauthorizedHandler?.();
+    if (response.status === 401 && token && handleUnauthorized && await getSessionToken() === token) {
+      unauthorizedHandler?.();
+    }
     const message =
       payload?.error || payload?.message || `Request failed (${response.status}).`;
     throw new ApiError(message, response.status);

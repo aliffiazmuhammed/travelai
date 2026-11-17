@@ -1,6 +1,6 @@
 import { apiRequest } from '@/api/client';
 import type { SessionUser } from '@/api/auth';
-import { setSessionToken } from '@/auth/tokenStorage';
+import { keyBackup } from '@/auth/chatKeyBackup';
 
 interface UserResponse {
   success: true;
@@ -12,12 +12,6 @@ interface HandleResponse {
   handle: string;
   available: boolean;
   reason?: 'invalid' | 'reserved' | 'taken';
-}
-
-interface PasswordResponse {
-  success: true;
-  message?: string;
-  token?: string;
 }
 
 export interface ProfileChanges {
@@ -84,11 +78,5 @@ export async function changePassword(
   currentPassword: string,
   newPassword: string
 ): Promise<string | undefined> {
-  const response = await apiRequest<PasswordResponse>('/auth/password', {
-    method: 'POST',
-    body: { currentPassword, newPassword },
-    handleUnauthorized: false,
-  });
-  if (response.token) await setSessionToken(response.token);
-  return response.message;
+  return keyBackup.changePassword(currentPassword, newPassword);
 }
