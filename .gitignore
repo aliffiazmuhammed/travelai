@@ -69,3 +69,9 @@ vibe_images/
 # Mobile UI mockups — generated design renders
 mobile ui/
 desktop ui/
+
+# Design hand-off exports (concept boards, landing screenshots) and the
+# unreferenced brand PNGs in src/assets — kept local; the product loads its
+# brand assets from frontend/public/brand/
+frontend/design/
+frontend/src/assets/brand/
