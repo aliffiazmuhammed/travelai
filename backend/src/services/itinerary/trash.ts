@@ -1,6 +1,7 @@
 import { Types } from 'mongoose';
 import Trip from '../../models/Trip.js';
 import TripChatKey from '../../models/TripChatKey.js';
+import TripChatKeyBackup from '../../models/TripChatKeyBackup.js';
 import TripComment from '../../models/TripComment.js';
 import TripDecision from '../../models/TripDecision.js';
 import TripInvite from '../../models/TripInvite.js';
@@ -88,6 +89,7 @@ export async function purgeTripCascade(trip: any): Promise<void> {
 
   await Promise.all([
     TripChatKey.deleteMany({ tripId }),
+    TripChatKeyBackup.deleteMany({ tripId }),
     TripComment.deleteMany({ tripId }),
     TripDecision.deleteMany({ tripId }),
     TripInvite.deleteMany({ tripId }),

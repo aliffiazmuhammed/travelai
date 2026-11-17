@@ -58,8 +58,9 @@ export const setTripChatKeysSchema = z.object({
   envelopes: envelopesField,
 });
 
-/** POST /:id/chat/envelopes — self-healing key distribution into the CURRENT epoch. */
+/** POST /:id/chat/envelopes — merge only into the client's confirmed epoch; stale is 409. */
 export const addChatEnvelopesSchema = z.object({
+  expectedEpoch: z.number().int().min(1).max(1_000_000_000),
   envelopes: envelopesField,
 });
 

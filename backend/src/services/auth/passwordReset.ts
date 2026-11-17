@@ -5,6 +5,7 @@ import PasswordResetToken from '../../models/PasswordResetToken.js';
 import { AppError } from '../../utils/AppError.js';
 import { appUrl } from '../mail/templates.js';
 import { notifyPasswordReset } from '../mail/notify.js';
+import { credentialCASFilter, credentialUpdate, loadPersonalBackupUser } from './keyBackup.js';
 
 /**
  * Self-service password reset for the personal realm.
@@ -95,12 +96,13 @@ export async function resetPasswordWithToken(
   });
   if (!token) throw new AppError(INVALID_LINK, 400);
 
-  const user = await User.findOne({
-    _id: token.userId,
-    accountType: 'personal',
-    status: 'active',
-  });
-  if (!user) throw new AppError(INVALID_LINK, 400);
+  let user: any;
+  try {
+    user = await loadPersonalBackupUser(String(token.userId));
+  } catch (error) {
+    if (error instanceof AppError && error.statusCode === 404) throw new AppError(INVALID_LINK, 400);
+    throw error;
+  }
 
   if (await bcrypt.compare(next, user.password)) {
     throw new AppError('Choose a password you have not used on this account before.', 400);
@@ -113,12 +115,15 @@ export async function resetPasswordWithToken(
   );
   if (!claimed) throw new AppError(INVALID_LINK, 400);
 
-  user.password = await bcrypt.hash(next, 12);
-  user.passwordChangedAt = new Date();
-  user.mustChangePassword = false;
-  user.tokenVersion = Number(user.tokenVersion ?? 0) + 1;
-  await user.save();
+  // The claim stays single-use. A losing credential CAS requires a new link;
+  // never overwrite a racing enrollment/change or strand its backup wrapper.
+  const updated = await User.findOneAndUpdate(
+    credentialCASFilter(user),
+    credentialUpdate(user, await bcrypt.hash(next, 12), true),
+    { new: true, runValidators: true }
+  );
+  if (!updated) throw new AppError('Account credentials changed. Request a new reset link.', 409);
 
   await PasswordResetToken.deleteMany({ userId: user._id, _id: { $ne: claimed._id } });
-  return user;
+  return updated;
 }

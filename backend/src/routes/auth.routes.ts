@@ -21,12 +21,19 @@ import {
   signinSchema,
 } from '../schemas/auth.schema.js';
 import { publishChatKeySchema } from '../schemas/chatKey.schema.js';
-import { changePasswordSchema, updateProfileSchema } from '../schemas/profile.schema.js';
+import { personalChangePasswordSchema, updateProfileSchema } from '../schemas/profile.schema.js';
+import { requireTripRole } from '../middleware/tripAccess.middleware.js';
+import { enrollKeyBackupSchema, recoverKeyBackupSchema, putTripKeyBackupSchema } from '../schemas/keyBackup.schema.js';
+import {
+  backupBodyLimit, getKeyBackup, enrollKeyBackup, recoverKeyBackup,
+  getKeyBackupEpochs, getKeyBackupTrips, getKeyBackupRows, putKeyBackupRow,
+} from '../controllers/keyBackup.controller.js';
 import { handleAvatarUpload } from '../middleware/upload.middleware.js';
 import {
   authLimiter,
   avatarUploadLimiter,
   passwordChangeLimiter,
+  keyBackupLimiter,
 } from '../middleware/rateLimiter.middleware.js';
 
 const router = Router();
@@ -56,6 +63,16 @@ router.patch('/profile', protectPersonal, validate(updateProfileSchema), updateP
 router.get('/profile/handle-available', protectPersonal, getHandleAvailability);
 router.post('/avatar', protectPersonal, avatarUploadLimiter, handleAvatarUpload, uploadAvatar);
 router.delete('/avatar', protectPersonal, removeAvatar);
-router.post('/password', protectPersonal, passwordChangeLimiter, validate(changePasswordSchema), changePassword);
+router.post('/password', protectPersonal, passwordChangeLimiter, backupBodyLimit, validate(personalChangePasswordSchema), changePassword);
+
+// Personal first, trip guard second: a dual-cookie browser must never select
+// its agency identity for personal recovery (including agency-trip collaborators).
+router.get('/key-backup', protectPersonal, keyBackupLimiter, getKeyBackup);
+router.post('/key-backup', protectPersonal, keyBackupLimiter, passwordChangeLimiter, backupBodyLimit, validate(enrollKeyBackupSchema), enrollKeyBackup);
+router.post('/key-backup/recover', protectPersonal, keyBackupLimiter, passwordChangeLimiter, backupBodyLimit, validate(recoverKeyBackupSchema), recoverKeyBackup);
+router.get('/key-backup/trips', protectPersonal, keyBackupLimiter, getKeyBackupTrips);
+router.get('/key-backup/trips/:id/epochs', protectPersonal, requireTripRole('viewer'), keyBackupLimiter, getKeyBackupEpochs);
+router.get('/key-backup/trips/:id/backups', protectPersonal, requireTripRole('viewer'), keyBackupLimiter, getKeyBackupRows);
+router.put('/key-backup/trips/:id/backups/:epoch', protectPersonal, requireTripRole('viewer'), keyBackupLimiter, backupBodyLimit, validate(putTripKeyBackupSchema), putKeyBackupRow);
 
 export default router;

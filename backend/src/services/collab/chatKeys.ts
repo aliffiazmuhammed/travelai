@@ -395,18 +395,23 @@ export async function setTripChatKeys(
 
 /**
  * Self-healing distribution (`POST /:id/chat/envelopes`): merge the caller's
- * envelopes into the CURRENT epoch so missing/new members can decrypt. 404s
- * when the trip has no key at all — `PUT` is how a trip gets its first one;
- * 409s on a stale race with a rotation (the doc changed under us).
+ * envelopes into the explicitly expected epoch. Missing epochs are a 400;
+ * no bootstrap is a 404 and stale expected epochs are a 409. The update pins
+ * the observed document/epoch: rotation after the check may add to the old
+ * epoch, but can never put an old key's envelope into the new epoch.
  */
 export async function addTripChatEnvelopes(
   trip: any,
   callerId: string,
-  entries: Record<string, string>
+  entries: Record<string, string>,
+  expectedEpoch: number
 ): Promise<ChatKeyState> {
   const tripId = String((trip as any)._id);
   const memberIds = ((trip as any).members || []).map((m: any) => String(m.userId));
 
+  if (!Number.isInteger(expectedEpoch) || expectedEpoch < 1 || expectedEpoch > 1_000_000_000) {
+    throw new AppError('expectedEpoch must be a positive bounded integer.', 400);
+  }
   await assertSlots(entries, memberIds);
 
   const doc = await loadCurrentDoc(tripId);
@@ -414,10 +419,16 @@ export async function addTripChatEnvelopes(
     throw new AppError('This trip has no chat key yet — bootstrap it first.', 404);
   }
 
-  for (const [userId, wrapped] of Object.entries(entries)) {
-    doc.envelopes.set(userId, wrapped);
+  if (doc.epoch !== expectedEpoch) {
+    throw new AppError('The chat key epoch changed. Fetch the current key before adding envelopes.', 409);
   }
-  await doc.save();
+  const fields: Record<string, string> = {};
+  for (const [target, wrapped] of Object.entries(entries)) fields[`envelopes.${target}`] = wrapped;
+  const result = await TripChatKey.updateOne(
+    { _id: doc._id, tripId: new Types.ObjectId(tripId), epoch: expectedEpoch },
+    { $set: fields }
+  );
+  if (result.matchedCount !== 1) throw new AppError('The chat key epoch changed. Fetch the current key.', 409);
 
   return getTripChatKeyState(trip, callerId);
 }

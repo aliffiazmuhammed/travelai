@@ -2,7 +2,6 @@ import { Response } from 'express';
 import { catchAsync } from '../utils/catchAsync.js';
 import { AuthenticatedRequest } from '../types/index.js';
 import {
-  changePassword as changeOwnPassword,
   checkHandleAvailability,
   clearAvatar,
   replaceAvatar,
@@ -10,6 +9,7 @@ import {
 } from '../services/user/profile.js';
 import { setRealmCookie, signSessionForAccount } from '../services/auth/realm.js';
 import { wantsTokenInBody } from '../services/auth/clientSession.js';
+import { changePersonalPassword as changeOwnPassword } from '../services/auth/keyBackup.js';
 
 /**
  * Profile editing (Milestone 7, F14; Milestone 8 G1 adds handle + bio). Every
@@ -40,7 +40,8 @@ export const changePassword = catchAsync(async (req: AuthenticatedRequest, res: 
   const user = await changeOwnPassword(
     String(req.userId),
     req.body?.currentPassword,
-    req.body?.newPassword
+    req.body?.newPassword,
+    req.body?.backup
   );
   // The password change bumped tokenVersion; reissue THIS realm's session so the
   // caller stays signed in while every other device is signed out. Native shells

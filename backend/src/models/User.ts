@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document, Types } from 'mongoose';
+import { isCanonicalBase64url, type AccountKeyBackup } from '../schemas/keyBackup.schema.js';
 
 /**
  * Account realms (PA0). One `User` collection holds three kinds of identity:
@@ -43,6 +44,8 @@ export interface IUser extends Document {
   passwordChangedAt?: Date;
   /** Bumped on password change/disable; stale JWTs fail on the next request. */
   tokenVersion: number;
+  /** Personal-only encrypted recovery metadata; never part of publicUser. */
+  keyBackup?: AccountKeyBackup;
   /** Platform admin or agency owner that provisioned this account. */
   createdBy?: Types.ObjectId;
   /**
@@ -87,6 +90,22 @@ const userProfileSchema = new Schema<IUserProfile>(
   },
   { _id: false }
 );
+
+const backupBinary = (bytes: number) => ({
+  type: String, required: true,
+  validate: (value: string) => isCanonicalBase64url(value, bytes),
+});
+const sealedKeySchema = new Schema({ iv: backupBinary(12), ct: backupBinary(48) }, { _id: false });
+const passwordWrapSchema = new Schema({
+  salt: backupBinary(16), iv: backupBinary(12), ct: backupBinary(48),
+}, { _id: false });
+const keyBackupSchema = new Schema<AccountKeyBackup>({
+  v: { type: Number, required: true, enum: [1] },
+  generation: { ...backupBinary(16), immutable: true },
+  revision: { type: Number, required: true, min: 1, max: Number.MAX_SAFE_INTEGER, validate: Number.isSafeInteger },
+  password: { type: passwordWrapSchema, default: null },
+  recovery: { type: sealedKeySchema, required: true },
+}, { _id: false });
 
 const userSchema = new Schema<IUser>(
   {
@@ -136,6 +155,7 @@ const userSchema = new Schema<IUser>(
       default: 0,
       min: 0,
     },
+    keyBackup: { type: keyBackupSchema, default: undefined, select: false },
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',
@@ -242,6 +262,10 @@ userSchema.pre('validate', function (next) {
 
   if (accountType !== 'personal' && this.profile?.handle) {
     this.invalidate('profile.handle', 'Only personal accounts may hold a public handle.');
+  }
+
+  if (accountType !== 'personal' && this.keyBackup !== undefined) {
+    this.invalidate('keyBackup', 'Only personal accounts may enroll key backups.');
   }
 
   next();

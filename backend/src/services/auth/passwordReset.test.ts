@@ -23,9 +23,13 @@ import {
  */
 
 const INVALID_LINK = 'This reset link is invalid or has expired.';
+const query = (value: any): any => Object.assign(Promise.resolve(value), {
+  select: () => query(value), lean: () => Promise.resolve(value),
+});
 
 const originals = {
   userFindOne: User.findOne,
+  userFindOneAndUpdate: User.findOneAndUpdate,
   tokenCreate: PasswordResetToken.create,
   tokenDeleteMany: PasswordResetToken.deleteMany,
   tokenFindOne: PasswordResetToken.findOne,
@@ -42,6 +46,7 @@ test.before(() => {
 
 test.after(() => {
   (User as any).findOne = originals.userFindOne;
+  (User as any).findOneAndUpdate = originals.userFindOneAndUpdate;
   (PasswordResetToken as any).create = originals.tokenCreate;
   (PasswordResetToken as any).deleteMany = originals.tokenDeleteMany;
   (PasswordResetToken as any).findOne = originals.tokenFindOne;
@@ -63,7 +68,7 @@ test('reset tokens are random, URL-safe and stored only as a hash', () => {
 
 test('an unknown address is a silent no-op', async () => {
   let writes = 0;
-  (User as any).findOne = async () => null;
+  (User as any).findOne = () => query(null);
   (PasswordResetToken as any).deleteMany = async () => {
     writes += 1;
   };
@@ -81,7 +86,7 @@ test('a personal account gets one fresh token that expires in an hour', async ()
   let created: any = null;
   const userId = '64e000000000000000000f01';
 
-  (User as any).findOne = async (filter: any) => {
+  (User as any).findOne = (filter: any) => {
     assert.deepEqual(filter, {
       email: 'meera@example.com',
       accountType: 'personal',
@@ -144,7 +149,7 @@ test('a used or expired token is rejected with the generic message', async () =>
 test('a token that belongs to a closed account is rejected', async () => {
   let claimed = false;
   (PasswordResetToken as any).findOne = async () => ({ _id: 'tok-1', userId: 'u-closed' });
-  (User as any).findOne = async () => null;
+  (User as any).findOne = () => query(null);
   (PasswordResetToken as any).findOneAndUpdate = async () => {
     claimed = true;
     return null;
@@ -172,7 +177,7 @@ test('reusing the current password is refused before the token is claimed', asyn
   };
 
   (PasswordResetToken as any).findOne = async () => ({ _id: 'tok-1', userId: 'u1' });
-  (User as any).findOne = async () => user;
+  (User as any).findOne = () => query(user);
   (PasswordResetToken as any).findOneAndUpdate = async () => {
     claimed = true;
     return null;
@@ -199,7 +204,7 @@ test('a lost claim race leaves the password untouched', async () => {
   };
 
   (PasswordResetToken as any).findOne = async () => ({ _id: 'tok-1', userId: 'u1' });
-  (User as any).findOne = async () => user;
+  (User as any).findOne = () => query(user);
   (PasswordResetToken as any).findOneAndUpdate = async () => null;
 
   await assert.rejects(
@@ -225,8 +230,16 @@ test('a valid reset claims, saves and invalidates every other session', async ()
   };
 
   (PasswordResetToken as any).findOne = async () => ({ _id: 'tok-1', userId: 'u1' });
-  (User as any).findOne = async (filter: any) => {
+  (User as any).findOne = (filter: any) => {
     assert.deepEqual(filter, { _id: 'u1', accountType: 'personal', status: 'active' });
+    return query(user);
+  };
+  (User as any).findOneAndUpdate = async (filter: any, update: any) => {
+    assert.equal(filter.password, currentHash);
+    assert.equal(filter.tokenVersion, 2);
+    assert.deepEqual(filter.keyBackup, { $exists: false });
+    Object.assign(user, update.$set);
+    order.push('save');
     return user;
   };
   (PasswordResetToken as any).findOneAndUpdate = async (filter: any) => {

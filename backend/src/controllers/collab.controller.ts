@@ -502,14 +502,14 @@ export const putTripChatKeys = catchAsync(
 );
 
 /**
- * POST /:id/chat/envelopes — self-healing distribution into the CURRENT
- * epoch: a member who holds the conversation key wraps it for everybody
- * missing an envelope (fresh invitees get full history this way).
+ * POST /:id/chat/envelopes — {expectedEpoch,envelopes}; expectedEpoch is
+ * required and stale values return 409. Writes are pinned to that epoch,
+ * never redirected to a new epoch if another device rotates concurrently.
  */
 export const postTripChatEnvelopes = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const { trip } = tripContext(req);
-    const state = await addTripChatEnvelopes(trip, String(req.userId), req.body?.envelopes);
+    const state = await addTripChatEnvelopes(trip, String(req.userId), req.body?.envelopes, req.body?.expectedEpoch);
     res.status(200).json({ success: true, ...state });
   }
 );

@@ -476,6 +476,7 @@ async function main() {
   const laptopHeal = await api('POST', `/itinerary/${tripId}/chat/envelopes`, {
     email: ALICE_EMAIL,
     body: {
+      expectedEpoch: 1,
       envelopes: {
         [aliceLaptop.pubB64]: await wrapEnvelope(String(alice._id), aliceId, aliceLaptop.pubB64, conv),
       },
@@ -544,6 +545,7 @@ async function main() {
   const heal = await api('POST', `/itinerary/${tripId}/chat/envelopes`, {
     email: ALICE_EMAIL,
     body: {
+      expectedEpoch: 1,
       envelopes: {
         // F10d: the slot is carol\u2019s DEVICE key, not her member id.
         [carolPubFromState!]: await wrapEnvelope(String(alice._id), aliceId, carolPubFromState, conv),
@@ -573,6 +575,7 @@ async function main() {
   const forgedMeta = await api('POST', `/itinerary/${tripId}/chat/envelopes`, {
     email: ALICE_EMAIL,
     body: {
+      expectedEpoch: 1,
       envelopes: {
         // wrapper id claims alice, but the wrapping device key is bob's.
         [carolPubFromState!]: await wrapEnvelope(String(alice._id), bobId, carolPubFromState!, conv),
@@ -590,6 +593,7 @@ async function main() {
   const carolV1 = await api('POST', `/itinerary/${tripId}/chat/envelopes`, {
     email: ALICE_EMAIL,
     body: {
+      expectedEpoch: 1,
       envelopes: {
         [carolPubFromState!]: await wrapLegacyV1Envelope(
           String(alice._id),
@@ -622,6 +626,7 @@ async function main() {
   const vandal = await api('POST', `/itinerary/${tripId}/chat/envelopes`, {
     email: ALICE_EMAIL,
     body: {
+      expectedEpoch: 1,
       envelopes: { [carolPubFromState!]: b64(globalThis.crypto.getRandomValues(new Uint8Array(48))) },
     },
   });
@@ -642,6 +647,7 @@ async function main() {
   const repair = await api('POST', `/itinerary/${tripId}/chat/envelopes`, {
     email: ALICE_EMAIL,
     body: {
+      expectedEpoch: 1,
       envelopes: {
         [carolPubFromState!]: await wrapEnvelope(String(alice._id), aliceId, carolPubFromState!, conv),
       },
@@ -657,25 +663,25 @@ async function main() {
   /* ------------------------ envelope + epoch walls --------------------------- */
   const foreignTarget = await api('POST', `/itinerary/${tripId}/chat/envelopes`, {
     email: ALICE_EMAIL,
-    body: { envelopes: { [String(eve._id)]: validB64Envelope() } },
+    body: { expectedEpoch: 1, envelopes: { [String(eve._id)]: validB64Envelope() } },
   });
   check('envelope to a NON-MEMBER is rejected', foreignTarget.status === 400, foreignTarget.status);
 
   const eveDeviceKey = await api('POST', `/itinerary/${tripId}/chat/envelopes`, {
     email: ALICE_EMAIL,
-    body: { envelopes: { 'STRANGER-DEVICE-KEY=': validB64Envelope() } },
+    body: { expectedEpoch: 1, envelopes: { 'STRANGER-DEVICE-KEY=': validB64Envelope() } },
   });
   check('envelope to a non-member DEVICE key is rejected (F10d wall)', eveDeviceKey.status === 400, eveDeviceKey.status);
 
   const junkPayload = await api('POST', `/itinerary/${tripId}/chat/envelopes`, {
     email: ALICE_EMAIL,
-    body: { envelopes: { [bobPub!]: '!!! junk !!!' } },
+    body: { expectedEpoch: 1, envelopes: { [bobPub!]: '!!! junk !!!' } },
   });
   check('a non-base64 envelope payload is a 400', junkPayload.status === 400, junkPayload.status);
 
   const eveEnvelope = await api('POST', `/itinerary/${tripId}/chat/envelopes`, {
     email: EVE_EMAIL,
-    body: { envelopes: { [bobPub!]: validB64Envelope() } },
+    body: { expectedEpoch: 1, envelopes: { [bobPub!]: validB64Envelope() } },
   });
   check('a stranger cannot inject envelopes (404)', eveEnvelope.status === 404, eveEnvelope.status);
 

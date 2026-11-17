@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { passwordBackupUpdateSchema } from './keyBackup.schema.js';
 
 /**
  * Profile-editing walls (Milestone 7, F14; Milestone 8 G1 adds the traveler
@@ -87,3 +88,8 @@ export const changePasswordSchema = z
     message: 'Your new password must be different from the current one.',
     path: ['newPassword'],
   });
+
+/** Only personal password changes carry ABK wrappers; other realms are unchanged. */
+export const personalChangePasswordSchema = changePasswordSchema.safeExtend({
+  backup: passwordBackupUpdateSchema.optional(),
+}).strict();

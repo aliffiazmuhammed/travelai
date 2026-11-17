@@ -257,6 +257,18 @@ export const reportCreateLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+/** Bounded backfill traffic, keyed on the authenticated personal account. */
+export const KEY_BACKUP_REQUEST_LIMIT = 120;
+export const keyBackupLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: KEY_BACKUP_REQUEST_LIMIT,
+  keyGenerator: userOrIpKey,
+  validate: false,
+  message: { success: false, error: 'Too many key backup requests. Please try again shortly.', message: 'Too many key backup requests. Please try again shortly.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 /**
  * F14 account security: a password change is a credential check, so it gets the
  * same brake shape as sign-in but keyed on the account (a shared NAT must not
