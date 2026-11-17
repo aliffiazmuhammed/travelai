@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { api } from '@/services/api';
 import {
   cachedMemberKeys,
   encryptMessage,
   decryptMessage,
   ensureIdentity,
+  exportConversationKey,
   generateConversationKey,
+  importConversationKey,
   memberDeviceKeysOf,
   mergeMemberKeys,
   publishChatKey,
@@ -19,6 +21,8 @@ import type {
   MemberKeyMap,
   MemberKeyMapMulti,
 } from '@/lib/chatCrypto';
+import { keyBackup } from '@/lib/chatKeyBackup';
+import type { BackupStatus } from '@/lib/keyBackupSession';
 import type { ChatKeysState } from '@/types/trip';
 
 /**
@@ -41,8 +45,8 @@ import type { ChatKeysState } from '@/types/trip';
  * - 'ready'     conversation key unwrapped; bodies flow.
  * - 'bootstrap' this member is minting epoch-1 (wraps to every member).
  * - 'keyless'   epoch exists but my envelope is missing; any member's open
- *               client self-heals it (full history) — the UI says so.
- * - 'error'     surfaced message; outgoing falls back to plaintext.
+ *               client re-shares this epoch's key (not full history recovery).
+ * - 'error'     surfaced message; encrypted/unknown epochs cannot send plaintext.
  */
 
 export type ChatCryptoStatus =
@@ -56,6 +60,13 @@ export type ChatCryptoStatus =
 export interface ChatCryptoApi {
   status: ChatCryptoStatus;
   error?: string;
+  /**
+   * The personal account's password-assisted backup state. Agency chats are a
+   * separate realm and deliberately never touch it.
+   */
+  backupStatus: BackupStatus;
+  /** Non-fatal backup/restore failures; chat itself keeps working. */
+  backupError?: string;
   /**
    * Only meaningful while `keyless`:
    * - 'missing'  no envelope for this account exists yet (awaiting a share),
@@ -74,9 +85,9 @@ export interface ChatCryptoApi {
   /** Remembers just-written plaintext so own bubbles never blink to 🔒. */
   rememberPlaintext: (rowId: string, plaintext: string) => void;
   /**
-   * Encrypts an outgoing message. Falls back to (disclosed) plaintext ONLY when
-   * this device has no usable key; while the composer says the chat is
-   * encrypted it throws instead of downgrading — never leak silently.
+   * Confirms the current server epoch before encrypting. Only explicitly off
+   * or confirmed uninitialized chats can send plaintext. Missing current keys
+   * and network failures block encrypted sends rather than downgrading.
    */
   encryptOutgoing: (
     plaintext: string
@@ -102,6 +113,42 @@ export interface ChatCryptoApi {
 
 /** Empty render value while a ciphertext row is not (yet) readable. */
 const PLACEHOLDER = '';
+const rowCacheKey = (rowId: string, body: string) => JSON.stringify([rowId, body]);
+const errorMessage = (error: unknown, fallback: string) =>
+  error instanceof Error ? error.message : typeof error === 'string' ? error : fallback;
+type CheckScope = () => void;
+type HeldKey = { epoch: number; key: CryptoKey };
+interface ChatSession {
+  scope: string;
+  held: HeldKey | null;
+  epoch: number | null;
+  status: ChatCryptoStatus;
+  error?: string;
+  backupError?: string;
+  keylessReason?: 'missing' | 'mismatch';
+  active: boolean;
+  generation: number;
+  queue: Promise<void>;
+  plaintext: Map<string, string>;
+  decrypting: Set<string>;
+  /** Bounded bridge for existing rememberPlaintext(rowId, text) callers. */
+  sentBodies: Map<string, string>;
+  /** Older epochs restored from the password-assisted backup, newest first. */
+  history: Map<number, CryptoKey>;
+  /** Epochs whose key this device opened canonically (may repair a bad row). */
+  confirmed: Set<number>;
+  /** Epochs this device already backed up during this mount. */
+  uploaded: Set<number>;
+  /** One restore attempt per epoch context; cleared when the epoch changes. */
+  restored: boolean;
+  /** In-flight backup/restore guard, so interval ticks do not pile up. */
+  backupBusy: boolean;
+}
+
+/** Older restored keys are only useful for reading; keep the map bounded. */
+const MAX_HISTORY_KEYS = 64;
+const BACKUP_FAILED =
+  'Some readable history could not be backed up. Your chat keys still work; try again shortly.';
 
 export function useTripChatCrypto(
   tripId: string | undefined,
@@ -115,20 +162,65 @@ export function useTripChatCrypto(
   realm: ChatRealm = 'personal',
   identityScope?: string
 ): ChatCryptoApi {
-  const [status, setStatus] = useState<ChatCryptoStatus>('starting');
-  const [error, setError] = useState<string | undefined>(undefined);
-  const [keylessReason, setKeylessReason] = useState<'missing' | 'mismatch' | undefined>(undefined);
-  const [, setTick] = useState(0); // bump after decrypt batches land
+  const [, setTick] = useState(0);
+  const backup = useSyncExternalStore(keyBackup.subscribe, keyBackup.getSnapshot, keyBackup.getSnapshot);
+  const scope = JSON.stringify([tripId, currentUserId, enabled, realm, identityScope]);
+  // Separate state at render time fences old callbacks before effect cleanup.
+  // Device identity storage is deliberately unchanged in this phase.
+  const session = useMemo<ChatSession>(() => ({
+    scope,
+    held: null,
+    epoch: null,
+    status: 'starting',
+    active: true,
+    generation: 0,
+    queue: Promise.resolve(),
+    plaintext: new Map(),
+    decrypting: new Set(),
+    sentBodies: new Map(),
+    history: new Map(),
+    confirmed: new Set(),
+    uploaded: new Set(),
+    restored: false,
+    backupBusy: false,
+  }), [scope]);
+  const activeSession = useRef(session);
+  activeSession.current = session;
+  const isCurrent = useCallback(() =>
+    activeSession.current === session && session.active, [session]);
+  const notify = useCallback(() => {
+    if (isCurrent()) setTick((tick) => tick + 1);
+  }, [isCurrent]);
+  const update = useCallback((
+    status: ChatCryptoStatus,
+    error?: string,
+    keylessReason?: 'missing' | 'mismatch'
+  ) => {
+    if (!isCurrent()) return;
+    session.status = status;
+    session.error = error;
+    session.keylessReason = keylessReason;
+    notify();
+  }, [isCurrent, notify, session]);
 
-  const convKeyRef = useRef<CryptoKey | null>(null);
-  const plainCacheRef = useRef<Map<string, string>>(new Map());
-  const decryptingRef = useRef<Set<string>>(new Set());
-
-  const markError = useCallback((message: string) => {
-    console.error('chatCrypto:', message);
-    setError(message);
-    setStatus('error');
-  }, []);
+  // Prevent out-of-order fetch/adopt/heal/reset/send completions. Generation
+  // additionally fences effect cleanup/remount (including React StrictMode).
+  const serialize = useCallback(<T,>(work: (check: CheckScope) => Promise<T>): Promise<T> => {
+    const generation = session.generation;
+    const check = () => {
+      if (!isCurrent() || generation !== session.generation) {
+        throw new Error('The chat session changed. Reopen the trip before trying again.');
+      }
+    };
+    const result = session.queue.then(async () => {
+      check();
+      const value = await work(check);
+      check();
+      return value;
+    });
+    session.queue = result.then(() => undefined, () => undefined);
+    return result;
+  }, [isCurrent, session]);
 
   /* ------------------------------ key biography ----------------------------- */
 
@@ -161,55 +253,159 @@ export function useTripChatCrypto(
    * this account (the server hands all of them over; only the slot wrapped to
    * THIS device's key can be opened). No slot opening at all is NOT an error:
    * it is either "no key for this account yet" or "wrapped for another device"
-   * — both `keyless`, healed by another open client or the backup code.
+   * — both `keyless`, healed by another open client. A password-assisted backup
+   * can also supply the current key when no device envelope is openable.
    */
-  const adoptEnvelope = useCallback(
-    async (
-      identity: ChatIdentity,
-      candidates: string[],
-      livePubs: MemberKeyMap,
-      cachedPubs: MemberKeyMap,
-      devicePubs: MemberKeyMapMulti
-    ): Promise<boolean> => {
-      if (!candidates.length) {
-        setKeylessReason('missing');
-        setStatus('keyless');
-        return false;
+  const adoptState = useCallback(async (
+    identity: ChatIdentity,
+    state: ChatKeysState,
+    check: CheckScope
+  ): Promise<boolean> => {
+    check();
+    const epoch = state.epoch ?? 0;
+    if (!Number.isSafeInteger(epoch) || epoch < 0 || epoch > 1_000_000_000 ||
+        (session.epoch !== null && epoch < session.epoch)) {
+      throw new Error('The current chat epoch could not be confirmed. Please try again.');
+    }
+    const previousEpoch = session.epoch;
+    session.epoch = epoch;
+    // Retire the previous key BEFORE opening a rotated epoch, even if keyless.
+    if (session.held?.epoch !== epoch) session.held = null;
+    if (previousEpoch !== epoch) {
+      // A new epoch may have its own backup row; allow one fresh restore.
+      session.restored = false;
+    }
+    if (!epoch) return false;
+    const livePubs = livePubsOf(state);
+    mergeMemberKeys(tripId!, livePubs);
+    if (session.held) {
+      update('ready');
+      return true;
+    }
+    const candidates = mineCandidates(state);
+    update('keyless', undefined, 'missing');
+    let wrapperGap = false;
+    for (const envelope of candidates) {
+      let key: CryptoKey;
+      try {
+        key = await unwrapMyEnvelope(
+          envelope, identity, livePubs, cachedMemberKeys(tripId!), devicePubsOf(state)
+        );
+      } catch (error) {
+        check();
+        if (/wrapper/i.test(errorMessage(error, ''))) wrapperGap = true;
+        continue;
       }
-      let lastError: unknown = null;
-      let sawWrapperGap = false;
-      for (const envelope of candidates) {
+      check();
+      session.held = { key, epoch };
+      update('ready');
+      return true;
+    }
+    update('keyless', undefined, !candidates.length || wrapperGap ? 'missing' : 'mismatch');
+    return false;
+  }, [session, tripId, update]);
+
+  /**
+   * Password-assisted backup integration (personal realm only).
+   *
+   * Two jobs, both non-fatal to the chat:
+   * - when this browser cannot open any device envelope, try the account-key
+   *   backup before settling on `keyless`;
+   * - when this browser opens the canonical key, offer it to the account backup.
+   *
+   * The account key is only used inside the session module; the chat hook sees
+   * raw trip-key bytes for the duration of one call/each restored epoch.
+   */
+  const restoreFromBackup = useCallback(async (check: CheckScope) => {
+    if (!tripId || !currentUserId || session.restored || session.held) return;
+    const snapshot = keyBackup.getSnapshot();
+    if (snapshot.userId !== currentUserId || snapshot.status !== 'ready') return;
+    try {
+      const restored = await keyBackup.restoreTripKeys(currentUserId, tripId);
+      check();
+      for (const [epoch, raw] of restored) {
         try {
-          convKeyRef.current = await unwrapMyEnvelope(
-            envelope,
-            identity,
-            livePubs,
-            cachedPubs,
-            devicePubs
-          );
-          setKeylessReason(undefined);
-          setStatus('ready');
-          return true;
-        } catch (err) {
-          lastError = err;
-          if (/wrapper/i.test(String((err as any)?.message || ''))) sawWrapperGap = true;
+          if (epoch === session.epoch && !session.held) {
+            const key = await importConversationKey(raw);
+            check();
+            session.held = { epoch, key };
+            session.confirmed.add(epoch);
+            session.uploaded.add(epoch);
+            update('ready');
+          } else if (epoch !== session.epoch) {
+            const key = await importConversationKey(raw);
+            check();
+            if (!session.history.has(epoch)) {
+              session.history.set(epoch, key);
+              if (session.history.size > MAX_HISTORY_KEYS) {
+                const oldest = session.history.keys().next().value;
+                if (oldest !== undefined) session.history.delete(oldest);
+              }
+            }
+            session.confirmed.add(epoch);
+            session.uploaded.add(epoch);
+          }
+        } finally {
+          raw.fill(0);
         }
       }
-      console.warn('chatCrypto: this device cannot open any envelope for the account', lastError);
-      // A missing wrapper pubkey (the member who wrapped it left the trip and
-      // we have no cache) is a RE-SHARE wait, not a wrong-device key.
-      setKeylessReason(sawWrapperGap ? 'missing' : 'mismatch');
-      setStatus('keyless');
-      return false;
-    },
-    []
-  );
+      check();
+      session.restored = true;
+      session.backupError = undefined;
+      notify();
+    } catch {
+      check();
+      session.backupError = 'Backed-up history could not be restored. Open account recovery to check the backup.';
+      notify();
+    }
+  }, [currentUserId, notify, session, tripId, update]);
+
+  const backUpCurrentKey = useCallback(async (check: CheckScope) => {
+    const held = session.held;
+    if (!tripId || !currentUserId || !held || held.epoch !== session.epoch) return;
+    if (session.uploaded.has(held.epoch)) return;
+    const snapshot = keyBackup.getSnapshot();
+    if (snapshot.userId !== currentUserId || snapshot.status !== 'ready') return;
+    let raw: Uint8Array | undefined;
+    try {
+      raw = await exportConversationKey(held.key);
+      check();
+      // `repair` is justified: `held` was opened from this device's own
+      // canonical envelope (or restored from the matching backup row), never
+      // guessed from history pagination.
+      await keyBackup.backupTripKey(currentUserId, tripId, held.epoch, raw, true);
+      check();
+      if (session.held === held) {
+        session.uploaded.add(held.epoch);
+        session.backupError = undefined;
+        notify();
+      }
+    } catch {
+      check();
+      session.backupError = BACKUP_FAILED;
+      notify();
+    } finally {
+      raw?.fill(0);
+    }
+  }, [currentUserId, notify, session, tripId]);
+
+  const syncBackup = useCallback(async (check: CheckScope) => {
+    if (realm !== 'personal' || !tripId || !currentUserId) return;
+    if (session.backupBusy) return;
+    session.backupBusy = true;
+    try {
+      if (session.held) await backUpCurrentKey(check);
+      else await restoreFromBackup(check);
+    } finally {
+      session.backupBusy = false;
+    }
+  }, [backUpCurrentKey, currentUserId, realm, restoreFromBackup, session, tripId]);
 
   /**
    * F10d self-heal: a client that HOLDS the conversation key wraps it for every
    * device slot that is still empty — a second browser of this account, or a
    * member who joined after the epoch was minted. Idempotent: only gaps are
-   * sent, and the server merges them into the current epoch.
+   * sent, and the server writes only the exact expected epoch.
    *
    * F10e: "empty" is now "not provably openable". A filled slot whose wrapper
    * has left the trip, whose blob was overwritten with rubbish, or which was
@@ -219,8 +415,11 @@ export function useTripChatCrypto(
    * usable again; `slotIsUsable` documents exactly when a slot is left alone.
    */
   const healSlots = useCallback(
-    async (identity: ChatIdentity, state: ChatKeysState) => {
-      if (!tripId || !currentUserId || !convKeyRef.current) return;
+    async (identity: ChatIdentity, state: ChatKeysState, check: CheckScope) => {
+      check();
+      const held = session.held;
+      if (!tripId || !currentUserId || !held || held.epoch !== state.epoch ||
+          held.epoch !== session.epoch) return;
       const liveDeviceKeys = new Set<string>();
       const memberIds = new Set<string>();
       for (const member of state.members || []) {
@@ -244,10 +443,11 @@ export function useTripChatCrypto(
           if (known && usable) continue;
           wanted += 1;
           try {
-            pending[pub] = await wrapEnvelope(currentUserId, identity, pub, convKeyRef.current);
+            pending[pub] = await wrapEnvelope(currentUserId, identity, pub, held.key);
           } catch {
             failed += 1; // one device failing to wrap never blocks the rest
           }
+          check();
         }
       }
       if (!Object.keys(pending).length) {
@@ -261,110 +461,105 @@ export function useTripChatCrypto(
         }
         return;
       }
+      check();
+      if (session.held !== held || session.epoch !== held.epoch) return;
       try {
-        await api.addTripChatEnvelopes(tripId, pending);
+        await api.addTripChatEnvelopes(tripId, held.epoch, pending);
       } catch {
-        /* the poll retries */
+        // Stale-epoch conflicts are retried only after a fresh state fetch.
       }
+      check();
     },
-    [tripId, currentUserId]
+    [tripId, currentUserId, session]
   );
 
-  const runKeyFlow = useCallback(async () => {
-    if (!tripId) return;
-    setStatus('starting');
-    setError(undefined);
-    setKeylessReason(undefined);
+  const fetchCurrent = useCallback(async (identity: ChatIdentity, check: CheckScope) => {
+    check();
+    const state = await api.getTripChatKeys(tripId!);
+    check();
+    await adoptState(identity, state, check);
+    check();
+    return state;
+  }, [tripId, adoptState]);
 
-    try {
-      const identity = await ensureIdentity(realm, identityScope);
-      if (!identity) {
-        setStatus('off');
-        return;
-      }
-      if (currentUserId) {
-        // Deterministic publish (ensureIdentity retries silently, but a fresh
-        // bootstrap needs EVERY envelope — including our own — to exist).
-        await publishChatKey(identity.pubKey, realm).catch(() => undefined);
-      }
-
-      const state = await api.getTripChatKeys(tripId);
-      const livePubs = livePubsOf(state);
-      const devicePubs = devicePubsOf(state);
-      mergeMemberKeys(tripId, livePubs);
-      const cachedPubs = cachedMemberKeys(tripId);
-
-      if (!state.epoch) {
-        // Nobody has minted a conversation key yet: bootstrap epoch 1 and
-        // envelope EVERY published device key of EVERY member (F10d: one slot
-        // per browser). Members we cannot wrap for are self-healed later.
-        setStatus('bootstrap');
-        if (!currentUserId) throw new Error('Missing the current user id for key bootstrapping.');
-        const conversationKey = await generateConversationKey();
-        const envelopes: Record<string, string> = {};
-        for (const member of state.members || []) {
-          for (const pub of memberDeviceKeysOf(member)) {
-            try {
-              envelopes[pub] = await wrapEnvelope(
-                currentUserId, // the wrapper id: recipients derive against MY pub
-                identity,
-                pub,
-                conversationKey
-              );
-            } catch {
-              /* one member failing to wrap never blocks the rest */
-            }
-          }
-        }
-        if (!envelopes[identity.pubKey]) {
-          throw new Error('Could not wrap the chat key for yourself — try reopening.');
-        }
-        try {
-          await api.putTripChatKeys(tripId, 1, envelopes);
-        } catch (err: any) {
-          // Bootstrap race: another member minted epoch 1 a beat before us and
-          // the unique (trip, epoch) index kept THEIR write. Their envelopes
-          // covered us too (our pubKey was published just before the fetch),
-          // so we recover as an ordinary keyholder: unwrap and move on.
-          if (err?.status !== 409) throw err;
-          const fresh = await api.getTripChatKeys(tripId);
-          const opened = await adoptEnvelope(
-            identity,
-            mineCandidates(fresh),
-            livePubsOf(fresh),
-            cachedPubs,
-            devicePubsOf(fresh)
-          );
-          if (opened) await healSlots(identity, fresh);
-          return;
-        }
-        convKeyRef.current = conversationKey;
-        setStatus('ready');
-        await healSlots(identity, state);
-        return;
-      }
-
-      const opened = await adoptEnvelope(
-        identity,
-        mineCandidates(state),
-        livePubs,
-        cachedPubs,
-        devicePubs
-      );
-      if (opened) await healSlots(identity, state);
-    } catch (err: any) {
-      // Capture the real cause for the diagnostics tooltip — thrown strings
-      // and exotic rejections used to fall through to the generic message,
-      // which made field reports like "why did this happen?" unanswerable.
-      const message =
-        err?.message || (typeof err === 'string' && err) || String(err) || 'Chat encryption is unavailable right now.';
-      markError(message);
+  const getIdentity = useCallback(async (check: CheckScope, publish = false) => {
+    check();
+    const identity = await ensureIdentity(realm, identityScope);
+    check();
+    if (!identity) {
+      throw new Error('Secure chat is unavailable in this browser. Nothing was sent.');
     }
-  }, [tripId, currentUserId, realm, identityScope, markError, adoptEnvelope, healSlots]);
+    if (publish && currentUserId) {
+      await publishChatKey(identity.pubKey, realm).catch(() => undefined);
+      check();
+    }
+    return identity;
+  }, [realm, identityScope, currentUserId]);
+
+  /** Bootstrap/reset candidates are never adopted without a canonical fetch. */
+  const mintEpoch = useCallback(async (
+    identity: ChatIdentity,
+    state: ChatKeysState,
+    check: CheckScope
+  ) => {
+    check();
+    if (!tripId || !currentUserId) throw new Error('Open the trip again before starting a new chat.');
+    update('bootstrap');
+    const key = await generateConversationKey();
+    check();
+    const envelopes: Record<string, string> = {};
+    for (const member of state.members || []) {
+      for (const pub of memberDeviceKeysOf(member)) {
+        try {
+          envelopes[pub] = await wrapEnvelope(currentUserId, identity, pub, key);
+        } catch {
+          // Missing device slots are healed by a confirmed keyholder later.
+        }
+        check();
+      }
+    }
+    if (!envelopes[identity.pubKey]) {
+      envelopes[identity.pubKey] = await wrapEnvelope(currentUserId, identity, identity.pubKey, key);
+      check();
+    }
+    const epoch = (state.epoch ?? 0) + 1;
+    let writeError: unknown;
+    try {
+      await api.putTripChatKeys(tripId, epoch, envelopes);
+    } catch (error) {
+      writeError = error;
+    }
+    check();
+    // Conflict AND ambiguous network failures may have committed another key.
+    // If this fetch fails, stay blocked instead of trusting our candidate.
+    const canonical = await fetchCurrent(identity, check);
+    check();
+    if (!canonical.epoch || canonical.epoch < epoch) {
+      throw new Error(errorMessage(writeError, 'The new chat epoch could not be confirmed. Please retry.'));
+    }
+    await healSlots(identity, canonical, check);
+  }, [tripId, currentUserId, update, fetchCurrent, healSlots]);
+
+  const runKeyFlow = useCallback(() => serialize(async (check) => {
+    if (!enabled || !tripId || !currentUserId) return;
+    update(session.held ? 'ready' : 'starting');
+    try {
+      const identity = await getIdentity(check, true);
+      if (!identity) return;
+      const state = await fetchCurrent(identity, check);
+      if (!state.epoch) await mintEpoch(identity, state, check);
+      else await healSlots(identity, state, check);
+      await syncBackup(check);
+    } catch (error) {
+      check();
+      // Retain a known key on transient failure; sends still must confirm it.
+      update(session.held ? 'ready' : 'error', errorMessage(error, 'Chat encryption is unavailable right now.'));
+    }
+  }), [serialize, enabled, tripId, currentUserId, session, update, getIdentity, fetchCurrent, mintEpoch, healSlots, syncBackup]);
 
   /** Re-runs the whole key flow in place — the banner's Retry medicine. */
   const retry = useCallback(() => {
-    void runKeyFlow();
+    void runKeyFlow().catch(() => undefined);
   }, [runKeyFlow]);
 
   /**
@@ -375,58 +570,30 @@ export function useTripChatCrypto(
    * under the previous key and remain unreadable — the UI says so before this
    * runs. No backup code and nothing reusable leaves the browser.
    */
-  const resetChat = useCallback(async () => {
-    if (!tripId || !currentUserId) {
+  const resetChat = useCallback(() => serialize(async (check) => {
+    if (!enabled || !tripId || !currentUserId) {
       throw new Error('Open the trip again before starting a new chat.');
     }
-    // Never let recovery downgrade a chat that is already working here.
-    if (convKeyRef.current) {
-      setStatus('ready');
-      return;
-    }
-    const identity = await ensureIdentity(realm, identityScope);
-    if (!identity) {
-      throw new Error('This browser cannot set up the secure chat.');
-    }
-    setStatus('bootstrap');
-    setError(undefined);
     try {
-      await publishChatKey(identity.pubKey, realm).catch(() => undefined);
-      const state = await api.getTripChatKeys(tripId);
-      const conversationKey = await generateConversationKey();
-      const envelopes: Record<string, string> = {};
-      for (const member of state.members || []) {
-        for (const pub of memberDeviceKeysOf(member)) {
-          try {
-            envelopes[pub] = await wrapEnvelope(currentUserId, identity, pub, conversationKey);
-          } catch {
-            /* one device failing to wrap never blocks the rest */
-          }
-        }
+      const identity = await getIdentity(check, true);
+      if (!identity) throw new Error('This browser cannot set up the secure chat.');
+      const state = await fetchCurrent(identity, check);
+      // A peer may have healed us since the banner appeared. Never reset that key.
+      if (session.held) return;
+      await mintEpoch(identity, state, check);
+      if (!session.held) {
+        throw new Error('The chat changed on another device. Wait for the current key to be shared, then retry.');
       }
-      if (!envelopes[identity.pubKey]) {
-        // Our key was not in the roster view yet (publication race): wrap for
-        // ourselves so this device is never left out of the epoch it minted.
-        envelopes[identity.pubKey] = await wrapEnvelope(
-          currentUserId,
-          identity,
-          identity.pubKey,
-          conversationKey
-        );
-      }
-      const next = await api.putTripChatKeys(tripId, (state.epoch ?? 0) + 1, envelopes);
-      convKeyRef.current = conversationKey;
-      setKeylessReason(undefined);
-      setStatus('ready');
-      await healSlots(identity, next);
-    } catch (err: any) {
-      setStatus('keyless');
-      if (err?.status === 409) {
-        throw new Error('The chat changed on another device just now. Please try again.');
-      }
-      throw new Error(err?.message || 'Could not start a new chat on this device.');
+    } catch (error) {
+      check();
+      update(
+        session.held ? 'ready' : session.epoch ? 'keyless' : 'error',
+        errorMessage(error, 'Could not start a new chat on this device.'),
+        session.keylessReason
+      );
+      throw error;
     }
-  }, [tripId, currentUserId, realm, identityScope, healSlots]);
+  }), [serialize, enabled, tripId, currentUserId, getIdentity, fetchCurrent, session, mintEpoch, update]);
 
   /**
    * Quiet re-check (never flickers through 'starting'): while keyless it tries
@@ -434,38 +601,42 @@ export function useTripChatCrypto(
    * second browser of this account, or a fresh member) so the OTHER device
    * unlocks itself without any user action.
    */
-  const refreshKey = useCallback(async () => {
-    if (!tripId) return;
-    try {
-      const identity = await ensureIdentity(realm, identityScope);
-      if (!identity) return;
-      const state = await api.getTripChatKeys(tripId);
-      if (!state.epoch) return;
-      const livePubs = livePubsOf(state);
-      mergeMemberKeys(tripId, livePubs);
-      if (convKeyRef.current) {
-        await healSlots(identity, state);
-        return;
-      }
-      const opened = await adoptEnvelope(
-        identity,
-        mineCandidates(state),
-        livePubs,
-        cachedMemberKeys(tripId),
-        devicePubsOf(state)
-      );
-      if (opened) await healSlots(identity, state);
-    } catch {
-      /* the next poll retries */
-    }
-  }, [tripId, realm, identityScope, adoptEnvelope, healSlots]);
+  const refreshKey = useCallback(() => serialize(async (check) => {
+    if (!enabled || !tripId || !currentUserId) return;
+    const identity = await getIdentity(check);
+    if (!identity) return;
+    const state = await fetchCurrent(identity, check);
+    await healSlots(identity, state, check);
+    await syncBackup(check);
+  }), [serialize, enabled, tripId, currentUserId, getIdentity, fetchCurrent, healSlots, syncBackup]);
+
+  useEffect(() => {
+    session.active = true;
+    void runKeyFlow().catch(() => undefined);
+    return () => {
+      session.active = false;
+      session.generation += 1;
+      session.held = null;
+      session.epoch = null;
+      session.plaintext.clear();
+      session.sentBodies.clear();
+      session.decrypting.clear();
+      session.history.clear();
+      session.confirmed.clear();
+      session.uploaded.clear();
+      session.restored = false;
+      session.backupBusy = false;
+    };
+  }, [session, runKeyFlow]);
+
+  const status = !enabled || !tripId ? 'off' : session.status;
 
   useEffect(() => {
     if (!enabled || !tripId) return;
     // Fast when locked (waiting for a share), slow when ready (slot healing).
     const delay = status === 'keyless' ? 6000 : status === 'ready' ? 15000 : 0;
     if (!delay) return;
-    const tick = () => void refreshKey();
+    const tick = () => { void refreshKey().catch(() => undefined); };
     const timer = window.setInterval(tick, delay);
     window.addEventListener('focus', tick);
     return () => {
@@ -475,77 +646,99 @@ export function useTripChatCrypto(
   }, [enabled, tripId, status, refreshKey]);
 
   useEffect(() => {
-    if (!enabled || !tripId) return;
-    void runKeyFlow();
-  }, [enabled, tripId, runKeyFlow]);
+    if (!enabled || !tripId || realm !== 'personal' || !currentUserId) return;
+    // An unlock performed after this chat mounted (the Profile shelf) should
+    // immediately restore maybe-restorable keys and offer the current one.
+    if (backup.userId !== currentUserId || backup.status !== 'ready') return;
+    if (session.held && session.uploaded.has(session.held.epoch)) return;
+    void refreshKey().catch(() => undefined);
+  }, [backup.status, backup.userId, enabled, tripId, realm, currentUserId, refreshKey, session]);
 
   /* ------------------------------ decrypt pass ----------------------------- */
 
-  const decryptBatch = useCallback(
-    async (rows: { _id: string; body?: string; e2ee?: boolean }[]) => {
-      const key = convKeyRef.current;
-      if (!key) return;
-      let changed = false;
-      await Promise.all(
-        rows.map(async (row) => {
-          if (
-            !row?.e2ee ||
-            plainCacheRef.current.has(row._id) ||
-            decryptingRef.current.has(row._id)
-          ) {
-            return;
-          }
-          decryptingRef.current.add(row._id);
-          try {
-            const plain = await decryptMessage(key, String(row.body || ''));
-            plainCacheRef.current.set(row._id, plain);
-            changed = true;
-          } catch {
-            /* undecryptable (rotation epoch, corrupt body): stays as 🔒 */
-          } finally {
-            decryptingRef.current.delete(row._id);
-          }
-        })
-      );
-      if (changed) setTick((t) => t + 1);
-    },
-    []
-  );
+  /** Current key first, then restored older epochs. Rows carry no epoch field. */
+  const decryptAny = useCallback(async (body: string): Promise<string> => {
+    const held = session.held;
+    if (held) {
+      try {
+        return await decryptMessage(held.key, body);
+      } catch {
+        /* a rotated epoch: fall through to restored history */
+      }
+    }
+    let lastError: unknown;
+    for (const key of session.history.values()) {
+      try {
+        return await decryptMessage(key, body);
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error('This message cannot be opened on this device.');
+  }, [session]);
 
-  const syncRows = useCallback(
-    (rows: { _id: string; body?: string; e2ee?: boolean }[]) => {
-      if (status !== 'ready') return;
-      void decryptBatch(rows);
-    },
-    [status, decryptBatch]
-  );
+  const syncRows = useCallback((rows: { _id: string; body?: string; e2ee?: boolean }[]) => {
+    if (!isCurrent() || (!session.held && !session.history.size)) return;
+    const generation = session.generation;
+    for (const row of rows) {
+      if (!row?.e2ee) continue;
+      const body = String(row.body || '');
+      const cacheKey = rowCacheKey(row._id, body);
+      if (session.plaintext.has(cacheKey) || session.decrypting.has(cacheKey)) continue;
+      session.decrypting.add(cacheKey);
+      void decryptAny(body).then((plaintext) => {
+        if (!isCurrent() || generation !== session.generation) return;
+        session.plaintext.set(cacheKey, plaintext);
+        notify();
+      }).catch(() => {
+        // Old epochs and corrupt bodies remain unreadable until a backup is
+        // unlocked; a later syncRows pass retries them with restored keys.
+      }).finally(() => {
+        if (isCurrent() && generation === session.generation) session.decrypting.delete(cacheKey);
+      });
+    }
+  }, [session, isCurrent, notify, decryptAny]);
 
   /* -------------------------------- write path ----------------------------- */
 
-  const encryptOutgoing = useCallback(
-    async (plaintext: string): Promise<{ body: string; e2ee: boolean }> => {
-      if (status !== 'ready' || !convKeyRef.current) {
-        // No usable key on this device: the composer says so in plain words
-        // ("Messages you send here aren't protected yet"), and the row is
-        // flagged so every reader can tell. Deliberate, disclosed plaintext.
-        return { body: plaintext, e2ee: false };
-      }
-      try {
-        return { body: await encryptMessage(convKeyRef.current, plaintext), e2ee: true };
-      } catch {
-        // NEVER silently downgrade. While the composer promises encryption, a
-        // failed encryption must fail the SEND, not leak the words in the clear
-        // with an `e2ee: false` flag nobody looks at (F10e).
-        throw new Error('This message could not be encrypted — nothing was sent. Please try again.');
-      }
-    },
-    [status]
-  );
+  const encryptOutgoing = useCallback((plaintext: string) => serialize(async (check) => {
+    // Keep explicitly off/plaintext chats unchanged. Unknown/network-failed
+    // encryption state is NOT off and cannot take this fallback.
+    if ((!enabled || !tripId || session.status === 'off') && !session.held && !session.epoch) {
+      return { body: plaintext, e2ee: false };
+    }
+    if (!currentUserId) throw new Error('Sign in again before sending a chat message.');
+    const identity = await getIdentity(check);
+    if (!identity) return { body: plaintext, e2ee: false };
+    // Rotation can happen between polls: confirm current state for every send.
+    await fetchCurrent(identity, check);
+    const held = session.held;
+    if (!held) {
+      if (session.epoch === 0) return { body: plaintext, e2ee: false };
+      throw new Error('The current encrypted chat key is not available on this device yet. Nothing was sent. Wait for another device to share it, then retry.');
+    }
+    let body: string;
+    try {
+      body = await encryptMessage(held.key, plaintext);
+    } catch {
+      throw new Error('This message could not be encrypted — nothing was sent. Please try again.');
+    }
+    check();
+    session.sentBodies.set(body, plaintext);
+    // Optimistic-send hints only, not another unbounded plaintext cache.
+    if (session.sentBodies.size > 32) session.sentBodies.delete(session.sentBodies.keys().next().value!);
+    return { body, e2ee: true };
+  }), [serialize, enabled, tripId, currentUserId, session, getIdentity, fetchCurrent]);
 
   const rememberPlaintext = useCallback((rowId: string, plaintext: string) => {
-    plainCacheRef.current.set(rowId, plaintext);
-    setTick((t) => t + 1);
-  }, []);
+    if (!isCurrent()) return;
+    // Existing callers have no body argument. Match only ciphertext actually
+    // produced in this scope; caching just a row ID would show stale edits.
+    for (const [body, sent] of session.sentBodies) {
+      if (sent === plaintext) session.plaintext.set(rowCacheKey(rowId, body), plaintext);
+    }
+    notify();
+  }, [session, isCurrent, notify]);
 
   /* --------------------------------- reads --------------------------------- */
 
@@ -557,37 +750,43 @@ export function useTripChatCrypto(
    * device has no key the call returns null and the UI refuses the action.
    */
   const sealJson = useCallback(async (value: unknown): Promise<string | null> => {
-    const key = convKeyRef.current;
-    if (!key) return null;
     try {
-      return await encryptMessage(key, JSON.stringify(value));
+      const result = await encryptOutgoing(JSON.stringify(value));
+      return isCurrent() && result.e2ee ? result.body : null;
     } catch {
       return null;
     }
-  }, []);
+  }, [encryptOutgoing, isCurrent]);
 
   const openJson = useCallback(async <T,>(body: string): Promise<T | null> => {
-    const key = convKeyRef.current;
-    if (!key || !body) return null;
+    const generation = session.generation;
+    if (!isCurrent() || (!session.held && !session.history.size) || !body) return null;
     try {
-      return JSON.parse(await decryptMessage(key, body)) as T;
+      const value = JSON.parse(await decryptAny(body)) as T;
+      return isCurrent() && generation === session.generation ? value : null;
     } catch {
       return null;
     }
-  }, []);
+  }, [session, isCurrent, decryptAny]);
 
   const plaintextOf = useCallback(
     (row: { _id: string; body: string; e2ee?: boolean }) => {
+      if (!isCurrent()) return PLACEHOLDER;
       if (!row?.e2ee) return row?.body || '';
-      return plainCacheRef.current.get(row._id) ?? PLACEHOLDER;
+      return session.plaintext.get(rowCacheKey(row._id, row.body)) ?? PLACEHOLDER;
     },
-    []
+    [session, isCurrent]
   );
+
+  const backupStatus: BackupStatus =
+    realm === 'personal' && currentUserId && backup.userId === currentUserId ? backup.status : 'idle';
 
   return {
     status,
-    error,
-    keylessReason,
+    error: session.error,
+    backupStatus,
+    backupError: realm === 'personal' ? session.backupError : undefined,
+    keylessReason: session.keylessReason,
     isEncrypted,
     plaintextOf,
     syncRows,

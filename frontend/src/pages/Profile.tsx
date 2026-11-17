@@ -26,6 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import Navbar from "@/components/Navbar";
+import { ChatRecoverySettings } from "@/components/profile/ChatRecoverySettings";
 import { TravellerBreadcrumbs } from "@/components/traveller/TravellerBreadcrumbs";
 import { useAuth } from "@/context/UserContext";
 import { api } from "@/services/api";
@@ -799,7 +800,9 @@ const Profile = () => {
                     Password
                   </h2>
                   <p className="text-sm leading-relaxed text-muted-foreground">
-                    Enter your current password, then choose a new one of at least 6 characters.
+                    Enter your current password, then choose a new one of at least 6
+                    characters. If chat backup is set up, its key is re-wrapped
+                    automatically before the password changes.
                   </p>
                 </div>
 
@@ -850,6 +853,8 @@ const Profile = () => {
                   </div>
                 </form>
               </section>
+
+              <ChatRecoverySettings />
             </div>
 
             <aside className="min-w-0 space-y-6">

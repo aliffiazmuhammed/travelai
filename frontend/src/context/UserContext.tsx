@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { API_BASE_URL } from '../config';
 import { queryClient } from '../lib/queryClient';
+import { keyBackup } from '../lib/chatKeyBackup';
 import { api } from '../services/api';
 
 import type { User, AuthContextType, ProfileUpdateInput } from '@/types';
@@ -51,6 +52,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (response.ok) {
         const data = await response.json();
         setUser(data.user);
+        // Password-assisted chat backup is personal-realm only. Beginning here
+        // restores an already-unlocked device key from this browser's storage;
+        // it never prompts for a password on its own.
+        void keyBackup.begin(data.user._id).catch(() => undefined);
       }
     } catch (err) {
       console.warn("Session check inactive:", err);
@@ -93,7 +98,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setUser(data.user);
   };
 
+  /**
+   * The backup-aware path: when the account has chat backup enrolled, the
+   * account key is re-wrapped under the new password before the server rotates
+   * the credential. Without an active recovery session (still loading, or no
+   * chat backup) the plain endpoint is correct.
+   */
   const changePassword = async (currentPassword: string, newPassword: string) => {
+    const snapshot = keyBackup.getSnapshot();
+    if (snapshot.userId && user && snapshot.userId === user._id) {
+      await keyBackup.changePassword(currentPassword, newPassword);
+      return;
+    }
     await api.changePassword(currentPassword, newPassword);
   };
 
@@ -126,6 +142,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // Identity change → drop any cached trips of the previous session (F21).
       queryClient.clear();
       setUser(data.user);
+      // A new account starts with backup disabled; passing the password lets a
+      // returning enrollment unlock immediately after sign-in.
+      void keyBackup.begin(data.user._id, password).catch(() => undefined);
     } catch (err: any) {
       const friendlyMsg = err.message || 'Unable to create account. Please try again.';
       setError(friendlyMsg);
@@ -160,6 +179,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // Identity change → drop any cached trips of the previous session (F21).
       queryClient.clear();
       setUser(data.user);
+      // Signing in with the exact password unlocks an enrolled backup for this
+      // session without asking for it twice. A locked/absent backup stays usable.
+      void keyBackup.begin(data.user._id, password).catch(() => undefined);
     } catch (err: any) {
       const friendlyMsg = err.message || 'Unable to sign in. Please try again.';
       setError(friendlyMsg);
@@ -177,7 +199,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         method: 'POST',
         credentials: 'include',
       });
-      // F21: a signed-out app must not keep the user's trips in memory.
+      // F21: a signed-out app must not keep the user's trips in memory. The
+      // unlocked account key must not survive either.
+      void keyBackup.end().catch(() => undefined);
       queryClient.clear();
       setUser(null);
     } catch (err: any) {

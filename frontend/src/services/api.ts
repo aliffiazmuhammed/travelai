@@ -1,5 +1,11 @@
 import { API_BASE_URL } from '@/config';
 import type {
+  AccountBackupState,
+  PasswordWrap,
+  SealedKey,
+  TripKeyBackup,
+} from '@/lib/chatKeyBackupCrypto';
+import type {
   ExploreFilters,
   ExplorePage,
   GalleryTravelerProfile,
@@ -218,6 +224,35 @@ export class ApiError extends Error {
     this.currentRev = currentRev;
   }
 }
+
+/** Account enroll/recover body; the wrappers are already sealed client-side. */
+export interface KeyBackupMutation {
+  v: 1;
+  currentPassword: string;
+  generation: string;
+  expectedRevision: number;
+  password: PasswordWrap;
+  recovery: SealedKey;
+}
+
+export interface KeyBackupTripsPage {
+  trips: { tripId: string; title: string }[];
+  nextAfterTripId: string | null;
+}
+
+export interface KeyBackupEpochPage {
+  currentEpoch: number | null;
+  epochs: ChatKeysState[];
+  nextBeforeEpoch: number | null;
+}
+
+export interface KeyBackupRowsPage {
+  backups: TripKeyBackup[];
+  nextBeforeEpoch: number | null;
+}
+
+const keyBackupPage = (beforeEpoch?: number) =>
+  `?limit=25${beforeEpoch === undefined ? '' : `&beforeEpoch=${beforeEpoch}`}`;
 
 class ApiClient {
   private baseUrl: string;
@@ -496,15 +531,73 @@ class ApiClient {
     return this.request('/api/auth/avatar', { method: 'DELETE' });
   }
 
-  /** Changes the password; the current one is re-checked server-side. */
+  /**
+   * Changes the password; the current one is re-checked server-side. Accounts
+   * with chat backup must send the re-wrapped account key, otherwise the server
+   * refuses with `KEY_BACKUP_UPDATE_REQUIRED` and the backup would be orphaned.
+   * `keyBackup.changePassword` supplies that wrapper; this method is the raw
+   * transport and the fallback for accounts with no backup enrollment.
+   */
   async changePassword(
     currentPassword: string,
-    newPassword: string
-  ): Promise<{ message: string }> {
+    newPassword: string,
+    backup?: { generation: string; expectedRevision: number; password: PasswordWrap }
+  ): Promise<{ message: string; token?: string }> {
     return this.request('/api/auth/password', {
       method: 'POST',
-      body: JSON.stringify({ currentPassword, newPassword }),
+      body: JSON.stringify({ currentPassword, newPassword, ...(backup ? { backup } : {}) }),
     });
+  }
+
+  // Password-assisted chat-key backup (personal realm only). The server stores
+  // opaque wrappers and revision metadata; every wrapper is opened in this
+  // browser by `lib/chatKeyBackupCrypto.ts`.
+  async getKeyBackup(): Promise<{ backup: AccountBackupState }> {
+    return this.request('/api/auth/key-backup', { cache: 'no-store' });
+  }
+
+  async enrollKeyBackup(input: KeyBackupMutation): Promise<{ backup: AccountBackupState }> {
+    return this.request('/api/auth/key-backup', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  }
+
+  async recoverKeyBackup(input: KeyBackupMutation): Promise<{ backup: AccountBackupState }> {
+    return this.request('/api/auth/key-backup/recover', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  }
+
+  async getKeyBackupTrips(afterTripId?: string): Promise<KeyBackupTripsPage> {
+    const suffix = afterTripId ? `&afterTripId=${encodeURIComponent(afterTripId)}` : '';
+    return this.request(`/api/auth/key-backup/trips?limit=25${suffix}`, { cache: 'no-store' });
+  }
+
+  async getKeyBackupEpochs(tripId: string, beforeEpoch?: number): Promise<KeyBackupEpochPage> {
+    return this.request(
+      `/api/auth/key-backup/trips/${encodeURIComponent(tripId)}/epochs${keyBackupPage(beforeEpoch)}`,
+      { cache: 'no-store' }
+    );
+  }
+
+  async getKeyBackupRows(tripId: string, beforeEpoch?: number): Promise<KeyBackupRowsPage> {
+    return this.request(
+      `/api/auth/key-backup/trips/${encodeURIComponent(tripId)}/backups${keyBackupPage(beforeEpoch)}`,
+      { cache: 'no-store' }
+    );
+  }
+
+  async putKeyBackup(
+    tripId: string,
+    epoch: number,
+    input: { v: 1; generation: string; expectedRowRevision: number; iv: string; ct: string }
+  ): Promise<{ backup: TripKeyBackup }> {
+    return this.request(
+      `/api/auth/key-backup/trips/${encodeURIComponent(tripId)}/backups/${epoch}`,
+      { method: 'PUT', body: JSON.stringify(input) }
+    );
   }
 
   // Agency Workspace A1. The namespace 404s when the server feature flag is
@@ -2962,7 +3055,7 @@ class ApiClient {
   }
 
   async getTripChatKeys(tripId: string): Promise<ChatKeysState> {
-    return this.request(`/api/itinerary/${tripId}/chat/keys`, { method: 'GET' });
+    return this.request(`/api/itinerary/${tripId}/chat/keys`, { method: 'GET', cache: 'no-store' });
   }
 
   async putTripChatKeys(
@@ -2978,11 +3071,12 @@ class ApiClient {
 
   async addTripChatEnvelopes(
     tripId: string,
+    expectedEpoch: number,
     envelopes: Record<string, string>
   ): Promise<ChatKeysState> {
     return this.request(`/api/itinerary/${tripId}/chat/envelopes`, {
       method: 'POST',
-      body: JSON.stringify({ envelopes }),
+      body: JSON.stringify({ expectedEpoch, envelopes }),
     });
   }
 

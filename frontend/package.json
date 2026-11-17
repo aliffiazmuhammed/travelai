@@ -13,6 +13,7 @@
     "build:dev": "vite build --mode development",
     "typecheck": "tsc -p tsconfig.app.json",
     "lint": "eslint .",
+    "test:key-backup": "tsx --test src/lib/chatKeyBackup.test.ts",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -88,6 +89,7 @@
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^15.15.0",
     "lovable-tagger": "^1.1.11",
+    "tsx": "^4.23.15",
     "typescript-eslint": "^8.38.0"
   },
   "optionalDependencies": {

@@ -370,6 +370,7 @@ function formatProposalValue(proposal: AssistantProposal): string {
  */
 const OFFLINE_CRYPTO: ChatCryptoApi = {
   status: "off",
+  backupStatus: "idle",
   isEncrypted: () => false,
   plaintextOf: (row) => row?.body ?? "",
   syncRows: () => undefined,

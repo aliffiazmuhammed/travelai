@@ -1,0 +1,392 @@
+/**
+ * Password-assisted chat-key backup — the browser crypto core (M7 chat
+ * recovery, web half).
+ *
+ * This is a deliberate, wire-compatible mirror of
+ * `mobile/src/lib/chatKeyBackupCrypto.ts`: the same `WTK1-` recovery codes,
+ * PBKDF2-HMAC-SHA256 at 600,000 iterations, AES-256-GCM seals and canonical
+ * unpadded base64url encodings. A key enrolled on the phone MUST open here and
+ * vice versa, so this file has no dependencies and no platform shortcuts; the
+ * frozen vectors in `chatKeyBackup.test.ts` are the interoperability contract.
+ *
+ * What the server sees: opaque `iv`/`ct`/`salt` strings plus generation and
+ * revision metadata. It never receives the account key, a recovery code or a
+ * trip key. What it *can* do is the honest limit of this design: the sign-in
+ * password reaches the server, so a compromised server can attempt to unlock a
+ * stolen backup, and a stolen backup allows offline password guessing. The UI
+ * says that plainly rather than claiming zero-knowledge recovery.
+ */
+
+export interface SealedKey {
+  iv: string;
+  ct: string;
+}
+
+export interface PasswordWrap extends SealedKey {
+  salt: string;
+}
+
+export type AccountBackupState =
+  | { v: 1; userId: string; enrolled: false; revision: 0 }
+  | {
+      v: 1;
+      userId: string;
+      enrolled: true;
+      generation: string;
+      revision: number;
+      password: PasswordWrap | null;
+      recovery: SealedKey;
+    };
+
+export interface TripKeyBackup extends SealedKey {
+  v: 1;
+  userId: string;
+  tripId: string;
+  epoch: number;
+  generation: string;
+  rowRevision: number;
+}
+
+export type RandomSource = (length: number) => Uint8Array;
+
+const P = 'waytowalk.trip-key-backup';
+const KEY_BYTES = 32;
+const GENERATION_BYTES = 16;
+const SALT_BYTES = 16;
+const IV_BYTES = 12;
+const SEALED_BYTES = KEY_BYTES + 16;
+const ITERATIONS = 600_000;
+// Matches the existing chat epoch schema, not a server-selected KDF parameter.
+const MAX_EPOCH = 1_000_000_000;
+const CODE_PREFIX = 'WTK1-';
+
+function invalid(): never {
+  // Never include passwords, recovery codes, keys or supplied wire data in errors.
+  throw new Error('Invalid key backup data.');
+}
+
+function bytes(value: unknown, length: number): asserts value is Uint8Array {
+  if (!(value instanceof Uint8Array) || value.length !== length) invalid();
+}
+
+function subtle(): SubtleCrypto {
+  if (typeof crypto === 'undefined' || !crypto.subtle) {
+    throw new Error('Web crypto is unavailable in this browser.');
+  }
+  return crypto.subtle;
+}
+
+function bytesToBase64(value: Uint8Array): string {
+  let binary = '';
+  for (let index = 0; index < value.length; index += 0x8000) {
+    binary += String.fromCharCode(...value.subarray(index, index + 0x8000));
+  }
+  return btoa(binary);
+}
+
+function base64ToBytes(text: string): Uint8Array {
+  const binary = atob(text);
+  const result = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    result[index] = binary.charCodeAt(index);
+  }
+  return result;
+}
+
+export function encodeKey(value: Uint8Array): string {
+  if (!(value instanceof Uint8Array)) invalid();
+  return bytesToBase64(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+export function decodeKey(text: string, expectedBytes: number): Uint8Array {
+  if (
+    !Number.isSafeInteger(expectedBytes) ||
+    expectedBytes < 0 ||
+    typeof text !== 'string' ||
+    text.length !== Math.ceil((expectedBytes * 8) / 6) ||
+    !/^[A-Za-z0-9_-]*$/.test(text)
+  ) invalid();
+  const padded = text.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - text.length % 4) % 4);
+  const decoded = base64ToBytes(padded);
+  // Round-trip checks otherwise ignored pad bits (e.g. AB instead of AA).
+  if (decoded.length !== expectedBytes || encodeKey(decoded) !== text) invalid();
+  return decoded;
+}
+
+function object(value: unknown, fields: readonly string[]): Record<string, unknown> {
+  if (!value || typeof value !== 'object') invalid();
+  const proto = Object.getPrototypeOf(value);
+  if (proto !== Object.prototype && proto !== null) invalid();
+  const keys = Reflect.ownKeys(value);
+  if (keys.length !== fields.length || keys.some((key) => typeof key !== 'string' || !fields.includes(key))) {
+    invalid();
+  }
+  // Accept JSON data, not accessors whose values could change after validation.
+  for (const field of fields) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, field);
+    if (!descriptor || !('value' in descriptor)) invalid();
+  }
+  return value as Record<string, unknown>;
+}
+
+function id(value: unknown): asserts value is string {
+  if (typeof value !== 'string' || value.length !== 24 || !/^[0-9a-fA-F]{24}$/.test(value)) invalid();
+}
+
+function integer(value: unknown, max: number): asserts value is number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1 || value > max) invalid();
+}
+
+function generation(value: unknown): asserts value is string {
+  if (typeof value !== 'string') invalid();
+  decodeKey(value, GENERATION_BYTES);
+}
+
+function context(userId: string, accountGeneration: string): void {
+  id(userId);
+  generation(accountGeneration);
+}
+
+function sealedFields(value: Record<string, unknown>): SealedKey {
+  if (typeof value.iv !== 'string' || typeof value.ct !== 'string') invalid();
+  decodeKey(value.iv, IV_BYTES);
+  decodeKey(value.ct, SEALED_BYTES);
+  return { iv: value.iv, ct: value.ct };
+}
+
+function sealed(value: unknown): SealedKey {
+  return sealedFields(object(value, ['iv', 'ct']));
+}
+
+function passwordWrap(value: unknown): PasswordWrap {
+  const data = object(value, ['salt', 'iv', 'ct']);
+  if (typeof data.salt !== 'string') invalid();
+  decodeKey(data.salt, SALT_BYTES);
+  return { salt: data.salt, ...sealedFields(data) };
+}
+
+/** Shape/identity validation is not authentication; callers must still open the wrappers. */
+export function validateAccountBackup(state: unknown, expectedUserId: string): AccountBackupState {
+  id(expectedUserId);
+  if (!state || typeof state !== 'object') invalid();
+  const enrolled = Object.getOwnPropertyDescriptor(state, 'enrolled')?.value;
+  const data = object(state, enrolled === false
+    ? ['v', 'userId', 'enrolled', 'revision']
+    : ['v', 'userId', 'enrolled', 'generation', 'revision', 'password', 'recovery']);
+  if (data.v !== 1 || data.userId !== expectedUserId) invalid();
+  if (data.enrolled === false) {
+    if (data.revision !== 0 || Object.is(data.revision, -0)) invalid();
+    return { v: 1, userId: expectedUserId, enrolled: false, revision: 0 };
+  }
+  if (data.enrolled !== true) invalid();
+  generation(data.generation);
+  integer(data.revision, Number.MAX_SAFE_INTEGER);
+  return {
+    v: 1,
+    userId: expectedUserId,
+    enrolled: true,
+    generation: data.generation,
+    revision: data.revision,
+    password: data.password === null ? null : passwordWrap(data.password),
+    recovery: sealed(data.recovery),
+  };
+}
+
+/** Expected IDs come from authenticated/authorized caller context, never from this row. */
+export function validateTripBackup(row: unknown, userId: string, tripId: string): TripKeyBackup {
+  id(userId);
+  id(tripId);
+  const data = object(row, ['v', 'userId', 'tripId', 'epoch', 'generation', 'rowRevision', 'iv', 'ct']);
+  if (data.v !== 1 || data.userId !== userId || data.tripId !== tripId) invalid();
+  generation(data.generation);
+  integer(data.epoch, MAX_EPOCH);
+  integer(data.rowRevision, Number.MAX_SAFE_INTEGER);
+  return {
+    v: 1,
+    userId,
+    tripId,
+    epoch: data.epoch,
+    generation: data.generation,
+    rowRevision: data.rowRevision,
+    ...sealedFields(data),
+  };
+}
+
+function aad(...parts: (string | number)[]): Uint8Array {
+  return new TextEncoder().encode(JSON.stringify([P, 1, ...parts]));
+}
+
+function passwordAad(userId: string, accountGeneration: string, salt: string): Uint8Array {
+  return aad('password', userId, accountGeneration, 'PBKDF2-HMAC-SHA256', ITERATIONS, salt);
+}
+
+async function derivePassword(password: string, salt: Uint8Array): Promise<Uint8Array> {
+  if (typeof password !== 'string') invalid();
+  // TextEncoder performs the same UTF-16 -> UTF-8 conversion the mobile core
+  // implements manually: lone surrogates become U+FFFD, everything else is
+  // preserved byte-for-byte. No trimming, normalization or length cap.
+  const utf8 = new TextEncoder().encode(password);
+  let base: CryptoKey | undefined;
+  try {
+    base = await subtle().importKey('raw', utf8, 'PBKDF2', false, ['deriveBits']);
+    const derived = await subtle().deriveBits(
+      { name: 'PBKDF2', hash: 'SHA-256', iterations: ITERATIONS, salt },
+      base,
+      256
+    );
+    return new Uint8Array(derived);
+  } finally {
+    utf8.fill(0);
+  }
+}
+
+function recoveryKey(code: string): Uint8Array {
+  if (typeof code !== 'string' || !code.startsWith(CODE_PREFIX)) invalid();
+  return decodeKey(code.slice(CODE_PREFIX.length), KEY_BYTES);
+}
+
+async function seal(
+  key: Uint8Array,
+  wrappingKey: Uint8Array,
+  iv: Uint8Array,
+  associatedData: Uint8Array
+): Promise<SealedKey> {
+  const cryptoKey = await subtle().importKey('raw', wrappingKey, 'AES-GCM', false, ['encrypt']);
+  const ct = await subtle().encrypt(
+    { name: 'AES-GCM', iv, additionalData: associatedData, tagLength: 128 },
+    cryptoKey,
+    key
+  );
+  return { iv: encodeKey(iv), ct: encodeKey(new Uint8Array(ct)) };
+}
+
+async function open(
+  wrap: SealedKey,
+  wrappingKey: Uint8Array,
+  associatedData: Uint8Array
+): Promise<Uint8Array> {
+  try {
+    const cryptoKey = await subtle().importKey('raw', wrappingKey, 'AES-GCM', false, ['decrypt']);
+    const key = new Uint8Array(await subtle().decrypt(
+      {
+        name: 'AES-GCM',
+        iv: decodeKey(wrap.iv, IV_BYTES),
+        additionalData: associatedData,
+        tagLength: 128,
+      },
+      cryptoKey,
+      decodeKey(wrap.ct, SEALED_BYTES)
+    ));
+    if (key.length !== KEY_BYTES) {
+      key.fill(0);
+      invalid();
+    }
+    return key;
+  } catch (error) {
+    if (error instanceof Error && error.message === 'Invalid key backup data.') throw error;
+    throw new Error('Unable to open key backup.');
+  }
+}
+
+/**
+ * Pure WebCrypto v1 core: no persistence, logging or ambient randomness.
+ * The caller MUST supply a cryptographically secure RandomSource in production.
+ * Best-effort buffer wiping cannot erase JS strings or guarantee memory erasure.
+ */
+export function createKeyBackupCrypto(random: RandomSource) {
+  function fresh(length: number): Uint8Array {
+    const value = random(length);
+    bytes(value, length);
+    return new Uint8Array(value);
+  }
+
+  return {
+    generateAccountKey: (): Uint8Array => fresh(KEY_BYTES),
+    generateGeneration: (): string => encodeKey(fresh(GENERATION_BYTES)),
+    generateRecoveryCode: (): string => {
+      const raw = fresh(KEY_BYTES);
+      try {
+        return CODE_PREFIX + encodeKey(raw);
+      } finally {
+        raw.fill(0);
+      }
+    },
+    async wrapPassword(userId: string, accountGeneration: string, password: string, key: Uint8Array): Promise<PasswordWrap> {
+      context(userId, accountGeneration);
+      bytes(key, KEY_BYTES);
+      if (typeof password !== 'string') invalid();
+      const salt = fresh(SALT_BYTES);
+      const iv = fresh(IV_BYTES);
+      const encodedSalt = encodeKey(salt);
+      const associatedData = passwordAad(userId, accountGeneration, encodedSalt);
+      // Own a snapshot across KDF yields; never wipe/mutate the caller's ABK.
+      const keyCopy = new Uint8Array(key);
+      let derived: Uint8Array | undefined;
+      try {
+        derived = await derivePassword(password, salt);
+        return { salt: encodedSalt, ...await seal(keyCopy, derived, iv, associatedData) };
+      } finally {
+        keyCopy.fill(0);
+        derived?.fill(0);
+      }
+    },
+    async unwrapPassword(userId: string, accountGeneration: string, password: string, wrap: PasswordWrap): Promise<Uint8Array> {
+      context(userId, accountGeneration);
+      // Reject unknown parameters and malformed encodings before expensive work.
+      const checked = passwordWrap(wrap);
+      const associatedData = passwordAad(userId, accountGeneration, checked.salt);
+      const derived = await derivePassword(password, decodeKey(checked.salt, SALT_BYTES));
+      try {
+        return await open(checked, derived, associatedData);
+      } finally {
+        derived.fill(0);
+      }
+    },
+    async wrapRecovery(userId: string, accountGeneration: string, code: string, key: Uint8Array): Promise<SealedKey> {
+      context(userId, accountGeneration);
+      bytes(key, KEY_BYTES);
+      const derived = recoveryKey(code);
+      try {
+        return await seal(key, derived, fresh(IV_BYTES), aad('recovery', userId, accountGeneration));
+      } finally {
+        derived.fill(0);
+      }
+    },
+    async unwrapRecovery(userId: string, accountGeneration: string, code: string, wrap: SealedKey): Promise<Uint8Array> {
+      context(userId, accountGeneration);
+      const checked = sealed(wrap);
+      const derived = recoveryKey(code);
+      try {
+        return await open(checked, derived, aad('recovery', userId, accountGeneration));
+      } finally {
+        derived.fill(0);
+      }
+    },
+    async wrapTrip(userId: string, accountGeneration: string, tripId: string, epoch: number, key: Uint8Array, accountKey: Uint8Array): Promise<SealedKey> {
+      context(userId, accountGeneration);
+      id(tripId);
+      integer(epoch, MAX_EPOCH);
+      bytes(key, KEY_BYTES);
+      bytes(accountKey, KEY_BYTES);
+      return seal(key, accountKey, fresh(IV_BYTES), aad('trip', userId, accountGeneration, tripId, epoch));
+    },
+    async unwrapTrip(userId: string, accountGeneration: string, tripId: string, epoch: number, wrap: SealedKey, accountKey: Uint8Array): Promise<Uint8Array> {
+      context(userId, accountGeneration);
+      id(tripId);
+      integer(epoch, MAX_EPOCH);
+      bytes(accountKey, KEY_BYTES);
+      // TripKeyBackup structurally extends SealedKey. Accept a complete row only
+      // after strict validation against the caller's context; never take AAD
+      // identity, generation or epoch from server-selected metadata.
+      let checked: SealedKey;
+      if (wrap && typeof wrap === 'object' && Object.getOwnPropertyDescriptor(wrap, 'v')) {
+        const row = validateTripBackup(wrap, userId, tripId);
+        if (row.generation !== accountGeneration || row.epoch !== epoch) invalid();
+        checked = { iv: row.iv, ct: row.ct };
+      } else {
+        checked = sealed(wrap);
+      }
+      return open(checked, accountKey, aad('trip', userId, accountGeneration, tripId, epoch));
+    },
+  };
+}

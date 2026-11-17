@@ -424,6 +424,27 @@ export async function generateConversationKey(): Promise<CryptoKey> {
   ]);
 }
 
+/**
+ * Raw bytes of a conversation key, for the password-assisted backup only.
+ * Conversation keys are deliberately extractable (see the identity note above);
+ * this helper keeps the export in one audited place instead of allowing ad-hoc
+ * `exportKey` calls around the UI.
+ */
+export async function exportConversationKey(conversationKey: CryptoKey): Promise<Uint8Array> {
+  const raw = await subtle!.exportKey('raw', conversationKey);
+  const bytes = new Uint8Array(raw);
+  if (bytes.length !== 32) throw new Error('Unsupported conversation key.');
+  return bytes;
+}
+
+/** Re-imports a backed-up 32-byte key as a normal extractable chat key. */
+export async function importConversationKey(raw: Uint8Array): Promise<CryptoKey> {
+  if (!(raw instanceof Uint8Array) || raw.length !== 32) {
+    throw new Error('Unsupported conversation key.');
+  }
+  return subtle!.importKey('raw', raw, 'AES-GCM', true, ['encrypt', 'decrypt']);
+}
+
 /** `<b64(iv)>.<b64(ct)>` — the wire format the backend stores verbatim. */
 export async function encryptMessage(conversationKey: CryptoKey, plaintext: string): Promise<string> {
   const iv = new Uint8Array(12);
