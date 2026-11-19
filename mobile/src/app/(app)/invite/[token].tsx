@@ -102,7 +102,7 @@ export default function InviteAcceptScreen() {
   return (
     <Screen scroll edges={['top', 'bottom']} contentContainerStyle={styles.content}>
       <View style={styles.topRow}>
-        <AppText variant="heading" tone="primary" style={styles.wordmark}>
+        <AppText variant="wordmark" tone="primary">
           waytowalk
         </AppText>
       </View>

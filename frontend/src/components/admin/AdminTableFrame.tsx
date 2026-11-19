@@ -13,10 +13,12 @@ export const AdminTableFrame: React.FC<{
   actions?: React.ReactNode;
   /** Minimum table width so columns never squash on a phone. */
   minWidth?: string;
+  /** Accessible name for the scroll region; falls back to the title. */
+  scrollLabel?: string;
   footer?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
-}> = ({ title, description, actions, minWidth = '900px', footer, children, className }) => (
+}> = ({ title, description, actions, minWidth = '900px', scrollLabel, footer, children, className }) => (
   <Card className={cn('overflow-hidden rounded-2xl border-border bg-card shadow-sm', className)}>
     {title || description || actions ? (
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-4 py-3.5">
@@ -32,7 +34,12 @@ export const AdminTableFrame: React.FC<{
       </div>
     ) : null}
     <CardContent className="p-0">
-      <div className="overflow-x-auto">
+      <div
+        role="region"
+        aria-label={scrollLabel ?? (typeof title === 'string' ? `${title} table` : 'Table')}
+        tabIndex={0}
+        className="overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      >
         <table className="w-full text-left text-sm" style={{ minWidth }}>
           {children}
         </table>
@@ -44,7 +51,7 @@ export const AdminTableFrame: React.FC<{
 
 /** Shared head-row treatment so a new column cannot invent its own case. */
 export const adminTableHeadClass =
-  'border-b border-border px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground';
+  'border-b border-border px-4 py-2.5 text-overline font-semibold text-muted-foreground';
 
 /** Shared body-row treatment. */
 export const adminTableRowClass =

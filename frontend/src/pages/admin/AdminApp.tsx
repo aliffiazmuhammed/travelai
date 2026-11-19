@@ -15,8 +15,9 @@ import AdminPasswordChange from './AdminPasswordChange';
  * or agency session alone is never enough. A bootstrapped super-admin with a
  * temporary password must set a new one before the console opens.
  *
- * Every state here is scoped to the console's dark theme so the gate never
- * flashes the light product underneath.
+ * `ThemeProvider` keeps the console dark for the whole `/admin` realm, and
+ * `theme-init.js` applies it before first paint, so the gate never flashes the
+ * light product underneath.
  */
 const AdminApp: React.FC = () => {
   const enabled = usePlatformEnabled();
@@ -24,7 +25,7 @@ const AdminApp: React.FC = () => {
 
   if (enabled === null || loading) {
     return (
-      <div className="dark grid min-h-screen place-items-center bg-background">
+      <div className="grid min-h-screen place-items-center bg-background">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
           Checking platform access…
@@ -35,14 +36,14 @@ const AdminApp: React.FC = () => {
 
   if (!enabled) {
     return (
-      <div className="dark grid min-h-screen place-items-center bg-background px-4">
+      <div className="grid min-h-screen place-items-center bg-background px-4">
         <Card className="w-full max-w-md rounded-2xl border-border bg-card">
           <CardContent className="space-y-4 p-8 text-center">
             <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-muted text-muted-foreground">
               <ShieldOff className="h-6 w-6" aria-hidden />
             </div>
             <div className="space-y-1">
-              <h1 className="text-lg font-semibold text-foreground">
+              <h1 className="text-xl font-semibold text-foreground">
                 Platform admin is not enabled
               </h1>
               <p className="text-sm leading-6 text-muted-foreground">

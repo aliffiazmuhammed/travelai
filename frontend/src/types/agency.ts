@@ -341,6 +341,13 @@ export interface AgencyEnquiryPage {
   nextCursor: string | null;
   hasMore: boolean;
   total: number;
+  /** Traveller history only: server-side pills, stable across pages. */
+  counts?: {
+    all: number;
+    replied: number;
+    quote: number;
+    open: number;
+  };
 }
 
 /** What the public form posts; the server re-validates every field. */

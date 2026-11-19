@@ -14,6 +14,25 @@ export const authLimiter = rateLimit({
 });
 
 /**
+ * Reset-link preflight is read-only and never consumes the token, but the SPA
+ * calls it on every mount (including reloads). It gets its own bucket so a
+ * person refreshing a link cannot burn their sign-in/reset attempts; the cap
+ * still bounds scripted token probing. 256-bit tokens make guessing infeasible;
+ * this is a traffic brake, not the security boundary.
+ */
+export const resetTokenLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  message: {
+    success: false,
+    error: 'Too many reset-link checks. Please try again shortly.',
+    message: 'Too many reset-link checks. Please try again shortly.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
  * PA0: each realm signs in through its own limiter instance. Separate stores
  * mean an attacker burning personal attempts cannot lock out agency staff (and
  * vice versa), and the plan requires per-realm throttling.
@@ -290,6 +309,24 @@ export const passwordChangeLimiter = rateLimit({
 });
 
 /**
+ * Account-deletion requests are rare, reviewed by a person and idempotent per
+ * account. The cap only stops a stuck client from filling the support queue.
+ */
+export const deletionRequestLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000,
+  max: 5,
+  keyGenerator: userOrIpKey,
+  validate: false,
+  message: {
+    success: false,
+    error: 'You have already sent several deletion requests today. Please contact support directly.',
+    message: 'You have already sent several deletion requests today. Please contact support directly.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
  * PA2: account management writes are rare and high-impact (disable, password
  * reset, super-admin creation). The limit is per platform account, generous for
  * an operator working through a support queue and hostile to scripted abuse.
@@ -463,6 +500,23 @@ export const publicGalleryLimiter = rateLimit({
     success: false,
     error: 'Too many gallery requests. Please slow down and try again shortly.',
     message: 'Too many gallery requests. Please slow down and try again shortly.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
+ * Public discovery covers (C-21). One gallery page fires a card image per trip,
+ * so this bucket is deliberately wider than the gallery's JSON bucket while
+ * still bounding cache-miss traffic to the upstream photo host.
+ */
+export const coverImageLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 600,
+  message: {
+    success: false,
+    error: 'Too many image requests. Please slow down and try again shortly.',
+    message: 'Too many image requests. Please slow down and try again shortly.',
   },
   standardHeaders: true,
   legacyHeaders: false,

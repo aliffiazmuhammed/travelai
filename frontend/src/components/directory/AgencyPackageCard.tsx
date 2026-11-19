@@ -26,10 +26,10 @@ export interface AgencyPackageCardModel {
 }
 
 const TONES = [
-  'from-teal-600 via-teal-500 to-sky-600',
-  'from-amber-500 via-orange-500 to-rose-500',
-  'from-sky-600 via-indigo-500 to-violet-600',
-  'from-emerald-600 via-teal-500 to-cyan-600',
+  'from-agency-accent via-agency-accent to-info',
+  'from-warning via-warning to-destructive',
+  'from-info via-admin-accent to-accent',
+  'from-success via-agency-accent to-info',
 ] as const;
 
 function toneFor(seed: string): string {
@@ -77,7 +77,7 @@ export const AgencyPackageCard: React.FC<{
           />
           <div
             aria-hidden="true"
-            className="absolute inset-0 bg-gradient-to-t from-slate-900/25 via-transparent to-transparent"
+            className="absolute inset-0 bg-gradient-to-t from-muted/25 via-transparent to-transparent"
           />
         </>
       ) : (
@@ -104,7 +104,7 @@ export const AgencyPackageCard: React.FC<{
           </div>
         </div>
       )}
-      <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-bold text-slate-700 shadow-sm backdrop-blur dark:bg-slate-900/90 dark:text-slate-200">
+      <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-xs font-bold text-muted-foreground shadow-sm backdrop-blur dark:bg-background/90">
         <CalendarDays className="h-3 w-3" />
         {nightsLabel(pkg.nights)}
       </span>
@@ -114,7 +114,7 @@ export const AgencyPackageCard: React.FC<{
   return (
     <article
       className={cn(
-        'group flex flex-col overflow-hidden rounded-3xl border border-border/70 bg-card shadow-xs transition-all duration-300 hover:-translate-y-0.5 hover:border-teal-200 hover:shadow-lg dark:hover:border-teal-900',
+        'group flex flex-col overflow-hidden rounded-3xl border border-border/70 bg-card shadow-xs transition-all duration-300 hover:-translate-y-0.5 hover:border-agency-accent/30 hover:shadow-lg',
         className
       )}
       aria-label={`${title} package`}
@@ -123,7 +123,7 @@ export const AgencyPackageCard: React.FC<{
         <button
           type="button"
           onClick={onOpen}
-          className="block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2"
+          className="block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-agency-accent focus-visible:ring-offset-2"
           aria-label={`Open the day-by-day plan for ${title}`}
         >
           {cover}
@@ -134,12 +134,12 @@ export const AgencyPackageCard: React.FC<{
 
       <div className="flex flex-1 flex-col gap-3 p-5">
         <div className="space-y-1">
-          <h3 className="text-lg font-black leading-snug tracking-tight text-foreground">
+          <h3 className="text-xl font-black leading-snug tracking-tight text-foreground">
             {onOpen ? (
               <button
                 type="button"
                 onClick={onOpen}
-                className="text-left transition-colors hover:text-teal-700 dark:hover:text-teal-300"
+                className="text-left transition-colors hover:text-agency-accent-ink"
               >
                 {title}
               </button>
@@ -156,17 +156,17 @@ export const AgencyPackageCard: React.FC<{
 
         {pkg.highlights && pkg.highlights.length > 0 ? (
           <section aria-label="Package highlights">
-            <h4 className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wide text-slate-500">
-              <Sparkles className="h-3 w-3 text-teal-600" />
+            <h4 className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wide text-muted-foreground">
+              <Sparkles className="h-3 w-3 text-agency-accent-ink" />
               Highlights
             </h4>
             <ul className="mt-1.5 space-y-1">
               {pkg.highlights.map((highlight) => (
                 <li
                   key={highlight}
-                  className="flex items-start gap-1.5 text-sm text-slate-700 dark:text-slate-300"
+                  className="flex items-start gap-1.5 text-sm text-muted-foreground"
                 >
-                  <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-teal-600" />
+                  <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-agency-accent-ink" />
                   {highlight}
                 </li>
               ))}
@@ -176,7 +176,7 @@ export const AgencyPackageCard: React.FC<{
 
         {pkg.inclusions && pkg.inclusions.length > 0 ? (
           <section aria-label="Package inclusions">
-            <h4 className="text-xs font-bold uppercase tracking-wide text-slate-500">
+            <h4 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
               What's included
             </h4>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -184,7 +184,7 @@ export const AgencyPackageCard: React.FC<{
                 <Badge
                   key={inclusion}
                   variant="secondary"
-                  className="bg-teal-50 text-teal-800 dark:bg-teal-950/60 dark:text-teal-200"
+                  className="bg-agency-accent-soft text-agency-accent-ink"
                 >
                   {inclusion}
                 </Badge>
@@ -200,13 +200,13 @@ export const AgencyPackageCard: React.FC<{
             </span>
           ) : (
             <>
-              <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+              <span className="text-overline font-bold text-muted-foreground">
                 From
               </span>
-              <span className="text-lg font-black text-foreground">
+              <span className="text-xl font-black text-foreground">
                 {formatMoney(pkg.pricePerPerson, pkg.currency)}
               </span>
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-xs text-muted-foreground">
                 per person
               </span>
             </>

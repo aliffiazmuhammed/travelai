@@ -9,13 +9,18 @@
  *   free of `'unsafe-inline'` / `'unsafe-eval'`.
  * - **Styles:** inline style attributes are unavoidable — Recharts and
  *   Leaflet position elements with `style="..."` — so `style-src` keeps
- *   `'unsafe-inline'`. The only remote stylesheet is the Google Fonts CSS
- *   (Cabin) linked from `index.html`.
- * - **Images:** same-origin uploads, inline data/blob previews, Unsplash trip
- *   covers, Cloudinary avatars/receipts, and the two map tile providers.
+ *   `'unsafe-inline'`. No remote stylesheets are used: fonts are self-hosted
+ *   (C-23), so `style-src` and `font-src` stay same-origin.
+ * - **Images:** same-origin uploads and proxied trip covers, inline data/blob
+ *   previews, Cloudinary avatars/receipts, and the two map tile providers.
+ *   Destination covers go through `/api/images/cover` (C-21), so the browser no
+ *   longer needs a third-party photo-host origin.
  * - **Connections:** same-origin API/SSE plus Nominatim geocoding, which the
  *   map calls directly from the browser.
- * - **Frames/objects:** none.
+ * - **Frames/objects:** no remote frames. Proposal documents render from
+ *   `srcdoc` inside a fully sandboxed iframe; `frame-src 'self'` permits that
+ *   local document while still refusing third-party embeds. `object-src` stays
+ *   `'none'`.
  *
  * Split-origin deployments (SPA on Vercel, API on Render) get their policy
  * from the static host, not from here; this allow-list covers the unified
@@ -27,15 +32,13 @@ export const CSP_IMAGE_ORIGINS = [
   "'self'",
   'data:',
   'blob:',
-  'https://images.unsplash.com',
   'https://res.cloudinary.com',
   'https://*.basemaps.cartocdn.com',
   'https://server.arcgisonline.com',
 ] as const;
 
-/** Origins the SPA loads fonts and font CSS from (Cabin). */
-export const CSP_FONT_ORIGINS = ['https://fonts.gstatic.com'] as const;
-export const CSP_STYLE_ORIGINS = ['https://fonts.googleapis.com'] as const;
+/** Stylesheets: same-origin only (fonts are self-hosted since C-23). */
+export const CSP_STYLE_ORIGINS: readonly string[] = [];
 
 /** Browser-initiated network calls outside this origin. */
 export const CSP_CONNECT_ORIGINS = [
@@ -59,11 +62,11 @@ export function buildCspDirectives(isDev: boolean) {
     scriptSrcAttr: ["'none'"],
     styleSrc: ["'self'", "'unsafe-inline'", ...CSP_STYLE_ORIGINS],
     imgSrc: [...CSP_IMAGE_ORIGINS],
-    fontSrc: ["'self'", 'data:', ...CSP_FONT_ORIGINS],
+    fontSrc: ["'self'", 'data:'],
     connectSrc: [...CSP_CONNECT_ORIGINS],
     mediaSrc: ["'self'"],
     workerSrc: ["'self'", 'blob:'],
-    frameSrc: ["'none'"],
+    frameSrc: ["'self'"],
     frameAncestors: ["'self'"],
     formAction: ["'self'"],
     upgradeInsecureRequests: isDev ? null : [],

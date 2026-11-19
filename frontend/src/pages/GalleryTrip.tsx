@@ -179,7 +179,7 @@ const FactRow = ({
   capitalize?: boolean;
 }) => (
   <div className="flex items-center justify-between gap-3 py-2.5">
-    <dt className="inline-flex items-center gap-2 text-[11px] font-semibold text-muted-foreground">
+    <dt className="inline-flex items-center gap-2 text-xs font-semibold text-muted-foreground">
       <Icon className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
       {label}
     </dt>
@@ -476,7 +476,7 @@ const GalleryTrip = () => {
     return (
       <div className="min-h-screen bg-gradient-hero flex flex-col">
         <Navbar />
-        <main className="flex-1 flex flex-col items-center justify-center min-h-[60vh] space-y-4">
+        <main id="main-content" tabIndex={-1} className="flex-1 flex flex-col items-center justify-center min-h-[60vh] space-y-4">
           <Loader2 className="w-10 h-10 text-primary animate-spin" />
           <div className="text-center space-y-1">
             <h3 className="text-base font-bold text-foreground">
@@ -495,7 +495,7 @@ const GalleryTrip = () => {
     return (
       <div className="min-h-screen bg-gradient-hero flex flex-col">
         <Navbar />
-        <main className="flex-1 container mx-auto px-4 pt-24 pb-20 max-w-xl">
+        <main id="main-content" tabIndex={-1} className="flex-1 container mx-auto px-4 pt-24 pb-20 max-w-xl">
           <div className="p-8 sm:p-12 text-center rounded-3xl bg-card/80 backdrop-blur-md border border-border/80 shadow-card space-y-6">
             <div className="w-16 h-16 rounded-3xl bg-destructive/10 text-destructive flex items-center justify-center mx-auto">
               <AlertCircle className="w-8 h-8" />
@@ -537,7 +537,7 @@ const GalleryTrip = () => {
     <div className="min-h-screen bg-gradient-hero flex flex-col">
       <Navbar />
 
-      <main className="flex-1 pb-20">
+      <main id="main-content" tabIndex={-1} className="flex-1 pb-20">
         <div className="pt-16">
           <section className="relative" aria-label="Trip photo">
             <TripCover
@@ -554,7 +554,7 @@ const GalleryTrip = () => {
               aria-label="Breadcrumb"
               className="absolute left-4 top-4 min-w-0 sm:left-6 sm:top-6"
             >
-              <ol className="flex min-w-0 flex-wrap items-center gap-1 text-[11px] font-semibold text-white/85">
+              <ol className="flex min-w-0 flex-wrap items-center gap-1 text-xs font-semibold text-white/85">
                 <li>
                   <Link
                     to="/explore"
@@ -607,7 +607,7 @@ const GalleryTrip = () => {
                     {formatGalleryDates(trip.dates)}
                   </span>
                   {tripHasStarted && (
-                    <span className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-muted/60 px-2.5 py-0.5 text-[10px] font-bold text-muted-foreground">
+                    <span className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-muted/60 px-2.5 py-0.5 text-xs font-bold text-muted-foreground">
                       <History className="h-3 w-3" aria-hidden="true" />
                       Finished
                     </span>
@@ -642,7 +642,7 @@ const GalleryTrip = () => {
                       Shared by{" "}
                       {trip.publisher.name || trip.publisher.handle}
                     </p>
-                    <p className="truncate text-[11px] text-muted-foreground">
+                    <p className="truncate text-xs text-muted-foreground">
                       Trip host · @{trip.publisher.handle}
                     </p>
                   </div>
@@ -656,7 +656,7 @@ const GalleryTrip = () => {
               <div className="flex w-full flex-col gap-3 lg:w-[22rem] lg:shrink-0 lg:items-end">
                 <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap lg:justify-end">
                   {joinState?.isOwner ? (
-                    <div className="w-full rounded-2xl border border-border/70 bg-muted/40 px-3 py-2.5 text-center text-[11px] font-semibold text-muted-foreground sm:w-auto">
+                    <div className="w-full rounded-2xl border border-border/70 bg-muted/40 px-3 py-2.5 text-center text-xs font-semibold text-muted-foreground sm:w-auto">
                       This is your trip — you already have full access.
                     </div>
                   ) : joinState?.isMember ? (
@@ -687,13 +687,13 @@ const GalleryTrip = () => {
                         size="sm"
                         disabled={joinBusy}
                         onClick={() => void handleWithdraw()}
-                        className="h-8 w-full rounded-xl text-[11px] font-semibold text-muted-foreground hover:text-destructive"
+                        className="h-8 w-full rounded-xl text-xs font-semibold text-muted-foreground hover:text-destructive"
                       >
                         {joinBusy ? "Withdrawing…" : "Withdraw request"}
                       </Button>
                     </div>
                   ) : joinClosed ? (
-                    <div className="w-full rounded-2xl border border-border/70 bg-muted/40 px-3 py-2.5 text-center text-[11px] font-semibold text-muted-foreground sm:w-auto">
+                    <div className="w-full rounded-2xl border border-border/70 bg-muted/40 px-3 py-2.5 text-center text-xs font-semibold text-muted-foreground sm:w-auto">
                       This trip has already happened — joining is closed.
                     </div>
                   ) : (
@@ -726,7 +726,7 @@ const GalleryTrip = () => {
 
                 <div className="flex flex-wrap gap-2 lg:justify-end">
                   {trip.groupType && (
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/50 px-3 py-1 text-[11px] font-semibold capitalize text-foreground/80">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/50 px-3 py-1 text-xs font-semibold capitalize text-foreground/80">
                       <Users
                         className="h-3 w-3 text-primary"
                         aria-hidden="true"
@@ -734,7 +734,7 @@ const GalleryTrip = () => {
                       {trip.groupType}
                     </span>
                   )}
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/50 px-3 py-1 text-[11px] font-semibold text-foreground/80">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/50 px-3 py-1 text-xs font-semibold text-foreground/80">
                     <CalendarDays
                       className="h-3 w-3 text-primary"
                       aria-hidden="true"
@@ -743,7 +743,7 @@ const GalleryTrip = () => {
                     {trip.durationDays === 1 ? "day" : "days"}
                   </span>
                   {trip.season && (
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/50 px-3 py-1 text-[11px] font-semibold capitalize text-foreground/80">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/50 px-3 py-1 text-xs font-semibold capitalize text-foreground/80">
                       <Leaf
                         className="h-3 w-3 text-primary"
                         aria-hidden="true"
@@ -753,7 +753,7 @@ const GalleryTrip = () => {
                   )}
                 </div>
 
-                <p className="max-w-sm text-[10px] leading-relaxed text-muted-foreground lg:text-right">
+                <p className="max-w-sm text-xs leading-relaxed text-muted-foreground lg:text-right">
                   {joinClosed
                     ? "This trip has already happened. Take a copy and change the dates, stays and routes however you like — the original stays as it is."
                     : "Your copy is private and yours to change however you like — the original stays as it is. Asking to join sends a note to the owner; if they say yes, you can follow the trip and comment."}
@@ -767,7 +767,7 @@ const GalleryTrip = () => {
                   <Link
                     key={tag}
                     to={`/explore?tag=${encodeURIComponent(tag)}`}
-                    className="rounded-full bg-muted px-2.5 py-1 text-[10px] font-semibold text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+                    className="rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
                   >
                     #{tag}
                   </Link>
@@ -841,7 +841,7 @@ const GalleryTrip = () => {
                                   Day {day.day}
                                 </p>
                                 {day.permit_required && (
-                                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-warning/10 px-1.5 py-0.5 text-xs font-semibold text-warning-ink">
                                     <Ticket
                                       className="h-3 w-3"
                                       aria-hidden="true"
@@ -966,7 +966,7 @@ const GalleryTrip = () => {
                               {(stay.location ||
                                 stay.vibe ||
                                 stay.description) && (
-                                <p className="line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">
+                                <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
                                   {[
                                     stay.location,
                                     stay.vibe || stay.description,
@@ -980,7 +980,7 @@ const GalleryTrip = () => {
                         ))}
                       </div>
                       {stays.length > 2 && (
-                        <p className="mt-3 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">
+                        <p className="mt-3 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
                           Also on the plan:{" "}
                           {stays
                             .slice(2)
@@ -1021,7 +1021,7 @@ const GalleryTrip = () => {
                         ))}
                       </div>
                       {eats.length > 2 && (
-                        <p className="mt-3 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">
+                        <p className="mt-3 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
                           Also on the plan: {eats.slice(2).join(" · ")}
                         </p>
                       )}
@@ -1071,7 +1071,7 @@ const GalleryTrip = () => {
                         <span className="min-w-0 truncate text-xs font-semibold text-foreground">
                           {route.name}
                         </span>
-                        <span className="shrink-0 text-[11px] text-muted-foreground">
+                        <span className="shrink-0 text-xs text-muted-foreground">
                           {route.day ? `Day ${route.day} · ` : ""}
                           {route.distanceKm > 0
                             ? `${route.distanceKm.toFixed(1)} km`
@@ -1145,14 +1145,14 @@ const GalleryTrip = () => {
                   )}
                 </dl>
 
-                <p className="mt-3 border-t border-border/60 pt-4 text-[11px] leading-relaxed text-muted-foreground">
+                <p className="mt-3 border-t border-border/60 pt-4 text-xs leading-relaxed text-muted-foreground">
                   {joinClosed
                     ? "This trip has already happened, so join requests are closed. The plan stays here to copy."
                     : joinState?.isOwner
                       ? "You're the host — join requests arrive in your dashboard."
                       : `${hostName} reviews join requests so the trip stays a good fit for everyone.`}
                 </p>
-                <p className="mt-2 flex items-start gap-1.5 text-[11px] leading-relaxed text-muted-foreground">
+                <p className="mt-2 flex items-start gap-1.5 text-xs leading-relaxed text-muted-foreground">
                   <Lock
                     className="mt-0.5 h-3 w-3 shrink-0"
                     aria-hidden="true"
@@ -1165,7 +1165,7 @@ const GalleryTrip = () => {
                 <p className="text-xs font-bold text-foreground">
                   What's shared — and what isn't
                 </p>
-                <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+                <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
                   You're seeing the itinerary, the dates the owner chose to share
                   and their public profile. Budgets, expenses and travel companions
                   stay private. The{" "}
@@ -1182,7 +1182,7 @@ const GalleryTrip = () => {
               <button
                 type="button"
                 onClick={handleReportClick}
-                className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl py-2 text-[11px] font-semibold text-muted-foreground transition-colors hover:text-destructive"
+                className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-semibold text-muted-foreground transition-colors hover:text-destructive"
               >
                 <Flag className="h-3.5 w-3.5" aria-hidden="true" />
                 Report this trip

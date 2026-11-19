@@ -3,8 +3,10 @@ import { Link, useParams } from "react-router-dom";
 import PdfDocumentViewer from "@/components/agency/PdfDocumentViewer";
 import { AgencyLogoTile } from "@/components/directory/AgencyLogoTile";
 import LiveProposalDocument from "@/components/directory/LiveProposalDocument";
+import { ProposalDocumentFallback } from "@/components/directory/ProposalDocumentFallback";
 import { Button } from "@/components/ui/button";
 import { api } from "@/services/api";
+import { applyPageMeta } from "@/lib/meta";
 import { formatMoney } from "@/lib/currency";
 import { formatDate, formatDateOnly } from "@/lib/date";
 import type { AgencyProposalView } from "@/types/agency";
@@ -68,6 +70,27 @@ const ProposalShare: React.FC = () => {
     fetchProposal();
   }, [token]);
 
+  // A proposal token is a private capability: previews may render the card, but
+  // search engines must not index the page (C-20).
+  useEffect(() => {
+    if (!proposal) {
+      return applyPageMeta({
+        title: "Travel proposal · waytowalk",
+        description: "A travel proposal prepared for you on waytowalk.",
+        image: "/brand/og-default.png",
+        robots: "noindex, nofollow",
+      });
+    }
+    const agency = proposal.agency.name || "a travel agency";
+    return applyPageMeta({
+      title: `${proposal.trip.title} · Proposal from ${agency} · waytowalk`,
+      description: `A private travel proposal from ${agency}, prepared for you on waytowalk.`,
+      image: "/brand/og-default.png",
+      ogType: "article",
+      robots: "noindex, nofollow",
+    });
+  }, [proposal]);
+
   useEffect(() => {
     if (!token || proposal?.documentMode !== "pdf") return;
     let cancelled = false;
@@ -130,7 +153,7 @@ const ProposalShare: React.FC = () => {
     if (!proposal) return null;
     if (proposal.declined) {
       return (
-        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-muted px-2.5 py-1 text-[10px] font-semibold text-muted-foreground">
+        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
           <X className="h-3 w-3" aria-hidden="true" />
           Declined
         </span>
@@ -140,27 +163,27 @@ const ProposalShare: React.FC = () => {
     switch (quote.status) {
       case "accepted":
         return (
-          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-transparent bg-accent/10 px-2.5 py-1 text-[10px] font-semibold text-accent">
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-transparent bg-accent/10 px-2.5 py-1 text-xs font-semibold text-accent-ink">
             <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
             Accepted
           </span>
         );
       case "sent":
         return (
-          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-transparent bg-primary/10 px-2.5 py-1 text-[10px] font-semibold text-primary">
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-transparent bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
             <span className="h-1.5 w-1.5 rounded-full bg-primary" />
             Awaiting your acceptance
           </span>
         );
       case "expired":
         return (
-          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-muted px-2.5 py-1 text-[10px] font-semibold text-muted-foreground">
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
             Expired
           </span>
         );
       case "cancelled":
         return (
-          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-muted px-2.5 py-1 text-[10px] font-semibold text-muted-foreground">
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
             Cancelled
           </span>
         );
@@ -173,12 +196,12 @@ const ProposalShare: React.FC = () => {
   // inside the document card so the page reads as one piece of paper.
   const answerPanel = proposal ? (
     proposal.accepted ? (
-      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-accent/20 bg-accent/10 px-4 py-3.5 text-accent">
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-accent/20 bg-accent/10 px-4 py-3.5 text-accent-ink">
         <CheckCircle2 className="h-5 w-5 shrink-0" aria-hidden="true" />
         <div className="space-y-0.5">
           <p className="text-xs font-semibold">You have accepted this proposal.</p>
           {proposal.acceptedAt ? (
-            <p className="text-[11px] opacity-80">
+            <p className="text-xs opacity-80">
               Accepted on {formatDate(proposal.acceptedAt)}
             </p>
           ) : null}
@@ -189,7 +212,7 @@ const ProposalShare: React.FC = () => {
         <p className="text-xs font-semibold text-foreground">
           You declined this proposal.
         </p>
-        <p className="mt-0.5 text-[11px] leading-5 text-muted-foreground">
+        <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
           Ask {agencyName} for an updated one if you change your mind.
         </p>
       </div>
@@ -201,31 +224,45 @@ const ProposalShare: React.FC = () => {
               <Send className="h-4 w-4" aria-hidden="true" />
             </span>
             <div className="space-y-1">
-              <p className="font-display text-lg font-semibold tracking-tight text-foreground">
+              <p className="font-display text-xl font-semibold tracking-tight text-foreground">
                 Ready when you are
               </p>
-              <p className="max-w-md text-[11px] leading-5 text-muted-foreground">
+              <p className="max-w-md text-xs leading-5 text-muted-foreground">
                 Review the details and accept when you’re happy to go ahead.
               </p>
             </div>
           </div>
           <div className="flex flex-col items-start gap-1.5 sm:items-end">
-            <Button
-              type="button"
-              onClick={handleAccept}
-              disabled={accepting}
-              className="h-9 gap-1.5 px-4 text-xs font-semibold"
-            >
-              {accepting ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : confirming ? (
-                <CheckCircle2 className="h-3.5 w-3.5" />
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                onClick={handleAccept}
+                disabled={accepting}
+                className="h-9 gap-1.5 px-4 text-xs font-semibold"
+              >
+                {accepting ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : confirming ? (
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                ) : null}
+                {confirming ? "Confirm acceptance" : "Accept proposal"}
+              </Button>
+              {confirming ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setConfirming(false)}
+                  disabled={accepting}
+                  className="h-9 rounded-lg px-3 text-xs font-semibold"
+                >
+                  Not yet
+                </Button>
               ) : null}
-              {confirming ? "Confirm acceptance" : "Accept proposal"}
-            </Button>
-            <p className="text-[10px] leading-4 text-muted-foreground">
+            </div>
+            <p className="text-xs leading-4 text-muted-foreground">
               {confirming
-                ? "Acceptance is final — it confirms the trip and locks this quote."
+                ? "Acceptance is final — it confirms the trip and locks this quote. Choose Not yet to keep reviewing."
                 : "Acceptance is final — it confirms the trip with the agency."}
             </p>
           </div>
@@ -236,7 +273,7 @@ const ProposalShare: React.FC = () => {
         <p className="text-xs font-semibold text-foreground">
           This proposal can no longer be accepted.
         </p>
-        <p className="mt-0.5 text-[11px] leading-5 text-muted-foreground">
+        <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
           Please contact {agencyName} for an updated proposal.
         </p>
       </div>
@@ -256,7 +293,7 @@ const ProposalShare: React.FC = () => {
             <img src="/brand/waytowalk-logo-name.svg" alt="waytowalk" width="140" height="28" className="h-7 w-[140px] dark:hidden" />
             <img src="/brand/waytowalk-logo-reverse.svg" alt="waytowalk" width="140" height="28" className="hidden h-7 w-[140px] dark:block" />
           </Link>
-          <p className="truncate text-[11px] text-muted-foreground">
+          <p className="truncate text-xs text-muted-foreground">
             Prepared by{" "}
             <span className="font-semibold text-foreground">
               {proposal?.agency.name?.trim() || "your agency"}
@@ -273,7 +310,7 @@ const ProposalShare: React.FC = () => {
               <p className="text-sm font-semibold text-foreground">
                 Preparing your proposal…
               </p>
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Rendering the document your agent prepared
               </p>
             </div>
@@ -305,13 +342,13 @@ const ProposalShare: React.FC = () => {
                   <div className="flex min-w-0 items-start gap-4">
                     <AgencyLogoTile
                       name={proposal.agency.name || "Agency"}
-                      className="h-14 w-14 rounded-xl text-lg sm:h-16 sm:w-16"
+                      className="h-14 w-14 rounded-xl text-xl sm:h-16 sm:w-16"
                     />
                     <div className="min-w-0 space-y-1">
                       <p className="font-display text-xl font-semibold leading-tight tracking-tight text-foreground sm:text-2xl">
                         {proposal.agency.name || "Your travel agency"}
                       </p>
-                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      <p className="text-overline font-semibold text-muted-foreground">
                         Travel agency
                       </p>
                     </div>
@@ -340,7 +377,7 @@ const ProposalShare: React.FC = () => {
                     <div className="overflow-hidden rounded-xl border border-border/70">
                       {quote.lineItems.length > 0 ? (
                         <>
-                          <div className="hidden grid-cols-[minmax(0,1.1fr)_minmax(0,1.4fr)_auto] gap-4 border-b border-border/70 bg-background/60 px-4 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:grid">
+                          <div className="hidden grid-cols-[minmax(0,1.1fr)_minmax(0,1.4fr)_auto] gap-4 border-b border-border/70 bg-background/60 px-4 py-2 text-overline font-semibold text-muted-foreground sm:grid">
                             <span>Item</span>
                             <span>Notes</span>
                             <span className="text-right">Amount</span>
@@ -356,13 +393,13 @@ const ProposalShare: React.FC = () => {
                                     {item.label}
                                   </p>
                                   {item.quantity !== 1 ? (
-                                    <p className="text-[10px] text-muted-foreground">
+                                    <p className="text-xs text-muted-foreground">
                                       {item.quantity} ×{" "}
                                       {formatMoney(item.unitPrice, quote.currency)}
                                     </p>
                                   ) : null}
                                 </div>
-                                <p className="text-[11px] leading-5 text-muted-foreground">
+                                <p className="text-xs leading-5 text-muted-foreground">
                                   {item.description ?? ""}
                                 </p>
                                 <p className="text-xs font-semibold tabular-nums text-foreground sm:text-right">
@@ -383,7 +420,7 @@ const ProposalShare: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="flex flex-col gap-1 text-[11px] text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3">
+                    <div className="flex flex-col gap-1 text-xs text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3">
                       {quote.taxAmount > 0 ? (
                         <span>
                           Includes tax
@@ -411,7 +448,7 @@ const ProposalShare: React.FC = () => {
                     {quote.inclusions.length > 0 ||
                     quote.exclusions.length > 0 ||
                     quote.terms.length > 0 ? (
-                      <div className="grid gap-4 border-t border-border/60 pt-4 text-[11px] sm:grid-cols-3">
+                      <div className="grid gap-4 border-t border-border/60 pt-4 text-xs sm:grid-cols-3">
                         <QuoteList title="Included" items={quote.inclusions} tone="accent" />
                         <QuoteList title="Not included" items={quote.exclusions} tone="muted" />
                         <QuoteList title="Terms" items={quote.terms} tone="muted" />
@@ -442,7 +479,7 @@ const ProposalShare: React.FC = () => {
                       The document {proposal.agency.name || "your agency"} sent
                     </h2>
                     {proposal.pageCount > 0 ? (
-                      <span className="text-[11px] text-muted-foreground">
+                      <span className="text-xs text-muted-foreground">
                         · {proposal.pageCount} page
                         {proposal.pageCount === 1 ? "" : "s"}
                       </span>
@@ -477,17 +514,23 @@ const ProposalShare: React.FC = () => {
                     />
                   )
                 ) : (
-                  <iframe
-                    title={`${proposal.trip.title} proposal`}
-                    srcDoc={proposal.html}
-                    sandbox=""
-                    className="h-[75vh] w-full rounded-xl border border-border/70 bg-card"
-                  />
+                  <div>
+                    <iframe
+                      title={`${proposal.trip.title} proposal`}
+                      srcDoc={proposal.html}
+                      sandbox=""
+                      className="h-[75vh] w-full rounded-xl border border-border/70 bg-card"
+                    />
+                    <ProposalDocumentFallback
+                      html={proposal.html ?? ""}
+                      title={proposal.trip.title}
+                    />
+                  </div>
                 )}
               </section>
             ) : null}
 
-            <p className="flex items-start gap-2 border-t border-border/60 pt-4 text-[11px] leading-5 text-muted-foreground">
+            <p className="flex items-start gap-2 border-t border-border/60 pt-4 text-xs leading-5 text-muted-foreground">
               <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
               <span>
                 This page shows only what {agencyName} prepared for you. Your link
@@ -509,14 +552,14 @@ const QuoteList: React.FC<{
   if (items.length === 0) return null;
   return (
     <div className="space-y-1.5">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+      <p className="text-overline font-semibold text-muted-foreground">
         {title}
       </p>
       <ul className="space-y-1 text-muted-foreground">
         {items.map((line, index) => (
           <li key={`${line}-${index}`} className="flex gap-1.5 leading-5">
             {tone === "accent" ? (
-              <Check className="mt-0.5 h-3 w-3 shrink-0 text-accent" aria-hidden="true" />
+              <Check className="mt-0.5 h-3 w-3 shrink-0 text-accent-ink" aria-hidden="true" />
             ) : (
               <span aria-hidden="true">·</span>
             )}

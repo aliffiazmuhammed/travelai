@@ -1,5 +1,6 @@
 import { jsPDF } from "jspdf";
 import type { ItineraryData } from "@/types/trip";
+import { activityTimeLabel } from "./itineraryTruth";
 
 /**
  * Purpose-built itinerary PDF (replaces the old `window.print()` screen dump).
@@ -263,20 +264,17 @@ function drawDay(ctx: Ctx, day: ItineraryData["day_by_day_itinerary"][number]) {
   }
 
   // Activities
-  const slotOf = (i: number) =>
-    ["Morning", "Afternoon", "Sunset / Evening", "Night"][i % 4];
-
   day.activities.forEach((act, i) => {
     const isObj = typeof act === "object" && act !== null;
     const titleA = isObj ? act.title || act.name || "" : String(act);
     const desc = isObj ? act.description || "" : "";
     const loc = isObj ? act.location_name || act.location || "" : "";
-    const time = isObj ? act.time || "" : "";
     const cost = isObj ? act.approx_cost : null;
+    const slotLabel = activityTimeLabel(act, i);
 
     const headH = 6.5; // slot label row + gap before the title
     let blockH = headH + 2;
-    if (time || loc || (cost != null && cost > 0)) blockH += 5;
+    if (loc || (cost != null && cost > 0)) blockH += 5;
     const estDesc =
       desc
         ? (doc as any).splitTextToSize(clean(desc), CONTENT_W - 6, {}).length * 4.2
@@ -291,7 +289,7 @@ function drawDay(ctx: Ctx, day: ItineraryData["day_by_day_itinerary"][number]) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7.5);
     doc.setTextColor(...MUTED);
-    doc.text(clean((time ? `${time}` : slotOf(i)).toUpperCase()), M + 2, startY + 3.2);
+    doc.text(clean(slotLabel.toUpperCase()), M + 2, startY + 3.2);
     if (cost != null && cost > 0) {
       doc.setTextColor(...EMERALD);
       doc.text(clean(rs(cost)), PAGE_W - M, startY + 3.2, { align: "right" });

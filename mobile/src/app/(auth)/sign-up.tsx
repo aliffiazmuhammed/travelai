@@ -1,40 +1,123 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useRef, useState, type ComponentRef } from 'react';
+import { useEffect, useRef, useState, type ComponentRef } from 'react';
 import { Keyboard, StyleSheet, TextInput } from 'react-native';
 
 import { ApiError } from '@/api/client';
+import { getAuthConfig } from '@/api/authConfig';
 import { useSession } from '@/auth/SessionProvider';
 import { AuthFooter, AuthShell } from '@/components/auth/AuthShell';
+import { ConsentFields } from '@/components/auth/ConsentFields';
+import { DEFAULT_LEGAL_CONFIG, type LegalConfig } from '@/lib/legal';
+import {
+  DEFAULT_PASSWORD_POLICY,
+  passwordProblem,
+  type PasswordPolicy,
+} from '@/lib/passwordPolicy';
 import { space } from '@/theme/tokens';
-import { Button, InlineError, TextField } from '@/ui';
+import { Button, InlineError, PasswordStrength, TextField } from '@/ui';
 
 const EMAIL = /^\S+@\S+\.\S+$/;
+
+type FieldErrors = {
+  name?: string;
+  email?: string;
+  password?: string;
+};
 
 export default function SignUpScreen() {
   const { signUp } = useSession();
   const router = useRouter();
   const params = useLocalSearchParams<{ next?: string | string[] }>();
   const next = Array.isArray(params.next) ? params.next[0] : params.next;
+  const nameRef = useRef<ComponentRef<typeof TextInput>>(null);
   const emailRef = useRef<ComponentRef<typeof TextInput>>(null);
   const passwordRef = useRef<ComponentRef<typeof TextInput>>(null);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [legal, setLegal] = useState<LegalConfig>(DEFAULT_LEGAL_CONFIG);
+  const [passwordPolicy, setPasswordPolicy] = useState<PasswordPolicy>(
+    DEFAULT_PASSWORD_POLICY
+  );
+  const [acceptedLegal, setAcceptedLegal] = useState(false);
+  const [marketingOptIn, setMarketingOptIn] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [consentError, setConsentError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    getAuthConfig()
+      .then((config) => {
+        if (active) {
+          setLegal(config.legal);
+          setPasswordPolicy(config.password);
+        }
+      })
+      .catch(() => {
+        // Keep the bundled defaults; the server rejects a stale pair with a
+        // clear message rather than recording consent to unseen copy.
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  function clearFieldError(field: keyof FieldErrors) {
+    setFieldErrors((previous) =>
+      previous[field] ? { ...previous, [field]: undefined } : previous
+    );
+  }
 
   async function submit() {
     if (submitting) return;
 
     const trimmedName = name.trim();
     const trimmedEmail = email.trim();
-    if (trimmedName.length > 40) return setError('Keep your name under 40 characters.');
-    if (!trimmedEmail) return setError('Enter your email address.');
-    if (!EMAIL.test(trimmedEmail)) return setError('That email address looks incomplete.');
-    if (password.length < 6) return setError('Use at least 6 characters for your password.');
+    const nextErrors: FieldErrors = {};
+
+    if (trimmedName.length > 40) {
+      nextErrors.name = 'Keep your name under 40 characters.';
+    }
+    if (!trimmedEmail) {
+      nextErrors.email = 'Enter your email address.';
+    } else if (!EMAIL.test(trimmedEmail)) {
+      nextErrors.email = 'That email address looks incomplete.';
+    }
+    if (!password) {
+      nextErrors.password = 'Choose a password.';
+    } else {
+      const problem = passwordProblem(password, passwordPolicy, {
+        email: trimmedEmail,
+        name: trimmedName,
+      });
+      if (problem) nextErrors.password = problem;
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setError(null);
+      setFieldErrors(nextErrors);
+      // Focus after the errors render, so the field announces its message. The
+      // shell's ScrollView brings the focused field into view on both platforms.
+      requestAnimationFrame(() => {
+        if (nextErrors.name) nameRef.current?.focus();
+        else if (nextErrors.email) emailRef.current?.focus();
+        else passwordRef.current?.focus();
+      });
+      return;
+    }
+
+    if (!acceptedLegal) {
+      setError(null);
+      setFieldErrors({});
+      return setConsentError('Please accept the Terms and Privacy Policy to create an account.');
+    }
 
     Keyboard.dismiss();
     setError(null);
+    setConsentError(null);
+    setFieldErrors({});
     setSubmitting(true);
     try {
       await signUp(
@@ -42,6 +125,11 @@ export default function SignUpScreen() {
           email: trimmedEmail,
           password,
           ...(trimmedName ? { name: trimmedName } : {}),
+          consent: {
+            termsVersion: legal.termsVersion,
+            privacyVersion: legal.privacyVersion,
+            marketingOptIn,
+          },
         },
         next
       );
@@ -70,12 +158,18 @@ export default function SignUpScreen() {
     >
       <InlineError message={error} />
       <TextField
+        ref={nameRef}
         label="Name"
         filled
         value={name}
-        onChangeText={setName}
+        onChangeText={(value) => {
+          setName(value);
+          clearFieldError('name');
+        }}
         placeholder="Mira Chen"
         hint="Optional — people see this on your trips."
+        error={fieldErrors.name}
+        maxLength={40}
         autoCapitalize="words"
         autoComplete="name"
         textContentType="name"
@@ -87,8 +181,12 @@ export default function SignUpScreen() {
         label="Email"
         filled
         value={email}
-        onChangeText={setEmail}
+        onChangeText={(value) => {
+          setEmail(value);
+          clearFieldError('email');
+        }}
         placeholder="you@example.com"
+        error={fieldErrors.email}
         keyboardType="email-address"
         autoCapitalize="none"
         autoCorrect={false}
@@ -102,9 +200,13 @@ export default function SignUpScreen() {
         label="Password"
         filled
         value={password}
-        onChangeText={setPassword}
-        placeholder="At least 6 characters"
-        hint="At least 6 characters."
+        onChangeText={(value) => {
+          setPassword(value);
+          clearFieldError('password');
+        }}
+        placeholder="Choose a password"
+        error={fieldErrors.password}
+        maxLength={passwordPolicy.maxLength}
         secureTextEntry
         autoCapitalize="none"
         autoCorrect={false}
@@ -113,10 +215,27 @@ export default function SignUpScreen() {
         returnKeyType="go"
         onSubmitEditing={submit}
       />
+      <PasswordStrength
+        value={password}
+        policy={passwordPolicy}
+        email={email}
+        name={name}
+      />
+      <ConsentFields
+        legal={legal}
+        accepted={acceptedLegal}
+        marketingOptIn={marketingOptIn}
+        onAcceptedChange={(accepted) => {
+          setAcceptedLegal(accepted);
+          if (accepted) setConsentError(null);
+        }}
+        onMarketingChange={setMarketingOptIn}
+        error={consentError}
+      />
       <Button
         label="Create account"
         size="lg"
-        variant="accent"
+        variant="primary"
         loading={submitting}
         onPress={submit}
         style={styles.submit}

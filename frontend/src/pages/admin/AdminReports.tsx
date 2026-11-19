@@ -3,22 +3,12 @@ import {
   CheckCircle2,
   ExternalLink,
   Flag,
-  Loader2,
   RefreshCw,
   ShieldOff,
   Undo2,
   UserRound,
 } from 'lucide-react';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { ConfirmDestructive } from '@/components/ui/confirm-destructive';
 import { Button } from '@/components/ui/button';
 import { AdminEmptyState, AdminLoadingPanel } from '@/components/admin/AdminEmptyState';
 import { AdminNotice } from '@/components/admin/AdminNotice';
@@ -69,12 +59,12 @@ const reasonLabel = (reason: string): string => REASON_LABELS[reason] ?? reason;
 
 const targetTypeChip = (group: PlatformModerationGroup): string => {
   if (group.targetType === 'agency_profile') {
-    return 'border-amber-500/40 bg-amber-500/10 text-amber-200';
+    return 'border-warning/40 bg-warning/10 text-warning-ink';
   }
   if (group.targetType === 'profile') {
-    return 'border-sky-500/40 bg-sky-500/10 text-sky-200';
+    return 'border-info/40 bg-info/10 text-info-ink';
   }
-  return 'border-indigo-500/40 bg-indigo-500/10 text-indigo-200';
+  return 'border-admin-accent/40 bg-admin-accent/10 text-admin-accent-ink';
 };
 
 const targetTypeLabel = (group: PlatformModerationGroup): string => {
@@ -214,7 +204,7 @@ const AdminReports: React.FC = () => {
           <>
             <span
               aria-hidden
-              className="grid h-8 w-8 place-items-center rounded-xl border border-border bg-card text-indigo-300"
+              className="grid h-8 w-8 place-items-center rounded-xl border border-border bg-card text-admin-accent-ink"
             >
               <Flag className="h-4 w-4" />
             </span>
@@ -251,7 +241,15 @@ const AdminReports: React.FC = () => {
       </div>
 
       {error ? (
-        <AdminNotice tone="error" title="Could not load the report queue">
+        <AdminNotice
+          tone="error"
+          title="Could not load the report queue"
+          action={
+            <Button type="button" variant="outline" size="sm" onClick={reload}>
+              Try again
+            </Button>
+          }
+        >
           {error}
         </AdminNotice>
       ) : null}
@@ -262,11 +260,17 @@ const AdminReports: React.FC = () => {
         </div>
       ) : groups.length === 0 ? (
         <div className="rounded-2xl border border-border bg-card">
-          <AdminEmptyState
-            icon={CheckCircle2}
-            title={status === 'open' ? 'Nothing is waiting for review.' : 'Nothing in this tab.'}
-            description="Reported trips, profiles and agency pages appear here as soon as a traveller flags them."
-          />
+          {error ? (
+            <p className="px-4 py-10 text-center text-xs text-muted-foreground">
+              The queue could not be loaded. Use Try again above.
+            </p>
+          ) : (
+            <AdminEmptyState
+              icon={CheckCircle2}
+              title={status === 'open' ? 'Nothing is waiting for review.' : 'Nothing in this tab.'}
+              description="Reported trips, profiles and agency pages appear here as soon as a traveller flags them."
+            />
+          )}
         </div>
       ) : (
         <div className="space-y-3">
@@ -282,7 +286,7 @@ const AdminReports: React.FC = () => {
                     <div className="flex flex-wrap items-center gap-2">
                       <span
                         className={cn(
-                          'inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
+                          'inline-flex items-center rounded-full border px-2 py-0.5 text-overline font-semibold',
                           targetTypeChip(group)
                         )}
                       >
@@ -292,7 +296,7 @@ const AdminReports: React.FC = () => {
                         {targetHeading(group)}
                       </h2>
                       {group.hidden ? (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-rose-500/40 bg-rose-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-200">
+                        <span className="inline-flex items-center gap-1 rounded-full border border-destructive/40 bg-destructive/10 px-2 py-0.5 text-overline font-semibold text-destructive-ink">
                           <ShieldOff className="h-3 w-3" aria-hidden />
                           {group.targetType === 'agency_profile'
                             ? 'Hidden'
@@ -305,7 +309,7 @@ const AdminReports: React.FC = () => {
                     <p className="truncate text-xs text-muted-foreground">
                       {targetSubheading(group)}
                     </p>
-                    <p className="truncate font-mono text-[10px] text-muted-foreground/70">
+                    <p className="truncate font-mono text-xs text-muted-foreground/70">
                       {group.targetId}
                     </p>
                   </div>
@@ -330,7 +334,7 @@ const AdminReports: React.FC = () => {
                       <Button
                         type="button"
                         size="sm"
-                        className="rounded-full bg-rose-600 text-white hover:bg-rose-500"
+                        className="rounded-full bg-destructive text-white hover:bg-destructive/90"
                         onClick={() => openAction(group, 'hide')}
                       >
                         <ShieldOff className="mr-1.5 h-3.5 w-3.5" />
@@ -355,7 +359,7 @@ const AdminReports: React.FC = () => {
                       <Button
                         type="button"
                         size="sm"
-                        className="rounded-full bg-emerald-600 text-white hover:bg-emerald-500"
+                        className="rounded-full bg-success text-white hover:bg-success/90"
                         onClick={() => openAction(group, 'restore')}
                       >
                         <Undo2 className="mr-1.5 h-3.5 w-3.5" />
@@ -369,13 +373,13 @@ const AdminReports: React.FC = () => {
                   {group.reasons.map((entry) => (
                     <span
                       key={entry.reason}
-                      className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/60 px-2 py-0.5 text-[10px] font-semibold text-foreground"
+                      className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/60 px-2 py-0.5 text-xs font-semibold text-foreground"
                     >
                       {reasonLabel(entry.reason)}
                       <span className="text-muted-foreground">×{entry.count}</span>
                     </span>
                   ))}
-                  <span className="text-[11px] text-muted-foreground">
+                  <span className="text-xs text-muted-foreground">
                     {group.reportCount} report{group.reportCount === 1 ? '' : 's'} · last{' '}
                     {formatAdminDate(group.lastReportedAt)}
                   </span>
@@ -409,12 +413,12 @@ const AdminReports: React.FC = () => {
                             </span>
                           </p>
                           {report.note ? (
-                            <p className="max-w-[640px] text-[11px] leading-relaxed text-muted-foreground">
+                            <p className="max-w-[640px] text-xs leading-relaxed text-muted-foreground">
                               “{report.note}”
                             </p>
                           ) : null}
                         </div>
-                        <span className="shrink-0 text-[10px] text-muted-foreground/80">
+                        <span className="shrink-0 text-xs text-muted-foreground/80">
                           {formatAdminDate(report.createdAt)}
                         </span>
                       </div>
@@ -427,7 +431,7 @@ const AdminReports: React.FC = () => {
         </div>
       )}
 
-      <AlertDialog
+      <ConfirmDestructive
         open={actionTarget !== null}
         onOpenChange={(next) => {
           if (!next && !actionBusy) {
@@ -435,95 +439,47 @@ const AdminReports: React.FC = () => {
             setActionError(null);
           }
         }}
-      >
-        {/* Portalled content leaves the console tree, so it carries the dark scope. */}
-        <AlertDialogContent className="dark rounded-2xl border-border bg-card text-card-foreground">
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {actionTarget?.action === 'hide'
-                ? 'De-list this trip?'
-                : actionTarget?.action === 'restore'
-                  ? 'Restore this listing?'
-                  : 'Dismiss these reports?'}
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-muted-foreground">
-              {actionTarget?.action === 'hide' ? (
-                <>
-                  The trip leaves the gallery, the traveler page, cloning and join
-                  requests immediately, and every open report is closed as hidden.
-                  The owner keeps their data and is told the listing was reviewed.
-                </>
-              ) : actionTarget?.action === 'restore' ? (
-                <>
-                  The reports stay closed as dismissed, the moderation marker is
-                  cleared, and the trip returns to the gallery with its original
-                  publication settings. The owner's data and members are untouched.
-                </>
-              ) : actionTarget?.group.targetType === 'profile' ? (
-                <>
-                  The reports are closed as dismissed. The profile stays public —
-                  disable the account from Accounts if the content itself breaks the
-                  guidelines.
-                </>
-              ) : actionTarget?.group.targetType === 'agency_profile' ? (
-                <>
-                  The reports are closed as dismissed. The agency page stays public;
-                  agency profiles are never hidden automatically. Hide the
-                  directory profile from the agency record if it breaks the
-                  guidelines.
-                </>
-              ) : (
-                <>
-                  The reports are closed as dismissed. If the trip was hidden
-                  automatically it returns to the gallery with its original
-                  publication settings.
-                </>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-
-          {actionTarget ? (
-            <p className="rounded-xl border border-border bg-muted/40 px-3 py-2 text-xs text-foreground">
+        tone={actionTarget?.action === 'hide' ? 'destructive' : 'warning'}
+        icon={actionTarget?.action === 'restore' ? Undo2 : ShieldOff}
+        title={
+          actionTarget?.action === 'hide'
+            ? 'De-list this trip?'
+            : actionTarget?.action === 'restore'
+              ? 'Restore this listing?'
+              : 'Dismiss these reports?'
+        }
+        description={
+          actionTarget?.action === 'hide'
+            ? 'The trip leaves the gallery, the traveler page, cloning and join requests immediately, and every open report is closed as hidden. The owner keeps their data and is told the listing was reviewed.'
+            : actionTarget?.action === 'restore'
+              ? "The reports stay closed as dismissed, the moderation marker is cleared, and the trip returns to the gallery with its original publication settings. The owner's data and members are untouched."
+              : actionTarget?.group.targetType === 'profile'
+                ? 'The reports are closed as dismissed. The profile stays public — disable the account from Accounts if the content itself breaks the guidelines.'
+                : actionTarget?.group.targetType === 'agency_profile'
+                  ? 'The reports are closed as dismissed. The agency page stays public; agency profiles are never hidden automatically. Hide the directory profile from the agency record if it breaks the guidelines.'
+                  : 'The reports are closed as dismissed. If the trip was hidden automatically it returns to the gallery with its original publication settings.'
+        }
+        detail={
+          actionTarget ? (
+            <>
               {targetHeading(actionTarget.group)}
-              <span className="block truncate font-mono text-[10px] text-muted-foreground">
+              <span className="block truncate font-mono text-xs text-muted-foreground">
                 {actionTarget.group.targetType} · {actionTarget.group.targetId}
               </span>
-            </p>
-          ) : null}
-
-          {actionError ? <p className="text-xs text-rose-300">{actionError}</p> : null}
-
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={actionBusy} className="rounded-full">
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              disabled={actionBusy}
-              onClick={(event) => {
-                // Keep the dialog mounted while the request runs so an error can
-                // be shown in place instead of behind a closed overlay.
-                event.preventDefault();
-                void runAction();
-              }}
-              className={cn(
-                'rounded-full',
-                actionTarget?.action === 'hide'
-                  ? 'bg-rose-600 text-white hover:bg-rose-500'
-                  : actionTarget?.action === 'restore'
-                    ? 'bg-emerald-600 text-white hover:bg-emerald-500'
-                    : 'bg-indigo-500 text-white hover:bg-indigo-400'
-              )}
-            >
-              {actionBusy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
-              {actionTarget?.action === 'hide'
-                ? 'De-list trip'
-                : actionTarget?.action === 'restore'
-                  ? 'Restore listing'
-                  : 'Dismiss reports'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+            </>
+          ) : null
+        }
+        error={actionError}
+        confirmLabel={
+          actionTarget?.action === 'hide'
+            ? 'De-list trip'
+            : actionTarget?.action === 'restore'
+              ? 'Restore listing'
+              : 'Dismiss reports'
+        }
+        onConfirm={runAction}
+        busy={actionBusy}
+      />
     </div>
   );
 };

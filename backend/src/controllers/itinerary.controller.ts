@@ -1,6 +1,11 @@
 import { Request, Response } from 'express';
 import crypto from 'crypto';
 import { generateWithFallback, generateStreamWithFallback } from '../services/ai/index.js';
+import {
+  isAbortError,
+  shouldPersistGeneration,
+  throwIfAborted,
+} from '../services/ai/generationGuard.js';
 import { normalizeGeneratedItinerary } from '../services/ai/normalize.js';
 import {
   PROMPT_VERSION,
@@ -13,6 +18,10 @@ import {
 } from '../services/ai/prompt.js';
 import { scoreItinerary } from '../services/ai/quality.js';
 import { buildTripHistorySummary } from '../services/itinerary/context.js';
+import {
+  discardGenerationAttemptTrip,
+  findTripByGenerationAttempt,
+} from '../services/itinerary/generationAttempts.js';
 import { listDeletedTrips, purgeTripCascade } from '../services/itinerary/trash.js';
 import {
   agencyTripCopyFields,
@@ -279,18 +288,67 @@ export const generateItineraryStream = async (req: AuthenticatedRequest, res: Re
   const { destination, days, budget, startdate, enddate, interests, groupType, language, preferences } =
     body;
 
+  // A generation attempt is a logical submit→cancel→retry session. Reusing its
+  // key means a request that finished saving just as the traveller cancelled is
+  // replayed on retry rather than duplicated in the dashboard.
+  const rawAttemptId = req.get('x-generation-attempt')?.trim();
+  const attemptId =
+    rawAttemptId && /^[A-Za-z0-9_-]{8,100}$/.test(rawAttemptId) ? rawAttemptId : undefined;
+
   // Set SSE Headers
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders?.();
 
-  const sendEvent = (eventData: Record<string, any>) => {
-    res.write(`data: ${JSON.stringify(eventData)}\n\n`);
+  const abortController = new AbortController();
+  const { signal } = abortController;
+  let clientGone = false;
+
+  // `close` also fires after `res.end()`. Only a close before the response has
+  // finished writing means the browser went away mid-generation.
+  const handleClientClose = () => {
+    if (res.writableEnded) return;
+    clientGone = true;
+    abortController.abort();
+  };
+  res.once('close', handleClientClose);
+
+  const endResponse = () => {
+    if (!res.writableEnded) res.end();
+  };
+
+  const sendEvent = (eventData: Record<string, any>): boolean => {
+    if (clientGone || signal.aborted || res.writableEnded) return false;
+    try {
+      res.write(`data: ${JSON.stringify(eventData)}\n\n`);
+      return true;
+    } catch {
+      clientGone = true;
+      abortController.abort();
+      return false;
+    }
   };
 
   try {
+    // Replay a completed attempt before doing any work. The trip is already
+    // saved, so "retry" after a lost `complete` event must not create another.
+    if (attemptId) {
+      const existing = await findTripByGenerationAttempt(req.userId, attemptId);
+      if (existing) {
+        sendEvent({
+          type: 'complete',
+          progress: 100,
+          message: 'Your personalized itinerary is ready!',
+          trip: existing,
+        });
+        endResponse();
+        return;
+      }
+    }
+
     const tenantFields = await generationTripFields(req, body.agencyId);
+    throwIfAborted(signal);
 
     sendEvent({
       type: 'progress',
@@ -301,6 +359,7 @@ export const generateItineraryStream = async (req: AuthenticatedRequest, res: Re
 
     const variant = assignVariant(req.userId);
     const history = await buildTripHistorySummary(req.userId);
+    throwIfAborted(signal);
 
     const promptText = buildPromptText({
       destination,
@@ -319,35 +378,41 @@ export const generateItineraryStream = async (req: AuthenticatedRequest, res: Re
     let totalCharsReceived = 0;
     let currentStage = 1;
 
-    const result = await generateStreamWithFallback(promptText, (chunk) => {
-      totalCharsReceived += chunk.length;
+    const result = await generateStreamWithFallback(
+      promptText,
+      (chunk) => {
+        totalCharsReceived += chunk.length;
 
-      if (totalCharsReceived > 600 && currentStage < 2) {
-        currentStage = 2;
-        sendEvent({
-          type: 'progress',
-          stage: 2,
-          progress: 40,
-          message: `Planning ${days}-day detailed activities & optimal timing for ${groupType}...`,
-        });
-      } else if (totalCharsReceived > 1600 && currentStage < 3) {
-        currentStage = 3;
-        sendEvent({
-          type: 'progress',
-          stage: 3,
-          progress: 65,
-          message: `Discovering authentic local food spots, dhabas & recommended stays...`,
-        });
-      } else if (totalCharsReceived > 2800 && currentStage < 4) {
-        currentStage = 4;
-        sendEvent({
-          type: 'progress',
-          stage: 4,
-          progress: 85,
-          message: `Optimizing â‚¹${budget} budget allocation, transport routes & permit notes...`,
-        });
-      }
-    });
+        if (totalCharsReceived > 600 && currentStage < 2) {
+          currentStage = 2;
+          sendEvent({
+            type: 'progress',
+            stage: 2,
+            progress: 40,
+            message: `Planning ${days}-day detailed activities & optimal timing for ${groupType}...`,
+          });
+        } else if (totalCharsReceived > 1600 && currentStage < 3) {
+          currentStage = 3;
+          sendEvent({
+            type: 'progress',
+            stage: 3,
+            progress: 65,
+            message: `Discovering authentic local food spots, dhabas & recommended stays...`,
+          });
+        } else if (totalCharsReceived > 2800 && currentStage < 4) {
+          currentStage = 4;
+          sendEvent({
+            type: 'progress',
+            stage: 4,
+            progress: 85,
+            message: `Optimizing â‚¹${budget} budget allocation, transport routes & permit notes...`,
+          });
+        }
+      },
+      { signal }
+    );
+
+    throwIfAborted(signal);
 
     sendEvent({
       type: 'progress',
@@ -357,6 +422,13 @@ export const generateItineraryStream = async (req: AuthenticatedRequest, res: Re
     });
 
     const parsedItinerary = normalizeGeneratedItinerary(parseItineraryJson(result.text));
+
+    // Last cancellation check before touching the database. A cancel that lands
+    // here or earlier must leave no trip behind.
+    if (!shouldPersistGeneration({ aborted: signal.aborted, clientGone })) {
+      endResponse();
+      return;
+    }
 
     const generationMeta = buildGenerationMeta({
       body,
@@ -376,19 +448,62 @@ export const generateItineraryStream = async (req: AuthenticatedRequest, res: Re
       tripDetails: parsedItinerary,
       promptVersion: PROMPT_VERSION,
       generationMeta,
+      ...(attemptId ? { generationAttemptId: attemptId } : {}),
       ...resolveTripWindow(startdate, enddate, days),
     });
-    await trip.save();
 
-    sendEvent({
+    try {
+      await trip.save();
+    } catch (saveError: any) {
+      // The partial unique index caught a replay that raced us. Return the one
+      // trip that was actually saved instead of surfacing a 500.
+      if (saveError?.code === 11000 && attemptId) {
+        const existing = await findTripByGenerationAttempt(req.userId, attemptId);
+        if (existing) {
+          sendEvent({
+            type: 'complete',
+            progress: 100,
+            message: 'Your personalized itinerary is ready!',
+            trip: existing,
+          });
+          endResponse();
+          return;
+        }
+      }
+      throw saveError;
+    }
+
+    // The write completed while the client was leaving. Delete it so the copy
+    // ("nothing is saved") stays true, and never announce a trip nobody saw.
+    if (!shouldPersistGeneration({ aborted: signal.aborted, clientGone })) {
+      await discardGenerationAttemptTrip(trip._id).catch((cleanupError) => {
+        console.warn('Could not remove a trip saved after cancellation:', cleanupError);
+      });
+      endResponse();
+      return;
+    }
+
+    const delivered = sendEvent({
       type: 'complete',
       progress: 100,
       message: 'Your personalized itinerary is ready!',
       trip: trip,
     });
+    if (!delivered) {
+      await discardGenerationAttemptTrip(trip._id).catch((cleanupError) => {
+        console.warn('Could not remove an undelivered trip:', cleanupError);
+      });
+    }
 
-    res.end();
+    endResponse();
   } catch (error: any) {
+    if (isAbortError(error) || signal.aborted || clientGone) {
+      // Cancellation is a normal outcome: no error event, no saved trip.
+      console.info('Streaming generation cancelled by the client.');
+      endResponse();
+      return;
+    }
+
     console.error('Streaming generation error:', error);
     const isProd = process.env.NODE_ENV === 'production';
     const friendlyMsg = isProd
@@ -399,7 +514,7 @@ export const generateItineraryStream = async (req: AuthenticatedRequest, res: Re
       type: 'error',
       message: friendlyMsg,
     });
-    res.end();
+    endResponse();
   }
 };
 

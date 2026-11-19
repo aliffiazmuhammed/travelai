@@ -13,16 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmDestructive } from "@/components/ui/confirm-destructive";
 import {
   Select,
   SelectContent,
@@ -313,33 +304,33 @@ export const ExpenseTracker: React.FC<ExpenseTrackerProps> = ({
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Card className="rounded-2xl border-border/70 bg-card/60">
           <CardContent className="p-4 space-y-1">
-            <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+            <div className="flex items-center gap-1.5 text-overline font-bold text-muted-foreground">
               <Wallet className="w-3.5 h-3.5 text-primary" />
               <span>Planned</span>
             </div>
-            <p className="text-lg font-black text-foreground">{formatMoney(summary.totalPlanned, base)}</p>
+            <p className="text-xl font-black text-foreground">{formatMoney(summary.totalPlanned, base)}</p>
           </CardContent>
         </Card>
 
         <Card className="rounded-2xl border-border/70 bg-card/60">
           <CardContent className="p-4 space-y-1">
-            <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+            <div className="flex items-center gap-1.5 text-overline font-bold text-muted-foreground">
               <Receipt className="w-3.5 h-3.5 text-primary" />
               <span>Spent</span>
             </div>
-            <p className="text-lg font-black text-foreground">{formatMoney(summary.totalActual, base)}</p>
+            <p className="text-xl font-black text-foreground">{formatMoney(summary.totalActual, base)}</p>
           </CardContent>
         </Card>
 
         <Card className="rounded-2xl border-border/70 bg-card/60">
           <CardContent className="p-4 space-y-1">
-            <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+            <div className="flex items-center gap-1.5 text-overline font-bold text-muted-foreground">
               <PiggyBank className="w-3.5 h-3.5 text-primary" />
               <span>Remaining</span>
             </div>
             <p
-              className={`text-lg font-black ${
-                remaining >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"
+              className={`text-xl font-black ${
+                remaining >= 0 ? "text-success-ink" : "text-destructive"
               }`}
             >
               {formatMoney(remaining, base)}
@@ -349,19 +340,19 @@ export const ExpenseTracker: React.FC<ExpenseTrackerProps> = ({
 
         <Card className="rounded-2xl border-border/70 bg-card/60">
           <CardContent className="p-4 space-y-1">
-            <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+            <div className="flex items-center gap-1.5 text-overline font-bold text-muted-foreground">
               {variancePct != null && variancePct > 0 ? (
                 <TrendingUp className="w-3.5 h-3.5 text-destructive" />
               ) : (
-                <TrendingDown className="w-3.5 h-3.5 text-emerald-500" />
+                <TrendingDown className="w-3.5 h-3.5 text-success-ink" />
               )}
               <span>Variance</span>
             </div>
             <p
-              className={`text-lg font-black ${
+              className={`text-xl font-black ${
                 variancePct != null && variancePct > 0
                   ? "text-destructive"
-                  : "text-emerald-600 dark:text-emerald-400"
+                  : "text-success-ink"
               }`}
             >
               {variancePct == null ? "—" : `${variancePct > 0 ? "+" : ""}${variancePct}%`}
@@ -417,7 +408,7 @@ export const ExpenseTracker: React.FC<ExpenseTrackerProps> = ({
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-muted-foreground">Base currency</span>
               <Select value={base} onValueChange={handleBaseCurrencyChange}>
-                <SelectTrigger className="h-9 w-52 text-sm rounded-xl">
+                <SelectTrigger className="h-9 w-52 text-sm rounded-xl" aria-label="Base currency">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -431,7 +422,7 @@ export const ExpenseTracker: React.FC<ExpenseTrackerProps> = ({
             </div>
 
             <div className="flex items-center gap-2 sm:ml-auto">
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-xs text-muted-foreground">
                 {ratesCount > 0
                   ? `${ratesCount} rates cached${
                       ratesAt ? ` · ${formatDate(ratesAt)}` : ""
@@ -482,7 +473,7 @@ export const ExpenseTracker: React.FC<ExpenseTrackerProps> = ({
                   className="text-xs px-2.5 py-1 rounded-full gap-1.5 border-border/70"
                 >
                   {person.name}
-                  {person.isMe && <span className="text-[10px] text-primary font-bold">you</span>}
+                  {person.isMe && <span className="text-xs text-primary font-bold">you</span>}
                   <button
                     type="button"
                     onClick={() => handleRemoveParticipant(person._id)}
@@ -506,6 +497,7 @@ export const ExpenseTracker: React.FC<ExpenseTrackerProps> = ({
                   }
                 }}
                 placeholder="Add a traveller's name..."
+                aria-label="Traveller name"
                 className="h-9 text-sm rounded-xl max-w-xs"
               />
               <Button
@@ -551,7 +543,7 @@ export const ExpenseTracker: React.FC<ExpenseTrackerProps> = ({
                     <p className="text-sm font-bold text-foreground truncate">
                       {balance.name || personName(balance.participantId) || "Traveller"}
                     </p>
-                    <p className="text-[11px] text-muted-foreground font-semibold">
+                    <p className="text-xs text-muted-foreground font-semibold">
                       paid {formatMoney(balance.paid, base)} · share{" "}
                       {formatMoney(balance.share, base)}
                     </p>
@@ -559,7 +551,7 @@ export const ExpenseTracker: React.FC<ExpenseTrackerProps> = ({
                   <span
                     className={`text-sm font-black shrink-0 ${
                       balance.net > 0.004
-                        ? "text-emerald-600 dark:text-emerald-400"
+                        ? "text-success-ink"
                         : balance.net < -0.004
                         ? "text-destructive"
                         : "text-muted-foreground"
@@ -660,29 +652,29 @@ export const ExpenseTracker: React.FC<ExpenseTrackerProps> = ({
                     <div className="min-w-0 space-y-1">
                       <p className="text-sm font-bold text-foreground truncate">{expense.label}</p>
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <Badge variant="outline" className="text-[10px] px-2 py-0 border-border/60">
+                        <Badge variant="outline" className="text-xs px-2 py-0 border-border/60">
                           {meta.label}
                         </Badge>
                         {expense.day != null && (
-                          <Badge variant="secondary" className="text-[10px] px-2 py-0">
+                          <Badge variant="secondary" className="text-xs px-2 py-0">
                             Day {expense.day}
                           </Badge>
                         )}
                         {payer && (
-                          <span className="text-[10px] text-muted-foreground font-semibold">
+                          <span className="text-xs text-muted-foreground font-semibold">
                             Paid by {payer}
                           </span>
                         )}
                         {expense.splitMode === "equal" && (
-                          <span className="text-[10px] text-primary font-semibold">Split equally</span>
+                          <span className="text-xs text-primary font-semibold">Split equally</span>
                         )}
                         {expense.splitMode === "custom" && (
-                          <span className="text-[10px] text-primary font-semibold">
+                          <span className="text-xs text-primary font-semibold">
                             Custom split
                           </span>
                         )}
                         {isForeign && (
-                          <span className="text-[10px] text-muted-foreground font-semibold">
+                          <span className="text-xs text-muted-foreground font-semibold">
                             {formatMoney(expense.amount, expense.currency)}
                           </span>
                         )}
@@ -692,7 +684,7 @@ export const ExpenseTracker: React.FC<ExpenseTrackerProps> = ({
                             target="_blank"
                             rel="noreferrer"
                             title={receiptDisplayName(expense.receiptUrl)}
-                            className="inline-flex items-center gap-0.5 text-[10px] font-bold text-primary hover:underline"
+                            className="inline-flex items-center gap-0.5 text-xs font-bold text-primary hover:underline"
                           >
                             {isPdfReceipt(expense.receiptUrl) ? (
                               <FileText className="w-3 h-3" />
@@ -751,41 +743,26 @@ export const ExpenseTracker: React.FC<ExpenseTrackerProps> = ({
       </Card>
 
       {/* Delete confirmation (M7.4) */}
-      <AlertDialog
+      <ConfirmDestructive
         open={deleteTarget != null}
         onOpenChange={(open) => {
           if (!open) setDeleteTarget(null);
         }}
-      >
-        <AlertDialogContent className="rounded-3xl max-w-md w-[92vw] sm:w-full p-5 sm:p-6">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-lg font-bold">
-              Remove this expense?
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-xs leading-relaxed">
-              <strong className="text-foreground">
-                {deleteTarget?.label?.trim() || "This expense"}
-              </strong>
-              {deleteTarget
-                ? ` (${formatMoney(deleteTarget.amountInBase, base)})`
-                : ""}{" "}
-              will be deleted from the budget and settlement. Expenses have no
-              history, so this cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="gap-2 sm:gap-0">
-            <AlertDialogCancel className="rounded-xl text-xs font-semibold h-10">
-              Keep it
-            </AlertDialogCancel>
-            <AlertDialogAction
-              className="rounded-xl text-xs font-bold h-10 bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={confirmDeleteExpense}
-            >
-              Remove expense
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        icon={Trash2}
+        title="Remove this expense?"
+        description="It is deleted from the budget and settlement. Expenses have no history, so this cannot be undone."
+        confirmLabel="Remove expense"
+        cancelLabel="Keep it"
+        detail={
+          deleteTarget ? (
+            <>
+              {deleteTarget.label?.trim() || "This expense"}
+              {` (${formatMoney(deleteTarget.amountInBase, base)})`}
+            </>
+          ) : null
+        }
+        onConfirm={confirmDeleteExpense}
+      />
 
       {canEdit && (
         <ExpenseEditor

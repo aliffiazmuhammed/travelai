@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -17,6 +17,7 @@ import {
 import { roleLabel } from "@/hooks/useTripAccess";
 import { formatDate } from "@/lib/date";
 import { initialsFor } from "@/lib/avatar";
+import { inviteAccountMismatch } from "@/lib/authRecovery";
 import type { InvitePreview } from "@/types/trip";
 import Navbar from "@/components/Navbar";
 
@@ -71,13 +72,17 @@ const ROLE_COPY: Record<InviteRole, { intro: string; bullets: string[] }> = {
 const InviteAccept: React.FC = () => {
   const { token = "" } = useParams();
   const navigate = useNavigate();
-  const { user, loading: authLoading, isAuthenticated } = useAuth();
+  const { user, loading: authLoading, isAuthenticated, logout } = useAuth();
 
   const [preview, setPreview] = useState<InvitePreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(true);
   const [joining, setJoining] = useState(false);
   const [joinedRole, setJoinedRole] = useState<string | null>(null);
+  const [switchingAccount, setSwitchingAccount] = useState(false);
+  /** The mismatch handler owns the trip to /auth; the signed-out effect must not
+   *  replace its navigation and drop the prefilled invited address. */
+  const switchingAccountRef = useRef(false);
 
   /** Removes the token from the URL once it has been consumed. */
   const stripTokenFromUrl = () => {
@@ -114,6 +119,7 @@ const InviteAccept: React.FC = () => {
     if (authLoading) return;
 
     if (!isAuthenticated) {
+      if (switchingAccountRef.current) return;
       navigate("/auth", {
         state: { from: { pathname: `/invite/${token}` } },
         replace: true,
@@ -192,9 +198,33 @@ const InviteAccept: React.FC = () => {
     navigate("/dashboard", { replace: true });
   };
 
+  /**
+   * One-click recovery for an email-bound invite opened by the wrong account:
+   * sign out, keep the token (sessionStorage + the `/invite/:token` return
+   * path), and land on /auth with the invited address prefilled.
+   */
+  const handleSwitchAccount = async () => {
+    if (!preview?.emailBoundTo) return;
+    switchingAccountRef.current = true;
+    setSwitchingAccount(true);
+    try {
+      await logout();
+      navigate("/auth", {
+        replace: true,
+        state: {
+          from: { pathname: `/invite/${token}` },
+          email: preview.emailBoundTo,
+        },
+      });
+    } catch {
+      switchingAccountRef.current = false;
+      setSwitchingAccount(false);
+      toast.error("We couldn't sign you out. Please try again.");
+    }
+  };
+
   const loading = authLoading || loadingPreview;
-  const emailMismatch =
-    preview?.emailBoundTo && user?.email && preview.emailBoundTo !== user.email;
+  const emailMismatch = inviteAccountMismatch(preview?.emailBoundTo, user?.email);
 
   return (
     <div className="relative flex min-h-screen flex-col overflow-hidden bg-gradient-hero">
@@ -210,7 +240,7 @@ const InviteAccept: React.FC = () => {
 
       <Navbar />
 
-      <main className="relative z-10 flex flex-1 items-center justify-center px-4 pb-16 pt-24">
+      <main id="main-content" tabIndex={-1} className="relative z-10 flex flex-1 items-center justify-center px-4 pb-16 pt-24">
         {loading ? (
           <div className="flex w-full max-w-[440px] flex-col items-center gap-3 rounded-3xl border border-border/70 bg-card px-6 py-16 text-center shadow-card">
             <Loader2 className="h-6 w-6 animate-spin text-primary" aria-hidden="true" />
@@ -245,7 +275,7 @@ const InviteAccept: React.FC = () => {
                 <Mail className="h-6 w-6" aria-hidden="true" />
               </div>
 
-              <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+              <p className="mt-4 text-overline font-semibold text-primary">
                 You're invited
               </p>
 
@@ -272,7 +302,7 @@ const InviteAccept: React.FC = () => {
               </div>
 
               {preview.kind === "email" && preview.emailBoundTo && (
-                <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+                <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
                   Reserved for{" "}
                   <span className="break-all font-semibold text-foreground">
                     {preview.emailBoundTo}
@@ -283,7 +313,7 @@ const InviteAccept: React.FC = () => {
               {preview.invitedBy && (
                 <div className="mt-4 flex items-center justify-center gap-2.5">
                   <Avatar className="h-9 w-9">
-                    <AvatarFallback className="bg-primary/10 text-[11px] font-bold text-primary">
+                    <AvatarFallback className="bg-primary/10 text-xs font-bold text-primary">
                       {initialsFor(preview.invitedBy)}
                     </AvatarFallback>
                   </Avatar>
@@ -305,7 +335,7 @@ const InviteAccept: React.FC = () => {
                     key={bullet}
                     className="flex items-start gap-2 text-xs leading-relaxed text-foreground/85"
                   >
-                    <CheckCircle2 className="mt-px h-4 w-4 shrink-0 text-accent" aria-hidden="true" />
+                    <CheckCircle2 className="mt-px h-4 w-4 shrink-0 text-accent-ink" aria-hidden="true" />
                     <span className="min-w-0">{bullet}</span>
                   </li>
                 ))}
@@ -313,13 +343,33 @@ const InviteAccept: React.FC = () => {
             </div>
 
             {emailMismatch ? (
-              <div className="mt-4 flex items-start gap-2 rounded-2xl border border-amber-500/25 bg-amber-500/10 p-3 text-left text-xs font-medium leading-relaxed text-amber-700 dark:text-amber-300">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                <p className="min-w-0">
-                  This invitation was sent to{" "}
-                  <strong className="break-all">{preview.emailBoundTo}</strong>, but you are
-                  signed in as <strong className="break-all">{user?.email}</strong>. Sign in
-                  with the invited email to accept it.
+              <div className="mt-4 space-y-3">
+                <div className="flex items-start gap-2 rounded-2xl border border-warning/25 bg-warning/10 p-3 text-left text-xs font-medium leading-relaxed text-warning-ink">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                  <p className="min-w-0">
+                    This invitation was sent to{" "}
+                    <strong className="break-all">{preview.emailBoundTo}</strong>, but you are
+                    signed in as <strong className="break-all">{user?.email}</strong>.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="hero"
+                  className="h-11 w-full rounded-xl px-4 text-xs font-bold"
+                  onClick={handleSwitchAccount}
+                  disabled={switchingAccount}
+                >
+                  {switchingAccount ? (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  ) : null}
+                  <span className="min-w-0 break-all">
+                    {switchingAccount
+                      ? "Signing out…"
+                      : `Sign out and continue with ${preview.emailBoundTo}`}
+                  </span>
+                </Button>
+                <p className="text-center text-xs leading-relaxed text-muted-foreground">
+                  Your invitation is kept — you'll come straight back here.
                 </p>
               </div>
             ) : (
@@ -350,7 +400,7 @@ const InviteAccept: React.FC = () => {
               No thanks
             </button>
 
-            <p className="mt-4 flex items-center justify-center gap-1.5 border-t border-border/60 pt-4 text-[11px] text-muted-foreground">
+            <p className="mt-4 flex items-center justify-center gap-1.5 border-t border-border/60 pt-4 text-xs text-muted-foreground">
               <Lock className="h-3 w-3" aria-hidden="true" />
               This invitation link is personal to you.
             </p>

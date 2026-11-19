@@ -4,6 +4,9 @@ import { AppError } from '../utils/AppError.js';
 import { mergePubKeyList } from './collab/chatKeys.js';
 import { assertNameAllowed, normalizeName, publicUser } from './user/profile.js';
 import { signSessionForAccount } from './auth/realm.js';
+import { assertPasswordPolicy } from './auth/passwordPolicy.js';
+import { consentProblem, consentRecord, type LegalConsentInput } from '../config/authPolicy.js';
+import { env } from '../config/env.js';
 
 /**
  * Personal auth service (PA0 scoping).
@@ -16,7 +19,12 @@ import { signSessionForAccount } from './auth/realm.js';
 
 const PERSONAL = 'personal' as const;
 
-export const signup = async (email: string, password: string, name?: string) => {
+export const signup = async (
+  email: string,
+  password: string,
+  name?: string,
+  consent?: LegalConsentInput
+) => {
   const normalizedEmail = email.trim().toLowerCase();
   const existingUser = await User.findOne({
     email: normalizedEmail,
@@ -26,8 +34,23 @@ export const signup = async (email: string, password: string, name?: string) => 
     throw new AppError('An account with this email already exists. Please sign in instead.', 400);
   }
 
+  const problem = consentProblem(consent, env.AUTH_LEGAL_CONSENT_REQUIRED);
+  if (problem === 'missing') {
+    throw new AppError(
+      'Please accept the Terms and Privacy Policy to create an account.',
+      400
+    );
+  }
+  if (problem) {
+    throw new AppError(
+      'The Terms or Privacy Policy changed while you were signing up. Please review and accept them again.',
+      400
+    );
+  }
+
   const displayName = normalizeName(name);
   assertNameAllowed(displayName);
+  assertPasswordPolicy(password, { email: normalizedEmail, name: displayName });
 
   const hashedPassword = await bcrypt.hash(password, 12);
   const user = new User({
@@ -35,6 +58,7 @@ export const signup = async (email: string, password: string, name?: string) => 
     password: hashedPassword,
     accountType: PERSONAL,
     ...(displayName ? { name: displayName } : {}),
+    ...(consent ? consentRecord(consent) : {}),
   });
   await user.save();
 

@@ -33,7 +33,7 @@ interface LayoutInput {
 }
 
 const BODY_FONT =
-  "Cabin,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+  "Manrope,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
 
 /** The SPA origin server-triggered mail should link to. */
 export function appUrl(path: string): string {

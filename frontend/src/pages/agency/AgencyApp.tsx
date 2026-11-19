@@ -24,8 +24,8 @@ const AgencyApp: React.FC = () => {
 
   if (enabled === null || loading) {
     return (
-      <div className="grid min-h-screen place-items-center bg-slate-50 dark:bg-slate-950">
-        <div className="flex items-center gap-2 text-sm text-slate-500">
+      <div className="grid min-h-screen place-items-center bg-muted dark:bg-background">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
           Checking agency workspace...
         </div>
@@ -35,15 +35,15 @@ const AgencyApp: React.FC = () => {
 
   if (!enabled) {
     return (
-      <div className="grid min-h-screen place-items-center bg-slate-50 px-4 dark:bg-slate-950">
+      <div className="grid min-h-screen place-items-center bg-muted px-4 dark:bg-background">
         <Card className="w-full max-w-md">
           <CardContent className="space-y-4 p-8 text-center">
-            <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-slate-100 text-slate-500 dark:bg-slate-900 dark:text-slate-400">
+            <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-muted text-muted-foreground dark:bg-background">
               <Building2 className="h-6 w-6" />
             </div>
             <div className="space-y-1">
-              <h1 className="text-lg font-semibold">Agency workspace is not enabled</h1>
-              <p className="text-sm text-slate-500 dark:text-slate-400">
+              <h1 className="text-xl font-semibold">Agency workspace is not enabled</h1>
+              <p className="text-sm text-muted-foreground">
                 This private pilot feature is currently switched off. Your
                 personal trips and messages are unchanged.
               </p>

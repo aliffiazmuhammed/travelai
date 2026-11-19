@@ -18,18 +18,18 @@ export interface RiskMeta {
 export const RISK_META: Record<WeatherRiskLevel, RiskMeta> = {
   none: {
     label: "Clear",
-    badgeClass: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-300/60",
-    dotClass: "bg-emerald-400",
+    badgeClass: "bg-success/10 text-success-ink border-success/60",
+    dotClass: "bg-success",
   },
   low: {
     label: "Light rain",
-    badgeClass: "bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-300/60",
-    dotClass: "bg-sky-400",
+    badgeClass: "bg-info/10 text-info-ink border-info/60",
+    dotClass: "bg-info",
   },
   moderate: {
     label: "Showers",
-    badgeClass: "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-300/60",
-    dotClass: "bg-amber-400",
+    badgeClass: "bg-warning/10 text-warning-ink border-warning/60",
+    dotClass: "bg-warning",
   },
   high: {
     label: "Rough weather",

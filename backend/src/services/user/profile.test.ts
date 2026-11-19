@@ -182,7 +182,7 @@ test('normalizeBio/assertBioAllowed: single-spaced and capped at 280', () => {
   assert.throws(() => assertBioAllowed('x'.repeat(281)), /280 characters/);
 });
 
-test('changePasswordSchema: 6+ characters, and the new one must differ', () => {
+test('changePasswordSchema: 8+ characters, and the new one must differ', () => {
   assert.equal(
     changePasswordSchema.safeParse({ currentPassword: 'old-pass', newPassword: 'new-pass' }).success,
     true

@@ -13,13 +13,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { api, ApiError } from "@/services/api";
+import { api } from "@/services/api";
+import { AsyncErrorPanel } from "@/components/states/AsyncState";
 import { avatarSrc, initialsFor } from "@/lib/avatar";
 import { DURATION_LABELS, formatGalleryDates } from "@/lib/galleryFormat";
 import { applyPageMeta } from "@/lib/meta";
 import { cn } from "@/lib/utils";
 import {
-  AlertCircle,
   ArrowRight,
   CalendarDays,
   Check,
@@ -185,7 +185,7 @@ const StatusCard = ({
       {icon}
     </span>
     <span className="min-w-0">
-      <span className="block font-display text-lg font-semibold leading-tight tracking-tight text-foreground">
+      <span className="block font-display text-xl font-semibold leading-tight tracking-tight text-foreground">
         {title}
       </span>
       <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">
@@ -196,30 +196,34 @@ const StatusCard = ({
 );
 
 const ExploreCard = ({ trip, past }: { trip: GalleryTripSummary; past?: boolean }) => (
-  <article className="group overflow-hidden rounded-3xl border border-border/70 bg-card shadow-xs transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md">
-    <Link to={`/explore/${trip._id}`} className="block" aria-label={`Open ${trip.title}`}>
-      <TripCover destination={trip.destination} title={trip.title}>
-        <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-background/90 px-2.5 py-1 text-[10px] font-bold text-foreground shadow-xs backdrop-blur">
-          <Clock3 className="h-3 w-3" aria-hidden="true" />
-          {trip.durationDays} {trip.durationDays === 1 ? "day" : "days"}
+  <article className="group relative overflow-hidden rounded-3xl border border-border/70 bg-card shadow-xs transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md">
+    <TripCover destination={trip.destination} title={trip.title}>
+      <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-background/90 px-2.5 py-1 text-xs font-bold text-foreground shadow-xs backdrop-blur">
+        <Clock3 className="h-3 w-3" aria-hidden="true" />
+        {trip.durationDays} {trip.durationDays === 1 ? "day" : "days"}
+      </span>
+      {past && (
+        <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-background/90 px-2.5 py-1 text-xs font-bold text-muted-foreground shadow-xs backdrop-blur">
+          <History className="h-3 w-3" aria-hidden="true" />
+          Finished
         </span>
-        {past && (
-          <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-background/90 px-2.5 py-1 text-[10px] font-bold text-muted-foreground shadow-xs backdrop-blur">
-            <History className="h-3 w-3" aria-hidden="true" />
-            Finished
-          </span>
-        )}
-      </TripCover>
-    </Link>
+      )}
+    </TripCover>
 
     <div className="space-y-2 p-4">
-      <p className="inline-flex max-w-full items-center gap-1 text-[11px] font-semibold text-primary">
+      <p className="inline-flex max-w-full items-center gap-1 text-xs font-semibold text-primary">
         <MapPin className="h-3 w-3 shrink-0" aria-hidden="true" />
         <span className="truncate">{trip.destination || "Somewhere new"}</span>
       </p>
 
-      <Link to={`/explore/${trip._id}`} className="block">
-        <h3 className="line-clamp-2 font-display text-lg font-semibold leading-snug tracking-tight text-foreground transition-colors group-hover:text-primary">
+      {/* The title link stretches over the whole card, so a tap anywhere opens
+          the trip; the publisher link sits above it in the stack. */}
+      <Link
+        to={`/explore/${trip._id}`}
+        aria-label={`Open ${trip.title}`}
+        className="block rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 after:absolute after:inset-0 after:content-['']"
+      >
+        <h3 className="line-clamp-2 font-display text-xl font-semibold leading-snug tracking-tight text-foreground transition-colors group-hover:text-primary">
           {trip.title}
         </h3>
       </Link>
@@ -231,14 +235,14 @@ const ExploreCard = ({ trip, past }: { trip: GalleryTripSummary; past?: boolean 
       )}
 
       <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/60 pt-3">
-        <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
+        <span className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
           <CalendarDays className="h-3 w-3" aria-hidden="true" />
           {formatGalleryDates(trip.dates)}
         </span>
 
         <Link
           to={`/travelers/${encodeURIComponent(trip.publisher.handle)}`}
-          className="flex min-w-0 items-center gap-1.5 rounded-full px-1 py-0.5 transition-colors hover:bg-muted/70"
+          className="relative z-10 flex min-w-0 items-center gap-1.5 rounded-full px-1 py-0.5 transition-colors hover:bg-muted/70"
           title={`View ${trip.publisher.name}'s profile`}
         >
           <Avatar className="h-6 w-6 shrink-0">
@@ -248,11 +252,11 @@ const ExploreCard = ({ trip, past }: { trip: GalleryTripSummary; past?: boolean 
                 alt={trip.publisher.name}
               />
             )}
-            <AvatarFallback className="bg-primary/10 text-[9px] font-bold text-primary">
+            <AvatarFallback className="bg-primary/10 text-xs font-bold text-primary">
               {initialsFor(trip.publisher.name || trip.publisher.handle)}
             </AvatarFallback>
           </Avatar>
-          <span className="truncate text-[11px] font-semibold text-muted-foreground">
+          <span className="truncate text-xs font-semibold text-muted-foreground">
             {trip.publisher.name}
           </span>
         </Link>
@@ -304,7 +308,8 @@ const Explore = () => {
   const [events, setEvents] = useState<PublicEventSummary[]>([]);
   const [result, setResult] = useState<PageResult | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [slowLoad, setSlowLoad] = useState(false);
+  const [error, setError] = useState<unknown | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   // A new filter set or tab always starts at page one, even before state
@@ -428,11 +433,7 @@ const Explore = () => {
         if (cancelled) return;
         console.error("Failed to load the gallery:", err);
         setResult(null);
-        setError(
-          err instanceof ApiError && err.message
-            ? err.message
-            : "We couldn't load the gallery right now."
-        );
+        setError(err);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -442,6 +443,18 @@ const Explore = () => {
       cancelled = true;
     };
   }, [q, duration, groupType, tag, view, page, pageKey, reloadKey]);
+
+  // C-16: the shell and skeleton grid never wait on the request. If the first
+  // page still has not arrived after a bounded wait, offer a retry rather than
+  // leaving the page in a silent stall.
+  useEffect(() => {
+    if (!loading) {
+      setSlowLoad(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setSlowLoad(true), 10000);
+    return () => window.clearTimeout(timer);
+  }, [loading, pageKey, reloadKey]);
 
   const goToNext = () => {
     if (!hasMore) return;
@@ -475,7 +488,7 @@ const Explore = () => {
     <div className="flex min-h-screen flex-col bg-gradient-hero">
       <Navbar />
 
-      <main className="container mx-auto max-w-6xl flex-1 px-4 pb-20 pt-24">
+      <main id="main-content" tabIndex={-1} className="container mx-auto max-w-6xl flex-1 px-4 pb-20 pt-24">
         <header className="mx-auto max-w-3xl text-center">
           <h1 className="font-display text-3xl font-semibold leading-tight tracking-tight text-foreground sm:text-5xl">
             Find a trip you'd like to join
@@ -559,7 +572,7 @@ const Explore = () => {
             <button
               type="button"
               onClick={clearFilters}
-              className="ml-1 text-[11px] font-bold text-muted-foreground underline-offset-2 transition-colors hover:text-foreground hover:underline"
+              className="ml-1 text-xs font-bold text-muted-foreground underline-offset-2 transition-colors hover:text-foreground hover:underline"
             >
               Clear all
             </button>
@@ -570,8 +583,12 @@ const Explore = () => {
           <h2 className="sr-only">Shared trips</h2>
 
           {loading ? (
-            <div className="space-y-6" role="status" aria-live="polite">
-              <p className="flex items-center gap-2.5 text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+            <div className="space-y-6">
+              <p
+                role="status"
+                aria-live="polite"
+                className="flex items-center gap-2.5 text-overline font-bold text-muted-foreground"
+              >
                 Gathering trips people shared
                 <LoadingDots />
               </p>
@@ -580,28 +597,30 @@ const Explore = () => {
                   <ExploreCardSkeleton key={index} />
                 ))}
               </div>
+              {slowLoad ? (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-card px-4 py-3">
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    This is taking longer than usual. Your connection may be slow.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="rounded-xl text-xs font-bold"
+                    onClick={() => setReloadKey((key) => key + 1)}
+                  >
+                    Try again
+                  </Button>
+                </div>
+              ) : null}
             </div>
           ) : error ? (
-            <div className="space-y-4 rounded-3xl border border-destructive/30 bg-destructive/5 p-8 text-center">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
-                <AlertCircle className="h-6 w-6" />
-              </div>
-              <div className="space-y-1">
-                <p className="text-sm font-bold text-foreground">
-                  We couldn't load the gallery
-                </p>
-                <p className="text-xs text-muted-foreground">{error}</p>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="rounded-xl text-xs font-bold"
-                onClick={() => setReloadKey((key) => key + 1)}
-              >
-                Try again
-              </Button>
-            </div>
+            <AsyncErrorPanel
+              className="bg-card/80"
+              error={error}
+              subject="the shared trips gallery"
+              onRetry={() => setReloadKey((key) => key + 1)}
+            />
           ) : total === 0 ? (
             <div className="space-y-3 rounded-3xl border border-dashed border-border/80 bg-card/60 p-10 text-center">
               <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
@@ -715,7 +734,7 @@ const Explore = () => {
               <div className="space-y-0.5">
                 <h2
                   id="explore-events-heading"
-                  className="font-display text-lg font-semibold tracking-tight text-foreground"
+                  className="font-display text-xl font-semibold tracking-tight text-foreground"
                 >
                   On the calendar
                 </h2>
@@ -726,7 +745,7 @@ const Explore = () => {
               </div>
               <Link
                 to="/agencies"
-                className="inline-flex items-center gap-1 text-[11px] font-bold text-primary transition-all hover:gap-1.5"
+                className="inline-flex items-center gap-1 text-xs font-bold text-primary transition-all hover:gap-1.5"
               >
                 Browse agencies
                 <ArrowRight className="h-3.5 w-3.5" />

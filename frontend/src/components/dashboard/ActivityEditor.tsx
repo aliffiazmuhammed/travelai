@@ -125,7 +125,7 @@ export const ActivityEditor: React.FC<ActivityEditorProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="rounded-2xl max-w-lg w-[94vw] sm:w-full p-5 sm:p-6 max-h-[92vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-lg font-black flex items-center gap-2">
+          <DialogTitle className="text-xl font-black flex items-center gap-2">
             <Type className="w-4 h-4 text-primary" />
             Edit Activity
             <span className="text-xs font-semibold text-muted-foreground">
@@ -214,8 +214,8 @@ export const ActivityEditor: React.FC<ActivityEditorProps> = ({
 
           {/* Photo */}
           {tripId && (
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold">Photo (optional)</Label>
+            <div className="space-y-1.5" role="group" aria-labelledby="activity-photo-label">
+              <span id="activity-photo-label" className="block text-xs font-bold">Photo (optional)</span>
               <TripPhotoField
                 tripId={tripId}
                 value={form.image}
@@ -224,23 +224,24 @@ export const ActivityEditor: React.FC<ActivityEditorProps> = ({
                 label="Add a photo of this activity"
                 onChange={(image) => setForm((prev) => ({ ...prev, image }))}
               />
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Shown on this card and in the exported plan.
               </p>
             </div>
           )}
 
           {/* Coordinates */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-bold flex items-center gap-1">
+          <div className="space-y-1.5" role="group" aria-labelledby="activity-coords-label">
+            <span id="activity-coords-label" className="block text-xs font-bold flex items-center gap-1">
               <MapPinned className="w-3 h-3 text-primary" /> Map Coordinates (optional)
-            </Label>
+            </span>
             <div className="grid grid-cols-2 gap-3">
               <Input
                 value={form.latitude}
                 onChange={(e) => update("latitude", e.target.value)}
                 placeholder="Latitude"
                 title="e.g. 11.5516"
+                aria-label="Latitude"
                 className="h-10 text-sm rounded-xl"
                 inputMode="decimal"
               />
@@ -249,11 +250,12 @@ export const ActivityEditor: React.FC<ActivityEditorProps> = ({
                 onChange={(e) => update("longitude", e.target.value)}
                 placeholder="Longitude"
                 title="e.g. 76.0874"
+                aria-label="Longitude"
                 className="h-10 text-sm rounded-xl"
                 inputMode="decimal"
               />
             </div>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Used to place this activity pin on the interactive map.
             </p>
           </div>

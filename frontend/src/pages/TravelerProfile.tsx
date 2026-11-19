@@ -182,7 +182,7 @@ const TravelerProfile = () => {
     <div className="min-h-screen bg-gradient-hero flex flex-col">
       <Navbar />
 
-      <main className="flex-1 container mx-auto max-w-6xl px-4 pb-20 pt-24 space-y-6">
+      <main id="main-content" tabIndex={-1} className="flex-1 container mx-auto max-w-6xl px-4 pb-20 pt-24 space-y-6">
         <TravellerBreadcrumbs
           items={[{ label: handle ? `@${handle}` : "Traveler" }]}
         />
@@ -190,7 +190,7 @@ const TravelerProfile = () => {
           <div className="flex min-h-[420px] flex-col items-center justify-center space-y-4">
             <Loader2 className="h-10 w-10 animate-spin text-primary" />
             <div className="space-y-1 text-center">
-              <h3 className="font-display text-lg font-semibold text-foreground">
+              <h3 className="font-display text-xl font-semibold text-foreground">
                 Opening this traveler's page…
               </h3>
               <p className="text-xs text-muted-foreground">
@@ -261,7 +261,7 @@ const TravelerProfile = () => {
                         <p className="text-base font-semibold text-foreground">
                           {trips.length}
                         </p>
-                        <p className="text-[11px] text-muted-foreground">
+                        <p className="text-xs text-muted-foreground">
                           {trips.length === 1 ? "trip shared" : "trips shared"}
                         </p>
                       </div>
@@ -279,7 +279,7 @@ const TravelerProfile = () => {
                             aria-hidden="true"
                           />
                           <div className="leading-tight">
-                            <p className="text-[11px] text-muted-foreground">
+                            <p className="text-xs text-muted-foreground">
                               Last shared
                             </p>
                             <p className="text-base font-semibold text-foreground">
@@ -379,10 +379,10 @@ const TravelerProfile = () => {
                         />
 
                         <div className="flex flex-1 flex-col gap-2 p-4">
-                          <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                          <p className="truncate text-overline font-semibold text-muted-foreground">
                             {trip.destination || "Somewhere new"}
                           </p>
-                          <h3 className="line-clamp-2 font-display text-lg font-semibold leading-snug tracking-tight text-foreground transition-colors group-hover:text-primary">
+                          <h3 className="line-clamp-2 font-display text-xl font-semibold leading-snug tracking-tight text-foreground transition-colors group-hover:text-primary">
                             {trip.title}
                           </h3>
                           {trip.summary && (
@@ -394,14 +394,14 @@ const TravelerProfile = () => {
                             </p>
                           )}
 
-                          <div className="mt-auto flex items-center gap-1.5 pt-2 text-[11px] text-muted-foreground">
+                          <div className="mt-auto flex items-center gap-1.5 pt-2 text-xs text-muted-foreground">
                             <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                             <span className="truncate">{dateLine(trip.dates)}</span>
                           </div>
 
                           {trip.tags[0] && (
                             <div className="pt-1">
-                              <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-semibold text-primary">
+                              <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
                                 <Tag className="h-3 w-3 shrink-0" aria-hidden="true" />
                                 <span className="truncate">{trip.tags[0]}</span>
                               </span>
@@ -417,7 +417,7 @@ const TravelerProfile = () => {
 
             <div className="flex flex-col items-start justify-between gap-3 rounded-3xl border border-primary/15 bg-primary/5 p-5 sm:flex-row sm:items-center">
               <div>
-                <p className="font-display text-lg font-semibold text-foreground">
+                <p className="font-display text-xl font-semibold text-foreground">
                   Planning something similar?
                 </p>
                 <p className="text-xs text-muted-foreground">

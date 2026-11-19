@@ -11,16 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmDestructive } from "@/components/ui/confirm-destructive";
 import { InviteDialog } from "./InviteDialog";
 import { api } from "@/services/api";
 import { toast } from "sonner";
@@ -61,9 +52,9 @@ interface TripMembersProps {
 }
 
 const ROLE_BADGE_STYLE: Record<TripRole, string> = {
-  owner: "bg-amber-500/10 text-amber-600 border-amber-200 dark:border-amber-800",
-  editor: "bg-emerald-500/10 text-emerald-600 border-emerald-200 dark:border-emerald-800",
-  commenter: "bg-sky-500/10 text-sky-600 border-sky-200 dark:border-sky-800",
+  owner: "bg-warning/10 text-warning-ink border-warning/30 dark:border-warning/40",
+  editor: "bg-success/10 text-success-ink border-success/30 dark:border-success/40",
+  commenter: "bg-info/10 text-info-ink border-info/30 dark:border-info/40",
   viewer: "bg-muted text-muted-foreground border-border",
 };
 
@@ -258,7 +249,7 @@ export const TripMembers: React.FC<TripMembersProps> = ({
               <h3 className="font-extrabold text-foreground text-sm uppercase tracking-wider">
                 Who is on this trip
               </h3>
-              <Badge variant="outline" className="text-[10px]">
+              <Badge variant="outline" className="text-xs">
                 {members.length}
               </Badge>
             </div>
@@ -347,12 +338,12 @@ export const TripMembers: React.FC<TripMembersProps> = ({
                               `Traveler ${member.userId.slice(-4)}`}
                           </span>
                           {member.isYou && (
-                            <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                            <Badge variant="outline" className="text-xs px-1.5 py-0">
                               you
                             </Badge>
                           )}
                         </div>
-                        <p className="text-[11px] text-muted-foreground">
+                        <p className="text-xs text-muted-foreground">
                           {member.label && member.email ? `${member.email} · ` : ""}
                           {member.joinedAt
                             ? `Joined ${formatDate(member.joinedAt)}`
@@ -367,7 +358,7 @@ export const TripMembers: React.FC<TripMembersProps> = ({
                       {(isRowOwner || !isOwner) && (
                         <Badge
                           className={cn(
-                            "px-2 py-0.5 text-[10px] font-bold gap-1",
+                            "px-2 py-0.5 text-xs font-bold gap-1",
                             ROLE_BADGE_STYLE[member.role]
                           )}
                         >
@@ -387,7 +378,10 @@ export const TripMembers: React.FC<TripMembersProps> = ({
                               )
                             }
                           >
-                            <SelectTrigger className="h-8 w-[110px] rounded-xl text-xs">
+                            <SelectTrigger
+                              className="h-8 w-[110px] rounded-xl text-xs"
+                              aria-label={`Trip role for ${member.label || member.email || member.userId}`}
+                            >
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -407,7 +401,7 @@ export const TripMembers: React.FC<TripMembersProps> = ({
                               title="Transfer ownership to this member"
                               disabled={isBusy}
                               onClick={() => setTransferTarget(member)}
-                              className="h-8 w-8 text-muted-foreground hover:text-amber-600 rounded-xl"
+                              className="h-8 w-8 text-muted-foreground hover:text-warning-ink rounded-xl"
                             >
                               <Crown className="w-3.5 h-3.5" />
                             </Button>
@@ -450,7 +444,7 @@ export const TripMembers: React.FC<TripMembersProps> = ({
               </h3>
               <Badge
                 className={cn(
-                  "text-[10px] font-bold px-2 py-0.5",
+                  "text-xs font-bold px-2 py-0.5",
                   joinRequests.length > 0
                     ? "bg-primary/10 text-primary border-primary/20"
                     : "bg-muted text-muted-foreground"
@@ -492,7 +486,7 @@ export const TripMembers: React.FC<TripMembersProps> = ({
                             <p className="text-sm font-bold text-foreground truncate">
                               {label}
                             </p>
-                            <p className="text-[11px] text-muted-foreground truncate">
+                            <p className="text-xs text-muted-foreground truncate">
                               {requester?.handle ? `@${requester.handle} · ` : ""}
                               Asked {formatDate(request.createdAt)}
                             </p>
@@ -500,7 +494,7 @@ export const TripMembers: React.FC<TripMembersProps> = ({
                         </div>
                         <Badge
                           variant="outline"
-                          className="shrink-0 text-[10px] text-muted-foreground"
+                          className="shrink-0 text-xs text-muted-foreground"
                           title="Approval can only grant a commenter seat"
                         >
                           Commenter only
@@ -520,7 +514,7 @@ export const TripMembers: React.FC<TripMembersProps> = ({
                           variant="ghost"
                           disabled={busy}
                           onClick={() => setBlockTarget(request)}
-                          className="h-8 rounded-xl text-[11px] font-bold gap-1 text-muted-foreground hover:text-destructive px-2.5"
+                          className="h-8 rounded-xl text-xs font-bold gap-1 text-muted-foreground hover:text-destructive px-2.5"
                         >
                           <Ban className="w-3 h-3" />
                           Block
@@ -531,7 +525,7 @@ export const TripMembers: React.FC<TripMembersProps> = ({
                           variant="outline"
                           disabled={busy}
                           onClick={() => void runJoinRequestAction(request, "decline")}
-                          className="h-8 rounded-xl text-[11px] font-bold gap-1 px-2.5"
+                          className="h-8 rounded-xl text-xs font-bold gap-1 px-2.5"
                         >
                           <X className="w-3 h-3" />
                           Decline
@@ -542,7 +536,7 @@ export const TripMembers: React.FC<TripMembersProps> = ({
                           variant="hero"
                           disabled={busy}
                           onClick={() => void runJoinRequestAction(request, "approve")}
-                          className="h-8 rounded-xl text-[11px] font-bold gap-1 px-2.5"
+                          className="h-8 rounded-xl text-xs font-bold gap-1 px-2.5"
                         >
                           {approving ? (
                             <Loader2 className="w-3 h-3 animate-spin" />
@@ -558,7 +552,7 @@ export const TripMembers: React.FC<TripMembersProps> = ({
               </div>
             )}
 
-            <p className="text-[10px] leading-relaxed text-muted-foreground">
+            <p className="text-xs leading-relaxed text-muted-foreground">
               Approving adds a commenter seat: they can join the discussion but
               cannot edit the itinerary or change trip settings. Declining is
               silent; blocking also clears their pending request.
@@ -597,34 +591,34 @@ export const TripMembers: React.FC<TripMembersProps> = ({
                           </code>
                           <Badge
                             className={cn(
-                              "px-2 py-0.5 text-[10px] font-bold",
+                              "px-2 py-0.5 text-xs font-bold",
                               ROLE_BADGE_STYLE[invite.role]
                             )}
                           >
                             {roleLabel(invite.role)}
                           </Badge>
                           {invite.kind === "email" && (
-                            <span className="text-[11px] text-muted-foreground truncate max-w-[160px]">
+                            <span className="text-xs text-muted-foreground truncate max-w-[160px]">
                               {invite.email}
                             </span>
                           )}
                         </div>
-                        <p className="text-[11px] text-muted-foreground mt-1">
+                        <p className="text-xs text-muted-foreground mt-1">
                           {invite.usedCount}/{invite.maxUses} used · expires{" "}
                           {formatDate(invite.expiresAt)}
                         </p>
                       </div>
                       <div className="shrink-0">
                         {isRevoked ? (
-                          <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                          <Badge variant="outline" className="text-xs text-muted-foreground">
                             revoked
                           </Badge>
                         ) : isExpired ? (
-                          <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                          <Badge variant="outline" className="text-xs text-muted-foreground">
                             expired
                           </Badge>
                         ) : isSpent ? (
-                          <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                          <Badge variant="outline" className="text-xs text-muted-foreground">
                             fully used
                           </Badge>
                         ) : (
@@ -634,7 +628,7 @@ export const TripMembers: React.FC<TripMembersProps> = ({
                             variant="outline"
                             disabled={busyId === invite._id}
                             onClick={() => setRevokeTarget(invite)}
-                            className="rounded-xl text-[11px] font-bold gap-1 h-8 px-2.5 hover:text-destructive"
+                            className="rounded-xl text-xs font-bold gap-1 h-8 px-2.5 hover:text-destructive"
                           >
                             <Ban className="w-3 h-3" />
                             <span>Revoke</span>
@@ -660,173 +654,102 @@ export const TripMembers: React.FC<TripMembersProps> = ({
         tripId={tripId}
       />
 
-      {/* Leave confirmation (non-owner) */}
-      <AlertDialog open={leaveDialogOpen} onOpenChange={setLeaveDialogOpen}>
-        <AlertDialogContent className="rounded-3xl max-w-md w-[92vw] sm:w-full p-5 sm:p-6">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-lg font-bold">Leave this trip?</AlertDialogTitle>
-            <AlertDialogDescription className="text-xs leading-relaxed">
-              You keep nothing behind: your past expenses and participant entry
-              stay with the trip, but you lose access until you are invited
-              again.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="gap-2 sm:gap-0">
-            <AlertDialogCancel className="rounded-xl text-xs font-semibold h-10">
-              Stay
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleLeave}
-              className="rounded-xl text-xs font-bold h-10 bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {busyId === "me" ? "Leaving…" : "Leave trip"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* C-07: one destructive recipe for leave, transfer, remove, revoke, block. */}
+      <ConfirmDestructive
+        open={leaveDialogOpen}
+        onOpenChange={setLeaveDialogOpen}
+        title="Leave this trip?"
+        description="You keep nothing behind: your past expenses and participant entry stay with the trip, but you lose access until you are invited again."
+        confirmLabel="Leave trip"
+        cancelLabel="Stay"
+        onConfirm={handleLeave}
+        busy={busyId === "me"}
+      />
 
-      {/* Transfer confirmation */}
-      <AlertDialog
+      <ConfirmDestructive
         open={Boolean(transferTarget)}
         onOpenChange={(open) => {
           if (!open) setTransferTarget(null);
         }}
-      >
-        <AlertDialogContent className="rounded-3xl max-w-md w-[92vw] sm:w-full p-5 sm:p-6">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-lg font-bold">Transfer ownership?</AlertDialogTitle>
-            <AlertDialogDescription className="text-xs leading-relaxed">
-              <strong className="text-foreground">
-                {transferTarget?.label || transferTarget?.email || "This member"}
-              </strong>{" "}
-              becomes the owner and gains full control — invitations, member
-              roles and trip deletion. You become an editor and keep editing.
-              This cannot be undone except by another transfer.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="gap-2 sm:gap-0">
-            <AlertDialogCancel className="rounded-xl text-xs font-semibold h-10">
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => transferTarget && handleTransfer(transferTarget)}
-              className="rounded-xl text-xs font-bold h-10 bg-amber-600 text-white hover:bg-amber-600/90"
-            >
-              Transfer ownership
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        tone="warning"
+        title="Transfer ownership?"
+        description="They gain full control — invitations, member roles and trip deletion. You become an editor and keep editing. This cannot be undone except by another transfer."
+        confirmLabel="Transfer ownership"
+        onConfirm={() => transferTarget && handleTransfer(transferTarget)}
+        busy={Boolean(transferTarget && busyId === transferTarget.userId)}
+        detail={
+          transferTarget ? (
+            <>
+              <span className="font-semibold">
+                {transferTarget.label || transferTarget.email || "This member"}
+              </span>{" "}
+              becomes the owner.
+            </>
+          ) : null
+        }
+        typedConfirmation={
+          transferTarget
+            ? {
+                phrase: transferTarget.email || transferTarget.label || "",
+                label: "Type their email to confirm",
+              }
+            : undefined
+        }
+      />
 
-      {/* Remove-member confirmation — removal is immediate and access is lost */}
-      <AlertDialog
+      <ConfirmDestructive
         open={Boolean(removeTarget)}
         onOpenChange={(open) => {
           if (!open && busyId !== removeTarget?.userId) setRemoveTarget(null);
         }}
-      >
-        <AlertDialogContent className="rounded-3xl max-w-md w-[92vw] sm:w-full p-5 sm:p-6">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-lg font-bold">Remove this member?</AlertDialogTitle>
-            <AlertDialogDescription className="text-xs leading-relaxed">
-              <strong className="text-foreground">
-                {removeTarget?.label || removeTarget?.email || "This member"}
-              </strong>{" "}
-              loses access immediately. Their past expenses and participant entry
-              stay with the trip, and they can only return through a new invite.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="gap-2 sm:gap-0">
-            <AlertDialogCancel className="rounded-xl text-xs font-semibold h-10">
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(event) => {
-                event.preventDefault();
-                if (removeTarget) void handleRemove(removeTarget);
-              }}
-              className="rounded-xl text-xs font-bold h-10 bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {removeTarget && busyId === removeTarget.userId ? "Removing…" : "Remove member"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        title={`Remove ${removeTarget?.label || removeTarget?.email || "this member"}?`}
+        description="They lose access immediately. Their past expenses and participant entry stay with the trip, and they can only return through a new invite."
+        confirmLabel="Remove member"
+        onConfirm={() => removeTarget && handleRemove(removeTarget)}
+        busy={Boolean(removeTarget && busyId === removeTarget.userId)}
+        detail={
+          removeTarget ? <>{removeTarget.email || removeTarget.label}</> : null
+        }
+      />
 
-      {/* Revoke-invite confirmation — the link dies for everyone who has not joined */}
-      <AlertDialog
+      <ConfirmDestructive
         open={Boolean(revokeTarget)}
         onOpenChange={(open) => {
           if (!open && busyId !== revokeTarget?._id) setRevokeTarget(null);
         }}
-      >
-        <AlertDialogContent className="rounded-3xl max-w-md w-[92vw] sm:w-full p-5 sm:p-6">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-lg font-bold">Revoke this invitation?</AlertDialogTitle>
-            <AlertDialogDescription className="text-xs leading-relaxed">
-              The link{" "}
-              <code className="text-[11px] font-mono bg-muted px-1 py-0.5 rounded">
-                {revokeTarget?.tokenHint}…
-              </code>{" "}
-              stops working immediately. Anyone who has not joined yet will need a
-              new invitation.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="gap-2 sm:gap-0">
-            <AlertDialogCancel className="rounded-xl text-xs font-semibold h-10">
-              Keep it
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(event) => {
-                event.preventDefault();
-                if (revokeTarget) void handleRevoke(revokeTarget);
-              }}
-              className="rounded-xl text-xs font-bold h-10 bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {revokeTarget && busyId === revokeTarget._id ? "Revoking…" : "Revoke invite"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-      {/* Block-from-request confirmation — one-way, and it clears the queue row */}
-      <AlertDialog
+        title="Revoke this invitation?"
+        description="The link stops working immediately. Anyone who has not joined yet will need a new invitation."
+        confirmLabel="Revoke invite"
+        cancelLabel="Keep it"
+        onConfirm={() => revokeTarget && handleRevoke(revokeTarget)}
+        busy={Boolean(revokeTarget && busyId === revokeTarget._id)}
+        detail={
+          revokeTarget ? (
+            <span className="font-mono text-xs">{revokeTarget.tokenHint}…</span>
+          ) : null
+        }
+      />
+
+      <ConfirmDestructive
         open={Boolean(blockTarget)}
         onOpenChange={(open) => {
           if (!open && !busyId?.startsWith(`${blockTarget?._id}:`)) setBlockTarget(null);
         }}
-      >
-        <AlertDialogContent className="rounded-3xl max-w-md w-[92vw] sm:w-full p-5 sm:p-6">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-lg font-bold">
-              Block this traveller?
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-xs leading-relaxed">
-              <strong className="text-foreground">
-                {blockTarget?.requester?.label || "This traveller"}
-              </strong>{" "}
-              can never request to join any of your trips again, and this
-              request is declined. They are not told about the block. You can
-              manage blocked accounts from your account settings.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="gap-2 sm:gap-0">
-            <AlertDialogCancel className="rounded-xl text-xs font-semibold h-10">
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(event) => {
-                event.preventDefault();
-                if (blockTarget) void runJoinRequestAction(blockTarget, "block");
-              }}
-              className="rounded-xl text-xs font-bold h-10 bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {blockTarget && busyId === `${blockTarget._id}:block`
-                ? "Blocking…"
-                : "Block traveller"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        title={`Block ${blockTarget?.requester?.label || "this traveller"}?`}
+        description="They can never request to join any of your trips again, and this request is declined. They are not told about the block. You can manage blocked accounts from your account settings."
+        confirmLabel="Block traveller"
+        onConfirm={() => blockTarget && runJoinRequestAction(blockTarget, "block")}
+        busy={Boolean(blockTarget && busyId === `${blockTarget._id}:block`)}
+        detail={
+          blockTarget?.requester ? (
+            <>
+              {blockTarget.requester.handle
+                ? `@${blockTarget.requester.handle}`
+                : blockTarget.requester.label}
+            </>
+          ) : null
+        }
+      />
     </div>
   );
 };
@@ -836,7 +759,7 @@ export const CopyableLink: React.FC<{ link: string }> = ({ link }) => {
   const [copied, setCopied] = useState(false);
   return (
     <div className="flex items-center gap-2">
-      <Input readOnly value={link} className="text-xs font-mono rounded-xl h-10" />
+      <Input readOnly value={link} aria-label="Invitation link" className="text-xs font-mono rounded-xl h-10" />
       <Button
         type="button"
         size="icon"
@@ -849,7 +772,7 @@ export const CopyableLink: React.FC<{ link: string }> = ({ link }) => {
           setTimeout(() => setCopied(false), 2000);
         }}
       >
-        {copied ? <Copy className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+        {copied ? <Copy className="w-4 h-4 text-success-ink" /> : <Copy className="w-4 h-4" />}
       </Button>
     </div>
   );

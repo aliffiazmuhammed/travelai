@@ -4,7 +4,7 @@ import { Loader2, Lock, Mail, ShieldCheck, ShieldOff } from 'lucide-react';
 import { AdminNotice } from '@/components/admin/AdminNotice';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { usePlatformAuth } from '@/context/PlatformAuthContext';
@@ -64,7 +64,7 @@ const AdminLogin: React.FC = () => {
 
   if (enabled === null || authLoading) {
     return (
-      <div className="dark grid min-h-screen place-items-center bg-background">
+      <div className="grid min-h-screen place-items-center bg-background">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
           Checking platform access…
@@ -75,14 +75,14 @@ const AdminLogin: React.FC = () => {
 
   if (!enabled) {
     return (
-      <div className="dark grid min-h-screen place-items-center bg-background px-4">
+      <div className="grid min-h-screen place-items-center bg-background px-4">
         <Card className="w-full max-w-md rounded-2xl border-border bg-card">
           <CardContent className="space-y-4 p-8 text-center">
             <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-muted text-muted-foreground">
               <ShieldOff className="h-6 w-6" aria-hidden />
             </div>
             <div className="space-y-1">
-              <h1 className="text-lg font-semibold text-foreground">
+              <h1 className="text-xl font-semibold text-foreground">
                 Platform admin is not enabled
               </h1>
               <p className="text-sm leading-6 text-muted-foreground">
@@ -101,10 +101,10 @@ const AdminLogin: React.FC = () => {
   }
 
   return (
-    <div className="dark relative grid min-h-screen place-items-center overflow-hidden bg-background px-4 py-10 text-foreground">
+    <div className="relative grid min-h-screen place-items-center overflow-hidden bg-background px-4 py-10 text-foreground">
       <div
         aria-hidden
-        className="pointer-events-none absolute -top-32 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-indigo-500/15 blur-3xl"
+        className="pointer-events-none absolute -top-32 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-admin-accent/15 blur-3xl"
       />
       <div
         aria-hidden
@@ -113,7 +113,7 @@ const AdminLogin: React.FC = () => {
 
       <div className="relative w-full max-w-md">
         <div className="mb-6 flex items-center justify-center gap-2.5">
-          <span className="grid h-10 w-10 place-items-center rounded-xl bg-indigo-500 text-white shadow-md shadow-indigo-500/25">
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-admin-accent text-admin-accent-foreground shadow-md shadow-admin-accent/25">
             <ShieldCheck className="h-5 w-5" aria-hidden />
           </span>
           <img src="/brand/waytowalk-logo-reverse.svg" alt="waytowalk" width="140" height="28" className="h-7 w-[140px]" />
@@ -123,12 +123,12 @@ const AdminLogin: React.FC = () => {
         <Card className="rounded-2xl border-border bg-card shadow-2xl shadow-black/40">
           <CardHeader className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
-              <CardTitle className="text-xl font-semibold tracking-tight text-foreground">
+              <h1 className="text-xl font-semibold tracking-tight text-foreground">
                 Operations sign in
-              </CardTitle>
+              </h1>
               <Badge
                 variant="outline"
-                className="border-indigo-500/40 bg-indigo-500/10 text-[10px] font-semibold uppercase tracking-wide text-indigo-300"
+                className="border-admin-accent/40 bg-admin-accent/10 text-overline font-semibold text-admin-accent-ink"
               >
                 Isolated realm
               </Badge>
@@ -151,6 +151,7 @@ const AdminLogin: React.FC = () => {
                   />
                   <Input
                     id="admin-email"
+                    name="email"
                     type="email"
                     autoComplete="username"
                     value={email}
@@ -173,6 +174,7 @@ const AdminLogin: React.FC = () => {
                   />
                   <Input
                     id="admin-password"
+                    name="password"
                     type="password"
                     autoComplete="current-password"
                     value={password}
@@ -188,7 +190,7 @@ const AdminLogin: React.FC = () => {
 
               <Button
                 type="submit"
-                className="h-11 w-full bg-indigo-500 text-white hover:bg-indigo-400"
+                className="h-11 w-full bg-admin-accent text-admin-accent-foreground hover:bg-admin-accent/90"
                 disabled={submitting}
               >
                 {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden /> : null}

@@ -22,6 +22,7 @@ import {
 } from './access.js';
 import { publicTenantLogo, type AgencySession } from './auth.js';
 import { signSessionForAccount } from '../auth/realm.js';
+import { assertPasswordPolicy } from '../auth/passwordPolicy.js';
 import { assertSeatAvailable } from './plan.js';
 import { notifyAgencyInvite } from '../mail/notify.js';
 
@@ -310,6 +311,9 @@ export async function activateAgencyInvite(
   if (user) {
     await verifyExisting(user);
   } else {
+    // Only a brand-new credential is held to the Phase 2 policy. An existing
+    // member is proving an old password, exactly like sign-in.
+    assertPasswordPolicy(password, { email, name: displayName });
     try {
       user = await User.create({
         email,

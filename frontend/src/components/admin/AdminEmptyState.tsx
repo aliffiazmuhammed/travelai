@@ -43,6 +43,7 @@ export const AdminLoadingPanel: React.FC<{
       'flex items-center justify-center gap-2 px-6 py-14 text-sm text-muted-foreground',
       className
     )}
+    role="status"
     aria-busy="true"
   >
     <span

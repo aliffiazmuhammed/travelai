@@ -111,7 +111,7 @@ export default function ProfileScreen() {
       >
         <View style={styles.page}>
           <View style={styles.topRow}>
-            <AppText variant="heading" tone="primary" style={styles.wordmark}>
+            <AppText variant="wordmark" tone="primary">
               waytowalk
             </AppText>
             <View style={[styles.signedIn, { backgroundColor: palette.muted }]}>

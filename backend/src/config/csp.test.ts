@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import {
   buildCspDirectives,
   CSP_CONNECT_ORIGINS,
-  CSP_FONT_ORIGINS,
   CSP_IMAGE_ORIGINS,
   CSP_STYLE_ORIGINS,
 } from './csp.js';
@@ -20,23 +19,34 @@ test('CSP: scripts are self-only (no inline, no eval)', () => {
   assert.deepEqual(directives.scriptSrc, ["'self'"]);
   assert.deepEqual(directives.scriptSrcAttr, ["'none'"]);
   assert.deepEqual(directives.objectSrc, ["'none'"]);
-  assert.deepEqual(directives.frameSrc, ["'none'"]);
+  assert.deepEqual(directives.frameSrc, ["'self'"]);
   assert.ok(!JSON.stringify(directives.scriptSrc).includes('unsafe-'));
 });
 
-test('CSP: image allow-list covers covers, avatars and both tile providers', () => {
-  assert.ok(CSP_IMAGE_ORIGINS.includes('https://images.unsplash.com'));
+test('CSP: proposal srcdoc frames are same-origin only', () => {
+  // The proposal previews use `<iframe srcdoc>`; `'none'` blocked them in
+  // production. `'self'` permits that local document and nothing remote.
+  const prod = buildCspDirectives(false) as Record<string, unknown>;
+  assert.deepEqual(prod.frameSrc, ["'self'"]);
+  assert.ok(!JSON.stringify(prod.frameSrc).includes('*'));
+  assert.ok(!JSON.stringify(prod.frameSrc).includes('http'));
+});
+
+test('CSP: image allow-list covers proxied photos, avatars and both tile providers', () => {
+  // C-21 routes destination covers through this app, so the browser never
+  // requests the photo host directly and the policy does not allow it.
+  assert.ok(!CSP_IMAGE_ORIGINS.includes('https://images.unsplash.com'));
+  assert.ok(CSP_IMAGE_ORIGINS.includes("'self'"));
   assert.ok(CSP_IMAGE_ORIGINS.includes('https://res.cloudinary.com'));
   assert.ok(CSP_IMAGE_ORIGINS.includes('https://*.basemaps.cartocdn.com'));
   assert.ok(CSP_IMAGE_ORIGINS.includes('https://server.arcgisonline.com'));
 });
 
-test('CSP: Google Fonts CSS and font files are allow-listed', () => {
-  assert.deepEqual(CSP_STYLE_ORIGINS, ['https://fonts.googleapis.com']);
-  assert.deepEqual(CSP_FONT_ORIGINS, ['https://fonts.gstatic.com']);
+test('CSP: styles and fonts are self-hosted (no third-party font origins)', () => {
+  assert.deepEqual(CSP_STYLE_ORIGINS, []);
   const prod = buildCspDirectives(false) as Record<string, unknown>;
-  assert.ok(JSON.stringify(prod.styleSrc).includes('fonts.googleapis.com'));
-  assert.ok(JSON.stringify(prod.fontSrc).includes('fonts.gstatic.com'));
+  assert.deepEqual(prod.styleSrc, ["'self'", "'unsafe-inline'"]);
+  assert.deepEqual(prod.fontSrc, ["'self'", 'data:']);
 });
 
 test('CSP: browser connections stay same-origin plus Nominatim', () => {

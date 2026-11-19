@@ -139,8 +139,8 @@ const PdfTemplateLayoutEditorDialog: React.FC<
         </DialogHeader>
         {loadError ? (
           <div className="flex flex-col items-center gap-3 py-8 text-center">
-            <AlertTriangle className="h-6 w-6 text-rose-500" />
-            <p className="max-w-sm text-xs text-rose-700 dark:text-rose-300">
+            <AlertTriangle className="h-6 w-6 text-destructive-ink" />
+            <p className="max-w-sm text-xs text-destructive-ink">
               {loadError}
             </p>
             <Button variant="outline" size="sm" onClick={() => void load()}>
@@ -149,8 +149,8 @@ const PdfTemplateLayoutEditorDialog: React.FC<
             </Button>
           </div>
         ) : (
-          <div className="flex items-center justify-center gap-2 py-10 text-sm text-slate-500 dark:text-slate-400">
-            <Loader2 className="h-4 w-4 animate-spin text-teal-600" />
+          <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin text-agency-accent-ink" />
             {loading ? 'Loading the design...' : 'Preparing the mapper...'}
           </div>
         )}

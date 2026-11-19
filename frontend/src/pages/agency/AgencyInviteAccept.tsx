@@ -18,6 +18,8 @@ import { useAgencyEnabled } from '@/hooks/useAgencyEnabled';
 import { api } from '@/services/api';
 import { agencyRoleBadgeClass, agencyRoleLabel } from '@/lib/agency';
 import { toast } from 'sonner';
+import { PasswordStrength } from '@/components/auth/PasswordStrength';
+import { DEFAULT_PASSWORD_POLICY } from '@/lib/passwordPolicy';
 import type { AgencyInvitePreview } from '@/types';
 
 /**
@@ -93,8 +95,8 @@ const AgencyInviteAccept: React.FC = () => {
       setFormError('Enter the email address this invitation was sent to.');
       return;
     }
-    if (password.length < 6) {
-      setFormError('Choose a password with at least 6 characters.');
+    if (!password) {
+      setFormError('Choose a password for your agency account.');
       return;
     }
     if (password !== confirmPassword) {
@@ -136,7 +138,7 @@ const AgencyInviteAccept: React.FC = () => {
     return (
       <div className="grid min-h-screen place-items-center bg-agency-canvas px-4 py-10">
         <div className="w-full max-w-lg rounded-2xl border border-agency-line bg-agency-panel p-7 text-center shadow-sm">
-          <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-300">
+          <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-destructive/10 text-destructive-ink dark:bg-destructive/20">
             <ShieldCheck className="h-6 w-6" />
           </div>
           <div className="mt-4 space-y-1.5">
@@ -149,7 +151,7 @@ const AgencyInviteAccept: React.FC = () => {
           </div>
           <Button
             asChild
-            className="mt-6 h-11 w-full rounded-lg bg-agency-accent text-white hover:bg-agency-accent/90"
+            className="mt-6 h-11 w-full rounded-lg bg-agency-accent text-agency-accent-foreground hover:bg-agency-accent/90"
           >
             <Link to="/agency/login">Go to agency sign in</Link>
           </Button>
@@ -164,7 +166,7 @@ const AgencyInviteAccept: React.FC = () => {
         <div className="mb-6 flex items-center justify-center gap-2.5">
           <Link to="/" className="flex items-center gap-3">
             <img src="/brand/waytowalk-logo-name.svg" alt="waytowalk" width="148" height="30" className="h-[30px] w-[148px]" />
-            <span className="text-sm font-semibold text-agency-accent">Agency</span>
+            <span className="text-sm font-semibold text-agency-accent-ink">Agency</span>
           </Link>
         </div>
 
@@ -182,7 +184,7 @@ const AgencyInviteAccept: React.FC = () => {
             </header>
 
             <div className="flex flex-wrap items-center gap-3 rounded-xl border border-agency-line bg-agency-accent-soft p-4">
-              <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-lg bg-agency-accent text-white">
+              <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-lg bg-agency-accent text-agency-accent-foreground">
                 {preview.agency.logoUrl ? (
                   <img
                     src={preview.agency.logoUrl}
@@ -207,7 +209,7 @@ const AgencyInviteAccept: React.FC = () => {
             </div>
 
             {formError ? (
-              <div className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-3 text-sm font-medium text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200">
+              <div role="alert" className="rounded-xl border border-destructive/30 bg-destructive/10 px-3.5 py-3 text-sm font-medium text-destructive-ink dark:border-destructive/40 dark:bg-destructive/20">
                 {formError}
               </div>
             ) : null}
@@ -219,6 +221,7 @@ const AgencyInviteAccept: React.FC = () => {
                   <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-agency-muted" />
                   <Input
                     id="invite-email"
+                    name="email"
                     type="email"
                     value={email}
                     onChange={(event) => {
@@ -238,6 +241,7 @@ const AgencyInviteAccept: React.FC = () => {
                   <UserRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-agency-muted" />
                   <Input
                     id="invite-name"
+                    name="name"
                     value={name}
                     onChange={(event) => setName(event.target.value)}
                     placeholder="Your name"
@@ -254,6 +258,7 @@ const AgencyInviteAccept: React.FC = () => {
                     <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-agency-muted" />
                     <Input
                       id="invite-password"
+                      name="newPassword"
                       type="password"
                       value={password}
                       onChange={(event) => {
@@ -261,6 +266,7 @@ const AgencyInviteAccept: React.FC = () => {
                         if (formError) setFormError(null);
                       }}
                       autoComplete="new-password"
+                      maxLength={DEFAULT_PASSWORD_POLICY.maxLength}
                       className="h-11 border-agency-line bg-agency-panel pl-9"
                     />
                   </div>
@@ -269,6 +275,7 @@ const AgencyInviteAccept: React.FC = () => {
                   <Label htmlFor="invite-confirm">Confirm password</Label>
                   <Input
                     id="invite-confirm"
+                    name="confirmPassword"
                     type="password"
                     value={confirmPassword}
                     onChange={(event) => {
@@ -276,14 +283,17 @@ const AgencyInviteAccept: React.FC = () => {
                       if (formError) setFormError(null);
                     }}
                     autoComplete="new-password"
+                    maxLength={DEFAULT_PASSWORD_POLICY.maxLength}
                     className="h-11 border-agency-line bg-agency-panel"
                   />
                 </div>
               </div>
 
+              <PasswordStrength value={password} email={email} name={name} />
+
               <Button
                 type="submit"
-                className="h-11 w-full rounded-lg bg-agency-accent text-white hover:bg-agency-accent/90"
+                className="h-11 w-full rounded-lg bg-agency-accent text-agency-accent-foreground hover:bg-agency-accent/90"
                 disabled={joining}
               >
                 {joining ? (
@@ -299,7 +309,7 @@ const AgencyInviteAccept: React.FC = () => {
               Already have an agency account for this workspace?{" "}
               <Link
                 to={`/agency/login?workspace=${encodeURIComponent(preview.agency.slug)}`}
-                className="font-semibold text-agency-accent hover:underline"
+                className="font-semibold text-agency-accent-ink hover:underline"
               >
                 Sign in
               </Link>

@@ -154,7 +154,7 @@ export const NearbyExplorer: React.FC<NearbyExplorerProps> = ({
             </div>
             <div>
               <p className="text-sm font-bold text-foreground">Nearby Places</p>
-              <p className="text-[11px] text-muted-foreground font-medium">
+              <p className="text-xs text-muted-foreground font-medium">
                 Real places from OpenStreetMap around your day
               </p>
             </div>
@@ -185,7 +185,7 @@ export const NearbyExplorer: React.FC<NearbyExplorerProps> = ({
               variant={selectedDay === day.day ? "default" : "outline"}
               onClick={() => setSelectedDay(day.day)}
               className={cn(
-                "rounded-2xl px-3 h-8 text-[11px] font-bold shrink-0",
+                "rounded-2xl px-3 h-8 text-xs font-bold shrink-0",
                 selectedDay === day.day
                   ? "bg-primary text-primary-foreground"
                   : "border-border/80 text-foreground hover:bg-muted/80"
@@ -206,7 +206,7 @@ export const NearbyExplorer: React.FC<NearbyExplorerProps> = ({
               variant={category === id ? "default" : "outline"}
               onClick={() => setCategory(category === id ? null : id)}
               className={cn(
-                "rounded-2xl h-8 px-3 text-[11px] font-bold gap-1.5",
+                "rounded-2xl h-8 px-3 text-xs font-bold gap-1.5",
                 category !== id && "border-border/80 text-foreground hover:bg-muted/80"
               )}
             >
@@ -217,7 +217,7 @@ export const NearbyExplorer: React.FC<NearbyExplorerProps> = ({
         </div>
 
         {category && (
-          <div className="flex items-center gap-2 text-[11px] font-semibold text-muted-foreground">
+          <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
             <span>Within</span>
             {RADIUS_OPTIONS.map((option) => (
               <button
@@ -257,10 +257,10 @@ export const NearbyExplorer: React.FC<NearbyExplorerProps> = ({
         )}
 
         {!loading && !error && unavailable && (
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-xl border border-amber-400/50 bg-amber-500/10 px-3 py-2.5">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-xl border border-warning/50 bg-warning/10 px-3 py-2.5">
             <div className="flex items-start gap-2 min-w-0">
-              <CloudOff className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-              <p className="text-xs font-semibold text-amber-800 dark:text-amber-200">
+              <CloudOff className="w-4 h-4 text-warning-ink shrink-0 mt-0.5" />
+              <p className="text-xs font-semibold text-warning-ink">
                 {note || "Nearby search is temporarily unavailable. Please try again in a moment."}
               </p>
             </div>
@@ -269,7 +269,7 @@ export const NearbyExplorer: React.FC<NearbyExplorerProps> = ({
               size="sm"
               variant="outline"
               onClick={() => setReloadToken((token) => token + 1)}
-              className="rounded-xl text-[11px] font-bold h-8 gap-1.5 shrink-0 sm:ml-auto border-amber-400/60 text-amber-800 dark:text-amber-200 hover:bg-amber-500/10"
+              className="rounded-xl text-xs font-bold h-8 gap-1.5 shrink-0 sm:ml-auto border-warning/60 text-warning-ink hover:bg-warning/10"
             >
               <RefreshCw className="w-3 h-3" />
               <span>Try again</span>
@@ -296,14 +296,14 @@ export const NearbyExplorer: React.FC<NearbyExplorerProps> = ({
                   </p>
                   <Badge
                     variant="outline"
-                    className="text-[10px] px-1.5 py-0 border-border/60 shrink-0 font-bold"
+                    className="text-xs px-1.5 py-0 border-border/60 shrink-0 font-bold"
                   >
                     {formatDistance(place.distanceKm)}
                   </Badge>
                 </div>
 
                 {place.tags?.address && (
-                  <p className="text-[11px] text-muted-foreground font-medium inline-flex items-start gap-1">
+                  <p className="text-xs text-muted-foreground font-medium inline-flex items-start gap-1">
                     <MapPin className="w-2.5 h-2.5 mt-0.5 text-primary shrink-0" />
                     <span className="line-clamp-2">{place.tags.address}</span>
                   </p>
@@ -311,12 +311,12 @@ export const NearbyExplorer: React.FC<NearbyExplorerProps> = ({
 
                 <div className="flex items-center gap-1.5 flex-wrap">
                   {place.tags?.cuisine && (
-                    <span className="text-[10px] font-semibold text-muted-foreground capitalize">
+                    <span className="text-xs font-semibold text-muted-foreground capitalize">
                       {place.tags.cuisine}
                     </span>
                   )}
                   {place.tags?.openingHours && (
-                    <span className="text-[10px] font-semibold text-muted-foreground">
+                    <span className="text-xs font-semibold text-muted-foreground">
                       · {place.tags.openingHours}
                     </span>
                   )}
@@ -329,7 +329,7 @@ export const NearbyExplorer: React.FC<NearbyExplorerProps> = ({
                     variant="outline"
                     disabled={busyDay === selectedDay}
                     onClick={() => onAddToDay(selectedDay, place)}
-                    className="rounded-xl h-7 px-2.5 text-[11px] font-bold gap-1 w-full mt-1 border-primary/40 text-primary hover:bg-primary/10"
+                    className="rounded-xl h-7 px-2.5 text-xs font-bold gap-1 w-full mt-1 border-primary/40 text-primary hover:bg-primary/10"
                   >
                     {busyDay === selectedDay ? (
                       <Loader2 className="w-3 h-3 animate-spin" />
@@ -346,7 +346,7 @@ export const NearbyExplorer: React.FC<NearbyExplorerProps> = ({
 
         {/* Required by Geoapify's free plan and OpenStreetMap's ODbL */}
         {!loading && places.length > 0 && attribution && (
-          <p className="text-[10px] text-muted-foreground/80 font-medium pt-0.5">
+          <p className="text-xs text-muted-foreground/80 font-medium pt-0.5">
             {attribution}
           </p>
         )}

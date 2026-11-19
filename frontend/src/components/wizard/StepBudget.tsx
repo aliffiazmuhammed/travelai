@@ -167,7 +167,7 @@ export const StepBudget: React.FC<StepBudgetProps> = ({
             onValueChange={handleSliderChange}
             className="py-4"
           />
-          <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-[11px] font-medium text-muted-foreground">
+          <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-xs font-medium text-muted-foreground">
             <span>₹3,000 (Shoestring)</span>
             <span>₹25,000 (Popular)</span>
             <span>₹1,00,000+ (Luxury)</span>

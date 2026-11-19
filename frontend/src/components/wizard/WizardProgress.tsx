@@ -50,6 +50,11 @@ export const WizardProgress: React.FC<WizardProgressProps> = ({
                 disabled={!isClickable}
                 aria-current={isCurrent ? "step" : undefined}
                 aria-label={`Step ${step.id}: ${step.title}`}
+                title={
+                  isClickable
+                    ? step.title
+                    : "Complete the earlier steps to unlock this one"
+                }
                 onClick={() => isClickable && onStepClick(step.id)}
                 className={cn(
                   "group flex shrink-0 flex-col items-center gap-2 rounded-xl px-1.5 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
@@ -75,7 +80,7 @@ export const WizardProgress: React.FC<WizardProgressProps> = ({
                 </span>
                 <span
                   className={cn(
-                    "text-[11px] font-medium leading-none transition-colors sm:text-xs",
+                    "text-xs font-medium leading-none transition-colors sm:text-xs",
                     isCurrent && "font-semibold text-primary",
                     isCompleted && "text-foreground/80",
                     !isCompleted && !isCurrent && "text-muted-foreground"

@@ -15,6 +15,7 @@ import {
   signin as apiSignin,
   signup as apiSignup,
   type SessionUser,
+  type SignupConsent,
 } from '@/api/auth';
 import { ApiError, setUnauthorizedHandler } from '@/api/client';
 import { clearSessionToken, getSessionToken, setSessionToken } from '@/auth/tokenStorage';
@@ -32,7 +33,7 @@ interface SessionValue {
   nextRoute: string | null;
   signIn: (email: string, password: string, nextRoute?: string) => Promise<void>;
   signUp: (
-    input: { email: string; password: string; name?: string },
+    input: { email: string; password: string; name?: string; consent?: SignupConsent },
     nextRoute?: string
   ) => Promise<void>;
   signOut: () => Promise<void>;
@@ -122,10 +123,18 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [acceptSession]);
 
   const signUp = useCallback(
-    async (input: { email: string; password: string; name?: string }, next?: string) => {
+    async (
+      input: { email: string; password: string; name?: string; consent?: SignupConsent },
+      next?: string
+    ) => {
       const ticket = ++sessionSequence.current;
       await keyBackup.end().catch(() => {});
-      const response = await apiSignup(input.email, input.password, input.name);
+      const response = await apiSignup(
+        input.email,
+        input.password,
+        input.name,
+        input.consent
+      );
       await acceptSession(response, ticket, input.password, next);
     },
     [acceptSession]

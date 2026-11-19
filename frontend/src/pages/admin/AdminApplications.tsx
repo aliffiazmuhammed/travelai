@@ -11,16 +11,7 @@ import {
   UserCheck,
   XCircle,
 } from 'lucide-react';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { ConfirmDestructive } from '@/components/ui/confirm-destructive';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -90,15 +81,15 @@ const STATUS_CHIP: Record<
 > = {
   pending: {
     label: 'Pending',
-    className: 'border-amber-500/40 bg-amber-500/10 text-amber-200',
+    className: 'border-warning/40 bg-warning/10 text-warning-ink',
   },
   approved: {
     label: 'Approved',
-    className: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200',
+    className: 'border-success/40 bg-success/10 text-success-ink',
   },
   rejected: {
     label: 'Rejected',
-    className: 'border-rose-500/40 bg-rose-500/10 text-rose-200',
+    className: 'border-destructive/40 bg-destructive/10 text-destructive-ink',
   },
 };
 
@@ -251,7 +242,7 @@ const AdminApplications: React.FC = () => {
           <>
             <span
               aria-hidden
-              className="grid h-8 w-8 place-items-center rounded-xl border border-border bg-card text-indigo-300"
+              className="grid h-8 w-8 place-items-center rounded-xl border border-border bg-card text-admin-accent-ink"
             >
               <Inbox className="h-4 w-4" />
             </span>
@@ -296,7 +287,15 @@ const AdminApplications: React.FC = () => {
       </div>
 
       {error ? (
-        <AdminNotice tone="error" title="Could not load the application queue">
+        <AdminNotice
+          tone="error"
+          title="Could not load the application queue"
+          action={
+            <Button type="button" variant="outline" size="sm" onClick={reload}>
+              Try again
+            </Button>
+          }
+        >
           {error}
         </AdminNotice>
       ) : null}
@@ -307,21 +306,27 @@ const AdminApplications: React.FC = () => {
         </div>
       ) : rows.length === 0 ? (
         <div className="rounded-2xl border border-border bg-card">
-          <AdminEmptyState
-            icon={status === 'pending' ? CheckCircle2 : Inbox}
-            title={
-              status === 'pending'
-                ? 'No applications are waiting.'
-                : debouncedQuery
-                  ? 'Nothing matches that search.'
-                  : 'Nothing in this tab yet.'
-            }
-            description={
-              status === 'pending'
-                ? 'Every new application from /agencies/apply lands here for a decision.'
-                : 'Applications stay on file after a decision, so past ones stay searchable.'
-            }
-          />
+          {error ? (
+            <p className="px-4 py-10 text-center text-xs text-muted-foreground">
+              The queue could not be loaded. Use Try again above.
+            </p>
+          ) : (
+            <AdminEmptyState
+              icon={status === 'pending' ? CheckCircle2 : Inbox}
+              title={
+                status === 'pending'
+                  ? 'No applications are waiting.'
+                  : debouncedQuery
+                    ? 'Nothing matches that search.'
+                    : 'Nothing in this tab yet.'
+              }
+              description={
+                status === 'pending'
+                  ? 'Every new application from /agencies/apply lands here for a decision.'
+                  : 'Applications stay on file after a decision, so past ones stay searchable.'
+              }
+            />
+          )}
         </div>
       ) : (
         <AdminTableFrame
@@ -378,19 +383,19 @@ const AdminApplications: React.FC = () => {
                   <td className="px-4 py-3">
                     <span
                       className={cn(
-                        'inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
+                        'inline-flex items-center rounded-full border px-2 py-0.5 text-overline font-semibold',
                         chip.className
                       )}
                     >
                       {chip.label}
                     </span>
                     {row.status !== 'pending' && row.decidedAt ? (
-                      <p className="mt-1 text-[11px] text-muted-foreground">
+                      <p className="mt-1 text-xs text-muted-foreground">
                         {formatAdminDate(row.decidedAt)}
                       </p>
                     ) : null}
                     {row.status === 'rejected' && row.decisionNote ? (
-                      <p className="mt-1 max-w-[200px] text-[11px] leading-4 text-muted-foreground">
+                      <p className="mt-1 max-w-[200px] text-xs leading-4 text-muted-foreground">
                         {row.decisionNote}
                       </p>
                     ) : null}
@@ -402,7 +407,7 @@ const AdminApplications: React.FC = () => {
                           <Button
                             type="button"
                             size="sm"
-                            className="rounded-full bg-indigo-500 text-white hover:bg-indigo-400"
+                            className="rounded-full bg-admin-accent text-admin-accent-foreground hover:bg-admin-accent/90"
                             onClick={() => openApprove(row)}
                           >
                             <UserCheck className="mr-1.5 h-3.5 w-3.5" aria-hidden />
@@ -432,7 +437,7 @@ const AdminApplications: React.FC = () => {
                           </Link>
                         </Button>
                       ) : (
-                        <span className="text-[11px] text-muted-foreground">
+                        <span className="text-xs text-muted-foreground">
                           {row.status === 'approved'
                             ? 'Workspace removed'
                             : 'No further action'}
@@ -448,7 +453,7 @@ const AdminApplications: React.FC = () => {
       )}
 
       {/* Approval is the loud action: it creates a tenant and an owner account. */}
-      <AlertDialog
+      <ConfirmDestructive
         open={approving !== null}
         onOpenChange={(next) => {
           if (!next && !approveBusy) {
@@ -456,42 +461,22 @@ const AdminApplications: React.FC = () => {
             setApproveError(null);
           }
         }}
-      >
-        <AlertDialogContent className="dark rounded-2xl border-border bg-card text-card-foreground">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Create this agency workspace?</AlertDialogTitle>
-            <AlertDialogDescription className="text-muted-foreground">
-              {approving?.name} gets a tenant, an owner account for{' '}
-              <span className="text-foreground">{approving?.email}</span> and the
-              default plan. A one-time password is shown to you once — there is no
-              email in this stack, so you pass it on yourself.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-
-          {approveError ? <p className="text-xs text-rose-300">{approveError}</p> : null}
-
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={approveBusy} className="rounded-full">
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              disabled={approveBusy}
-              onClick={(event) => {
-                event.preventDefault();
-                void runApprove();
-              }}
-              className="rounded-full bg-indigo-500 text-white hover:bg-indigo-400"
-            >
-              {approveBusy ? (
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />
-              ) : (
-                <ShieldCheck className="mr-1.5 h-3.5 w-3.5" aria-hidden />
-              )}
-              Approve and provision
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        tone="warning"
+        icon={ShieldCheck}
+        title="Create this agency workspace?"
+        description="It gets a tenant, an owner account for that address and the default plan. A one-time password is shown to you once — there is no email in this stack, so you pass it on yourself."
+        detail={
+          approving ? (
+            <>
+              {approving.name} · {approving.email}
+            </>
+          ) : null
+        }
+        error={approveError}
+        confirmLabel="Approve and provision"
+        onConfirm={runApprove}
+        busy={approveBusy}
+      />
 
       <Dialog
         open={rejecting !== null}
@@ -502,7 +487,7 @@ const AdminApplications: React.FC = () => {
           }
         }}
       >
-        <DialogContent className="dark rounded-2xl border-border bg-card text-card-foreground sm:max-w-md">
+        <DialogContent className="rounded-2xl border-border bg-card text-card-foreground sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Reject this application?</DialogTitle>
             <DialogDescription className="leading-6">
@@ -512,7 +497,7 @@ const AdminApplications: React.FC = () => {
           </DialogHeader>
 
           <div className="space-y-1.5">
-            <Label htmlFor="reject-note" className="text-[11px] font-bold">
+            <Label htmlFor="reject-note" className="text-xs font-bold">
               Private note (optional)
             </Label>
             <Textarea
@@ -524,12 +509,12 @@ const AdminApplications: React.FC = () => {
               disabled={rejectBusy}
               className="min-h-[84px] resize-none rounded-xl text-xs"
             />
-            <p className="text-right text-[10px] text-muted-foreground">
+            <p className="text-right text-xs text-muted-foreground">
               {rejectNote.length}/500
             </p>
           </div>
 
-          {rejectError ? <p className="text-xs text-rose-300">{rejectError}</p> : null}
+          {rejectError ? <p className="text-xs text-destructive-ink">{rejectError}</p> : null}
 
           <DialogFooter className="gap-2">
             <Button
@@ -543,7 +528,7 @@ const AdminApplications: React.FC = () => {
             </Button>
             <Button
               type="button"
-              className="rounded-full bg-rose-600 text-white hover:bg-rose-500"
+              className="rounded-full bg-destructive text-white hover:bg-destructive/90"
               onClick={() => void runReject()}
               disabled={rejectBusy}
             >

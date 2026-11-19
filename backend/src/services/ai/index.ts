@@ -1,8 +1,13 @@
-import { AIService } from './ai.interface.js';
+import { AIService, GenerateStreamOptions } from './ai.interface.js';
 import { GeminiService } from './gemini.service.js';
 import { GroqService } from './groq.service.js';
 import { env } from '../../config/env.js';
 import { buildCacheKey, getFromCache, setInCache } from './cache.js';
+import {
+  GenerationAbortedError,
+  isAbortError,
+  throwIfAborted,
+} from './generationGuard.js';
 
 let primaryService: AIService;
 let fallbackService: AIService | null = null;
@@ -55,26 +60,39 @@ export async function generateWithFallback(prompt: string): Promise<GenerationRe
 
 export async function generateStreamWithFallback(
   prompt: string,
-  onChunk: (chunk: string) => void
+  onChunk: (chunk: string) => void,
+  options: GenerateStreamOptions = {}
 ): Promise<GenerationResult> {
+  const { signal } = options;
+  throwIfAborted(signal);
+
   const cacheKey = buildCacheKey(prompt);
   const cached = getFromCache(cacheKey);
   if (cached) {
-    // Replay the cached result through the same streaming callback contract
+    // Replay the cached result through the same streaming callback contract.
+    // A cancel between lookup and replay must still produce nothing.
+    throwIfAborted(signal);
     onChunk(cached);
     return { text: cached, provider: 'cache', cached: true };
   }
 
   try {
     const primary = getAIService();
-    const text = await primary.generateContentStream(prompt, onChunk);
+    const text = await primary.generateContentStream(prompt, onChunk, { signal });
+    // Never cache or fall back after a cancel: the user asked us to stop.
+    throwIfAborted(signal);
     setInCache(cacheKey, text);
     return { text, provider: 'gemini', cached: false };
   } catch (error) {
+    if (isAbortError(error) || signal?.aborted) {
+      throw new GenerationAbortedError();
+    }
     console.warn('Primary AI streaming failed, trying fallback...', error);
     const fallback = getFallbackAIService();
     if (fallback) {
-      const text = await fallback.generateContentStream(prompt, onChunk);
+      throwIfAborted(signal);
+      const text = await fallback.generateContentStream(prompt, onChunk, { signal });
+      throwIfAborted(signal);
       setInCache(cacheKey, text);
       return { text, provider: 'groq', cached: false };
     }

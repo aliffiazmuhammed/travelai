@@ -25,9 +25,9 @@ export function templateStatusLabel(status: AgencyTemplateStatus): string {
 export function templateStatusClass(status: AgencyTemplateStatus): string {
   switch (status) {
     case 'active':
-      return 'border-teal-300 bg-teal-50 text-teal-800 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-300';
+      return 'border-agency-accent/30 bg-agency-accent-soft text-agency-accent-ink';
     case 'draft':
-      return 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300';
+      return 'border-warning/30 bg-warning/10 text-warning-ink dark:border-warning/40 dark:bg-warning/20';
     default:
       return 'border-agency-line bg-agency-soft text-agency-muted';
   }

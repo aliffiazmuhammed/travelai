@@ -540,6 +540,39 @@ export async function getAgencyProposal(rawToken: unknown): Promise<AgencyPropos
   return buildAgencyProposalView(link);
 }
 
+export interface AgencyProposalMeta {
+  title: string;
+  description: string;
+}
+
+/**
+ * Head-tag metadata for chat crawlers (C-20). Deliberately does not build the
+ * full projection and never counts a view: a WhatsApp/Slack fetch is not a
+ * traveller opening the proposal. Anything unusable fails closed to `null`.
+ */
+export async function getAgencyProposalMeta(
+  rawToken: unknown
+): Promise<AgencyProposalMeta | null> {
+  try {
+    const link = await loadLink(rawToken);
+    if (!proposalLinkIsViewable(link)) return null;
+
+    const snapshot = (link.itinerarySnapshot ?? null) as ExportDocument | null;
+    let title = String(snapshot?.trip?.title ?? '').trim();
+    if (!title) {
+      const { trip } = await loadPinnedRows(link);
+      title = String(trip.tripDetails?.trip_title ?? trip.title ?? '').trim();
+    }
+
+    return {
+      title: title.slice(0, 160) || 'Travel proposal',
+      description: 'A private travel proposal prepared for you on waytowalk.',
+    };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Renders a proposal for its own traveller (M9 D8). The proposal token never
  * leaves the link the agency sent, so the comparison page resolves the link by

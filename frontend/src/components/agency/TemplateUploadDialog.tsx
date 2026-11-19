@@ -206,7 +206,7 @@ const TemplateUploadDialog: React.FC<TemplateUploadDialogProps> = ({
                     </SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                <p className="text-xs text-muted-foreground">
                   Client templates never expose cost or markup fields.
                 </p>
               </div>
@@ -223,8 +223,8 @@ const TemplateUploadDialog: React.FC<TemplateUploadDialogProps> = ({
               </div>
             </div>
           ) : (
-            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs dark:border-slate-800 dark:bg-slate-900/50">
-              <FileText className="h-4 w-4 text-teal-600" />
+            <div className="flex items-center gap-2 rounded-xl border border-border bg-muted px-3 py-2 text-xs dark:bg-background/50">
+              <FileText className="h-4 w-4 text-agency-accent-ink" />
               <span>
                 {template.name} · {template.audience} · v
                 {template.activeVersion ?? template.version}
@@ -234,7 +234,7 @@ const TemplateUploadDialog: React.FC<TemplateUploadDialogProps> = ({
 
           <div className="space-y-2">
             <Label htmlFor="template-file">HTML template file</Label>
-            <div className="rounded-2xl border border-dashed border-slate-300 p-4 text-center dark:border-slate-700">
+            <div className="rounded-2xl border border-dashed border-border p-4 text-center">
               <input
                 ref={fileInputRef}
                 id="template-file"
@@ -246,11 +246,11 @@ const TemplateUploadDialog: React.FC<TemplateUploadDialogProps> = ({
                   chooseFile(event.target.files?.[0] ?? null)
                 }
               />
-              <Upload className="mx-auto h-6 w-6 text-slate-400" />
-              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+              <Upload className="mx-auto h-6 w-6 text-muted-foreground" />
+              <p className="mt-2 text-xs text-muted-foreground">
                 {file ? (
                   <>
-                    <span className="font-medium text-slate-700 dark:text-slate-200">
+                    <span className="font-medium text-muted-foreground">
                       {file.name}
                     </span>{' '}
                     · {formatBytes(file.size)}
@@ -291,7 +291,7 @@ const TemplateUploadDialog: React.FC<TemplateUploadDialogProps> = ({
             Cancel
           </Button>
           <Button
-            className="bg-teal-600 hover:bg-teal-700"
+            className="bg-agency-accent hover:bg-agency-accent/90"
             onClick={() => void handleUpload()}
             disabled={saving || !file}
           >

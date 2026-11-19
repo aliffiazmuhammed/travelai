@@ -22,15 +22,22 @@ import {
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { ConfirmDestructive } from "@/components/ui/confirm-destructive";
+import { focusFirstInvalidAfterRender } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import Navbar from "@/components/Navbar";
+import { PasswordStrength } from "@/components/auth/PasswordStrength";
 import { ChatRecoverySettings } from "@/components/profile/ChatRecoverySettings";
-import { TravellerBreadcrumbs } from "@/components/traveller/TravellerBreadcrumbs";
+import { TravellerPageHeader } from "@/components/traveller/TravellerPageHeader";
 import { useAuth } from "@/context/UserContext";
 import { api } from "@/services/api";
 import { avatarSrc, initialsFor } from "@/lib/avatar";
+import {
+  DEFAULT_PASSWORD_POLICY,
+  passwordProblem,
+} from "@/lib/passwordPolicy";
 import {
   travellerEnquiryStatusLabel,
   travellerEnquiryStatusBadgeClass,
@@ -38,6 +45,7 @@ import {
 } from "@/lib/agency";
 import { cn } from "@/lib/utils";
 import type { AgencyEnquiry } from "@/types/agency";
+import type { AccountDeletionRequest } from "@/types/auth";
 import type { BlockedAccount } from "@/types/gallery";
 
 /**
@@ -77,7 +85,9 @@ const PasswordField: React.FC<{
   onChange: (value: string) => void;
   autoComplete: string;
   minLength?: number;
-}> = ({ id, label, value, onChange, autoComplete, minLength }) => {
+  maxLength?: number;
+  error?: string | null;
+}> = ({ id, label, value, onChange, autoComplete, minLength, maxLength, error }) => {
   const [revealed, setRevealed] = useState(false);
 
   return (
@@ -85,16 +95,21 @@ const PasswordField: React.FC<{
       <Label htmlFor={id} className="text-xs font-semibold text-foreground sm:text-sm">
         {label}
       </Label>
+      <div className="space-y-1.5">
       <div className="relative">
         <Input
           id={id}
+          name={id}
           type={revealed ? "text" : "password"}
           value={value}
           onChange={(event) => onChange(event.target.value)}
           autoComplete={autoComplete}
           minLength={minLength}
+          maxLength={maxLength}
           required
-          className="h-11 rounded-xl pr-11"
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? `${id}-error` : undefined}
+          className={cn("h-11 rounded-xl pr-11", error && "border-destructive focus-visible:ring-destructive")}
         />
         <button
           type="button"
@@ -109,6 +124,12 @@ const PasswordField: React.FC<{
             <Eye className="h-4 w-4" aria-hidden="true" />
           )}
         </button>
+      </div>
+        {error ? (
+          <p id={`${id}-error`} role="alert" className="text-xs font-semibold text-destructive">
+            {error}
+          </p>
+        ) : null}
       </div>
     </div>
   );
@@ -132,7 +153,7 @@ const PublicPageCard: React.FC<{
         <Globe className="h-4 w-4" aria-hidden="true" />
       </span>
       <div className="min-w-0 space-y-0.5">
-        <h2 className="font-display text-lg font-semibold tracking-tight text-foreground">
+        <h2 className="font-display text-xl font-semibold tracking-tight text-foreground">
           Your public page
         </h2>
         <p className="text-xs leading-relaxed text-muted-foreground">
@@ -150,7 +171,7 @@ const PublicPageCard: React.FC<{
       </Avatar>
       <div className="min-w-0">
         <p className="truncate text-sm font-semibold text-foreground">{name}</p>
-        <p className="truncate text-[11px] text-muted-foreground">
+        <p className="truncate text-xs text-muted-foreground">
           {handle ? `@${handle}` : "No public handle yet"}
         </p>
       </div>
@@ -209,7 +230,7 @@ const AtAGlanceCard: React.FC<{
   memberSince: string | null;
 }> = ({ enquiriesSent, memberSince }) => (
   <section className="rounded-2xl border border-border/70 bg-card p-5 shadow-xs">
-    <h2 className="font-display text-lg font-semibold tracking-tight text-foreground">
+    <h2 className="font-display text-xl font-semibold tracking-tight text-foreground">
       At a glance
     </h2>
     <ul className="mt-4 space-y-4">
@@ -222,7 +243,7 @@ const AtAGlanceCard: React.FC<{
             <p className="font-display text-xl font-semibold leading-none tracking-tight tabular-nums text-foreground">
               {enquiriesSent}
             </p>
-            <p className="mt-1 text-[11px] text-muted-foreground">
+            <p className="mt-1 text-xs text-muted-foreground">
               {enquiriesSent === 1 ? "Enquiry sent" : "Enquiries sent"}
             </p>
           </div>
@@ -230,19 +251,19 @@ const AtAGlanceCard: React.FC<{
       ) : null}
       {memberSince ? (
         <li className="flex items-start gap-3">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-accent/10 text-accent">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-accent/10 text-accent-ink">
             <CalendarDays className="h-4 w-4" aria-hidden="true" />
           </span>
           <div className="min-w-0">
             <p className="font-display text-xl font-semibold leading-none tracking-tight tabular-nums text-foreground">
               {memberSince}
             </p>
-            <p className="mt-1 text-[11px] text-muted-foreground">Member since</p>
+            <p className="mt-1 text-xs text-muted-foreground">Member since</p>
           </div>
         </li>
       ) : null}
     </ul>
-    <p className="mt-4 border-t border-border/60 pt-3 text-[11px] leading-relaxed text-muted-foreground">
+    <p className="mt-4 border-t border-border/60 pt-3 text-xs leading-relaxed text-muted-foreground">
       Published trips live on your public page.
     </p>
   </section>
@@ -260,6 +281,9 @@ const Profile = () => {
 
   // Photo
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const nameFormRef = useRef<HTMLFormElement | null>(null);
+  const passwordFormRef = useRef<HTMLFormElement | null>(null);
+  const identityFormRef = useRef<HTMLFormElement | null>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
@@ -274,18 +298,30 @@ const Profile = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordField, setPasswordField] = useState<
+    "current" | "new" | "confirm" | null
+  >(null);
 
   // Public traveler identity (Milestone 8 G2)
   const [handle, setHandle] = useState("");
   const [bio, setBio] = useState("");
   const [identityBusy, setIdentityBusy] = useState(false);
   const [identityError, setIdentityError] = useState<string | null>(null);
+  const [identityField, setIdentityField] = useState<"handle" | "bio" | null>(null);
   const [availabilityBusy, setAvailabilityBusy] = useState(false);
   const [availability, setAvailability] = useState<{
     handle: string;
     available: boolean;
     reason?: "invalid" | "reserved" | "taken";
   } | null>(null);
+
+  // Account deletion request (C-08 / D-F). Phase 4 queues a request for the
+  // support team; nothing is removed from a click.
+  const [deletionRequest, setDeletionRequest] = useState<AccountDeletionRequest | null>(null);
+  const [deletionOpen, setDeletionOpen] = useState(false);
+  const [deletionReason, setDeletionReason] = useState("");
+  const [deletionBusy, setDeletionBusy] = useState(false);
+  const [deletionError, setDeletionError] = useState<string | null>(null);
 
   // Block list (Milestone 8 G5) — who cannot request to join my trips.
   const [blocks, setBlocks] = useState<BlockedAccount[]>([]);
@@ -312,6 +348,26 @@ const Profile = () => {
     setHandle(user?.handle ?? "");
     setBio(user?.bio ?? "");
   }, [user?.handle, user?.bio]);
+
+  // C-08: an open request is shown instead of the form, so a refresh does not
+  // invite a duplicate request. Failure is non-fatal — the button still works.
+  useEffect(() => {
+    if (!user?._id) return;
+
+    let cancelled = false;
+    api
+      .getAccountDeletionRequest()
+      .then((result) => {
+        if (!cancelled) setDeletionRequest(result.request ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setDeletionRequest(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?._id]);
 
   // G5: load the personal block list once the session is known. Non-fatal on
   // failure — the card simply stays hidden.
@@ -512,6 +568,7 @@ const Profile = () => {
     setNameError(null);
     if (name.trim().length > 40) {
       setNameError("Names must be 40 characters or fewer.");
+      focusFirstInvalidAfterRender(nameFormRef.current);
       return;
     }
     setNameBusy(true);
@@ -528,14 +585,22 @@ const Profile = () => {
   const handleSaveIdentity = async (event: React.FormEvent) => {
     event.preventDefault();
     setIdentityError(null);
+    setIdentityField(null);
+
+    const failIdentity = (field: "handle" | "bio", message: string) => {
+      setIdentityField(field);
+      setIdentityError(message);
+      focusFirstInvalidAfterRender(identityFormRef.current);
+    };
 
     if (normalizedHandle) {
       if (normalizedHandle.length < 3 || normalizedHandle.length > 24) {
-        setIdentityError("Handles must be 3–24 characters.");
+        failIdentity("handle", "Handles must be 3–24 characters.");
         return;
       }
       if (!/^[a-z0-9_]+$/.test(normalizedHandle)) {
-        setIdentityError(
+        failIdentity(
+          "handle",
           "Handles can use lowercase letters, numbers and underscores only."
         );
         return;
@@ -545,12 +610,12 @@ const Profile = () => {
         !availability.available &&
         availability.handle === normalizedHandle
       ) {
-        setIdentityError(handleAvailabilityMessage(availability));
+        failIdentity("handle", handleAvailabilityMessage(availability));
         return;
       }
     }
     if (bio.trim().length > 280) {
-      setIdentityError("Bios must be 280 characters or fewer.");
+      failIdentity("bio", "Bios must be 280 characters or fewer.");
       return;
     }
 
@@ -572,17 +637,31 @@ const Profile = () => {
   const handleChangePassword = async (event: React.FormEvent) => {
     event.preventDefault();
     setPasswordError(null);
+    setPasswordField(null);
 
-    if (newPassword.length < 6) {
-      setPasswordError("Your new password must be at least 6 characters.");
+    const fail = (
+      field: "current" | "new" | "confirm",
+      message: string
+    ) => {
+      setPasswordField(field);
+      setPasswordError(message);
+      focusFirstInvalidAfterRender(passwordFormRef.current);
+    };
+
+    const problem = passwordProblem(newPassword, DEFAULT_PASSWORD_POLICY, {
+      email: user?.email,
+      name: user?.name,
+    });
+    if (problem) {
+      fail("new", problem);
       return;
     }
     if (newPassword !== confirmPassword) {
-      setPasswordError("The two new passwords do not match.");
+      fail("confirm", "The two new passwords do not match.");
       return;
     }
     if (newPassword === currentPassword) {
-      setPasswordError("Your new password must be different from the current one.");
+      fail("new", "Your new password must be different from the current one.");
       return;
     }
 
@@ -600,21 +679,33 @@ const Profile = () => {
     }
   };
 
+  const handleRequestDeletion = async () => {
+    setDeletionError(null);
+    setDeletionBusy(true);
+    try {
+      const result = await api.requestAccountDeletion(deletionReason);
+      setDeletionRequest(result.request ?? null);
+      setDeletionOpen(false);
+      setDeletionReason("");
+      toast.success(result.message || "Your request is in.");
+    } catch (error: any) {
+      setDeletionError(
+        error?.message || "We couldn't record that request. Please try again."
+      );
+    } finally {
+      setDeletionBusy(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <main className="container mx-auto max-w-5xl px-4 pt-24 pb-16">
-        <header className="space-y-3">
-          <TravellerBreadcrumbs items={[{ label: "Profile" }]} />
-          <div className="space-y-1.5">
-            <h1 className="font-display text-3xl font-semibold leading-tight tracking-tight text-foreground sm:text-4xl">
-              Your profile
-            </h1>
-            <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-              How you show up to the people you travel with.
-            </p>
-          </div>
-        </header>
+      <main id="main-content" tabIndex={-1} className="container mx-auto max-w-5xl px-4 pt-24 pb-16">
+        <TravellerPageHeader
+          title="Your profile"
+          description="How you show up to the people you travel with."
+          crumbs={[{ label: "Profile" }]}
+        />
 
         {/* Pill tabs: each panel stays mounted, so a half-typed form survives a look at another tab. */}
         <div
@@ -637,7 +728,7 @@ const Profile = () => {
                 tabIndex={active ? 0 : -1}
                 onClick={() => setSection(tab.value)}
                 className={cn(
-                  "inline-flex min-w-0 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 sm:flex-none sm:px-4 sm:text-sm",
+                  "inline-flex min-w-0 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-2 text-xs font-semibold transition-colors coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 sm:flex-none sm:px-4 sm:text-sm",
                   active
                     ? "bg-primary text-primary-foreground shadow-sm"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -664,7 +755,7 @@ const Profile = () => {
               <section className="rounded-2xl border border-border/70 bg-card p-5 shadow-xs sm:p-7">
                 <div className="space-y-1">
                   <h2 className="font-display text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
-                    Account details
+                    Profile
                   </h2>
                   <p className="text-sm leading-relaxed text-muted-foreground">
                     The name and photo the people on your trips see.
@@ -701,13 +792,13 @@ const Profile = () => {
                           type="button"
                           onClick={handleRemovePhoto}
                           disabled={photoBusy}
-                          className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-semibold text-muted-foreground transition-colors hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                          className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-semibold text-muted-foreground transition-colors hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                         >
                           <Trash2 className="h-3 w-3" aria-hidden="true" />
                           Remove photo
                         </button>
                       )}
-                      <p className="text-center text-[10px] leading-relaxed text-muted-foreground">
+                      <p className="text-center text-xs leading-relaxed text-muted-foreground">
                         JPEG, PNG or WebP, up to {AVATAR_MAX_MB} MB. Without one, your initials
                         are shown.
                       </p>
@@ -724,18 +815,20 @@ const Profile = () => {
                   </div>
 
                   <div className="min-w-0 space-y-5">
-                    <form onSubmit={handleSaveName} className="space-y-2">
+                    <form ref={nameFormRef} onSubmit={handleSaveName} className="space-y-2">
                       <Label htmlFor="display-name" className="text-xs font-semibold">
                         Full name
                       </Label>
                       <div className="flex flex-col gap-2 sm:flex-row">
                         <Input
                           id="display-name"
+                          name="name"
                           value={name}
                           onChange={(event) => setName(event.target.value)}
                           maxLength={40}
                           placeholder={label}
                           autoComplete="name"
+                          aria-invalid={nameError ? true : undefined}
                           aria-describedby={
                             nameError ? "display-name-error" : "display-name-help"
                           }
@@ -753,7 +846,7 @@ const Profile = () => {
                       {nameError ? (
                         <p
                           id="display-name-error"
-                          className="text-[11px] font-semibold text-destructive"
+                          className="text-xs font-semibold text-destructive"
                           role="alert"
                         >
                           {nameError}
@@ -761,7 +854,7 @@ const Profile = () => {
                       ) : (
                         <p
                           id="display-name-help"
-                          className="text-[11px] leading-relaxed text-muted-foreground"
+                          className="text-xs leading-relaxed text-muted-foreground"
                         >
                           Up to 40 characters. Leave it empty to go back to your email name
                           ({user.email.split("@")[0]}).
@@ -775,15 +868,17 @@ const Profile = () => {
                       </Label>
                       <Input
                         id="profile-email"
+                        name="email"
                         type="email"
                         value={user.email}
                         readOnly
+                        autoComplete="email"
                         aria-describedby="profile-email-help"
                         className="h-11 cursor-default rounded-xl border-input bg-muted/40 text-foreground focus-visible:ring-0 focus-visible:ring-offset-0"
                       />
                       <p
                         id="profile-email-help"
-                        className="text-[11px] leading-relaxed text-muted-foreground"
+                        className="text-xs leading-relaxed text-muted-foreground"
                       >
                         Used for sign-in only. Changing it needs a verification step we haven't
                         built yet.
@@ -797,22 +892,23 @@ const Profile = () => {
               <section className="rounded-2xl border border-border/70 bg-card p-5 shadow-xs sm:p-7">
                 <div className="space-y-1">
                   <h2 className="font-display text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
-                    Password
+                    Sign-in &amp; password
                   </h2>
                   <p className="text-sm leading-relaxed text-muted-foreground">
-                    Enter your current password, then choose a new one of at least 6
-                    characters. If chat backup is set up, its key is re-wrapped
-                    automatically before the password changes.
+                    Enter your current password, then choose a new one of at least{" "}
+                    {DEFAULT_PASSWORD_POLICY.minLength} characters. If chat backup is set up,
+                    its key is re-wrapped automatically before the password changes.
                   </p>
                 </div>
 
-                <form onSubmit={handleChangePassword} className="mt-6 space-y-4">
+                <form ref={passwordFormRef} onSubmit={handleChangePassword} className="mt-6 space-y-4">
                   <PasswordField
                     id="current-password"
                     label="Current password"
                     value={currentPassword}
                     onChange={setCurrentPassword}
                     autoComplete="current-password"
+                    error={passwordField === "current" ? passwordError : null}
                   />
                   <PasswordField
                     id="new-password"
@@ -820,25 +916,36 @@ const Profile = () => {
                     value={newPassword}
                     onChange={setNewPassword}
                     autoComplete="new-password"
-                    minLength={6}
+                    minLength={DEFAULT_PASSWORD_POLICY.minLength}
+                    maxLength={DEFAULT_PASSWORD_POLICY.maxLength}
+                    error={passwordField === "new" ? passwordError : null}
                   />
+                  <div className="sm:pl-[12rem]">
+                    <PasswordStrength
+                      value={newPassword}
+                      email={user?.email}
+                      name={user?.name}
+                    />
+                  </div>
                   <PasswordField
                     id="confirm-password"
                     label="Confirm new password"
                     value={confirmPassword}
                     onChange={setConfirmPassword}
                     autoComplete="new-password"
-                    minLength={6}
+                    minLength={DEFAULT_PASSWORD_POLICY.minLength}
+                    maxLength={DEFAULT_PASSWORD_POLICY.maxLength}
+                    error={passwordField === "confirm" ? passwordError : null}
                   />
 
-                  {passwordError && (
-                    <p className="text-[11px] font-semibold text-destructive" role="alert">
+                  {passwordError && !passwordField && (
+                    <p className="text-xs font-semibold text-destructive" role="alert">
                       {passwordError}
                     </p>
                   )}
 
                   <div className="flex flex-col gap-3 border-t border-border/60 pt-5 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="text-[11px] leading-relaxed text-muted-foreground sm:max-w-xs">
+                    <p className="text-xs leading-relaxed text-muted-foreground sm:max-w-xs">
                       You stay signed in here. Other devices keep working until their session
                       expires.
                     </p>
@@ -892,7 +999,7 @@ const Profile = () => {
                 </p>
               </div>
 
-              <form onSubmit={handleSaveIdentity} className="mt-6 space-y-5">
+              <form ref={identityFormRef} onSubmit={handleSaveIdentity} className="mt-6 space-y-5">
                 <div className="space-y-2">
                   <Label htmlFor="traveler-handle" className="text-xs font-semibold">
                     Your handle
@@ -903,12 +1010,23 @@ const Profile = () => {
                     </span>
                     <Input
                       id="traveler-handle"
+                      name="handle"
                       value={handle}
                       onChange={(event) => setHandle(event.target.value)}
                       maxLength={25}
                       placeholder="ada_travels"
-                      autoComplete="username"
-                      aria-describedby="traveler-handle-help"
+                      autoComplete="off"
+                      spellCheck={false}
+                      aria-invalid={
+                        handleAvailable === false || identityField === "handle"
+                          ? true
+                          : undefined
+                      }
+                      aria-describedby={
+                        identityField === "handle"
+                          ? "traveler-handle-help traveler-identity-error"
+                          : "traveler-handle-help"
+                      }
                       className="h-11 border-0 bg-transparent px-2 focus-visible:ring-0 focus-visible:ring-offset-0"
                     />
                   </div>
@@ -919,7 +1037,7 @@ const Profile = () => {
                       role="status"
                       aria-live="polite"
                       className={cn(
-                        "flex items-start gap-1.5 text-[11px] font-semibold leading-relaxed",
+                        "flex items-start gap-1.5 text-xs font-semibold leading-relaxed",
                         availabilityBusy
                           ? "text-muted-foreground"
                           : handleAvailable
@@ -931,7 +1049,7 @@ const Profile = () => {
                         <Loader2 className="mt-px h-3 w-3 shrink-0 animate-spin" aria-hidden="true" />
                       ) : handleAvailable ? (
                         <CheckCircle2
-                          className="mt-px h-3 w-3 shrink-0 text-accent"
+                          className="mt-px h-3 w-3 shrink-0 text-accent-ink"
                           aria-hidden="true"
                         />
                       ) : (
@@ -942,7 +1060,7 @@ const Profile = () => {
                   ) : (
                     <p
                       id="traveler-handle-help"
-                      className="text-[11px] leading-relaxed text-muted-foreground"
+                      className="text-xs leading-relaxed text-muted-foreground"
                     >
                       3–24 lowercase letters, numbers or underscores. This becomes the address of
                       your public page.
@@ -956,24 +1074,34 @@ const Profile = () => {
                   </Label>
                   <Textarea
                     id="traveler-bio"
+                    name="bio"
                     value={bio}
                     onChange={(event) => setBio(event.target.value)}
                     maxLength={280}
                     rows={4}
                     placeholder="A sentence about how you travel."
-                    aria-describedby="traveler-bio-count"
+                    aria-invalid={identityField === "bio" ? true : undefined}
+                    aria-describedby={
+                      identityField === "bio"
+                        ? "traveler-bio-count traveler-identity-error"
+                        : "traveler-bio-count"
+                    }
                     className="min-h-[7rem] resize-none rounded-xl"
                   />
                   <p
                     id="traveler-bio-count"
-                    className="text-right text-[11px] tabular-nums text-muted-foreground"
+                    className="text-right text-xs tabular-nums text-muted-foreground"
                   >
                     {bio.length}/280
                   </p>
                 </div>
 
                 {identityError && (
-                  <p className="text-[11px] font-semibold text-destructive" role="alert">
+                  <p
+                    id="traveler-identity-error"
+                    className="text-xs font-semibold text-destructive"
+                    role="alert"
+                  >
                     {identityError}
                   </p>
                 )}
@@ -1003,7 +1131,7 @@ const Profile = () => {
 
                 {/* Visibility is chosen per trip when you publish, so the note
                     describes the real rule instead of a profile-wide switch. */}
-                <p className="rounded-xl border border-border/60 bg-muted/40 p-3 text-[11px] leading-relaxed text-muted-foreground">
+                <p className="rounded-xl border border-border/60 bg-muted/40 p-3 text-xs leading-relaxed text-muted-foreground">
                   {user.handle
                     ? "Your public page lists only published, upcoming trips. Unpublish them before removing the handle."
                     : "You need a handle before publishing a trip. Leaving it empty removes it."}
@@ -1037,7 +1165,7 @@ const Profile = () => {
                     <Ban className="h-4 w-4" aria-hidden="true" />
                   </span>
                   <div className="min-w-0 space-y-1">
-                    <h2 className="font-display text-lg font-semibold tracking-tight text-foreground">
+                    <h2 className="font-display text-xl font-semibold tracking-tight text-foreground">
                       Blocked travellers
                     </h2>
                     <p className="max-w-2xl text-xs leading-relaxed text-muted-foreground">
@@ -1066,7 +1194,7 @@ const Profile = () => {
                           <p className="truncate text-sm font-semibold text-foreground">
                             {block.label}
                           </p>
-                          <p className="truncate text-[11px] text-muted-foreground">
+                          <p className="truncate text-xs text-muted-foreground">
                             {block.handle ? `@${block.handle}` : "Blocked account"}
                           </p>
                         </div>
@@ -1077,7 +1205,7 @@ const Profile = () => {
                         variant="outline"
                         disabled={blocksBusy === block.userId}
                         onClick={() => void handleUnblock(block)}
-                        className="h-8 shrink-0 gap-1 rounded-lg px-2.5 text-[11px] font-semibold"
+                        className="h-8 shrink-0 gap-1 rounded-lg px-2.5 text-xs font-semibold"
                       >
                         {blocksBusy === block.userId && (
                           <Loader2 className="h-3 w-3 animate-spin" />
@@ -1099,7 +1227,7 @@ const Profile = () => {
                       <Inbox className="h-4 w-4" aria-hidden="true" />
                     </span>
                     <div className="min-w-0 space-y-1">
-                      <h2 className="font-display text-lg font-semibold tracking-tight text-foreground">
+                      <h2 className="font-display text-xl font-semibold tracking-tight text-foreground">
                         Enquiries you've sent
                       </h2>
                       <p className="max-w-2xl text-xs leading-relaxed text-muted-foreground">
@@ -1112,7 +1240,7 @@ const Profile = () => {
                     asChild
                     variant="outline"
                     size="sm"
-                    className="w-fit shrink-0 gap-1.5 rounded-xl text-[11px] font-semibold"
+                    className="w-fit shrink-0 gap-1.5 rounded-xl text-xs font-semibold"
                   >
                     <Link to="/proposals">
                       <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
@@ -1143,7 +1271,7 @@ const Profile = () => {
                           )}
                           <span
                             className={cn(
-                              "rounded-full border px-2 py-0.5 text-[10px] font-bold",
+                              "rounded-full border px-2 py-0.5 text-xs font-bold",
                               travellerEnquiryStatusBadgeClass(
                                 enquiry.status,
                                 (enquiry.proposals?.count ?? 0) > 0
@@ -1156,7 +1284,7 @@ const Profile = () => {
                             )}
                           </span>
                           {enquiry.unread.traveller > 0 && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-xs font-bold text-primary-foreground">
                               <MessageSquare className="h-2.5 w-2.5" aria-hidden="true" />
                               {enquiry.unread.traveller}{" "}
                               {enquiry.unread.traveller === 1
@@ -1166,13 +1294,13 @@ const Profile = () => {
                           )}
                         </div>
                         {enquiry.createdAt && (
-                          <span className="text-[10px] text-muted-foreground">
+                          <span className="text-xs text-muted-foreground">
                             {formatAgencyDate(enquiry.createdAt)}
                           </span>
                         )}
                       </div>
 
-                      <p className="text-[11px] text-muted-foreground">
+                      <p className="text-xs text-muted-foreground">
                         {enquiry.package ? `${enquiry.package.title} · ` : ""}
                         {enquiry.dates.flexible && !enquiry.dates.start
                           ? "Flexible dates"
@@ -1186,7 +1314,7 @@ const Profile = () => {
                       </p>
 
                       <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
-                        <span className="flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
+                        <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                           {enquiry.replyCount > 0
                             ? `${enquiry.replyCount} ${
                                 enquiry.replyCount === 1 ? "reply" : "replies"
@@ -1205,7 +1333,7 @@ const Profile = () => {
                           asChild
                           variant="outline"
                           size="sm"
-                          className="h-8 gap-1 rounded-lg px-2.5 text-[10px] font-semibold"
+                          className="h-8 gap-1 rounded-lg px-2.5 text-xs font-semibold"
                         >
                           <Link to={`/enquiry/${enquiry.id}`}>
                             <MessageSquare className="h-3 w-3" aria-hidden="true" />
@@ -1220,7 +1348,7 @@ const Profile = () => {
                     asChild
                     variant="ghost"
                     size="sm"
-                    className="gap-1 rounded-xl text-[11px] font-semibold"
+                    className="gap-1 rounded-xl text-xs font-semibold"
                   >
                     <Link to="/enquiries">
                       View all {myEnquiriesTotal}{" "}
@@ -1237,7 +1365,7 @@ const Profile = () => {
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
                   <Inbox className="h-6 w-6" aria-hidden="true" />
                 </div>
-                <p className="mt-3 font-display text-lg font-semibold tracking-tight text-foreground">
+                <p className="mt-3 font-display text-xl font-semibold tracking-tight text-foreground">
                   Nothing here yet
                 </p>
                 <p className="mx-auto mt-1 max-w-md text-xs leading-relaxed text-muted-foreground">
@@ -1259,9 +1387,9 @@ const Profile = () => {
           </div>
         </div>
 
-        {/* Delete account -----------------------------------------------------
-            No deletion route exists yet, so this stays an honest notice rather
-            than a button that pretends to remove the account. */}
+        {/* Delete account (C-08 / D-F) --------------------------------------
+            Deletion is a support-queue request, not an instant purge: the
+            owner keeps full access until a human confirms by email. */}
         <section className="mt-8 rounded-2xl border border-destructive/25 bg-card p-5 shadow-xs sm:p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-start gap-3">
@@ -1269,25 +1397,87 @@ const Profile = () => {
                 <Trash2 className="h-5 w-5" aria-hidden="true" />
               </span>
               <div className="min-w-0 space-y-1">
-                <h2 className="font-display text-lg font-semibold tracking-tight text-foreground">
+                <h2 className="font-display text-xl font-semibold tracking-tight text-foreground">
                   Delete account
                 </h2>
-                <p className="max-w-2xl text-xs leading-relaxed text-muted-foreground">
-                  This would remove your profile, your trips and every page you've shared.
-                  Deleting an account isn't self-serve yet, so the button stays off for now.
-                </p>
+                {deletionRequest ? (
+                  <>
+                    <p className="max-w-2xl text-xs leading-relaxed text-muted-foreground">
+                      Your request from {formatAgencyDate(deletionRequest.requestedAt)} is with
+                      our support team. Nothing has been removed — you keep full access until we
+                      reply by email within two business days.
+                    </p>
+                    <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-destructive">
+                      <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                      Request pending
+                    </p>
+                  </>
+                ) : (
+                  <p className="max-w-2xl text-xs leading-relaxed text-muted-foreground">
+                    This removes your profile, your trips and every page you've shared. It is
+                    handled by our support team, so nothing changes today — you keep full access
+                    until we reply by email within two business days.
+                  </p>
+                )}
               </div>
             </div>
             <Button
               type="button"
               variant="outline"
-              disabled
-              className="h-10 w-full shrink-0 rounded-xl border-destructive/40 text-xs font-semibold text-destructive hover:bg-destructive/5 hover:text-destructive sm:w-auto"
+              disabled={Boolean(deletionRequest)}
+              onClick={() => {
+                setDeletionError(null);
+                setDeletionOpen(true);
+              }}
+              className="h-10 w-full shrink-0 rounded-xl border-destructive/40 text-xs font-semibold text-destructive hover:bg-destructive/5 hover:text-destructive sm:w-auto disabled:text-muted-foreground"
             >
-              Delete account
+              {deletionRequest ? "Request pending" : "Delete account"}
             </Button>
           </div>
         </section>
+
+        <ConfirmDestructive
+          open={deletionOpen}
+          onOpenChange={(next) => {
+            if (!next && deletionBusy) return;
+            setDeletionOpen(next);
+            if (!next) setDeletionError(null);
+          }}
+          title="Request account deletion?"
+          description="We queue this for our support team — nothing is deleted today. We'll reply by email within two business days, and you keep full access until then."
+          confirmLabel="Send deletion request"
+          onConfirm={handleRequestDeletion}
+          busy={deletionBusy}
+          error={deletionError}
+          detail={
+            <>
+              The request covers <span className="font-semibold">{user?.email}</span>, every
+              trip you own and every public page you've shared.
+            </>
+          }
+          typedConfirmation={{
+            phrase: user?.email ?? "",
+            label: "Type your email to confirm",
+            placeholder: user?.email ?? "you@example.com",
+          }}
+        >
+          <div className="space-y-1.5">
+            <Label htmlFor="deletion-reason" className="text-xs font-semibold">
+              Why are you leaving?{" "}
+              <span className="font-normal text-muted-foreground">(optional)</span>
+            </Label>
+            <Textarea
+              id="deletion-reason"
+              name="deletionReason"
+              rows={3}
+              maxLength={500}
+              value={deletionReason}
+              onChange={(event) => setDeletionReason(event.target.value)}
+              placeholder="Tell us what went wrong — it helps us fix it."
+              disabled={deletionBusy}
+            />
+          </div>
+        </ConfirmDestructive>
       </main>
     </div>
   );

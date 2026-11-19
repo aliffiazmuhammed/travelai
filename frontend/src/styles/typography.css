@@ -1,0 +1,16 @@
+/*
+ * C-23 / D-13 — the typography contract.
+ *
+ * Manrope carries UI and body copy; Newsreader carries display headings. The
+ * families live here and only here: `tailwind.config.ts` points `font-sans` and
+ * `font-display` at these variables, and no component may set its own family.
+ *
+ * Both faces are self-hosted variable fonts (imported in `main.tsx` from the
+ * `@fontsource-variable/*` packages), so the SPA needs no third-party font
+ * origins and the CSP can stay same-origin.
+ */
+:root {
+  --font-sans: "Manrope Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Newsreader Variable", Georgia, ui-serif, serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+}

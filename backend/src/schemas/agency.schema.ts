@@ -523,11 +523,15 @@ export const agencySigninSchema = z
  * Invite activation creates (or signs into) an agency account for the invite's
  * tenant. The password is always required: a forwarded link must not be enough
  * to take over an existing account.
+ *
+ * The length policy is enforced in the service only when this activation
+ * *creates* an account. An existing member is proving an old credential, so a
+ * schema-level 8-character floor would lock out accounts that predate Phase 2.
  */
 export const activateAgencyInviteSchema = z
   .object({
     email: z.string().trim().email('Enter a valid email address.'),
-    password: z.string().min(6, 'Choose a password with at least 6 characters.'),
+    password: z.string().min(1, 'Enter your password.'),
     name: z.string().trim().max(40, 'Names must be 40 characters or fewer.').optional(),
   })
   .strict();

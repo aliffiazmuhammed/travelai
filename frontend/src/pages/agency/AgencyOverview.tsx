@@ -150,7 +150,7 @@ const AgencyOverview: React.FC = () => {
     return (
       <Card className="rounded-2xl border-agency-line shadow-none">
         <CardContent className="space-y-2 p-8 text-center">
-          <h1 className="text-lg font-semibold">Workspace unavailable</h1>
+          <h1 className="text-xl font-semibold">Workspace unavailable</h1>
           <p className="text-sm text-agency-muted">
             We could not load this agency workspace. Refresh the page, or sign in
             again at the workspace login link.
@@ -301,7 +301,7 @@ const AgencyOverview: React.FC = () => {
                 >
                   <span
                     aria-hidden
-                    className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300"
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent/10 text-accent-ink dark:bg-accent/50"
                   >
                     <Map className="h-4 w-4" />
                   </span>
@@ -317,9 +317,9 @@ const AgencyOverview: React.FC = () => {
                     <Badge
                       variant="outline"
                       className={cn(
-                        'shrink-0 text-[10px]',
+                        'shrink-0 text-xs',
                         trip.status === 'ongoing'
-                          ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300'
+                          ? 'border-success/30 bg-success/10 text-success-ink dark:border-success/40 dark:bg-success/20'
                           : 'text-agency-muted'
                       )}
                     >
@@ -363,7 +363,7 @@ const AgencyOverview: React.FC = () => {
                 >
                   <span
                     aria-hidden
-                    className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300"
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-info/10 text-info-ink dark:bg-info/20"
                   >
                     <CalendarDays className="h-4 w-4" />
                   </span>
@@ -378,7 +378,7 @@ const AgencyOverview: React.FC = () => {
                   {event.interests.pending > 0 ? (
                     <Badge
                       variant="outline"
-                      className="shrink-0 border-teal-200 bg-teal-50 text-[10px] text-teal-700 dark:border-teal-900 dark:bg-teal-950/40 dark:text-teal-300"
+                      className="shrink-0 border-agency-accent/30 bg-agency-accent-soft text-xs text-agency-accent-ink"
                     >
                       {countLabel(event.interests.pending, 'waiting', 'waiting')}
                     </Badge>
@@ -474,7 +474,7 @@ const SetupRow: React.FC<{
       className={cn(
         'mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border',
         done
-          ? 'border-teal-600 bg-teal-600 text-white'
+          ? 'border-agency-accent/30 bg-agency-accent text-white'
           : 'border-agency-line text-agency-muted'
       )}
     >

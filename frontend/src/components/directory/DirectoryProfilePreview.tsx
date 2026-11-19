@@ -53,13 +53,13 @@ export const DirectoryProfileHero: React.FC<{
     <header
       aria-label={ariaLabel}
       className={cn(
-        'relative overflow-hidden rounded-[2rem] border border-teal-100/80 bg-gradient-to-br from-teal-50 via-white to-amber-50 shadow-sm dark:border-teal-900/40 dark:from-teal-950/50 dark:via-slate-900 dark:to-amber-950/20',
+        'relative overflow-hidden rounded-[2rem] border border-agency-accent/80 bg-gradient-to-br from-agency-accent via-white to-warning shadow-sm dark:border-agency-accent/40 dark:from-agency-accent/50 dark:via-muted dark:to-warning/20',
         className
       )}
     >
       <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-        <div className="absolute -right-20 -top-24 h-64 w-64 rounded-full bg-teal-200/50 blur-3xl dark:bg-teal-800/20" />
-        <div className="absolute -bottom-28 right-24 h-56 w-56 rounded-full bg-amber-200/50 blur-3xl dark:bg-amber-800/10" />
+        <div className="absolute -right-20 -top-24 h-64 w-64 rounded-full bg-agency-accent/50 blur-3xl dark:bg-agency-accent/20" />
+        <div className="absolute -bottom-28 right-24 h-56 w-56 rounded-full bg-warning/50 blur-3xl dark:bg-warning/10" />
       </div>
 
       <div className="relative px-6 py-7 sm:px-9 sm:py-9">
@@ -67,53 +67,53 @@ export const DirectoryProfileHero: React.FC<{
           <AgencyLogoTile
             name={name}
             logoUrl={profile.logoUrl}
-            className="h-16 w-16 rounded-3xl border-white/80 text-2xl shadow-sm sm:h-20 sm:w-20 dark:border-slate-700"
+            className="h-16 w-16 rounded-3xl border-white/80 text-2xl shadow-sm sm:h-20 sm:w-20 dark:border-border"
             imgClassName="p-1.5"
           />
           <div className="min-w-0 flex-1 space-y-3">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-              <Heading className="font-display text-2xl font-black leading-tight tracking-tight text-slate-900 sm:text-4xl dark:text-white">
+              <Heading className="font-display text-2xl font-black leading-tight tracking-tight text-foreground sm:text-4xl dark:text-white">
                 {name}
               </Heading>
               {profile.verified ? (
-                <Badge className="gap-1 rounded-full bg-teal-600 px-2.5 py-0.5 text-[10px] font-bold text-white hover:bg-teal-600">
+                <Badge className="gap-1 rounded-full bg-agency-accent px-2.5 py-0.5 text-xs font-bold text-white hover:bg-agency-accent/90">
                   <ShieldCheck className="h-3 w-3" />
                   Verified
                 </Badge>
               ) : null}
             </div>
 
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs font-medium text-slate-600 sm:text-sm dark:text-slate-300">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs font-medium text-muted-foreground sm:text-sm">
               {profile.baseCity.trim() ? (
                 <span className="inline-flex items-center gap-1.5">
-                  <MapPin className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
+                  <MapPin className="h-3.5 w-3.5 text-agency-accent-ink" />
                   Based in {profile.baseCity.trim()}
                 </span>
               ) : (
-                <span className="italic text-slate-400">
+                <span className="italic text-muted-foreground">
                   Your base city will appear here.
                 </span>
               )}
               {profile.replyTimeHours && profile.replyTimeHours > 0 ? (
                 <span className="inline-flex items-center gap-1.5">
-                  <Clock className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
+                  <Clock className="h-3.5 w-3.5 text-agency-accent-ink" />
                   Usually replies in ~{profile.replyTimeHours} h
                 </span>
               ) : null}
               {languageNames.length > 0 ? (
                 <span className="inline-flex items-center gap-1.5">
-                  <BadgeCheck className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
+                  <BadgeCheck className="h-3.5 w-3.5 text-agency-accent-ink" />
                   Speaks {languageNames.join(', ')}
                 </span>
               ) : null}
             </div>
 
             {profile.about.trim() ? (
-              <p className="max-w-2xl whitespace-pre-line text-sm leading-relaxed text-slate-700 sm:text-[15px] dark:text-slate-300">
+              <p className="max-w-2xl whitespace-pre-line text-sm leading-relaxed text-muted-foreground sm:text-base">
                 {profile.about.trim()}
               </p>
             ) : (
-              <p className="text-sm italic text-slate-400">
+              <p className="text-sm italic text-muted-foreground">
                 Tell travellers who you are and how you plan trips.
               </p>
             )}
@@ -139,7 +139,7 @@ export const DirectoryProfileFacts: React.FC<{
   return (
     <div className={cn('space-y-6', className)}>
       <section aria-label="Services">
-        <h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+        <h3 className="text-overline font-bold text-muted-foreground">
           Services
         </h3>
         {profile.services.length > 0 ? (
@@ -148,7 +148,7 @@ export const DirectoryProfileFacts: React.FC<{
               <Badge
                 key={service.id}
                 variant="secondary"
-                className="rounded-full bg-teal-50 text-teal-800 dark:bg-teal-950/60 dark:text-teal-200"
+                className="rounded-full bg-agency-accent-soft text-agency-accent-ink"
               >
                 {service.label}
               </Badge>
@@ -162,7 +162,7 @@ export const DirectoryProfileFacts: React.FC<{
       </section>
 
       <section aria-label="Destinations">
-        <h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+        <h3 className="text-overline font-bold text-muted-foreground">
           Destinations
         </h3>
         {profile.destinations.length > 0 ? (
@@ -182,7 +182,7 @@ export const DirectoryProfileFacts: React.FC<{
 
       {profile.specialties.length > 0 ? (
         <section aria-label="Specialties">
-          <h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+          <h3 className="text-overline font-bold text-muted-foreground">
             Known for
           </h3>
           <ul className="mt-2 space-y-1.5">
@@ -193,7 +193,7 @@ export const DirectoryProfileFacts: React.FC<{
               >
                 <span
                   aria-hidden="true"
-                  className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-teal-500"
+                  className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-agency-accent"
                 />
                 {specialty}
               </li>
@@ -204,24 +204,24 @@ export const DirectoryProfileFacts: React.FC<{
 
       {hasContact ? (
         <section aria-label="Contact">
-          <h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+          <h3 className="text-overline font-bold text-muted-foreground">
             Contact
           </h3>
           <ul className="mt-2 space-y-2 text-xs text-muted-foreground">
             {profile.website ? (
               <li className="flex items-start gap-2">
-                <Globe className="mt-0.5 h-3.5 w-3.5 shrink-0 text-teal-600 dark:text-teal-400" />
+                <Globe className="mt-0.5 h-3.5 w-3.5 shrink-0 text-agency-accent-ink" />
                 <span className="break-all">{profile.website}</span>
               </li>
             ) : null}
             {profile.contactPhone ? (
               <li className="flex items-start gap-2">
-                <Phone className="mt-0.5 h-3.5 w-3.5 shrink-0 text-teal-600 dark:text-teal-400" />
+                <Phone className="mt-0.5 h-3.5 w-3.5 shrink-0 text-agency-accent-ink" />
                 <span>{profile.contactPhone}</span>
               </li>
             ) : null}
             {profile.gstin ? (
-              <li className="font-mono text-[11px]">GSTIN {profile.gstin}</li>
+              <li className="font-mono text-xs">GSTIN {profile.gstin}</li>
             ) : null}
           </ul>
         </section>

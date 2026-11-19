@@ -57,7 +57,7 @@ export const WeatherBadge: React.FC<{ day?: DailyWeather; className?: string }> 
       variant="outline"
       title={day.advisories.join("\n")}
       className={cn(
-        "text-[10px] px-2 py-0 gap-1 font-semibold border",
+        "text-xs px-2 py-0 gap-1 font-semibold border",
         meta.badgeClass,
         className
       )}
@@ -67,7 +67,7 @@ export const WeatherBadge: React.FC<{ day?: DailyWeather; className?: string }> 
       <span className="font-bold uppercase tracking-wide">{meta.label}</span>
       {day.windKph != null && day.windKph >= 35 && <Wind className="w-3 h-3" />}
       {day.source === "seasonal" && (
-        <span className="text-[9px] font-bold opacity-70">seasonal</span>
+        <span className="text-xs font-bold opacity-70">seasonal</span>
       )}
     </Badge>
   );
@@ -88,17 +88,17 @@ export const WeatherAdvisoryPanel: React.FC<{ day?: DailyWeather }> = ({ day }) 
         "mt-3 p-3 rounded-2xl border flex items-start gap-2.5 text-xs",
         day.riskLevel === "high"
           ? "bg-destructive/5 border-destructive/25"
-          : "bg-amber-500/5 border-amber-400/30"
+          : "bg-warning/5 border-warning/30"
       )}
     >
       <AlertTriangle
         className={cn(
           "w-4 h-4 shrink-0 mt-0.5",
-          day.riskLevel === "high" ? "text-destructive" : "text-amber-500"
+          day.riskLevel === "high" ? "text-destructive" : "text-warning-ink"
         )}
       />
       <div className="space-y-1 min-w-0">
-        <p className={cn("font-bold", day.riskLevel === "high" ? "text-destructive" : "text-amber-700 dark:text-amber-300")}>
+        <p className={cn("font-bold", day.riskLevel === "high" ? "text-destructive" : "text-warning-ink")}>
           Weather advisory · {meta.label}
         </p>
         <ul className="space-y-0.5 text-muted-foreground font-medium">

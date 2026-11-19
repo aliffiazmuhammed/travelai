@@ -60,7 +60,7 @@ const ReviewRow: React.FC<ReviewRowProps> = ({
         <Icon className="h-4 w-4 text-primary" aria-hidden="true" />
       </span>
       <div className="min-w-0">
-        <p className="text-[11px] font-medium text-muted-foreground">{label}</p>
+        <p className="text-xs font-medium text-muted-foreground">{label}</p>
         <p className="mt-0.5 break-words text-sm font-semibold text-foreground">
           {value}
         </p>

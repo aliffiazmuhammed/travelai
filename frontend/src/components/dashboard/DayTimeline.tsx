@@ -3,16 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmDestructive } from "@/components/ui/confirm-destructive";
 import {
   Clock,
   MapPin,
@@ -26,10 +17,6 @@ import {
   Edit2,
   Check,
   X,
-  Compass,
-  Sun,
-  Sunset,
-  Moon,
   GripVertical,
   ChevronUp,
   ChevronDown,
@@ -43,6 +30,7 @@ import { ActivityEditor } from "./ActivityEditor";
 import { TripPhotoField } from "./TripPhotoField";
 import { WeatherAdvisoryPanel, WeatherBadge } from "./WeatherAdvisory";
 import { buildLegs, formatDistance, formatDuration, isValidCoord, totalRoute } from "@/lib/geo";
+import { activityTime, activityTimeLabel } from "@/lib/itineraryTruth";
 import { hasSignificantRisk } from "@/lib/weather";
 import type { GeoLeg, LatLng } from "@/lib/geo";
 import type { ActivityItem, DailyWeather, ItineraryData, MediaRef } from "@/types/trip";
@@ -81,13 +69,6 @@ interface DayTimelineProps {
    */
   commentCounts?: Record<string, number>;
 }
-
-const TIME_OF_DAY = [
-  { label: "Morning", icon: <Sun className="w-3.5 h-3.5 text-amber-500" /> },
-  { label: "Afternoon", icon: <Compass className="w-3.5 h-3.5 text-blue-500" /> },
-  { label: "Sunset / Evening", icon: <Sunset className="w-3.5 h-3.5 text-orange-500" /> },
-  { label: "Night", icon: <Moon className="w-3.5 h-3.5 text-indigo-500" /> },
-];
 
 interface DragState {
   dayIndex: number;
@@ -278,7 +259,7 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
               <span
                 title={`${commentCount(d.day)} comment${commentCount(d.day) === 1 ? "" : "s"} on this day`}
                 className={cn(
-                  "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0 text-[10px] font-black leading-4",
+                  "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0 text-xs font-black leading-4",
                   selectedDay === d.day
                     ? "bg-primary-foreground/25 text-primary-foreground"
                     : "bg-primary/10 text-primary"
@@ -289,13 +270,13 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
               </span>
             )}
             {d.permit_required && (
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+              <span className="w-1.5 h-1.5 rounded-full bg-warning" />
             )}
           </Button>
         ))}
 
         {isPersisting && (
-          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground shrink-0 pl-1">
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground shrink-0 pl-1">
             <Loader2 className="w-3 h-3 animate-spin" />
             Saving
           </span>
@@ -348,7 +329,7 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
                       <Badge
                         title={`${commentCount(dayData.day)} comment${commentCount(dayData.day) === 1 ? "" : "s"} on this day`}
                         variant="outline"
-                        className="text-[10px] font-semibold gap-1 border-border/60 text-muted-foreground"
+                        className="text-xs font-semibold gap-1 border-border/60 text-muted-foreground"
                       >
                         <MessageCircle className="w-3 h-3" />
                         <span>
@@ -358,7 +339,7 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
                       </Badge>
                     )}
                     {dayData.permit_required && (
-                      <Badge className="bg-amber-500/10 text-amber-600 border-amber-300 dark:border-amber-700 text-[10px] font-semibold gap-1">
+                      <Badge className="bg-warning/10 text-warning-ink border-warning/30 dark:border-warning/40 text-xs font-semibold gap-1">
                         <Ticket className="w-3 h-3" />
                         <span>Permit Required</span>
                       </Badge>
@@ -391,10 +372,11 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
                         type="button"
                         size="icon"
                         variant="ghost"
+                        aria-label="Move this day earlier"
                         title="Move this day earlier"
                         disabled={actualDayIndex <= 0 || isPersisting}
                         onClick={() => handleMoveDay(actualDayIndex, -1)}
-                        className="h-7 w-7 rounded-lg text-muted-foreground hover:text-primary"
+                        className="h-9 w-9 rounded-lg text-muted-foreground hover:text-primary coarse:h-11 coarse:w-11"
                       >
                         <ChevronUp className="w-4 h-4" />
                       </Button>
@@ -402,12 +384,13 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
                         type="button"
                         size="icon"
                         variant="ghost"
+                        aria-label="Move this day later"
                         title="Move this day later"
                         disabled={
                           actualDayIndex >= itinerary.length - 1 || isPersisting
                         }
                         onClick={() => handleMoveDay(actualDayIndex, 1)}
-                        className="h-7 w-7 rounded-lg text-muted-foreground hover:text-primary"
+                        className="h-9 w-9 rounded-lg text-muted-foreground hover:text-primary coarse:h-11 coarse:w-11"
                       >
                         <ChevronDown className="w-4 h-4" />
                       </Button>
@@ -443,9 +426,9 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
                         disabled={alternativeLoadingDay === dayData.day}
                         onClick={() => onSuggestAlternative(dayData.day)}
                         className={cn(
-                          "rounded-xl text-[11px] font-bold h-7 gap-1.5",
+                          "rounded-xl text-xs font-bold h-7 gap-1.5",
                           hasSignificantRisk(dayWeather)
-                            ? "border-amber-400/60 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10"
+                            ? "border-warning/60 text-warning-ink hover:bg-warning/10"
                             : "border-primary/40 text-primary hover:bg-primary/10"
                         )}
                       >
@@ -472,14 +455,14 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
                   const isEditing =
                     editingDayIndex === actualDayIndex &&
                     editingActivityIndex === actIdx;
-                  const timeSlot = TIME_OF_DAY[actIdx % TIME_OF_DAY.length];
+                  const storedTime = activityTime(activity);
+                  const timeLabel = activityTimeLabel(activity, actIdx);
 
                   const isObj = typeof activity === "object" && activity !== null;
                   const actTitle = isObj
                     ? (activity.title || activity.name || "")
                     : String(activity);
                   const actDesc = isObj ? activity.description : null;
-                  const actTime = isObj ? activity.time : null;
                   const actLoc = isObj ? (activity.location_name || activity.location) : null;
                   const actCost = isObj ? activity.approx_cost : null;
 
@@ -496,7 +479,7 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
                   return (
                     <React.Fragment key={`${dayData.day}-${actIdx}`}>
                     {actIdx > 0 && leg && leg.km >= 0.05 && (
-                      <div className="flex items-center gap-2 -mt-1 pl-1 text-[11px] font-semibold text-muted-foreground">
+                      <div className="flex items-center gap-2 -mt-1 pl-1 text-xs font-semibold text-muted-foreground">
                         <span className="w-px h-3.5 bg-border" />
                         <Car className="w-3.5 h-3.5 text-primary/70" />
                         <span className="text-foreground/80">{formatDistance(leg.km)}</span>
@@ -555,9 +538,21 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
                             </span>
                           )}
 
-                          {/* Time / Category Icon */}
-                          <div className="w-8 h-8 rounded-xl bg-muted/60 flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
-                            {timeSlot.icon}
+                          {/* Stored time, or the stop's order — never a guessed slot */}
+                          <div
+                            className="w-8 h-8 rounded-xl bg-muted/60 flex items-center justify-center shrink-0 mt-0.5 shadow-2xs"
+                            title={storedTime ? `Scheduled: ${storedTime}` : "Stop order"}
+                          >
+                            {storedTime ? (
+                              <Clock className="w-4 h-4 text-primary" aria-hidden="true" />
+                            ) : (
+                              <span
+                                className="text-xs font-bold text-muted-foreground"
+                                aria-hidden="true"
+                              >
+                                {actIdx + 1}
+                              </span>
+                            )}
                           </div>
 
                           {isObj && activity.image && (
@@ -572,17 +567,17 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
 
                           <div className="flex-1 min-w-0 space-y-1">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
-                                {actTime || timeSlot.label}
+                              <span className="text-overline font-bold text-muted-foreground">
+                                {timeLabel}
                               </span>
                               {actLoc && (
-                                <Badge variant="outline" className="text-[10px] px-2 py-0 border-border/60">
+                                <Badge variant="outline" className="text-xs px-2 py-0 border-border/60">
                                   <MapPin className="w-2.5 h-2.5 mr-1 text-primary" />
                                   {actLoc}
                                 </Badge>
                               )}
                               {actCost != null && actCost > 0 && (
-                                <Badge variant="secondary" className="text-[10px] px-2 py-0 text-emerald-600 dark:text-emerald-400">
+                                <Badge variant="secondary" className="text-xs px-2 py-0 text-success-ink">
                                   ₹{actCost}
                                 </Badge>
                               )}
@@ -594,13 +589,16 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
                                   value={editingText}
                                   onChange={(e) => setEditingText(e.target.value)}
                                   className="h-8 text-xs"
+                                  aria-label="Activity name"
                                   autoFocus
                                 />
                                 <Button
                                   type="button"
                                   size="icon"
                                   variant="ghost"
-                                  className="h-7 w-7 text-emerald-600 hover:bg-emerald-50"
+                                  aria-label="Save activity name"
+                                  title="Save activity name"
+                                  className="h-9 w-9 text-success-ink hover:bg-success/10 coarse:h-11 coarse:w-11"
                                   onClick={() => handleSaveEdit(actualDayIndex, actIdx)}
                                 >
                                   <Check className="w-3.5 h-3.5" />
@@ -609,7 +607,9 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
                                   type="button"
                                   size="icon"
                                   variant="ghost"
-                                  className="h-7 w-7 text-muted-foreground hover:bg-muted"
+                                  aria-label="Cancel renaming"
+                                  title="Cancel renaming"
+                                  className="h-9 w-9 text-muted-foreground hover:bg-muted coarse:h-11 coarse:w-11"
                                   onClick={() => {
                                     setEditingDayIndex(null);
                                     setEditingActivityIndex(null);
@@ -624,7 +624,7 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
                                   {actTitle}
                                 </p>
                                 {actDesc && (
-                                  <p className="text-[13px] sm:text-xs text-muted-foreground leading-relaxed">
+                                  <p className="text-sm sm:text-xs text-muted-foreground leading-relaxed">
                                     {actDesc}
                                   </p>
                                 )}
@@ -642,9 +642,10 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
                               type="button"
                               size="icon"
                               variant="ghost"
+                              aria-label="Move activity up"
                               title="Reorder up"
                               disabled={actIdx === 0}
-                              className="h-8 w-8 sm:h-7 sm:w-7 text-muted-foreground hover:text-primary rounded-lg inline-flex"
+                              className="h-9 w-9 sm:h-8 sm:w-8 text-muted-foreground hover:text-primary rounded-lg inline-flex coarse:h-11 coarse:w-11"
                               onClick={() => applyReorder(actualDayIndex, actIdx, actIdx - 1)}
                             >
                               <ChevronUp className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
@@ -653,9 +654,10 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
                               type="button"
                               size="icon"
                               variant="ghost"
+                              aria-label="Move activity down"
                               title="Reorder down"
                               disabled={actIdx === dayData.activities.length - 1}
-                              className="h-8 w-8 sm:h-7 sm:w-7 text-muted-foreground hover:text-primary rounded-lg inline-flex"
+                              className="h-9 w-9 sm:h-8 sm:w-8 text-muted-foreground hover:text-primary rounded-lg inline-flex coarse:h-11 coarse:w-11"
                               onClick={() => applyReorder(actualDayIndex, actIdx, actIdx + 1)}
                             >
                               <ChevronDown className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
@@ -664,8 +666,9 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
                               type="button"
                               size="icon"
                               variant="ghost"
+                              aria-label="Edit activity details"
                               title="Edit details"
-                              className="h-8 w-8 sm:h-7 sm:w-7 text-muted-foreground hover:text-primary rounded-lg"
+                              className="h-9 w-9 sm:h-8 sm:w-8 text-muted-foreground hover:text-primary rounded-lg coarse:h-11 coarse:w-11"
                               onClick={() =>
                                 setEditorTarget({ dayIndex: actualDayIndex, actIndex: actIdx })
                               }
@@ -676,20 +679,28 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
                               type="button"
                               size="icon"
                               variant="ghost"
+                              aria-label="Rename activity"
                               title="Rename"
-                              className="h-8 w-8 sm:h-7 sm:w-7 text-muted-foreground hover:text-primary rounded-lg"
+                              className="h-9 w-9 sm:h-8 sm:w-8 text-muted-foreground hover:text-primary rounded-lg coarse:h-11 coarse:w-11"
                               onClick={() =>
                                 handleStartEdit(actualDayIndex, actIdx, actTitle)
                               }
                             >
                               <Edit2 className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
                             </Button>
+                            {/* Delete stays apart from rename: one more tap of
+                                distance between editing a title and losing it. */}
+                            <span
+                              aria-hidden="true"
+                              className="mx-0.5 h-5 w-px shrink-0 bg-border/70"
+                            />
                             <Button
                               type="button"
                               size="icon"
                               variant="ghost"
+                              aria-label="Delete activity"
                               title="Delete activity"
-                              className="h-8 w-8 sm:h-7 sm:w-7 text-muted-foreground hover:text-destructive rounded-lg ml-auto sm:ml-0"
+                              className="h-9 w-9 sm:h-8 sm:w-8 text-muted-foreground hover:text-destructive rounded-lg ml-auto sm:ml-0 coarse:h-11 coarse:w-11"
                               onClick={() =>
                                 setDeleteTarget({
                                   dayIndex: actualDayIndex,
@@ -766,8 +777,8 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
               {/* Day Supplementary Grid: Stay, Dining & Transit */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
                 {/* Stay Card */}
-                <div className="p-3.5 rounded-2xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200/50 dark:border-blue-900/40 space-y-1.5">
-                  <div className="flex items-center gap-1.5 text-blue-700 dark:text-blue-300 text-xs font-bold uppercase tracking-wider">
+                <div className="p-3.5 rounded-2xl bg-info/10 dark:bg-info/20 border border-info/50 dark:border-info/40 space-y-1.5">
+                  <div className="flex items-center gap-1.5 text-info-ink text-xs font-bold uppercase tracking-wider">
                     <Bed className="w-3.5 h-3.5" />
                     <span>Night Stay</span>
                   </div>
@@ -787,8 +798,8 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
                 </div>
 
                 {/* Food Card */}
-                <div className="p-3.5 rounded-2xl bg-orange-50/50 dark:bg-orange-950/20 border border-orange-200/50 dark:border-orange-900/40 space-y-1.5">
-                  <div className="flex items-center gap-1.5 text-orange-700 dark:text-orange-300 text-xs font-bold uppercase tracking-wider">
+                <div className="p-3.5 rounded-2xl bg-warning/10 dark:bg-warning/20 border border-warning/50 dark:border-warning/40 space-y-1.5">
+                  <div className="flex items-center gap-1.5 text-warning-ink text-xs font-bold uppercase tracking-wider">
                     <Utensils className="w-3.5 h-3.5" />
                     <span>Food Spots</span>
                   </div>
@@ -802,8 +813,8 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
                 </div>
 
                 {/* Transport Card */}
-                <div className="p-3.5 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/50 dark:border-emerald-900/40 space-y-1.5">
-                  <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300 text-xs font-bold uppercase tracking-wider">
+                <div className="p-3.5 rounded-2xl bg-success/10 dark:bg-success/20 border border-success/50 dark:border-success/40 space-y-1.5">
+                  <div className="flex items-center gap-1.5 text-success-ink text-xs font-bold uppercase tracking-wider">
                     <Car className="w-3.5 h-3.5" />
                     <span>Transit Routes</span>
                   </div>
@@ -831,43 +842,29 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
       </div>
 
       {/* Delete confirmation (M7.4) */}
-      <AlertDialog
+      <ConfirmDestructive
         open={deleteTarget != null}
         onOpenChange={(open) => {
           if (!open) setDeleteTarget(null);
         }}
-      >
-        <AlertDialogContent className="rounded-3xl max-w-md w-[92vw] sm:w-full p-5 sm:p-6">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-lg font-bold">
-              Remove this activity?
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-xs leading-relaxed">
-              <strong className="text-foreground">
-                {deleteTarget?.title?.trim() || "This activity"}
-              </strong>{" "}
-              will be removed from Day {deleteTarget?.day}. The plan updates
-              immediately; History can restore the previous version, but there
-              is no undo on this screen.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="gap-2 sm:gap-0">
-            <AlertDialogCancel className="rounded-xl text-xs font-semibold h-10">
-              Keep it
-            </AlertDialogCancel>
-            <AlertDialogAction
-              className="rounded-xl text-xs font-bold h-10 bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => {
-                if (!deleteTarget) return;
-                handleDeleteActivity(deleteTarget.dayIndex, deleteTarget.actIndex);
-                setDeleteTarget(null);
-              }}
-            >
-              Remove activity
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        icon={Trash2}
+        title="Remove this activity?"
+        description="The plan updates immediately. History can restore the previous version, but there is no undo on this screen."
+        confirmLabel="Remove activity"
+        cancelLabel="Keep it"
+        detail={
+          deleteTarget ? (
+            <>
+              {deleteTarget.title?.trim() || "This activity"} · Day {deleteTarget.day}
+            </>
+          ) : null
+        }
+        onConfirm={() => {
+          if (!deleteTarget) return;
+          handleDeleteActivity(deleteTarget.dayIndex, deleteTarget.actIndex);
+          setDeleteTarget(null);
+        }}
+      />
 
       {/* Full-detail Activity Editor Modal */}
       <ActivityEditor

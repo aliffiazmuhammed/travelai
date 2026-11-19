@@ -96,6 +96,13 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((value) => parseBooleanFlag(value)),
+  // Personal auth consent (Phase 1B). Recording consent is always on; this flag
+  // only turns *enforcement* on after the clients that send it have drained.
+  // Fail closed: a missing or unrecognised value stays off.
+  AUTH_LEGAL_CONSENT_REQUIRED: z
+    .string()
+    .optional()
+    .transform((value) => parseBooleanFlag(value)),
   // A7 proposal share links; the service caps requests at 90 days.
   AGENCY_PROPOSAL_TTL_DAYS: z.coerce.number().positive().default(30),
   // A8 plan limits. Tiers are env-configurable; AGENCY_PLAN_DEFAULT picks the

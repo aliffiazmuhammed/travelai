@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -13,12 +14,14 @@ import {
   AlertCircle,
   RefreshCw,
   X,
+  Square,
   Wallet,
   Sunrise,
   CarTaxiFront,
   Backpack,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 
 interface GenerationOverlayProps {
   isOpen: boolean;
@@ -95,33 +98,45 @@ export const GenerationOverlay: React.FC<GenerationOverlayProps> = ({
   onCancel,
 }) => {
   const [tipIndex, setTipIndex] = useState(0);
+  const reducedMotion = useReducedMotion();
 
-  // Rotate travel tips every 5 seconds
+  // Rotate travel tips every 5 seconds; reduced motion keeps one tip still.
   useEffect(() => {
-    if (!isOpen || error) return;
+    if (!isOpen || error || reducedMotion) return;
     const interval = setInterval(() => {
       setTipIndex((prev) => (prev + 1) % TRAVEL_TIPS.length);
     }, 4500);
     return () => clearInterval(interval);
-  }, [isOpen, error]);
-
-  if (!isOpen) return null;
+  }, [isOpen, error, reducedMotion]);
 
   const clampedProgress = Math.min(100, Math.max(10, progress));
+  const isStreaming = !error && progress < 100;
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="generation-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-3 backdrop-blur-md animate-fade-in sm:p-4"
+    <DialogPrimitive.Root
+      open={isOpen}
+      onOpenChange={(open) => {
+        // Escape and the close control both take the cancel path.
+        if (!open) onCancel();
+      }}
     >
-      <div className="relative max-h-[92vh] w-full max-w-lg overflow-x-hidden overflow-y-auto rounded-3xl border border-border/70 bg-card p-5 text-center shadow-card sm:p-8">
-        {error && (
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay
+          className={cn(
+            "fixed inset-0 z-50 bg-background/80 backdrop-blur-md",
+            !reducedMotion && "animate-fade-in"
+          )}
+        />
+        <DialogPrimitive.Content
+          aria-describedby={undefined}
+          onInteractOutside={(event) => event.preventDefault()}
+          className="fixed left-1/2 top-1/2 z-50 max-h-[92vh] w-[calc(100%-1.5rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-x-hidden overflow-y-auto rounded-3xl border border-border/70 bg-card p-5 text-center shadow-card sm:p-8"
+        >
+        {(error || isStreaming) && (
           <button
             type="button"
             onClick={onCancel}
-            aria-label="Close"
+            aria-label={isStreaming ? "Stop generating and close" : "Close"}
             className="absolute right-4 top-4 rounded-full p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <X className="h-4 w-4" />
@@ -135,18 +150,21 @@ export const GenerationOverlay: React.FC<GenerationOverlayProps> = ({
               <AlertCircle className="h-8 w-8" aria-hidden="true" />
             </div>
           ) : progress >= 100 ? (
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-accent/10 text-accent">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-accent/10 text-accent-ink">
               <CheckCircle2 className="h-8 w-8 stroke-[2.5]" aria-hidden="true" />
             </div>
           ) : (
             <>
               <span
                 aria-hidden="true"
-                className="absolute inset-0 rounded-full border border-primary/20 animate-ping opacity-40"
+                className={cn(
+                  "absolute inset-0 rounded-full border border-primary/20 opacity-40",
+                  !reducedMotion && "animate-ping"
+                )}
               />
               <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
                 <Compass
-                  className="h-8 w-8 animate-pulse"
+                  className={cn("h-8 w-8", !reducedMotion && "animate-pulse")}
                   aria-hidden="true"
                 />
               </div>
@@ -156,21 +174,18 @@ export const GenerationOverlay: React.FC<GenerationOverlayProps> = ({
 
         {/* Status Copy */}
         <div className="mt-4 space-y-1.5">
-          <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-primary">
+          <p className="inline-flex items-center gap-1.5 text-xs font-semibold tracking-wide text-primary">
             <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
             AI travel assistant
           </p>
 
-          <h3
-            id="generation-title"
-            className="font-display text-2xl font-semibold tracking-tight text-foreground"
-          >
+          <DialogPrimitive.Title className="font-display text-2xl font-semibold tracking-tight text-foreground">
             {error
               ? "Itinerary generation paused"
               : progress >= 100
               ? "Your itinerary is ready"
               : `Synthesizing your ${days}-day trip`}
-          </h3>
+          </DialogPrimitive.Title>
 
           <p
             aria-live="polite"
@@ -224,11 +239,16 @@ export const GenerationOverlay: React.FC<GenerationOverlayProps> = ({
                   <span className="shrink-0">
                     {isPast ? (
                       <CheckCircle2
-                        className="h-4 w-4 text-accent"
+                        className="h-4 w-4 text-accent-ink"
                         aria-hidden="true"
                       />
                     ) : isCurrent ? (
-                      <span className="block h-2 w-2 animate-ping rounded-full bg-primary" />
+                      <span
+                        className={cn(
+                          "block h-2 w-2 rounded-full bg-primary",
+                          !reducedMotion && "animate-ping"
+                        )}
+                      />
                     ) : (
                       <span className="block h-1.5 w-1.5 rounded-full bg-border" />
                     )}
@@ -240,8 +260,8 @@ export const GenerationOverlay: React.FC<GenerationOverlayProps> = ({
         )}
 
         {/* Rotating Travel Tip */}
-        {!error && progress < 100 && (
-          <div className="mt-4 flex items-start gap-2.5 rounded-2xl border border-border/60 bg-muted/30 p-3 text-left text-[11px] text-muted-foreground">
+        {isStreaming && (
+          <div className="mt-4 flex items-start gap-2.5 rounded-2xl border border-border/60 bg-muted/30 p-3 text-left text-xs text-muted-foreground">
             {React.createElement(TRAVEL_TIPS[tipIndex].icon, {
               className: "mt-px h-4 w-4 shrink-0 text-primary",
               "aria-hidden": true,
@@ -250,29 +270,54 @@ export const GenerationOverlay: React.FC<GenerationOverlayProps> = ({
           </div>
         )}
 
-        {/* Error Actions */}
-        {error && (
-          <div className="mt-5 flex flex-col justify-center gap-3 sm:flex-row">
+        {/* Cancel is always available while streaming, and it really stops. */}
+        {isStreaming && (
+          <div className="mt-5 space-y-2">
             <Button
               type="button"
               variant="outline"
               onClick={onCancel}
-              className="h-11 rounded-xl text-xs font-semibold"
+              className="h-10 rounded-xl text-xs font-semibold gap-2"
             >
-              Back to the wizard
+              <Square className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+              <span>Stop generating</span>
             </Button>
-            <Button
-              type="button"
-              variant="hero"
-              onClick={onRetry}
-              className="h-11 rounded-xl text-xs font-bold gap-2"
-            >
-              <RefreshCw className="h-4 w-4" />
-              <span>Retry generation</span>
-            </Button>
+            <p className="px-2 text-xs leading-relaxed text-muted-foreground">
+              Stopping cancels the request on our servers. Nothing is saved, and
+              you can change any answer before trying again.
+            </p>
           </div>
         )}
-      </div>
-    </div>
+
+        {/* Error Actions */}
+        {error && (
+          <div className="mt-5 space-y-2">
+            <div className="flex flex-col justify-center gap-3 sm:flex-row">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onCancel}
+                className="h-11 rounded-xl text-xs font-semibold"
+              >
+                Back to the wizard
+              </Button>
+              <Button
+                type="button"
+                variant="hero"
+                onClick={onRetry}
+                className="h-11 rounded-xl text-xs font-bold gap-2"
+              >
+                <RefreshCw className="h-4 w-4" />
+                <span>Retry generation</span>
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              No trip was created. Retrying continues this same attempt.
+            </p>
+          </div>
+        )}
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 };

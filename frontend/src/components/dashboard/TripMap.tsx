@@ -31,6 +31,7 @@ import {
 import { toast } from "sonner";
 import { api } from "@/services/api";
 import { formatDistance, formatDuration, pathLengthKm, totalRoute } from "@/lib/geo";
+import { buildTripMapModel } from "@/lib/itineraryTruth";
 import { routeModeMeta } from "@/lib/routeStyle";
 import { riskMeta } from "@/lib/weather";
 import { RouteEditor } from "./RouteEditor";
@@ -336,24 +337,19 @@ export const TripMap: React.FC<TripMapProps> = ({
     minutes: number;
     provider: string;
   } | null>(null);
-  const [isDark, setIsDark] = useState<boolean>(() => {
-    if (typeof document !== "undefined") {
-      return (
-        document.documentElement.classList.contains("dark") ||
-        localStorage.getItem("travelai_theme") === "dark"
-      );
-    }
-    return false;
-  });
+  // The applied class is the single source of truth: ThemeProvider owns mode
+  // and realm, and admin is always dark regardless of the saved preference.
+  const [isDark, setIsDark] = useState<boolean>(() =>
+    typeof document === "undefined"
+      ? false
+      : document.documentElement.classList.contains("dark")
+  );
 
   // Track light/dark mode changes to switch map tiles seamlessly
   useEffect(() => {
     if (typeof document === "undefined") return;
     const updateTheme = () => {
-      setIsDark(
-        document.documentElement.classList.contains("dark") ||
-        localStorage.getItem("travelai_theme") === "dark"
-      );
+      setIsDark(document.documentElement.classList.contains("dark"));
     };
     const observer = new MutationObserver(updateTheme);
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
@@ -460,105 +456,26 @@ export const TripMap: React.FC<TripMapProps> = ({
     };
   }, [destination]);
 
-  // Generate geographically distributed pins for activities and stays around destination
-  const mapPins = useMemo(() => {
-    const pins: Array<{
-      id: string;
-      title: string;
-      day: number;
-      coords: [number, number];
-      type: "activity" | "stay";
-      color: string;
-      category: string;
-    }> = [];
-
-    itinerary.forEach((dayData, dayIdx) => {
-      const dayColor = DAY_COLORS[dayIdx % DAY_COLORS.length];
-
-      // Add activities with real GPS coordinates or calculated offsets
-      dayData.activities.forEach((act, actIdx) => {
-        let title = "";
-        let coords: [number, number];
-
-        if (typeof act === "object" && act !== null) {
-          title = act.title || act.name || `Activity ${actIdx + 1}`;
-          if (
-            act.coordinates &&
-            Array.isArray(act.coordinates) &&
-            act.coordinates.length === 2 &&
-            !isNaN(act.coordinates[0])
-          ) {
-            coords = [Number(act.coordinates[0]), Number(act.coordinates[1])];
-          } else {
-            const angle = (dayIdx * 2.2 + actIdx * 1.3) % (2 * Math.PI);
-            const radius = 0.015 + ((actIdx + 1) * 0.012) + (dayIdx * 0.005);
-            coords = [baseCoord[0] + radius * Math.sin(angle), baseCoord[1] + radius * Math.cos(angle)];
-          }
-        } else {
-          title = String(act);
-          const angle = (dayIdx * 2.2 + actIdx * 1.3) % (2 * Math.PI);
-          const radius = 0.015 + ((actIdx + 1) * 0.012) + (dayIdx * 0.005);
-          coords = [baseCoord[0] + radius * Math.sin(angle), baseCoord[1] + radius * Math.cos(angle)];
-        }
-
-        pins.push({
-          id: `act-${dayData.day}-${actIdx}`,
-          title,
-          day: dayData.day,
-          coords,
-          type: "activity",
-          color: dayColor,
-          category: `Day ${dayData.day} Activity`,
-        });
-      });
-
-      // Add primary stay marker with real GPS coordinates or calculated offset
-      if (dayData.stay_recommendations && dayData.stay_recommendations.length > 0) {
-        const stay = dayData.stay_recommendations[0];
-        let stayTitle = "";
-        let stayCoords: [number, number];
-
-        if (typeof stay === "object" && stay !== null) {
-          stayTitle = stay.name || "Stay";
-          if (
-            stay.coordinates &&
-            Array.isArray(stay.coordinates) &&
-            stay.coordinates.length === 2 &&
-            !isNaN(stay.coordinates[0])
-          ) {
-            stayCoords = [Number(stay.coordinates[0]), Number(stay.coordinates[1])];
-          } else {
-            const stayAngle = (dayIdx * 1.8) % (2 * Math.PI);
-            const stayRadius = 0.008 + (dayIdx * 0.003);
-            stayCoords = [baseCoord[0] + stayRadius * Math.sin(stayAngle), baseCoord[1] + stayRadius * Math.cos(stayAngle)];
-          }
-        } else {
-          stayTitle = String(stay).split("(")[0].split(":")[0].trim();
-          const stayAngle = (dayIdx * 1.8) % (2 * Math.PI);
-          const stayRadius = 0.008 + (dayIdx * 0.003);
-          stayCoords = [baseCoord[0] + stayRadius * Math.sin(stayAngle), baseCoord[1] + stayRadius * Math.cos(stayAngle)];
-        }
-
-        pins.push({
-          id: `stay-${dayData.day}`,
-          title: stayTitle,
-          day: dayData.day,
-          coords: stayCoords,
-          type: "stay",
-          color: "#eab308", // Gold for stay
-          category: `Night ${dayData.day} Stay`,
-        });
-      }
-    });
-
-    return pins;
-  }, [itinerary, baseCoord]);
+  // Real stored coordinates only. Anything without a valid pair is listed
+  // under the map instead of being placed at an invented offset (C-04).
+  const { pins: mapPins, unmapped: unmappedItems } = useMemo(
+    () => buildTripMapModel(itinerary),
+    [itinerary]
+  );
 
   // Filter pins based on selected day
   const filteredPins = useMemo(() => {
     if (selectedDay === "all") return mapPins;
     return mapPins.filter((p) => p.day === selectedDay);
   }, [mapPins, selectedDay]);
+
+  const visibleUnmapped = useMemo(
+    () =>
+      selectedDay === "all"
+        ? unmappedItems
+        : unmappedItems.filter((item) => item.day === selectedDay),
+    [unmappedItems, selectedDay]
+  );
 
   // Path polyline for the selected day
   const routePolyline = useMemo(() => {
@@ -670,7 +587,7 @@ export const TripMap: React.FC<TripMapProps> = ({
             <div className="flex items-center gap-2">
               <h4 className="text-sm font-bold text-foreground">Interactive Itinerary Map</h4>
               {detectedLocation && (
-                <Badge variant="outline" className="text-[10px] text-primary border-primary/30">
+                <Badge variant="outline" className="text-xs text-primary border-primary/30">
                   <MapPin className="w-3 h-3 mr-1" />
                   {detectedLocation}
                 </Badge>
@@ -680,12 +597,12 @@ export const TripMap: React.FC<TripMapProps> = ({
               Explore day routes, stay locations, and scenic spots around your destination
             </p>
             {routeInfo && (
-              <div className="flex items-center gap-1.5 mt-1 text-[11px] font-bold text-primary">
+              <div className="flex items-center gap-1.5 mt-1 text-xs font-bold text-primary">
                 <Car className="w-3.5 h-3.5" />
                 <span>
                   {formatDistance(routeInfo.km)} · ~{formatDuration(routeInfo.minutes)} drive
                 </span>
-                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                <span className="text-overline font-semibold text-muted-foreground">
                   ({routeInfo.provider})
                 </span>
               </div>
@@ -878,9 +795,12 @@ export const TripMap: React.FC<TripMapProps> = ({
           {/* Render Markers */}
           {filteredPins.map((pin) => {
             const isStay = pin.type === "stay";
+            const color = isStay
+              ? "#eab308"
+              : DAY_COLORS[((pin.day - 1) % DAY_COLORS.length + DAY_COLORS.length) % DAY_COLORS.length];
             const icon = createCustomPin(
               isStay ? "H" : `D${pin.day}`,
-              pin.color,
+              color,
               isStay
             );
 
@@ -889,10 +809,10 @@ export const TripMap: React.FC<TripMapProps> = ({
                 <Popup className="custom-popup">
                   <div className="p-1 space-y-1 text-left min-w-[180px]">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-primary">
+                      <span className="text-overline font-bold text-primary">
                         {pin.category}
                       </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted font-bold">
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-muted font-bold">
                         Day {pin.day}
                       </span>
                     </div>
@@ -921,16 +841,16 @@ export const TripMap: React.FC<TripMapProps> = ({
               <Popup className="custom-popup">
                 <div className="p-1 space-y-1 text-left min-w-[180px]">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600">
+                    <span className="text-overline font-bold text-warning-ink">
                       {place.category}
                     </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted font-bold">
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-muted font-bold">
                       {formatDistance(place.distanceKm)}
                     </span>
                   </div>
                   <p className="text-xs font-bold text-foreground leading-snug">{place.name}</p>
                   {place.tags?.address && (
-                    <p className="text-[11px] text-muted-foreground">{place.tags.address}</p>
+                    <p className="text-xs text-muted-foreground">{place.tags.address}</p>
                   )}
                 </div>
               </Popup>
@@ -939,7 +859,7 @@ export const TripMap: React.FC<TripMapProps> = ({
         </MapContainer>
 
         {/* Floating Legend */}
-        <div className="absolute bottom-4 left-4 z-[400] p-3 rounded-2xl bg-card/90 backdrop-blur-md border border-border/70 shadow-md text-[11px] space-y-1.5 hidden sm:block">
+        <div className="absolute bottom-4 left-4 z-[400] p-3 rounded-2xl bg-card/90 backdrop-blur-md border border-border/70 shadow-md text-xs space-y-1.5 hidden sm:block">
           <div className="font-bold text-foreground flex items-center gap-1.5">
             <Sparkles className="w-3 h-3 text-primary" />
             <span>Map Legend</span>
@@ -949,23 +869,61 @@ export const TripMap: React.FC<TripMapProps> = ({
             <span>Activities (Numbered by Day)</span>
           </div>
           <div className="flex items-center gap-2 text-muted-foreground">
-            <span className="w-2.5 h-2.5 rounded-full bg-yellow-400" />
+            <span className="w-2.5 h-2.5 rounded-full bg-warning" />
             <span>Recommended Night Stays</span>
           </div>
           {routes.length > 0 && (
             <div className="flex items-center gap-2 text-muted-foreground">
-              <span className="w-4 h-0.5 rounded-full bg-sky-500" />
+              <span className="w-4 h-0.5 rounded-full bg-info" />
               <span>Your Custom Routes</span>
             </div>
           )}
           {(nearbyPlaces || []).length > 0 && (
             <div className="flex items-center gap-2 text-muted-foreground">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+              <span className="w-2.5 h-2.5 rounded-full bg-warning" />
               <span>Nearby Places ({nearbyPlaces!.length})</span>
             </div>
           )}
         </div>
       </div>
+
+      {/* Unmapped stops: listed honestly rather than plotted at invented coordinates */}
+      {visibleUnmapped.length > 0 && (
+        <div className="rounded-3xl border border-border/70 bg-card/70 p-4">
+          <div className="flex items-center gap-2 text-xs font-bold text-foreground">
+            <MapPin className="w-4 h-4 text-primary" />
+            <span>Location not mapped ({visibleUnmapped.length})</span>
+          </div>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            These stops have no saved coordinates, so they are not plotted on the map.
+          </p>
+          <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+            {visibleUnmapped.map((item) => (
+              <li
+                key={item.id}
+                className="flex items-start justify-between gap-2 rounded-2xl border border-border/60 bg-background/60 p-2.5"
+              >
+                <div className="min-w-0 space-y-0.5">
+                  <p className="truncate text-xs font-semibold text-foreground">{item.title}</p>
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <span>Day {item.day}</span>
+                    {item.type === "stay" && (
+                      <Badge variant="outline" className="px-1.5 py-0 text-xs">
+                        Stay
+                      </Badge>
+                    )}
+                    {item.time && <span aria-hidden="true">·</span>}
+                    {item.time && <span>{item.time}</span>}
+                  </div>
+                  {item.location && (
+                    <p className="truncate text-xs text-muted-foreground">{item.location}</p>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Saved Custom Routes List */}
       {routes.length > 0 && (
@@ -989,11 +947,11 @@ export const TripMap: React.FC<TripMapProps> = ({
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-foreground truncate">{route.name}</p>
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-[11px] text-muted-foreground font-semibold">
+                      <span className="text-xs text-muted-foreground font-semibold">
                         {formatDistance(route.distanceKm)}
                       </span>
                       {route.day != null && (
-                        <Badge variant="secondary" className="text-[10px] px-2 py-0">
+                        <Badge variant="secondary" className="text-xs px-2 py-0">
                           Day {route.day}
                         </Badge>
                       )}

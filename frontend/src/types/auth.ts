@@ -20,12 +20,31 @@ export interface ProfileUpdateInput {
   bio?: string;
 }
 
+/** Support-queue account deletion (C-08 / D-F); nothing is removed on request. */
+export interface AccountDeletionRequest {
+  status: "pending" | "approved" | "rejected" | "completed";
+  requestedAt: string;
+  reason?: string;
+}
+
+/** Phase 1B consent evidence sent with a new account. */
+export interface SignupConsent {
+  termsVersion: string;
+  privacyVersion: string;
+  marketingOptIn?: boolean;
+}
+
 export interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   loading: boolean;
   error: string | null;
-  signup: (email: string, password: string, name?: string) => Promise<void>;
+  signup: (
+    email: string,
+    password: string,
+    name?: string,
+    consent?: SignupConsent
+  ) => Promise<void>;
   signin: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   clearError: () => void;

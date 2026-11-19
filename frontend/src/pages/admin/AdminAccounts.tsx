@@ -21,16 +21,7 @@ import {
 } from '@/components/admin/AdminTableFrame';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { ConfirmDestructive } from '@/components/ui/confirm-destructive';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -341,7 +332,15 @@ const AdminAccounts: React.FC = () => {
       </div>
 
       {error ? (
-        <AdminNotice tone="error" title="The directory did not load">
+        <AdminNotice
+          tone="error"
+          title="The directory did not load"
+          action={
+            <Button type="button" variant="outline" size="sm" onClick={reload}>
+              Try again
+            </Button>
+          }
+        >
           {error}
         </AdminNotice>
       ) : null}
@@ -382,11 +381,17 @@ const AdminAccounts: React.FC = () => {
           ) : accounts.length === 0 ? (
             <tr>
               <td colSpan={7}>
-                <AdminEmptyState
-                  icon={Users}
-                  title="No accounts match these filters"
-                  description="Try a different realm, status or search term."
-                />
+                {error ? (
+                  <p className="px-4 py-10 text-center text-xs text-muted-foreground">
+                    The list could not be loaded. Use Try again above.
+                  </p>
+                ) : (
+                  <AdminEmptyState
+                    icon={Users}
+                    title="No accounts match these filters"
+                    description="Try a different realm, status or search term."
+                  />
+                )}
               </td>
             </tr>
           ) : (
@@ -396,11 +401,11 @@ const AdminAccounts: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => void openDetail(account._id)}
-                    className="group inline-flex flex-wrap items-center gap-2 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    className="group inline-flex flex-wrap items-center gap-2 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-admin-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                     aria-label={`Open the record for ${account.email}`}
                   >
                     <span className="min-w-0">
-                      <span className="block truncate font-medium group-hover:text-indigo-300 group-hover:underline group-hover:underline-offset-2">
+                      <span className="block truncate font-medium group-hover:text-admin-accent-ink group-hover:underline group-hover:underline-offset-2">
                         {accountDisplayName(account)}
                       </span>
                       <span className="block truncate text-xs text-muted-foreground">
@@ -410,7 +415,7 @@ const AdminAccounts: React.FC = () => {
                     {account.mustChangePassword ? (
                       <Badge
                         variant="outline"
-                        className="border-amber-500/40 bg-amber-500/10 text-[10px] text-amber-300"
+                        className="border-warning/40 bg-warning/10 text-xs text-warning-ink"
                       >
                         Temp password
                       </Badge>
@@ -487,90 +492,46 @@ const AdminAccounts: React.FC = () => {
         </tbody>
       </AdminTableFrame>
 
-      <AlertDialog
+      <ConfirmDestructive
         open={statusTarget !== null}
         onOpenChange={(open) => {
           if (!open && !statusBusy) setStatusTarget(null);
         }}
-      >
-        <AlertDialogContent className="dark rounded-2xl border-border bg-card text-card-foreground">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <Power className="h-4 w-4 text-indigo-400" aria-hidden />
-              {statusTarget?.next === 'disabled' ? 'Disable account?' : 'Enable account?'}
-            </AlertDialogTitle>
-            <AlertDialogDescription className="leading-6">
-              {statusTarget?.next === 'disabled'
-                ? 'This signs the account out on its next request. Only this realm/tenant account is affected — the same email in another realm keeps working.'
-                : 'This restores the account and lets the user sign in again.'}
-              {statusTarget ? (
-                <span className="mt-2 block break-all text-foreground/80">
-                  {statusTarget.account.email}
-                </span>
-              ) : null}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={statusBusy}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={statusBusy}
-              onClick={(event) => {
-                event.preventDefault();
-                void confirmStatusChange();
-              }}
-              className={
-                statusTarget?.next === 'disabled'
-                  ? 'bg-rose-600 text-white hover:bg-rose-500'
-                  : 'bg-indigo-500 text-white hover:bg-indigo-400'
-              }
-            >
-              {statusBusy ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" aria-hidden /> : null}
-              {statusTarget?.next === 'disabled' ? 'Disable account' : 'Enable account'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        tone={statusTarget?.next === 'disabled' ? 'destructive' : 'warning'}
+        icon={Power}
+        title={statusTarget?.next === 'disabled' ? 'Disable account?' : 'Enable account?'}
+        description={
+          statusTarget?.next === 'disabled'
+            ? 'This signs the account out on its next request. Only this realm/tenant account is affected — the same email in another realm keeps working.'
+            : 'This restores the account and lets the user sign in again.'
+        }
+        confirmLabel={statusTarget?.next === 'disabled' ? 'Disable account' : 'Enable account'}
+        detail={statusTarget ? <>{statusTarget.account.email}</> : null}
+        onConfirm={confirmStatusChange}
+        busy={statusBusy}
+      />
 
-      <AlertDialog
+      <ConfirmDestructive
         open={resetTarget !== null}
         onOpenChange={(open) => {
           if (!open && !resetBusy) setResetTarget(null);
         }}
-      >
-        <AlertDialogContent className="dark rounded-2xl border-border bg-card text-card-foreground">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <KeyRound className="h-4 w-4 text-amber-400" aria-hidden />
-              Reset workspace password?
-            </AlertDialogTitle>
-            <AlertDialogDescription className="leading-6">
-              A new one-time password will be issued and the account will be forced to
-              change it at the next sign-in. Every existing session for this account is
-              signed out. The personal account with the same email is not touched.
-              {resetTarget ? (
-                <span className="mt-2 block break-all text-foreground/80">
-                  {resetTarget.email}
-                  {resetTarget.agency ? ` · ${resetTarget.agency.slug}` : ''}
-                </span>
-              ) : null}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={resetBusy}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={resetBusy}
-              onClick={(event) => {
-                event.preventDefault();
-                void confirmReset();
-              }}
-              className="bg-amber-600 text-white hover:bg-amber-500"
-            >
-              {resetBusy ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" aria-hidden /> : null}
-              Issue temporary password
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        tone="warning"
+        icon={KeyRound}
+        title="Reset workspace password?"
+        description="A new one-time password will be issued and the account will be forced to change it at the next sign-in. Every existing session for this account is signed out. The personal account with the same email is not touched."
+        confirmLabel="Issue temporary password"
+        detail={
+          resetTarget ? (
+            <>
+              {resetTarget.email}
+              {resetTarget.agency ? ` · ${resetTarget.agency.slug}` : ''}
+            </>
+          ) : null
+        }
+        onConfirm={confirmReset}
+        busy={resetBusy}
+      />
 
       <AdminAccountDetail
         open={detailOpen}

@@ -100,9 +100,9 @@ const TravellerCommandMenu: React.FC<TravellerCommandMenuProps> = ({
             }}
           >
             {isDark ? (
-              <Sun className="mr-2 h-4 w-4 text-amber-400" aria-hidden />
+              <Sun className="mr-2 h-4 w-4 text-warning-ink" aria-hidden />
             ) : (
-              <Moon className="mr-2 h-4 w-4 text-indigo-500" aria-hidden />
+              <Moon className="mr-2 h-4 w-4 text-admin-accent-ink" aria-hidden />
             )}
             Switch to {isDark ? 'light' : 'dark'} theme
           </CommandItem>
@@ -133,13 +133,13 @@ const TravellerCommandMenu: React.FC<TravellerCommandMenuProps> = ({
           ) : null}
         </CommandGroup>
       </CommandList>
-      <div className="flex items-center justify-between gap-3 border-t border-border/70 px-3 py-2 text-[11px] text-muted-foreground">
+      <div className="flex items-center justify-between gap-3 border-t border-border/70 px-3 py-2 text-xs text-muted-foreground">
         <span className="inline-flex items-center gap-1.5">
           <Map className="h-3 w-3" aria-hidden />
           waytowalk
         </span>
         <span className="inline-flex items-center gap-1">
-          <kbd className="rounded border border-border bg-muted px-1 py-0.5 font-sans text-[10px]">
+          <kbd className="rounded border border-border bg-muted px-1 py-0.5 font-sans text-xs">
             Esc
           </kbd>
           to close

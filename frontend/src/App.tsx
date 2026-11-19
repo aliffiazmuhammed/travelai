@@ -6,6 +6,8 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./context/UserContext";
 import { AgencyAuthProvider } from "./context/AgencyAuthContext";
 import { PlatformAuthProvider } from "./context/PlatformAuthContext";
+import { ThemeProvider } from "./context/ThemeContext";
+import { RouteMeta } from "./components/RouteMeta";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ErrorBoundary from "./components/ErrorBoundary";
 import WaytowalkLoader from "./components/brand/WaytowalkLoader";
@@ -14,6 +16,8 @@ import { queryClient } from "./lib/queryClient";
 // Lazy-loaded route pages for production code-splitting
 const Landing = lazy(() => import("./pages/Landing"));
 const Auth = lazy(() => import("./pages/Auth"));
+const Terms = lazy(() => import("./pages/Terms"));
+const Privacy = lazy(() => import("./pages/Privacy"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const TripPlanner = lazy(() => import("./pages/TripPlanner"));
@@ -21,6 +25,7 @@ const Dashboard = lazy(() => import("./pages/Dashboard"));
 const SharedTrip = lazy(() => import("./pages/SharedTrip"));
 const TravelerProfile = lazy(() => import("./pages/TravelerProfile"));
 const Guidelines = lazy(() => import("./pages/Guidelines"));
+const DesignSystem = lazy(() => import("./pages/DesignSystem"));
 const Explore = lazy(() => import("./pages/Explore"));
 const GalleryTrip = lazy(() => import("./pages/GalleryTrip"));
 const EventDetail = lazy(() => import("./pages/EventDetail"));
@@ -70,168 +75,176 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <ErrorBoundary>
       <TooltipProvider>
-        <Toaster />
         <BrowserRouter>
-          <AuthProvider>
-            <Suspense fallback={<PageLoader />}>
-              <Routes>
-                <Route path="/" element={<Landing />} />
-                <Route path="/auth" element={<Auth />} />
-                {/* P1: self-service personal reset. Agency and platform
-                    accounts are reset by their owner or an operator. */}
-                <Route path="/forgot-password" element={<ForgotPassword />} />
-                <Route path="/reset-password/:token" element={<ResetPassword />} />
-                <Route
-                  path="/plan"
-                  element={
-                    <ProtectedRoute>
-                      <TripPlanner />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route path="/shared/:shareId" element={<SharedTrip />} />
-                {/* Milestone 8 G2: public traveler identity — no session needed. */}
-                <Route path="/travelers/:handle" element={<TravelerProfile />} />
-                <Route path="/guidelines" element={<Guidelines />} />
-                {/* Milestone 8 G3: anonymous gallery. The nav entry waits for a
-                    content threshold; these routes stay reachable by URL. */}
-                <Route path="/explore" element={<Explore />} />
-                {/* M10 E1: an agency event, reachable from Explore and the
-                    agency page. Anonymous, with the interest form on the page. */}
-                <Route path="/explore/events/:eventId" element={<EventDetail />} />
-                <Route path="/explore/:tripId" element={<GalleryTrip />} />
-                {/* Milestone 9 D3: anonymous agency directory. The nav entry
-                    waits for five published profiles; these routes do not. */}
-                <Route path="/agencies" element={<Agencies />} />
-                {/* PA6: public "join as an agency" form. Reviewed by a platform
-                    admin; approval provisions the tenant, not this page. */}
-                <Route path="/agencies/apply" element={<AgencyApply />} />
-                <Route path="/agencies/:slug" element={<AgencyProfile />} />
-                <Route path="/proposal/:token" element={<ProposalShare />} />
-                {/* M9 D8: the guest's private thread. */}
-                <Route path="/conversation/:token" element={<ConversationPage />} />
-                <Route path="/invite/:token" element={<InviteAccept />} />
-                <Route
-                  path="/dashboard"
-                  element={
-                    <ProtectedRoute>
-                      <Dashboard />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/profile"
-                  element={
-                    <ProtectedRoute>
-                      <Profile />
-                    </ProtectedRoute>
-                  }
-                />
-                {/* M9 D8: a signed-in traveller's thread and comparison. */}
-                <Route
-                  path="/enquiries"
-                  element={
-                    <ProtectedRoute>
-                      <Enquiries />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/enquiry/:enquiryId"
-                  element={
-                    <ProtectedRoute>
-                      <ConversationPage />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/proposals"
-                  element={
-                    <ProtectedRoute>
-                      <MyProposals />
-                    </ProtectedRoute>
-                  }
-                />
-                {/* PA0: agency pages use the separate `agency_token` realm. A
-                    personal session is never accepted as an agency session. */}
-                <Route
-                  path="/agency/login"
-                  element={
-                    <AgencyAuthProvider>
-                      <AgencyLogin />
-                    </AgencyAuthProvider>
-                  }
-                />
-                <Route
-                  path="/agency/invite/:token"
-                  element={
-                    <AgencyAuthProvider>
-                      <AgencyInviteAccept />
-                    </AgencyAuthProvider>
-                  }
-                />
-                <Route
-                  path="/agency"
-                  element={
-                    <AgencyAuthProvider>
-                      <AgencyApp />
-                    </AgencyAuthProvider>
-                  }
-                >
-                  <Route index element={<AgencyOverview />} />
-                  <Route path="onboarding" element={<AgencyOnboarding />} />
-                  <Route path="trips" element={<AgencyTrips />} />
-                  <Route path="trips/new" element={<AgencyTripPlanner />} />
-                  <Route path="trips/:tripId" element={<AgencyTrips />} />
-                  <Route path="events" element={<AgencyEvents />} />
-                  <Route path="clients" element={<AgencyClients />} />
-                  <Route path="enquiries" element={<AgencyEnquiries />} />
-                  <Route path="templates" element={<AgencyTemplates />} />
-                  <Route path="team" element={<AgencyTeam />} />
-                  <Route path="operations" element={<AgencyOperations />} />
-                  <Route path="settings" element={<AgencySettings />} />
-                </Route>
-                {/* PA1: the platform realm is a third, fully separate front
-                    door. `/admin` never accepts a personal or agency session. */}
-                <Route
-                  path="/admin/login"
-                  element={
-                    <PlatformAuthProvider>
-                      <AdminLogin />
-                    </PlatformAuthProvider>
-                  }
-                />
-                <Route
-                  path="/admin"
-                  element={
-                    <PlatformAuthProvider>
-                      <AdminApp />
-                    </PlatformAuthProvider>
-                  }
-                >
-                  <Route index element={<AdminOverview />} />
-                  <Route path="account" element={<AdminAccount />} />
-                  <Route path="accounts" element={<AdminAccounts />} />
+          <ThemeProvider>
+            <Toaster />
+            <RouteMeta />
+            <AuthProvider>
+              <Suspense fallback={<PageLoader />}>
+                <Routes>
+                  <Route path="/" element={<Landing />} />
+                  <Route path="/auth" element={<Auth />} />
+                  {/* Phase 1B: public policies linked from sign-up consent. */}
+                  <Route path="/terms" element={<Terms />} />
+                  <Route path="/privacy" element={<Privacy />} />
+                  {/* P1: self-service personal reset. Agency and platform
+                      accounts are reset by their owner or an operator. */}
+                  <Route path="/forgot-password" element={<ForgotPassword />} />
+                  <Route path="/reset-password/:token" element={<ResetPassword />} />
                   <Route
-                    path="agencies"
-                    element={<AdminAgencies />}
+                    path="/plan"
+                    element={
+                      <ProtectedRoute>
+                        <TripPlanner />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route path="/shared/:shareId" element={<SharedTrip />} />
+                  {/* Milestone 8 G2: public traveler identity — no session needed. */}
+                  <Route path="/travelers/:handle" element={<TravelerProfile />} />
+                  <Route path="/guidelines" element={<Guidelines />} />
+                  {/* Review surface for the shared primitives (C-13). */}
+                  <Route path="/design" element={<DesignSystem />} />
+                  {/* Milestone 8 G3: anonymous gallery. The nav entry waits for a
+                      content threshold; these routes stay reachable by URL. */}
+                  <Route path="/explore" element={<Explore />} />
+                  {/* M10 E1: an agency event, reachable from Explore and the
+                      agency page. Anonymous, with the interest form on the page. */}
+                  <Route path="/explore/events/:eventId" element={<EventDetail />} />
+                  <Route path="/explore/:tripId" element={<GalleryTrip />} />
+                  {/* Milestone 9 D3: anonymous agency directory. The nav entry
+                      waits for five published profiles; these routes do not. */}
+                  <Route path="/agencies" element={<Agencies />} />
+                  {/* PA6: public "join as an agency" form. Reviewed by a platform
+                      admin; approval provisions the tenant, not this page. */}
+                  <Route path="/agencies/apply" element={<AgencyApply />} />
+                  <Route path="/agencies/:slug" element={<AgencyProfile />} />
+                  <Route path="/proposal/:token" element={<ProposalShare />} />
+                  {/* M9 D8: the guest's private thread. */}
+                  <Route path="/conversation/:token" element={<ConversationPage />} />
+                  <Route path="/invite/:token" element={<InviteAccept />} />
+                  <Route
+                    path="/dashboard"
+                    element={
+                      <ProtectedRoute>
+                        <Dashboard />
+                      </ProtectedRoute>
+                    }
                   />
                   <Route
-                    path="agencies/:agencyId"
-                    element={<AdminAgencyRecord />}
+                    path="/profile"
+                    element={
+                      <ProtectedRoute>
+                        <Profile />
+                      </ProtectedRoute>
+                    }
                   />
-                  <Route path="applications" element={<AdminApplications />} />
-                  <Route path="reports" element={<AdminReports />} />
+                  {/* M9 D8: a signed-in traveller's thread and comparison. */}
                   <Route
-                    path="audit"
-                    element={<AdminAudit />}
+                    path="/enquiries"
+                    element={
+                      <ProtectedRoute>
+                        <Enquiries />
+                      </ProtectedRoute>
+                    }
                   />
-                  <Route path="platform-admins" element={<AdminPlatformAdmins />} />
-                </Route>
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </Suspense>
-          </AuthProvider>
+                  <Route
+                    path="/enquiry/:enquiryId"
+                    element={
+                      <ProtectedRoute>
+                        <ConversationPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/proposals"
+                    element={
+                      <ProtectedRoute>
+                        <MyProposals />
+                      </ProtectedRoute>
+                    }
+                  />
+                  {/* PA0: agency pages use the separate `agency_token` realm. A
+                      personal session is never accepted as an agency session. */}
+                  <Route
+                    path="/agency/login"
+                    element={
+                      <AgencyAuthProvider>
+                        <AgencyLogin />
+                      </AgencyAuthProvider>
+                    }
+                  />
+                  <Route
+                    path="/agency/invite/:token"
+                    element={
+                      <AgencyAuthProvider>
+                        <AgencyInviteAccept />
+                      </AgencyAuthProvider>
+                    }
+                  />
+                  <Route
+                    path="/agency"
+                    element={
+                      <AgencyAuthProvider>
+                        <AgencyApp />
+                      </AgencyAuthProvider>
+                    }
+                  >
+                    <Route index element={<AgencyOverview />} />
+                    <Route path="onboarding" element={<AgencyOnboarding />} />
+                    <Route path="trips" element={<AgencyTrips />} />
+                    <Route path="trips/new" element={<AgencyTripPlanner />} />
+                    <Route path="trips/:tripId" element={<AgencyTrips />} />
+                    <Route path="events" element={<AgencyEvents />} />
+                    <Route path="clients" element={<AgencyClients />} />
+                    <Route path="enquiries" element={<AgencyEnquiries />} />
+                    <Route path="templates" element={<AgencyTemplates />} />
+                    <Route path="team" element={<AgencyTeam />} />
+                    <Route path="operations" element={<AgencyOperations />} />
+                    <Route path="settings" element={<AgencySettings />} />
+                  </Route>
+                  {/* PA1: the platform realm is a third, fully separate front
+                      door. `/admin` never accepts a personal or agency session. */}
+                  <Route
+                    path="/admin/login"
+                    element={
+                      <PlatformAuthProvider>
+                        <AdminLogin />
+                      </PlatformAuthProvider>
+                    }
+                  />
+                  <Route
+                    path="/admin"
+                    element={
+                      <PlatformAuthProvider>
+                        <AdminApp />
+                      </PlatformAuthProvider>
+                    }
+                  >
+                    <Route index element={<AdminOverview />} />
+                    <Route path="account" element={<AdminAccount />} />
+                    <Route path="accounts" element={<AdminAccounts />} />
+                    <Route
+                      path="agencies"
+                      element={<AdminAgencies />}
+                    />
+                    <Route
+                      path="agencies/:agencyId"
+                      element={<AdminAgencyRecord />}
+                    />
+                    <Route path="applications" element={<AdminApplications />} />
+                    <Route path="reports" element={<AdminReports />} />
+                    <Route
+                      path="audit"
+                      element={<AdminAudit />}
+                    />
+                    <Route path="platform-admins" element={<AdminPlatformAdmins />} />
+                  </Route>
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </Suspense>
+            </AuthProvider>
+          </ThemeProvider>
         </BrowserRouter>
       </TooltipProvider>
     </ErrorBoundary>

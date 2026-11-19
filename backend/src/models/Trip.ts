@@ -188,6 +188,12 @@ export interface ITrip extends Document {
   rev: number;
   /** Rich generation metadata: variant, language, quality score, request echo, etc. */
   generationMeta?: Record<string, any>;
+  /**
+   * Client-supplied idempotency key for one generation attempt (C-03).
+   * Cancel-then-retry reuses the key so a race that already saved the first
+   * attempt replays that trip instead of creating a duplicate.
+   */
+  generationAttemptId?: string;
   /** User rating of the generated itinerary (drives personalization + A/B insights). */
   feedback?: ITripFeedback;
   /** Group travellers used for expense splitting (Milestone 5). */
@@ -446,6 +452,11 @@ const tripSchema = new Schema<ITrip>(
       type: Schema.Types.Mixed,
       default: undefined,
     },
+    generationAttemptId: {
+      type: String,
+      trim: true,
+      maxlength: 100,
+    },
     feedback: {
       type: tripFeedbackSchema,
       default: undefined,
@@ -489,6 +500,12 @@ tripSchema.index({ 'gallery.tags': 1 });
 // Moderation lookups (G6): the admin console asks "which public trips are
 // hidden?" and the public clauses exclude the rest by this field.
 tripSchema.index({ 'moderation.hiddenAt': 1 }, { sparse: true });
+// Generation idempotency (C-03): one saved trip per client attempt. The partial
+// filter keeps legacy rows (no attempt id) out of the unique constraint.
+tripSchema.index(
+  { userId: 1, generationAttemptId: 1 },
+  { unique: true, partialFilterExpression: { generationAttemptId: { $type: 'string' } } }
+);
 
 /** Agency trips must name their tenant; personal trips must not acquire one. */
 tripSchema.pre('validate', function () {

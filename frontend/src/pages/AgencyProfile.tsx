@@ -7,11 +7,12 @@ import { AgencyLogoTile } from "@/components/directory/AgencyLogoTile";
 import { ReportDialog } from "@/components/gallery/ReportDialog";
 import { TravellerBreadcrumbs } from "@/components/traveller/TravellerBreadcrumbs";
 import { Button } from "@/components/ui/button";
+import { AppImage } from "@/components/ui/app-image";
 import { api, ApiError } from "@/services/api";
 import { formatMoney } from "@/lib/currency";
 import { spotsLabel } from "@/lib/events";
 import { applyPageMeta } from "@/lib/meta";
-import { tripCoverUrl } from "@/lib/tripCover";
+import { tripCoverSrcSet, tripCoverUrl } from "@/lib/tripCover";
 import { cn } from "@/lib/utils";
 import {
   AlertCircle,
@@ -95,7 +96,7 @@ const SectionHeading = ({
     {action ? (
       <Link
         to={action.to}
-        className="inline-flex items-center gap-1 text-[11px] font-bold text-primary transition-all hover:gap-1.5"
+        className="inline-flex items-center gap-1 text-xs font-bold text-primary transition-all hover:gap-1.5"
       >
         {action.label}
         <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
@@ -142,7 +143,7 @@ const PackageCard = ({
       </button>
 
       <div className="flex flex-1 flex-col gap-2.5 p-4">
-        <h3 className="line-clamp-2 font-display text-lg font-semibold leading-snug tracking-tight text-foreground">
+        <h3 className="line-clamp-2 font-display text-xl font-semibold leading-snug tracking-tight text-foreground">
           {title}
         </h3>
         <p className="text-xs font-medium text-muted-foreground">
@@ -154,7 +155,7 @@ const PackageCard = ({
             {chips.map((destination) => (
               <span
                 key={destination}
-                className="inline-flex max-w-full items-center gap-1 rounded-full border border-border/70 bg-muted/40 px-2 py-1 text-[10px] font-semibold text-muted-foreground"
+                className="inline-flex max-w-full items-center gap-1 rounded-full border border-border/70 bg-muted/40 px-2 py-1 text-xs font-semibold text-muted-foreground"
               >
                 <MapPin className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
                 <span className="truncate">{destination}</span>
@@ -164,7 +165,7 @@ const PackageCard = ({
         )}
 
         <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-3">
-          <span className="text-[11px] font-semibold text-foreground">
+          <span className="text-xs font-semibold text-foreground">
             {pkg.pricePerPerson === null
               ? "Price on request"
               : `From ${formatMoney(pkg.pricePerPerson, pkg.currency)} per person`}
@@ -172,7 +173,7 @@ const PackageCard = ({
           <button
             type="button"
             onClick={onOpen}
-            className="inline-flex items-center gap-1 text-[11px] font-bold text-primary transition-all hover:gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2"
+            className="inline-flex items-center gap-1 text-xs font-bold text-primary transition-all hover:gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2"
           >
             See itinerary
             <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
@@ -194,13 +195,13 @@ const EventCard = ({ event }: { event: PublicEventSummary }) => {
       className="group flex items-start gap-4 rounded-2xl border border-border/70 bg-card p-4 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2"
     >
       <div className="grid w-14 shrink-0 place-items-center gap-0.5 rounded-xl border border-border/70 bg-muted/50 px-2 py-2 text-center">
-        <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+        <span className="text-overline font-bold text-muted-foreground">
           {tile?.month ?? ""}
         </span>
         <span className="font-display text-xl font-semibold leading-none text-foreground">
           {tile?.day ?? "—"}
         </span>
-        <span className="text-[10px] font-semibold uppercase text-muted-foreground">
+        <span className="text-overline font-semibold text-muted-foreground">
           {tile?.weekday ?? ""}
         </span>
       </div>
@@ -210,7 +211,7 @@ const EventCard = ({ event }: { event: PublicEventSummary }) => {
           {event.title}
         </h3>
         {place && (
-          <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+          <p className="flex items-center gap-1 text-xs text-muted-foreground">
             <MapPin className="h-3 w-3 shrink-0" aria-hidden="true" />
             <span className="truncate">{place}</span>
           </p>
@@ -218,9 +219,9 @@ const EventCard = ({ event }: { event: PublicEventSummary }) => {
         {spots && (
           <span
             className={cn(
-              "inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold",
+              "inline-flex rounded-full px-2 py-0.5 text-xs font-bold",
               event.spotsLeft !== null && event.spotsLeft > 0
-                ? "bg-emerald-500/10 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
+                ? "bg-success/10 text-success-ink dark:bg-success/15"
                 : "bg-destructive/10 text-destructive"
             )}
           >
@@ -396,7 +397,7 @@ const AgencyProfile = () => {
     <div className="flex min-h-screen flex-col bg-gradient-hero">
       <Navbar />
 
-      <main className="container mx-auto max-w-6xl flex-1 space-y-6 px-4 pb-20 pt-24">
+      <main id="main-content" tabIndex={-1} className="container mx-auto max-w-6xl flex-1 space-y-6 px-4 pb-20 pt-24">
         <TravellerBreadcrumbs
           items={[
             { label: "Agencies", to: "/agencies" },
@@ -456,16 +457,19 @@ const AgencyProfile = () => {
             >
               <div className="relative h-44 w-full sm:h-60 lg:h-72">
                 {heroImage && (
-                  <img
+                  <AppImage
                     src={heroImage}
+                    srcSet={tripCoverSrcSet(locationText)}
+                    sizes="(min-width: 1024px) 64rem, 100vw"
                     alt=""
                     aria-hidden="true"
+                    priority
                     className="h-full w-full object-cover"
                   />
                 )}
                 <div
                   aria-hidden="true"
-                  className="absolute inset-0 bg-gradient-to-t from-slate-900/45 via-slate-900/10 to-transparent dark:from-black/60"
+                  className="absolute inset-0 bg-gradient-to-t from-muted/45 via-muted/10 to-transparent dark:from-black/60"
                 />
               </div>
 
@@ -544,7 +548,7 @@ const AgencyProfile = () => {
                 </div>
 
                 {profile.about.trim() && (
-                  <p className="mt-4 max-w-3xl whitespace-pre-line text-sm leading-relaxed text-foreground/80 sm:text-[15px]">
+                  <p className="mt-4 max-w-3xl whitespace-pre-line text-sm leading-relaxed text-foreground/80 sm:text-base">
                     {profile.about.trim()}
                   </p>
                 )}
@@ -554,7 +558,7 @@ const AgencyProfile = () => {
                     {profile.specialties.map((specialty) => (
                       <span
                         key={specialty}
-                        className="rounded-full bg-muted/70 px-3 py-1.5 text-[11px] font-semibold text-muted-foreground"
+                        className="rounded-full bg-muted/70 px-3 py-1.5 text-xs font-semibold text-muted-foreground"
                       >
                         {specialty}
                       </span>
@@ -658,7 +662,7 @@ const AgencyProfile = () => {
                 <button
                   type="button"
                   onClick={() => setReportOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:text-foreground"
+                  className="inline-flex items-center gap-1.5 px-1 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
                 >
                   <Flag className="h-3 w-3" aria-hidden="true" />
                   Report this profile

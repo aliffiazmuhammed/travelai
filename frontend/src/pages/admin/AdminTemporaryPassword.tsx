@@ -49,10 +49,10 @@ const AdminTemporaryPassword: React.FC<AdminTemporaryPasswordProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="dark max-w-md rounded-2xl border-border bg-card text-card-foreground">
+      <DialogContent className="max-w-md rounded-2xl border-border bg-card text-card-foreground">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
-            <span className="grid h-7 w-7 place-items-center rounded-lg bg-amber-500/15 text-amber-300">
+            <span className="grid h-7 w-7 place-items-center rounded-lg bg-warning/15 text-warning-ink">
               <KeyRound className="h-4 w-4" aria-hidden />
             </span>
             Temporary password
@@ -66,14 +66,14 @@ const AdminTemporaryPassword: React.FC<AdminTemporaryPasswordProps> = ({
         <div className="space-y-3">
           <dl className="grid gap-3 rounded-xl border border-border bg-muted/40 p-3 sm:grid-cols-2">
             <div className="min-w-0">
-              <dt className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <dt className="text-overline font-semibold text-muted-foreground">
                 Account
               </dt>
               <dd className="mt-0.5 break-all text-sm">{email}</dd>
             </div>
             {workspace ? (
               <div className="min-w-0">
-                <dt className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                <dt className="text-overline font-semibold text-muted-foreground">
                   Workspace
                 </dt>
                 <dd className="mt-0.5 truncate text-sm">{workspace}</dd>
@@ -81,31 +81,31 @@ const AdminTemporaryPassword: React.FC<AdminTemporaryPasswordProps> = ({
             ) : null}
           </dl>
 
-          <div className="rounded-xl border border-amber-500/35 bg-amber-500/10 p-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-300">
+          <div className="rounded-xl border border-warning/35 bg-warning/10 p-3">
+            <p className="text-overline font-semibold text-warning-ink">
               One-time password
             </p>
             <div className="mt-1.5 flex items-center gap-2">
-              <code className="min-w-0 flex-1 break-all rounded-lg border border-amber-500/20 bg-background px-2.5 py-2 font-mono text-sm text-amber-200">
+              <code className="min-w-0 flex-1 break-all rounded-lg border border-warning/20 bg-background px-2.5 py-2 font-mono text-sm text-warning-ink">
                 {temporaryPassword}
               </code>
               <Button
                 type="button"
                 size="icon"
                 variant="outline"
-                className="h-9 w-9 shrink-0 border-amber-500/30 bg-background text-amber-200 hover:bg-amber-500/10 hover:text-amber-100"
+                className="h-9 w-9 shrink-0 border-warning/30 bg-background text-warning-ink hover:bg-warning/10 hover:text-warning-ink"
                 onClick={() => void copy()}
                 aria-label="Copy temporary password"
               >
                 {copied ? (
-                  <Check className="h-4 w-4 text-emerald-400" aria-hidden />
+                  <Check className="h-4 w-4 text-success-ink" aria-hidden />
                 ) : (
                   <Copy className="h-4 w-4" aria-hidden />
                 )}
               </Button>
             </div>
             {workspace ? (
-              <p className="mt-2 text-xs text-amber-200/70">
+              <p className="mt-2 text-xs text-warning-ink/70">
                 Sign in at{' '}
                 <code className="rounded bg-background/60 px-1 py-0.5">/agency/login</code> with
                 this workspace slug.
@@ -122,7 +122,7 @@ const AdminTemporaryPassword: React.FC<AdminTemporaryPasswordProps> = ({
         <DialogFooter>
           <Button
             type="button"
-            className="bg-indigo-500 text-white hover:bg-indigo-400 focus-visible:ring-indigo-400"
+            className="bg-admin-accent text-admin-accent-foreground hover:bg-admin-accent/90 focus-visible:ring-admin-accent"
             onClick={() => onOpenChange(false)}
           >
             Done

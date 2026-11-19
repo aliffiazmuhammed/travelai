@@ -151,12 +151,12 @@ const TemplatePreviewDialog: React.FC<TemplatePreviewDialogProps> = ({
 
         <div className="space-y-3">
           {tripsLoading ? (
-            <div className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-3 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
+            <div className="flex items-center gap-2 rounded-xl border border-border px-3 py-3 text-xs text-muted-foreground">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
               Loading trips...
             </div>
           ) : tripsError ? (
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-300">
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive-ink dark:border-destructive/20 dark:bg-destructive/30">
               <span className="flex items-center gap-1.5">
                 <AlertTriangle className="h-3.5 w-3.5" />
                 {tripsError}
@@ -171,7 +171,7 @@ const TemplatePreviewDialog: React.FC<TemplatePreviewDialogProps> = ({
               </Button>
             </div>
           ) : trips.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-200 px-4 py-6 text-center text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
+            <div className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
               <p>
                 A preview needs a real trip. Create one in the trip library
                 first.
@@ -183,7 +183,7 @@ const TemplatePreviewDialog: React.FC<TemplatePreviewDialogProps> = ({
           ) : (
             <div className="flex flex-wrap items-end gap-2">
               <div className="min-w-[220px] flex-1 space-y-1.5">
-                <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                <span className="text-xs font-medium text-muted-foreground">
                   Preview trip
                 </span>
                 <Select
@@ -191,7 +191,7 @@ const TemplatePreviewDialog: React.FC<TemplatePreviewDialogProps> = ({
                   onValueChange={setSelectedTripId}
                   disabled={previewing}
                 >
-                  <SelectTrigger className="h-9 text-xs">
+                  <SelectTrigger className="h-9 text-xs" aria-label="Preview trip">
                     <SelectValue placeholder="Choose a trip" />
                   </SelectTrigger>
                   <SelectContent>
@@ -208,7 +208,7 @@ const TemplatePreviewDialog: React.FC<TemplatePreviewDialogProps> = ({
               </div>
               <Button
                 size="sm"
-                className="bg-teal-600 hover:bg-teal-700"
+                className="bg-agency-accent hover:bg-agency-accent/90"
                 onClick={() => void handlePreview()}
                 disabled={previewing || !selectedTripId}
               >
@@ -223,7 +223,7 @@ const TemplatePreviewDialog: React.FC<TemplatePreviewDialogProps> = ({
           )}
 
           {previewError ? (
-            <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-[11px] text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-300">
+            <div className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 p-2.5 text-xs text-destructive-ink dark:border-destructive/20 dark:bg-destructive/30">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span>{previewError}</span>
             </div>
@@ -231,7 +231,7 @@ const TemplatePreviewDialog: React.FC<TemplatePreviewDialogProps> = ({
 
           {preview ? (
             <>
-              <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <span>
                   {preview.trip.title || 'Untitled trip'} · {preview.pageCount}{' '}
                   {preview.pageCount === 1 ? 'page' : 'pages'}
@@ -251,21 +251,21 @@ const TemplatePreviewDialog: React.FC<TemplatePreviewDialogProps> = ({
                   title={`${template.name} v${version.version} preview`}
                   srcDoc={preview.html ?? ''}
                   sandbox=""
-                  className="h-[60vh] w-full rounded-2xl border border-slate-200 bg-white"
+                  className="h-[60vh] w-full rounded-2xl border border-border bg-white"
                 />
               )}
             </>
           ) : trips.length > 0 ? (
-            <div className="flex h-[60vh] flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-6 text-center dark:border-slate-800 dark:bg-slate-900/40">
+            <div className="flex h-[60vh] flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border bg-muted/60 px-6 text-center dark:bg-background/40">
               {previewing ? (
-                <Loader2 className="h-7 w-7 animate-spin text-teal-600" />
+                <Loader2 className="h-7 w-7 animate-spin text-agency-accent-ink" />
               ) : (
-                <Eye className="h-7 w-7 text-slate-300 dark:text-slate-700" />
+                <Eye className="h-7 w-7 text-muted-foreground" />
               )}
               <span className="text-sm font-semibold">
                 Render this version with real trip data
               </span>
-              <span className="max-w-sm text-[11px] text-slate-500 dark:text-slate-400">
+              <span className="max-w-sm text-xs text-muted-foreground">
                 You will see the actual document layout, including the selected
                 trip, its days and its latest quote.
               </span>

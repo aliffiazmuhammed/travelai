@@ -70,8 +70,8 @@ export const TripFeedback: React.FC<TripFeedbackProps> = ({
           "flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border text-xs font-bold transition-all disabled:opacity-60",
           isActive
             ? value === "up"
-              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-              : "border-rose-500/40 bg-rose-500/10 text-rose-600 dark:text-rose-400"
+              ? "border-success/40 bg-success/10 text-success-ink"
+              : "border-destructive/40 bg-destructive/10 text-destructive-ink"
             : "border-border/70 bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground"
         )}
       >
@@ -96,7 +96,7 @@ export const TripFeedback: React.FC<TripFeedbackProps> = ({
             Was this itinerary helpful?
           </span>
           {typeof qualityScore === "number" && (
-            <span className="text-[11px] font-semibold text-muted-foreground">
+            <span className="text-xs font-semibold text-muted-foreground">
               · AI confidence {qualityScore}%
             </span>
           )}
@@ -108,7 +108,7 @@ export const TripFeedback: React.FC<TripFeedbackProps> = ({
               {renderButton("down")}
             </>
           ) : (
-            <span className="text-[11px] text-muted-foreground font-medium">
+            <span className="text-xs text-muted-foreground font-medium">
               Only the trip owner can rate this itinerary
             </span>
           )}

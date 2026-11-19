@@ -100,17 +100,17 @@ export const LiveProposalDocument: React.FC<LiveProposalDocumentProps> = ({
           <AgencyLogoTile
             name={agency.name}
             logoUrl={agency.logoUrl}
-            className="h-14 w-14 rounded-xl text-lg sm:h-16 sm:w-16 sm:text-xl"
+            className="h-14 w-14 rounded-xl text-xl sm:h-16 sm:w-16"
           />
           <div className="min-w-0 space-y-1">
             <p className="font-display text-xl font-semibold leading-tight tracking-tight text-foreground sm:text-2xl">
               {agency.name}
             </p>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <p className="text-overline font-semibold text-muted-foreground">
               Travel agency
             </p>
             {agency.address ? (
-              <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
+              <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
                 <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                 <span>{agency.address}</span>
               </p>
@@ -178,7 +178,7 @@ export const LiveProposalDocument: React.FC<LiveProposalDocumentProps> = ({
                     key={`${line}-${index}`}
                     className="flex items-start gap-2 px-4 py-2.5 text-xs text-foreground"
                   >
-                    <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" aria-hidden="true" />
+                    <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent-ink" aria-hidden="true" />
                     <span>{line}</span>
                   </li>
                 ))}
@@ -193,7 +193,7 @@ export const LiveProposalDocument: React.FC<LiveProposalDocumentProps> = ({
                     {formatMoney(quote!.total, quote!.currency)}
                   </span>
                   {quote!.perPerson ? (
-                    <span className="text-[11px] text-muted-foreground">
+                    <span className="text-xs text-muted-foreground">
                       {formatMoney(quote!.perPerson, quote!.currency)} per person
                     </span>
                   ) : null}
@@ -203,10 +203,10 @@ export const LiveProposalDocument: React.FC<LiveProposalDocumentProps> = ({
           </div>
 
           {quote!.exclusions.length > 0 || quote!.terms.length > 0 ? (
-            <div className="grid gap-4 text-[11px] sm:grid-cols-2">
+            <div className="grid gap-4 text-xs sm:grid-cols-2">
               {quote!.exclusions.length > 0 ? (
                 <div className="space-y-1">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  <p className="text-overline font-semibold text-muted-foreground">
                     Not included
                   </p>
                   <ul className="space-y-1">
@@ -221,7 +221,7 @@ export const LiveProposalDocument: React.FC<LiveProposalDocumentProps> = ({
               ) : null}
               {quote!.terms.length > 0 ? (
                 <div className="space-y-1">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  <p className="text-overline font-semibold text-muted-foreground">
                     Terms
                   </p>
                   <ul className="space-y-1 text-muted-foreground">
@@ -263,7 +263,7 @@ export const LiveProposalDocument: React.FC<LiveProposalDocumentProps> = ({
       ) : null}
 
       {contact.phone || contact.email || contact.website ? (
-        <footer className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border/70 pt-4 text-[11px] text-muted-foreground">
+        <footer className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border/70 pt-4 text-xs text-muted-foreground">
           <span className="font-semibold text-foreground">{agency.name}</span>
           {contact.phone ? <span>{contact.phone}</span> : null}
           {contact.email ? <span>{contact.email}</span> : null}
@@ -287,12 +287,12 @@ const DayRow: React.FC<{ day: AgencyExportDay }> = ({ day }) => {
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-xs font-semibold text-primary">Day {day.day}</span>
           {day.date ? (
-            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
               {formatDateShort(day.date)}
             </span>
           ) : null}
           {day.permitRequired ? (
-            <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+            <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">
               <ShieldAlert className="h-3 w-3" aria-hidden="true" />
               Permit needed
             </span>
@@ -308,12 +308,12 @@ const DayRow: React.FC<{ day: AgencyExportDay }> = ({ day }) => {
         <div className="space-y-0.5">
           <p className="text-xs font-semibold text-foreground">{day.title}</p>
           {day.summary ? (
-            <p className="text-[11px] leading-5 text-muted-foreground">{day.summary}</p>
+            <p className="text-xs leading-5 text-muted-foreground">{day.summary}</p>
           ) : null}
         </div>
 
         {location ? (
-          <p className="flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground sm:max-w-[13rem] sm:justify-end sm:truncate">
+          <p className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground sm:max-w-[13rem] sm:justify-end sm:truncate">
             <MapPin className="h-3 w-3 shrink-0" aria-hidden="true" />
             <span className="truncate">{location}</span>
           </p>
@@ -328,16 +328,16 @@ const DayRow: React.FC<{ day: AgencyExportDay }> = ({ day }) => {
               className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5"
             >
               {activity.time ? (
-                <span className="text-[10px] font-semibold tabular-nums text-primary">
+                <span className="text-xs font-semibold tabular-nums text-primary">
                   {activity.time}
                 </span>
               ) : null}
-              <span className="text-[11px] font-medium text-foreground">{activity.title}</span>
+              <span className="text-xs font-medium text-foreground">{activity.title}</span>
               {activity.location ? (
-                <span className="text-[10px] text-muted-foreground">{activity.location}</span>
+                <span className="text-xs text-muted-foreground">{activity.location}</span>
               ) : null}
               {activity.description ? (
-                <span className="w-full text-[11px] leading-5 text-muted-foreground">
+                <span className="w-full text-xs leading-5 text-muted-foreground">
                   {activity.description}
                 </span>
               ) : null}
@@ -347,7 +347,7 @@ const DayRow: React.FC<{ day: AgencyExportDay }> = ({ day }) => {
       ) : null}
 
       {day.stay.length > 0 || day.food.length > 0 || day.transport.length > 0 || day.tips.length > 0 ? (
-        <div className="space-y-1 text-[11px] text-muted-foreground sm:pl-[10.75rem]">
+        <div className="space-y-1 text-xs text-muted-foreground sm:pl-[10.75rem]">
           {day.stay.map((stay, index) => (
             <p key={`${stay.name}-${index}`} className="flex items-start gap-1.5">
               <BedDouble className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
@@ -386,7 +386,7 @@ const ListBlock: React.FC<{ title: string; items: string[] }> = ({ title, items 
   if (items.length === 0) return null;
   return (
     <div className="space-y-1.5">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+      <p className="text-overline font-semibold text-muted-foreground">
         {title}
       </p>
       <ul className="space-y-1 text-muted-foreground">

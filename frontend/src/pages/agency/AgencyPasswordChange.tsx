@@ -3,7 +3,12 @@ import { KeyRound, Loader2, LogOut, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { PasswordStrength } from '@/components/auth/PasswordStrength';
 import { useAgencyAuth } from '@/context/AgencyAuthContext';
+import {
+  DEFAULT_PASSWORD_POLICY,
+  passwordProblem,
+} from '@/lib/passwordPolicy';
 import { toast } from 'sonner';
 
 interface AgencyPasswordChangeProps {
@@ -36,8 +41,12 @@ const AgencyPasswordChange: React.FC<AgencyPasswordChangeProps> = ({ forced = fa
       setError('Enter your current password.');
       return;
     }
-    if (newPassword.length < 6) {
-      setError('Your new password must be at least 6 characters.');
+    const problem = passwordProblem(newPassword, DEFAULT_PASSWORD_POLICY, {
+      email: user?.email,
+      name: user?.name,
+    });
+    if (problem) {
+      setError(problem);
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -70,7 +79,7 @@ const AgencyPasswordChange: React.FC<AgencyPasswordChangeProps> = ({ forced = fa
   const form = (
     <form className="space-y-4" onSubmit={submit}>
       {error ? (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-3 text-sm font-medium text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200">
+        <div role="alert" className="rounded-xl border border-destructive/30 bg-destructive/10 px-3.5 py-3 text-sm font-medium text-destructive-ink dark:border-destructive/40 dark:bg-destructive/20">
           {error}
         </div>
       ) : null}
@@ -81,6 +90,7 @@ const AgencyPasswordChange: React.FC<AgencyPasswordChangeProps> = ({ forced = fa
         </Label>
         <Input
           id="current-password"
+          name="currentPassword"
           type="password"
           value={currentPassword}
           onChange={(event) => {
@@ -96,6 +106,7 @@ const AgencyPasswordChange: React.FC<AgencyPasswordChangeProps> = ({ forced = fa
         <Label htmlFor="new-password">New password</Label>
         <Input
           id="new-password"
+          name="newPassword"
           type="password"
           value={newPassword}
           onChange={(event) => {
@@ -103,15 +114,17 @@ const AgencyPasswordChange: React.FC<AgencyPasswordChangeProps> = ({ forced = fa
             if (error) setError(null);
           }}
           autoComplete="new-password"
+          maxLength={DEFAULT_PASSWORD_POLICY.maxLength}
           className="h-11 border-agency-line bg-agency-panel"
         />
-        <p className="text-xs text-agency-muted">At least 6 characters.</p>
+        <PasswordStrength value={newPassword} email={user?.email} name={user?.name} />
       </div>
 
       <div className="space-y-2">
         <Label htmlFor="confirm-password">Confirm new password</Label>
         <Input
           id="confirm-password"
+          name="confirmPassword"
           type="password"
           value={confirmPassword}
           onChange={(event) => {
@@ -125,7 +138,7 @@ const AgencyPasswordChange: React.FC<AgencyPasswordChangeProps> = ({ forced = fa
 
       <Button
         type="submit"
-        className="h-11 w-full rounded-lg bg-agency-accent text-white hover:bg-agency-accent/90"
+        className="h-11 w-full rounded-lg bg-agency-accent text-agency-accent-foreground hover:bg-agency-accent/90"
         disabled={submitting}
       >
         {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -139,7 +152,7 @@ const AgencyPasswordChange: React.FC<AgencyPasswordChangeProps> = ({ forced = fa
       <section className="rounded-2xl border border-agency-line bg-agency-panel p-6">
         <header className="mb-5 space-y-1">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-agency-ink">
-            <KeyRound className="h-4 w-4 text-agency-accent" />
+            <KeyRound className="h-4 w-4 text-agency-accent-ink" />
             Agency password
           </h2>
           <p className="text-xs leading-5 text-agency-muted">
@@ -159,7 +172,7 @@ const AgencyPasswordChange: React.FC<AgencyPasswordChangeProps> = ({ forced = fa
           <img src="/brand/waytowalk-symbol.svg" alt="" width="48" height="36" className="h-9 w-14" />
           <span className="font-display text-xl font-semibold tracking-tight text-agency-ink">
             {agency?.name ?? "waytowalk"}{" "}
-            <span className="text-agency-accent">Agency</span>
+            <span className="text-agency-accent-ink">Agency</span>
           </span>
         </div>
 

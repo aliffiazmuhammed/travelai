@@ -83,13 +83,14 @@ export const TripPhotoField: React.FC<TripPhotoFieldProps> = ({
       type="file"
       accept="image/jpeg,image/png,image/webp"
       className="hidden"
+      aria-label="Upload photo"
       onChange={(event) => void handleFile(event.target.files?.[0])}
     />
   );
 
   const busyOverlay = busy && (
     <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/70 backdrop-blur-[1px]">
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-card px-2.5 py-1 text-[11px] font-semibold text-muted-foreground shadow-sm">
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-card px-2.5 py-1 text-xs font-semibold text-muted-foreground shadow-sm">
         <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
         Uploading
       </span>
@@ -146,8 +147,8 @@ export const TripPhotoField: React.FC<TripPhotoFieldProps> = ({
           )}
         >
           <ImagePlus className="h-5 w-5" aria-hidden />
-          <span className="text-[11px] font-semibold">{label || "Add a photo"}</span>
-          <span className="text-[10px] font-medium text-muted-foreground/80">
+          <span className="text-xs font-semibold">{label || "Add a photo"}</span>
+          <span className="text-xs font-medium text-muted-foreground/80">
             JPEG, PNG or WebP
           </span>
           {busyOverlay}
@@ -177,7 +178,7 @@ export const TripPhotoField: React.FC<TripPhotoFieldProps> = ({
             type="button"
             onClick={pick}
             disabled={busy}
-            className="inline-flex items-center gap-1 rounded-full bg-background/90 px-2.5 py-1 text-[11px] font-semibold text-foreground shadow-sm backdrop-blur-sm hover:bg-background"
+            className="inline-flex items-center gap-1 rounded-full bg-background/90 px-2.5 py-1 text-xs font-semibold text-foreground shadow-sm backdrop-blur-sm hover:bg-background"
           >
             <RefreshCw className="h-3 w-3" aria-hidden />
             Replace

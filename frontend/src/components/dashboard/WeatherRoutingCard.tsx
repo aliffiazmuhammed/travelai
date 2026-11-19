@@ -87,7 +87,7 @@ export const WeatherRoutingCard: React.FC<WeatherRoutingCardProps> = ({
             </span>
           </div>
         ) : allClear ? (
-          <div className="flex items-center gap-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+          <div className="flex items-center gap-2 text-xs font-semibold text-success-ink">
             <CheckCircle2 className="w-4 h-4" />
             <span>No travel legs are exposed to poor weather.</span>
           </div>
@@ -101,7 +101,7 @@ export const WeatherRoutingCard: React.FC<WeatherRoutingCardProps> = ({
                   <Badge
                     key={flag.day}
                     variant="outline"
-                    className={cn("text-[11px] px-2.5 py-1 rounded-full gap-1.5", meta.badgeClass)}
+                    className={cn("text-xs px-2.5 py-1 rounded-full gap-1.5", meta.badgeClass)}
                   >
                     <span className={cn("w-1.5 h-1.5 rounded-full", meta.dotClass)} />
                     Day {flag.day} · {meta.label}
@@ -130,22 +130,22 @@ export const WeatherRoutingCard: React.FC<WeatherRoutingCardProps> = ({
                       key={`${leg.day}-${leg.fromIndex}-${leg.toIndex}`}
                       className="flex items-center justify-between gap-3 p-2.5 rounded-xl border border-border/60 bg-background/60"
                     >
-                      <span className="text-[11px] font-semibold text-foreground truncate">
+                      <span className="text-xs font-semibold text-foreground truncate">
                         Day {leg.day} · stop {leg.fromIndex + 1} → {leg.toIndex + 1}
                       </span>
-                      <span className="text-[11px] font-bold text-muted-foreground shrink-0">
+                      <span className="text-xs font-bold text-muted-foreground shrink-0">
                         {formatDistance(leg.km)} · {formatDuration(leg.minutes)}
                       </span>
                     </div>
                   ))}
                   {riskyLegs.length > 4 && (
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                       +{riskyLegs.length - 4} more exposed leg
                       {riskyLegs.length - 4 === 1 ? "" : "s"}.
                     </p>
                   )}
                 </div>
-                <p className="text-[11px] text-muted-foreground italic">{riskyLegs[0].reason}</p>
+                <p className="text-xs text-muted-foreground italic">{riskyLegs[0].reason}</p>
               </div>
             )}
 
@@ -167,7 +167,7 @@ export const WeatherRoutingCard: React.FC<WeatherRoutingCardProps> = ({
                         </span>
                         <div className="min-w-0 flex-1">
                           <p className="text-xs font-bold text-foreground">{suggestion.title}</p>
-                          <p className="text-[11px] text-muted-foreground">{suggestion.detail}</p>
+                          <p className="text-xs text-muted-foreground">{suggestion.detail}</p>
                         </div>
                       </div>
                       {canEdit && actionLabel && (
@@ -176,7 +176,7 @@ export const WeatherRoutingCard: React.FC<WeatherRoutingCardProps> = ({
                             type="button"
                             size="sm"
                             variant="outline"
-                            className="rounded-xl text-[11px] font-bold h-8 gap-1.5"
+                            className="rounded-xl text-xs font-bold h-8 gap-1.5"
                             onClick={() => handleAction(suggestion)}
                           >
                             {SUGGESTION_ICONS[suggestion.type]}

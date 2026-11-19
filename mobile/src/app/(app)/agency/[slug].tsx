@@ -116,7 +116,7 @@ export default function AgencyProfileScreen() {
       >
         <Ionicons name="chevron-back" size={18} color={palette.foreground} />
       </Pressable>
-      <AppText variant="heading" tone="primary" style={styles.wordmark}>
+      <AppText variant="wordmark" tone="primary">
         waytowalk
       </AppText>
     </View>

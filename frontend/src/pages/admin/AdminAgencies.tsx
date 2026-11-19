@@ -430,7 +430,7 @@ const AdminAgencies: React.FC = () => {
             <Button
               type="button"
               size="sm"
-              className="h-9 gap-1.5 rounded-full bg-indigo-500 px-3 text-xs text-white hover:bg-indigo-400"
+              className="h-9 gap-1.5 rounded-full bg-admin-accent px-3 text-xs text-admin-accent-foreground hover:bg-admin-accent/90"
               onClick={openWizard}
               disabled={plans.length === 0}
             >
@@ -456,7 +456,7 @@ const AdminAgencies: React.FC = () => {
               <Button
                 asChild
                 size="sm"
-                className="h-8 gap-1.5 rounded-full bg-indigo-500 px-3 text-xs text-white hover:bg-indigo-400"
+                className="h-8 gap-1.5 rounded-full bg-admin-accent px-3 text-xs text-admin-accent-foreground hover:bg-admin-accent/90"
               >
                 <Link
                   to={`/agency/login?workspace=${encodeURIComponent(provisioned.agency.slug)}`}
@@ -493,7 +493,7 @@ const AdminAgencies: React.FC = () => {
                 ? 'The owner account was created in the agency realm with a one-time password.'
                 : 'An existing workspace account for this tenant was attached as owner.'}
             </p>
-            <p className="font-mono text-[11px]">
+            <p className="font-mono text-xs">
               {provisioned.agency.slug} · {provisioned.owner.email} ·{' '}
               {provisioned.agency.plan.tierId}
             </p>
@@ -576,7 +576,20 @@ const AdminAgencies: React.FC = () => {
       </div>
 
       {listError ? (
-        <AdminNotice tone="error" title="The agency directory did not load">
+        <AdminNotice
+          tone="error"
+          title="The agency directory did not load"
+          action={
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setListReloadKey((key) => key + 1)}
+            >
+              Try again
+            </Button>
+          }
+        >
           {listError}
         </AdminNotice>
       ) : null}
@@ -618,19 +631,25 @@ const AdminAgencies: React.FC = () => {
           ) : (list?.agencies.length ?? 0) === 0 ? (
             <tr>
               <td colSpan={8}>
-                <AdminEmptyState
-                  icon={Building2}
-                  title={
-                    search || statusFilter !== 'all' || planFilter !== 'all'
-                      ? 'No agencies match these filters'
-                      : 'No agencies yet'
-                  }
-                  description={
-                    search || statusFilter !== 'all' || planFilter !== 'all'
-                      ? 'Try a different status, plan or search term.'
-                      : 'Provision the first tenant to get started.'
-                  }
-                />
+                {listError ? (
+                  <p className="px-4 py-10 text-center text-xs text-muted-foreground">
+                    The list could not be loaded. Use Try again above.
+                  </p>
+                ) : (
+                  <AdminEmptyState
+                    icon={Building2}
+                    title={
+                      search || statusFilter !== 'all' || planFilter !== 'all'
+                        ? 'No agencies match these filters'
+                        : 'No agencies yet'
+                    }
+                    description={
+                      search || statusFilter !== 'all' || planFilter !== 'all'
+                        ? 'Try a different status, plan or search term.'
+                        : 'Provision the first tenant to get started.'
+                    }
+                  />
+                )}
               </td>
             </tr>
           ) : (
@@ -639,12 +658,12 @@ const AdminAgencies: React.FC = () => {
                 <td className="px-4 py-3">
                   <Link
                     to={`/admin/agencies/${agency._id}`}
-                    className="group block rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    className="group block rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-admin-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                   >
-                    <span className="block font-medium group-hover:text-indigo-300 group-hover:underline group-hover:underline-offset-2">
+                    <span className="block font-medium group-hover:text-admin-accent-ink group-hover:underline group-hover:underline-offset-2">
                       {agency.name}
                     </span>
-                    <span className="block font-mono text-[11px] text-muted-foreground">
+                    <span className="block font-mono text-xs text-muted-foreground">
                       {agency.slug}
                     </span>
                   </Link>
@@ -655,14 +674,14 @@ const AdminAgencies: React.FC = () => {
                 <td className="px-4 py-3">
                   <p className="break-all text-xs">{agency.owner?.email ?? 'No owner'}</p>
                   {agency.ownerCount > 1 ? (
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                       +{agency.ownerCount - 1} more owner{agency.ownerCount - 1 === 1 ? '' : 's'}
                     </p>
                   ) : null}
                 </td>
                 <td className="px-4 py-3">
                   <TierBadge tier={agency.plan.tierId} />
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  <p className="mt-0.5 text-xs text-muted-foreground">
                     {agency.plan.seats} seats · {agency.plan.monthlyExports} exports
                   </p>
                 </td>
@@ -674,7 +693,7 @@ const AdminAgencies: React.FC = () => {
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
                   {formatAdminDate(agency.lastActivityAt)}
-                  <p className="mt-0.5 text-[11px]">
+                  <p className="mt-0.5 text-xs">
                     Created {formatAdminDate(agency.createdAt)}
                   </p>
                 </td>
@@ -705,10 +724,10 @@ const AdminAgencies: React.FC = () => {
           if (!submitting) setOpen(next);
         }}
       >
-        <DialogContent className="dark max-h-[88vh] overflow-y-auto rounded-2xl border-border bg-card text-card-foreground sm:max-w-2xl">
+        <DialogContent className="max-h-[88vh] overflow-y-auto rounded-2xl border-border bg-card text-card-foreground sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <span className="grid h-7 w-7 place-items-center rounded-lg bg-indigo-500/15 text-indigo-300">
+              <span className="grid h-7 w-7 place-items-center rounded-lg bg-admin-accent/15 text-admin-accent-ink">
                 <Building2 className="h-4 w-4" aria-hidden />
               </span>
               Provision agency
@@ -724,7 +743,7 @@ const AdminAgencies: React.FC = () => {
               <div
                 key={value}
                 className={`h-1.5 flex-1 rounded-full ${
-                  value <= step ? 'bg-indigo-500' : 'bg-muted'
+                  value <= step ? 'bg-admin-accent' : 'bg-muted'
                 }`}
               />
             ))}
@@ -865,17 +884,17 @@ const AdminAgencies: React.FC = () => {
                     </div>
 
                     {preview.blocked ? (
-                      <p className="text-xs text-rose-300">{preview.blockedReason}</p>
+                      <p className="text-xs text-destructive-ink">{preview.blockedReason}</p>
                     ) : null}
 
                     {preview.warnings.map((warning) => (
-                      <p key={warning} className="text-xs leading-5 text-amber-200/90">
+                      <p key={warning} className="text-xs leading-5 text-warning-ink/90">
                         {warning}
                       </p>
                     ))}
 
                     {!preview.blocked && preview.warnings.length === 0 ? (
-                      <p className="flex items-center gap-1.5 text-xs text-emerald-300">
+                      <p className="flex items-center gap-1.5 text-xs text-success-ink">
                         <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
                         This email has no personal, agency or platform account yet.
                       </p>
@@ -992,7 +1011,7 @@ const AdminAgencies: React.FC = () => {
             {step < 3 ? (
               <Button
                 type="button"
-                className="bg-indigo-500 text-white hover:bg-indigo-400"
+                className="bg-admin-accent text-admin-accent-foreground hover:bg-admin-accent/90"
                 onClick={goNext}
               >
                 Continue
@@ -1000,7 +1019,7 @@ const AdminAgencies: React.FC = () => {
             ) : (
               <Button
                 type="button"
-                className="bg-indigo-500 text-white hover:bg-indigo-400"
+                className="bg-admin-accent text-admin-accent-foreground hover:bg-admin-accent/90"
                 onClick={() => void submit()}
                 disabled={submitting || preview?.blocked === true}
               >
@@ -1033,14 +1052,14 @@ const RealmChip: React.FC<{
   tone: 'sky' | 'indigo' | 'rose' | 'muted';
 }> = ({ label, tone }) => {
   const tones: Record<'sky' | 'indigo' | 'rose' | 'muted', string> = {
-    sky: 'border-sky-500/40 bg-sky-500/10 text-sky-300',
-    indigo: 'border-indigo-500/40 bg-indigo-500/10 text-indigo-300',
-    rose: 'border-rose-500/40 bg-rose-500/10 text-rose-300',
+    sky: 'border-info/40 bg-info/10 text-info-ink',
+    indigo: 'border-admin-accent/40 bg-admin-accent/10 text-admin-accent-ink',
+    rose: 'border-destructive/40 bg-destructive/10 text-destructive-ink',
     muted: 'border-border text-muted-foreground',
   };
   return (
     <span
-      className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${tones[tone]}`}
+      className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-xs font-medium ${tones[tone]}`}
     >
       {label}
     </span>
@@ -1053,7 +1072,7 @@ const Summary: React.FC<{ label: string; value: string; mono?: boolean }> = ({
   mono,
 }) => (
   <div className="rounded-xl border border-border bg-muted/30 px-3 py-2">
-    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+    <p className="text-overline font-semibold text-muted-foreground">
       {label}
     </p>
     <p

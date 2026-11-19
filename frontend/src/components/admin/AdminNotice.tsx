@@ -5,9 +5,9 @@ import { cn } from '@/lib/utils';
 type Tone = 'error' | 'warning' | 'success' | 'info';
 
 const toneClasses: Record<Tone, string> = {
-  error: 'border-rose-500/40 bg-rose-500/10 text-rose-200',
-  warning: 'border-amber-500/40 bg-amber-500/10 text-amber-100',
-  success: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-100',
+  error: 'border-destructive/40 bg-destructive/10 text-destructive-ink',
+  warning: 'border-warning/40 bg-warning/10 text-warning-ink',
+  success: 'border-success/40 bg-success/10 text-success-ink',
   info: 'border-border bg-muted/60 text-muted-foreground',
 };
 
@@ -43,7 +43,7 @@ export const AdminNotice: React.FC<{
       <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
       <div className="min-w-0 flex-1 space-y-0.5">
         {title ? <p className="font-medium">{title}</p> : null}
-        {children ? <div className="text-[13px] leading-5 opacity-90">{children}</div> : null}
+        {children ? <div className="text-sm leading-5 opacity-90">{children}</div> : null}
       </div>
       {action ? <div className="flex items-center gap-2">{action}</div> : null}
     </div>

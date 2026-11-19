@@ -10,27 +10,54 @@ import { AppText, Button, InlineError, TextField } from '@/ui';
 
 const EMAIL = /^\S+@\S+\.\S+$/;
 
+type FieldErrors = {
+  email?: string;
+  password?: string;
+};
+
 export default function SignInScreen() {
   const { signIn, sessionExpired } = useSession();
   const router = useRouter();
   const params = useLocalSearchParams<{ next?: string | string[] }>();
   const next = Array.isArray(params.next) ? params.next[0] : params.next;
+  const emailRef = useRef<ComponentRef<typeof TextInput>>(null);
   const passwordRef = useRef<ComponentRef<typeof TextInput>>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  function clearFieldError(field: keyof FieldErrors) {
+    setFieldErrors((previous) =>
+      previous[field] ? { ...previous, [field]: undefined } : previous
+    );
+  }
 
   async function submit() {
     if (submitting) return;
 
     const trimmedEmail = email.trim();
-    if (!trimmedEmail) return setError('Enter your email address.');
-    if (!EMAIL.test(trimmedEmail)) return setError('That email address looks incomplete.');
-    if (!password) return setError('Enter your password.');
+    const nextErrors: FieldErrors = {};
+    if (!trimmedEmail) nextErrors.email = 'Enter your email address.';
+    else if (!EMAIL.test(trimmedEmail)) {
+      nextErrors.email = 'That email address looks incomplete.';
+    }
+    if (!password) nextErrors.password = 'Enter your password.';
+
+    if (Object.keys(nextErrors).length > 0) {
+      setError(null);
+      setFieldErrors(nextErrors);
+      requestAnimationFrame(() => {
+        if (nextErrors.email) emailRef.current?.focus();
+        else passwordRef.current?.focus();
+      });
+      return;
+    }
 
     Keyboard.dismiss();
     setError(null);
+    setFieldErrors({});
     setSubmitting(true);
     try {
       await signIn(trimmedEmail, password, next);
@@ -67,11 +94,16 @@ export default function SignInScreen() {
     >
       <InlineError message={error} />
       <TextField
+        ref={emailRef}
         label="Email"
         filled
         value={email}
-        onChangeText={setEmail}
+        onChangeText={(value) => {
+          setEmail(value);
+          clearFieldError('email');
+        }}
         placeholder="you@example.com"
+        error={fieldErrors.email}
         keyboardType="email-address"
         autoCapitalize="none"
         autoCorrect={false}
@@ -85,8 +117,12 @@ export default function SignInScreen() {
         label="Password"
         filled
         value={password}
-        onChangeText={setPassword}
+        onChangeText={(value) => {
+          setPassword(value);
+          clearFieldError('password');
+        }}
         placeholder="Your password"
+        error={fieldErrors.password}
         secureTextEntry
         autoCapitalize="none"
         autoCorrect={false}
@@ -108,7 +144,7 @@ export default function SignInScreen() {
       <Button
         label="Sign in"
         size="lg"
-        variant="accent"
+        variant="primary"
         loading={submitting}
         onPress={submit}
         style={styles.submit}

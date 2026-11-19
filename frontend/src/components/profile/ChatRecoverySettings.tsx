@@ -9,8 +9,10 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { ConfirmDestructive } from "@/components/ui/confirm-destructive";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/components/auth/PasswordInput";
 import { useAuth } from "@/context/UserContext";
 import { keyBackup } from "@/lib/chatKeyBackup";
 import { backUpReadableHistory, type BackfillProgress } from "@/lib/chatKeyBackfill";
@@ -68,6 +70,7 @@ export function ChatRecoverySettings() {
   const [progress, setProgress] = useState<BackfillProgress>(emptyProgress);
   const [backfillBusy, setBackfillBusy] = useState(false);
   const [backfillError, setBackfillError] = useState<string | null>(null);
+  const [replaceOpen, setReplaceOpen] = useState(false);
   const pendingDraft = useRef<BackupDraft | null>(null);
   const run = useRef(0);
 
@@ -87,7 +90,7 @@ export function ChatRecoverySettings() {
     setNote(null);
   }
 
-  async function prepare(useCode: boolean) {
+  async function prepare(useCode: boolean): Promise<boolean> {
     resetFeedback();
     try {
       const next = await keyBackup.prepare(useCode ? code : undefined);
@@ -97,9 +100,15 @@ export function ChatRecoverySettings() {
       setCode("");
       setPassword("");
       setAcknowledged(false);
+      return true;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Recovery could not be opened. Try again.");
+      return false;
     }
+  }
+
+  async function replaceRecoveryCode() {
+    if (await prepare(false)) setReplaceOpen(false);
   }
 
   async function submit(event: React.FormEvent) {
@@ -182,7 +191,7 @@ export function ChatRecoverySettings() {
         </div>
         <div className="min-w-0 space-y-1">
           <h2 className="font-display text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
-            Chat backup &amp; recovery
+            Advanced: chat backup &amp; recovery
           </h2>
           <p className="text-sm leading-relaxed text-muted-foreground">
             Keep trip conversation history readable after a password reset or on a new
@@ -218,7 +227,7 @@ export function ChatRecoverySettings() {
         {draft ? (
           <form onSubmit={submit} className="space-y-4">
             <div className="rounded-xl border border-border/70 bg-muted/60 p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="text-overline font-semibold text-muted-foreground">
                 Your recovery code
               </p>
               <p className="mt-2 break-all font-mono text-sm font-semibold text-foreground">
@@ -256,9 +265,8 @@ export function ChatRecoverySettings() {
               <Label htmlFor="backup-password" className="text-xs font-semibold">
                 Current account password
               </Label>
-              <Input
+              <PasswordInput
                 id="backup-password"
-                type="password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 autoComplete="current-password"
@@ -266,7 +274,7 @@ export function ChatRecoverySettings() {
                 disabled={busy}
                 className="h-11 rounded-xl"
               />
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Enter it again to activate backup. The code is not active until the
                 save succeeds.
               </p>
@@ -389,7 +397,7 @@ export function ChatRecoverySettings() {
                     variant="secondary"
                     className="h-11 rounded-xl px-5 text-sm font-semibold"
                     disabled={loading}
-                    onClick={() => void prepare(false)}
+                    onClick={() => setReplaceOpen(true)}
                   >
                     Replace recovery code
                   </Button>
@@ -444,7 +452,7 @@ export function ChatRecoverySettings() {
                   </div>
                   {progress.trips > 0 || progress.finished ? (
                     <p
-                      className="mt-3 text-[11px] leading-relaxed text-muted-foreground"
+                      className="mt-3 text-xs leading-relaxed text-muted-foreground"
                       aria-live="polite"
                     >
                       {progress.trips} trips visited · {progress.saved} keys saved ·{" "}
@@ -479,7 +487,7 @@ export function ChatRecoverySettings() {
 
             {snapshot.status === "recoveryNeeded" ? (
               <p className="flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
-                <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
+                <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-warning-ink" aria-hidden="true" />
                 Without a matching saved code or this browser&rsquo;s saved backup key,
                 unavailable history cannot be recovered. Existing device chats may
                 still work. Nothing is erased or replaced automatically.
@@ -487,7 +495,7 @@ export function ChatRecoverySettings() {
             ) : null}
 
             {snapshot.status === "ready" ? (
-              <p className="flex items-start gap-2 text-[11px] leading-relaxed text-muted-foreground">
+              <p className="flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
                 <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
                 Keep old devices available until their history has been migrated.
                 This browser stores the unlocked key in local storage for this
@@ -497,12 +505,26 @@ export function ChatRecoverySettings() {
           </>
         )}
 
-        <p className={cn("text-[11px] leading-relaxed text-muted-foreground")}>
+        <p className={cn("text-xs leading-relaxed text-muted-foreground")}>
           Changing your password here re-wraps the chat-backup key under the new
           password automatically. Agency identities are separate and never use
           personal chat backup.
         </p>
       </div>
+
+      <ConfirmDestructive
+        open={replaceOpen}
+        onOpenChange={(next) => {
+          setReplaceOpen(next);
+          if (!next) resetFeedback();
+        }}
+        title="Replace your recovery code?"
+        description="This creates a new recovery code and two new wrapped copies of the account key. The old code stops working for future recovery; a copied old backup can still be opened with it, so keep or destroy that copy deliberately."
+        confirmLabel="Replace recovery code"
+        tone="warning"
+        onConfirm={replaceRecoveryCode}
+        error={replaceOpen ? error : null}
+      />
     </section>
   );
 }

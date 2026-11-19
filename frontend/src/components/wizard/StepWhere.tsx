@@ -120,7 +120,7 @@ export const StepWhere: React.FC<StepWhereProps> = ({
                 aria-pressed={isSelected}
                 onClick={() => onChange(dest.name)}
                 className={cn(
-                  "inline-flex min-h-[40px] items-center rounded-full border px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  "inline-flex min-h-[40px] items-center rounded-full border px-4 text-sm font-medium transition-colors coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   isSelected
                     ? "border-primary/50 bg-primary/10 text-primary"
                     : "border-border/80 bg-card text-foreground/80 hover:border-primary/40 hover:text-foreground"
@@ -136,7 +136,7 @@ export const StepWhere: React.FC<StepWhereProps> = ({
       {/* Rough Duration */}
       <div className="space-y-3 border-t border-border/60 pt-6">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
-          <h3 className="font-display text-lg font-semibold tracking-tight text-foreground sm:text-xl">
+          <h3 className="font-display text-xl font-semibold tracking-tight text-foreground">
             How long?
           </h3>
           <p className="text-xs text-muted-foreground sm:text-sm">

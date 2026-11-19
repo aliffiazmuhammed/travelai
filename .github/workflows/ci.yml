@@ -50,6 +50,11 @@ jobs:
       - name: Frontend typecheck
         run: npm run typecheck --workspace=frontend
 
+      # Phase 6 gate: semantic tokens own colour and type. ESLint carries the
+      # same rules for editors, but the scanners are the deterministic check.
+      - name: Design token scan
+        run: npm run ui:check --workspace=frontend
+
       # WebCrypto mirror of the mobile key-backup wire format; frozen vectors
       # prove that a code enrolled on one client opens on the other.
       - name: Frontend chat-key backup tests

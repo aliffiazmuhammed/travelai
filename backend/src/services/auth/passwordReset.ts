@@ -6,6 +6,7 @@ import { AppError } from '../../utils/AppError.js';
 import { appUrl } from '../mail/templates.js';
 import { notifyPasswordReset } from '../mail/notify.js';
 import { credentialCASFilter, credentialUpdate, loadPersonalBackupUser } from './keyBackup.js';
+import { assertPasswordPolicy } from './passwordPolicy.js';
 
 /**
  * Self-service password reset for the personal realm.
@@ -74,6 +75,33 @@ export async function requestPersonalPasswordReset(rawEmail: unknown): Promise<v
 }
 
 /**
+ * Read-only preflight used by the reset page before it renders the form.
+ *
+ * Mirrors the checks `resetPasswordWithToken` makes *before* asking for a new
+ * password: the token must exist, be unused, be unexpired, and still resolve to
+ * an active personal account. Unlike redemption it never claims the token, so a
+ * refresh or a shared link preview cannot burn it.
+ */
+export async function inspectPasswordResetToken(rawToken: unknown): Promise<void> {
+  const tokenValue = String(rawToken ?? '').trim();
+  if (!tokenValue) throw new AppError(INVALID_LINK, 400);
+
+  const token = await PasswordResetToken.findOne({
+    tokenHash: resetTokenHash(tokenValue),
+    usedAt: null,
+    expiresAt: { $gt: new Date() },
+  }).select('_id userId');
+  if (!token) throw new AppError(INVALID_LINK, 400);
+
+  try {
+    await loadPersonalBackupUser(String(token.userId));
+  } catch (error) {
+    if (error instanceof AppError && error.statusCode === 404) throw new AppError(INVALID_LINK, 400);
+    throw error;
+  }
+}
+
+/**
  * Consumes a token and replaces the password. The token is claimed atomically
  * *after* the account is validated (so a typo in the new password does not burn
  * the link) but *before* the password write (so two requests cannot both win).
@@ -85,9 +113,7 @@ export async function resetPasswordWithToken(
   const tokenValue = String(rawToken ?? '').trim();
   const next = String(newPassword ?? '');
   if (!tokenValue) throw new AppError(INVALID_LINK, 400);
-  if (next.length < 6) {
-    throw new AppError('Your new password must be at least 6 characters.', 400);
-  }
+  assertPasswordPolicy(next);
 
   const token = await PasswordResetToken.findOne({
     tokenHash: resetTokenHash(tokenValue),
@@ -103,6 +129,10 @@ export async function resetPasswordWithToken(
     if (error instanceof AppError && error.statusCode === 404) throw new AppError(INVALID_LINK, 400);
     throw error;
   }
+
+  // The account context is only known after the token resolves. Re-check before
+  // claiming the link so a password equal to the email/name does not burn it.
+  assertPasswordPolicy(next, { email: user.email, name: user.name });
 
   if (await bcrypt.compare(next, user.password)) {
     throw new AppError('Choose a password you have not used on this account before.', 400);

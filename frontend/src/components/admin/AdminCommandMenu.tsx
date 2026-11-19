@@ -63,7 +63,7 @@ const AdminCommandMenu: React.FC<AdminCommandMenuProps> = ({
     <CommandDialog
       open={open}
       onOpenChange={onOpenChange}
-      contentClassName="dark rounded-2xl border-border"
+      contentClassName="rounded-2xl border-border"
     >
       <CommandInput placeholder="Jump to a page or action…" />
       <CommandList>
@@ -89,7 +89,7 @@ const AdminCommandMenu: React.FC<AdminCommandMenuProps> = ({
             value="provision a new agency tenant"
             onSelect={() => go('/admin/agencies?provision=1')}
           >
-            <Building2 className="mr-2 h-4 w-4 text-indigo-400" aria-hidden />
+            <Building2 className="mr-2 h-4 w-4 text-admin-accent-ink" aria-hidden />
             Provision an agency
           </CommandItem>
           <CommandItem
@@ -125,10 +125,10 @@ const AdminCommandMenu: React.FC<AdminCommandMenuProps> = ({
           </CommandItem>
         </CommandGroup>
       </CommandList>
-      <div className="flex items-center justify-between gap-3 border-t border-border px-3 py-2 text-[11px] text-muted-foreground">
+      <div className="flex items-center justify-between gap-3 border-t border-border px-3 py-2 text-xs text-muted-foreground">
         <span>Platform console · isolated realm</span>
         <span className="inline-flex items-center gap-1">
-          <kbd className="rounded border border-border bg-muted px-1 py-0.5 font-sans text-[10px]">
+          <kbd className="rounded border border-border bg-muted px-1 py-0.5 font-sans text-xs">
             Esc
           </kbd>
           to close

@@ -51,15 +51,15 @@ const AdminAccountDetail: React.FC<AdminAccountDetailProps> = ({
 }) => {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      {/* Portalled content leaves the console tree, so it carries the dark scope. */}
+      {/* Portalled to <body>; it inherits the admin realm from <html>. */}
       <SheetContent
         side="right"
-        className="dark flex w-full flex-col gap-0 border-border bg-card p-0 text-card-foreground sm:max-w-lg"
+        className="flex w-full flex-col gap-0 border-border bg-card p-0 text-card-foreground sm:max-w-lg"
       >
         <SheetHeader className="shrink-0 space-y-2 border-b border-border px-6 py-5 pr-12 text-left">
           <div className="flex flex-wrap items-center gap-2">
             <SheetTitle className="flex items-center gap-2 text-base">
-              <span className="grid h-7 w-7 place-items-center rounded-lg bg-indigo-500/15 text-indigo-300">
+              <span className="grid h-7 w-7 place-items-center rounded-lg bg-admin-accent/15 text-admin-accent-ink">
                 <UserRound className="h-4 w-4" aria-hidden />
               </span>
               {account ? accountDisplayName(account) : 'Account detail'}
@@ -100,7 +100,7 @@ const AdminAccountDetail: React.FC<AdminAccountDetailProps> = ({
 
               {account.agency ? (
                 <section>
-                  <SectionTitle icon={Building2} tone="text-emerald-300">
+                  <SectionTitle icon={Building2} tone="text-success-ink">
                     Tenant
                   </SectionTitle>
                   <div className="mt-2 rounded-xl border border-border bg-muted/30 p-3">
@@ -110,8 +110,8 @@ const AdminAccountDetail: React.FC<AdminAccountDetailProps> = ({
                         variant="outline"
                         className={
                           account.agency.status === 'active'
-                            ? 'border-emerald-500/40 bg-emerald-500/10 text-[10px] uppercase text-emerald-300'
-                            : 'border-amber-500/40 bg-amber-500/10 text-[10px] uppercase text-amber-300'
+                            ? 'border-success/40 bg-success/10 text-overline text-success-ink'
+                            : 'border-warning/40 bg-warning/10 text-overline text-warning-ink'
                         }
                       >
                         {account.agency.status}
@@ -128,7 +128,7 @@ const AdminAccountDetail: React.FC<AdminAccountDetailProps> = ({
               ) : null}
 
               <section>
-                <SectionTitle icon={ShieldCheck} tone="text-indigo-300">
+                <SectionTitle icon={ShieldCheck} tone="text-admin-accent-ink">
                   Memberships
                 </SectionTitle>
                 {account.memberships.length === 0 ? (
@@ -152,12 +152,12 @@ const AdminAccountDetail: React.FC<AdminAccountDetailProps> = ({
                           </span>
                           <Badge
                             variant="outline"
-                            className="text-[10px] uppercase tracking-wide text-muted-foreground"
+                            className="text-overline text-muted-foreground"
                           >
                             {membership.role}
                           </Badge>
                         </div>
-                        <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        <p className="mt-0.5 text-xs text-muted-foreground">
                           Joined {formatAdminDate(membership.joinedAt)}
                         </p>
                       </li>
@@ -167,7 +167,7 @@ const AdminAccountDetail: React.FC<AdminAccountDetailProps> = ({
               </section>
 
               <section>
-                <SectionTitle icon={UserRound} tone="text-indigo-300">
+                <SectionTitle icon={UserRound} tone="text-admin-accent-ink">
                   Related accounts with this email
                 </SectionTitle>
                 {account.relatedAccounts.length === 0 ? (
@@ -182,7 +182,7 @@ const AdminAccountDetail: React.FC<AdminAccountDetailProps> = ({
                           type="button"
                           onClick={() => onOpenAccount?.(related._id)}
                           disabled={!onOpenAccount}
-                          className="w-full rounded-xl border border-border bg-muted/30 px-3 py-2 text-left transition hover:border-indigo-500/40 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:cursor-default disabled:hover:border-border disabled:hover:bg-muted/30"
+                          className="w-full rounded-xl border border-border bg-muted/30 px-3 py-2 text-left transition hover:border-admin-accent/40 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-admin-accent disabled:cursor-default disabled:hover:border-border disabled:hover:bg-muted/30"
                         >
                           <span className="flex flex-wrap items-center gap-2">
                             <RealmBadge realm={related.accountType} />
@@ -199,10 +199,10 @@ const AdminAccountDetail: React.FC<AdminAccountDetailProps> = ({
                               />
                             ) : null}
                           </span>
-                          <span className="mt-1 block break-all font-mono text-[10px] text-muted-foreground">
+                          <span className="mt-1 block break-all font-mono text-xs text-muted-foreground">
                             {related._id}
                           </span>
-                          <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                          <span className="mt-0.5 block text-xs text-muted-foreground">
                             Last sign-in {formatAdminDate(related.lastLoginAt)}
                           </span>
                         </button>
@@ -213,7 +213,7 @@ const AdminAccountDetail: React.FC<AdminAccountDetailProps> = ({
               </section>
 
               <section>
-                <SectionTitle icon={ClipboardList} tone="text-indigo-300">
+                <SectionTitle icon={ClipboardList} tone="text-admin-accent-ink">
                   Recent platform audit
                 </SectionTitle>
                 {account.recentAudit.length === 0 ? (
@@ -225,14 +225,14 @@ const AdminAccountDetail: React.FC<AdminAccountDetailProps> = ({
                     {account.recentAudit.map((event) => (
                       <li key={event._id} className="px-3 py-2">
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                          <code className="text-xs font-medium text-indigo-300">
+                          <code className="text-xs font-medium text-admin-accent-ink">
                             {event.action}
                           </code>
-                          <span className="text-[11px] tabular-nums text-muted-foreground">
+                          <span className="text-xs tabular-nums text-muted-foreground">
                             {formatAdminDate(event.createdAt)}
                           </span>
                         </div>
-                        <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        <p className="mt-0.5 text-xs text-muted-foreground">
                           {event.actorEmail ?? 'system'} · {event.targetType}
                         </p>
                       </li>
@@ -242,7 +242,7 @@ const AdminAccountDetail: React.FC<AdminAccountDetailProps> = ({
               </section>
 
               <div className="rounded-xl border border-border/70 bg-muted/20 px-3 py-2.5">
-                <p className="text-[11px] leading-5 text-muted-foreground">
+                <p className="text-xs leading-5 text-muted-foreground">
                   Tenant content is out of scope here by design. Use the agency
                   record for plan, members and public-directory state.
                 </p>
@@ -287,7 +287,7 @@ const Detail: React.FC<{ label: string; value: string; mono?: boolean }> = ({
   mono,
 }) => (
   <div className="rounded-xl border border-border bg-muted/30 px-3 py-2">
-    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+    <p className="text-overline font-semibold text-muted-foreground">
       {label}
     </p>
     <p className={`mt-0.5 break-all text-sm ${mono ? 'font-mono text-xs' : ''}`}>{value}</p>

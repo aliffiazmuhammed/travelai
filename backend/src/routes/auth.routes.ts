@@ -1,5 +1,13 @@
 import { Router } from 'express';
-import { signup, signin, logout, getMe, getCsrfToken, publishChatKey } from '../controllers/auth.controller.js';
+import {
+  signup,
+  signin,
+  logout,
+  getMe,
+  getAuthConfig,
+  getCsrfToken,
+  publishChatKey,
+} from '../controllers/auth.controller.js';
 import {
   changePassword,
   getHandleAvailability,
@@ -10,15 +18,22 @@ import {
 import {
   forgotPassword,
   resetPassword,
+  validateResetToken,
 } from '../controllers/passwordReset.controller.js';
+import {
+  createAccountDeletionRequest,
+  getAccountDeletionRequest,
+} from '../controllers/accountDeletion.controller.js';
 import { protectPersonal } from '../middleware/auth.middleware.js';
 import { issueCsrfCookie } from '../middleware/csrf.middleware.js';
 import { validate } from '../middleware/validate.middleware.js';
 import {
+  accountDeletionRequestSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
   signupSchema,
   signinSchema,
+  validateResetTokenSchema,
 } from '../schemas/auth.schema.js';
 import { publishChatKeySchema } from '../schemas/chatKey.schema.js';
 import { personalChangePasswordSchema, updateProfileSchema } from '../schemas/profile.schema.js';
@@ -32,17 +47,26 @@ import { handleAvatarUpload } from '../middleware/upload.middleware.js';
 import {
   authLimiter,
   avatarUploadLimiter,
+  deletionRequestLimiter,
   passwordChangeLimiter,
   keyBackupLimiter,
+  resetTokenLimiter,
 } from '../middleware/rateLimiter.middleware.js';
 
 const router = Router();
 
+// Public capability document: current policy versions, consent enforcement and
+// (later) the enabled sign-in methods. Anonymous by design — the consent page
+// and the sign-up form both need it before a session exists.
+router.get('/config', getAuthConfig);
 router.post('/signup', authLimiter, validate(signupSchema), signup);
 router.post('/signin', authLimiter, validate(signinSchema), signin);
 // Personal self-service reset. The request endpoint never reveals whether the
 // address exists; the reset endpoint consumes a single-use hashed token.
 router.post('/forgot-password', authLimiter, validate(forgotPasswordSchema), forgotPassword);
+// Read-only preflight: the reset page rejects a dead link before showing the
+// password form. Never claims the token, so refreshes cannot burn it.
+router.post('/reset-password/validate', resetTokenLimiter, validate(validateResetTokenSchema), validateResetToken);
 router.post('/reset-password', authLimiter, validate(resetPasswordSchema), resetPassword);
 router.post('/logout', logout);
 // CSRF bootstrap: hands the token to cross-origin SPAs in the body, because a
@@ -64,6 +88,17 @@ router.get('/profile/handle-available', protectPersonal, getHandleAvailability);
 router.post('/avatar', protectPersonal, avatarUploadLimiter, handleAvatarUpload, uploadAvatar);
 router.delete('/avatar', protectPersonal, removeAvatar);
 router.post('/password', protectPersonal, passwordChangeLimiter, backupBodyLimit, validate(personalChangePasswordSchema), changePassword);
+
+// Account deletion is a support-queue request in Phase 4, not self-serve
+// deletion (D-F). The route records the request and never removes data.
+router.get('/account-deletion-request', protectPersonal, getAccountDeletionRequest);
+router.post(
+  '/account-deletion-request',
+  protectPersonal,
+  deletionRequestLimiter,
+  validate(accountDeletionRequestSchema),
+  createAccountDeletionRequest
+);
 
 // Personal first, trip guard second: a dual-cookie browser must never select
 // its agency identity for personal recovery (including agency-trip collaborators).

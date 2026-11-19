@@ -4,6 +4,7 @@ import Navbar from "@/components/Navbar";
 import { AgencyLogoTile } from "@/components/directory/AgencyLogoTile";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -82,7 +83,7 @@ const AgencyCard = ({ agency }: { agency: AgencyDirectoryCard }) => {
   const description = agency.services.map((service) => service.label).join(" · ");
 
   return (
-    <article className="group flex h-full flex-col rounded-2xl border border-border/70 bg-card p-5 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md sm:p-6">
+    <article className="group relative flex h-full flex-col rounded-2xl border border-border/70 bg-card p-5 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md sm:p-6">
       <div className="flex items-start gap-4">
         <AgencyLogoTile
           name={agency.name}
@@ -92,10 +93,10 @@ const AgencyCard = ({ agency }: { agency: AgencyDirectoryCard }) => {
         />
 
         <div className="min-w-0 flex-1">
-          <h3 className="flex min-w-0 items-center gap-1.5 font-display text-lg font-semibold leading-snug tracking-tight text-foreground">
+          <h3 className="flex min-w-0 items-center gap-1.5 font-display text-xl font-semibold leading-snug tracking-tight text-foreground">
             <Link
               to={profileHref}
-              className="truncate transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2"
+              className="truncate transition-colors group-hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 after:absolute after:inset-0 after:content-['']"
             >
               {agency.name}
             </Link>
@@ -126,7 +127,7 @@ const AgencyCard = ({ agency }: { agency: AgencyDirectoryCard }) => {
           {agency.specialties.slice(0, 3).map((specialty) => (
             <span
               key={specialty}
-              className="rounded-full bg-muted/70 px-2.5 py-1 text-[11px] font-medium text-muted-foreground"
+              className="rounded-full bg-muted/70 px-2.5 py-1 text-xs font-medium text-muted-foreground"
             >
               {specialty}
             </span>
@@ -144,13 +145,10 @@ const AgencyCard = ({ agency }: { agency: AgencyDirectoryCard }) => {
                   agency.currency
                 )} per person`}
           </span>
-          <Link
-            to={profileHref}
-            className="inline-flex items-center gap-1 text-[11px] font-bold text-primary transition-all hover:gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2"
-          >
+          <span className="inline-flex items-center gap-1 text-xs font-bold text-primary transition-all group-hover:gap-1.5">
             View profile
             <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-          </Link>
+          </span>
         </div>
       </div>
     </article>
@@ -175,7 +173,7 @@ const FilterDropdown = ({
         <button
           type="button"
           className={cn(
-            "inline-flex min-h-[40px] max-w-full items-center gap-2 rounded-full border px-4 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2",
+            "inline-flex min-h-[40px] max-w-full items-center gap-2 rounded-full border px-4 text-xs font-semibold transition-colors coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2",
             activeFacet
               ? "border-primary/50 bg-primary/10 text-primary"
               : "border-border/80 bg-card text-foreground/80 hover:border-primary/30 hover:text-foreground"
@@ -228,7 +226,7 @@ const FilterDropdown = ({
               >
                 {facet.label}
               </span>
-              <span className="shrink-0 text-[10px] text-muted-foreground">
+              <span className="shrink-0 text-xs text-muted-foreground">
                 {facet.count}
               </span>
             </DropdownMenuItem>
@@ -455,17 +453,13 @@ const Agencies = () => {
     <div className="flex min-h-screen flex-col bg-gradient-hero">
       <Navbar />
 
-      <main className="container mx-auto max-w-6xl flex-1 px-4 pb-20 pt-24">
-        <header className="space-y-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0 space-y-2">
-              <h1 className="font-display text-3xl font-semibold leading-[1.08] tracking-tight text-foreground sm:text-5xl">
-                Find an agency that plans your kind of trip
-              </h1>
-              <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-                Local experts and small teams who plan trips for a living.
-              </p>
-            </div>
+      <main id="main-content" tabIndex={-1} className="container mx-auto max-w-6xl flex-1 px-4 pb-20 pt-24">
+        <PageHeader
+          realm="public"
+          size="xl"
+          title="Find an agency that plans your kind of trip"
+          description="Local experts and small teams who plan trips for a living."
+          actions={
             <Button
               asChild
               variant="outline"
@@ -477,8 +471,8 @@ const Agencies = () => {
                 List your agency
               </Link>
             </Button>
-          </div>
-
+          }
+        >
           <div className="max-w-2xl">
             <div className="relative">
               <Search
@@ -529,7 +523,7 @@ const Agencies = () => {
               )}
             </div>
           )}
-        </header>
+        </PageHeader>
 
         <div ref={resultsRef} className="mt-8 scroll-mt-24">
           <h2 className="sr-only">Agency directory results</h2>

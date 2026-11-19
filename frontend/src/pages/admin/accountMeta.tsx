@@ -21,15 +21,15 @@ export function realmLabel(realm: PlatformAccountType): string {
 }
 
 const realmClass: Record<PlatformAccountType, string> = {
-  personal: 'border-sky-500/40 bg-sky-500/10 text-sky-300',
-  agency: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300',
-  platform: 'border-indigo-500/40 bg-indigo-500/10 text-indigo-300',
+  personal: 'border-info/40 bg-info/10 text-info-ink',
+  agency: 'border-success/40 bg-success/10 text-success-ink',
+  platform: 'border-admin-accent/40 bg-admin-accent/10 text-admin-accent-ink',
 };
 
 export const RealmBadge: React.FC<{ realm: PlatformAccountType }> = ({ realm }) => (
   <Badge
     variant="outline"
-    className={cn('px-1.5 py-0 text-[10px] font-semibold uppercase tracking-wide', realmClass[realm])}
+    className={cn('px-1.5 py-0 text-overline font-semibold', realmClass[realm])}
   >
     {realmLabel(realm)}
   </Badge>
@@ -39,10 +39,10 @@ export const StatusBadge: React.FC<{ status: PlatformAccountStatus }> = ({ statu
   <Badge
     variant="outline"
     className={cn(
-      'px-1.5 py-0 text-[10px] font-semibold uppercase tracking-wide',
+      'px-1.5 py-0 text-overline font-semibold',
       status === 'active'
-        ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
-        : 'border-rose-500/40 bg-rose-500/10 text-rose-300'
+        ? 'border-success/40 bg-success/10 text-success-ink'
+        : 'border-destructive/40 bg-destructive/10 text-destructive-ink'
     )}
   >
     {status === 'active' ? 'Active' : 'Disabled'}
@@ -55,10 +55,10 @@ export const AgencyStatusBadge: React.FC<{ status: PlatformAgencyStatus }> = ({
   <Badge
     variant="outline"
     className={cn(
-      'px-1.5 py-0 text-[10px] font-semibold uppercase tracking-wide',
+      'px-1.5 py-0 text-overline font-semibold',
       status === 'active'
-        ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
-        : 'border-rose-500/40 bg-rose-500/10 text-rose-300'
+        ? 'border-success/40 bg-success/10 text-success-ink'
+        : 'border-destructive/40 bg-destructive/10 text-destructive-ink'
     )}
   >
     {status}
@@ -69,7 +69,7 @@ export const AgencyStatusBadge: React.FC<{ status: PlatformAgencyStatus }> = ({
 export const TierBadge: React.FC<{ tier: string }> = ({ tier }) => (
   <Badge
     variant="outline"
-    className="px-1.5 py-0 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+    className="px-1.5 py-0 text-overline font-semibold text-muted-foreground"
   >
     {tier}
   </Badge>

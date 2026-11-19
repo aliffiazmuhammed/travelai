@@ -5,11 +5,21 @@ import { cn } from "@/lib/utils";
 type TableProps = React.HTMLAttributes<HTMLTableElement> & {
   /** The scroll container around the table; a max height here keeps long tables from growing the page. */
   containerClassName?: string;
+  /** Accessible name for the scroll region; set it whenever the table scrolls. */
+  scrollLabel?: string;
 };
 
 const Table = React.forwardRef<HTMLTableElement, TableProps>(
-  ({ className, containerClassName, ...props }, ref) => (
-    <div className={cn("relative w-full overflow-auto", containerClassName)}>
+  ({ className, containerClassName, scrollLabel, ...props }, ref) => (
+    <div
+      className={cn(
+        "relative w-full overflow-auto",
+        scrollLabel &&
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        containerClassName,
+      )}
+      {...(scrollLabel ? { role: "region" as const, "aria-label": scrollLabel, tabIndex: 0 } : null)}
+    >
       <table ref={ref} className={cn("w-full caption-bottom text-sm", className)} {...props} />
     </div>
   ),

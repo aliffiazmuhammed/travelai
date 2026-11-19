@@ -9,6 +9,7 @@ export { ListGroup } from './ListGroup';
 export { ListRow } from './ListRow';
 export { NavShell, type NavTab } from './NavShell';
 export { PillTabs, type PillTabItem } from './PillTabs';
+export { PasswordStrength } from './PasswordStrength';
 export { NAV_BOTTOM_SPACE, Screen } from './Screen';
 export { SearchBar } from './SearchBar';
 export { SectionHeader } from './SectionHeader';

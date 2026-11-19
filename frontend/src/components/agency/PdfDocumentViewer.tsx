@@ -77,11 +77,11 @@ const PdfDocumentViewer: React.FC<PdfDocumentViewerProps> = ({
     return (
       <div
         className={cn(
-          'flex h-[60vh] flex-col items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/60 text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-400',
+          'flex h-[60vh] flex-col items-center justify-center gap-2 rounded-2xl border border-border bg-muted/60 text-xs text-muted-foreground dark:bg-background/40',
           className
         )}
       >
-        <Loader2 className="h-5 w-5 animate-spin text-teal-600" />
+        <Loader2 className="h-5 w-5 animate-spin text-agency-accent-ink" />
         Rendering the PDF...
       </div>
     );
@@ -91,7 +91,7 @@ const PdfDocumentViewer: React.FC<PdfDocumentViewerProps> = ({
     return (
       <div
         className={cn(
-          'flex h-[60vh] flex-col items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50/60 px-6 text-center text-xs text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-300',
+          'flex h-[60vh] flex-col items-center justify-center gap-2 rounded-2xl border border-destructive/30 bg-destructive/10 px-6 text-center text-xs text-destructive-ink dark:border-destructive/20 dark:bg-destructive/30',
           className
         )}
       >
@@ -105,11 +105,11 @@ const PdfDocumentViewer: React.FC<PdfDocumentViewerProps> = ({
     return (
       <div
         className={cn(
-          'flex h-[60vh] flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-200 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400',
+          'flex h-[60vh] flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border text-xs text-muted-foreground',
           className
         )}
       >
-        <FileText className="h-5 w-5 text-slate-300 dark:text-slate-700" />
+        <FileText className="h-5 w-5 text-muted-foreground" />
         No document to show yet.
       </div>
     );
@@ -118,7 +118,7 @@ const PdfDocumentViewer: React.FC<PdfDocumentViewerProps> = ({
   return (
     <div
       className={cn(
-        'max-h-[60vh] space-y-3 overflow-y-auto rounded-2xl border border-slate-200 bg-slate-100/60 p-3 dark:border-slate-800 dark:bg-slate-950/40',
+        'max-h-[60vh] space-y-3 overflow-y-auto rounded-2xl border border-border bg-muted/60 p-3 dark:bg-background/40',
         className
       )}
     >

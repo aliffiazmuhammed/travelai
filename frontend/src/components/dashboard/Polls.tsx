@@ -85,7 +85,7 @@ const PollOption: React.FC<{
       <span className="relative flex items-center gap-1.5">
         {mine && <Check className="w-3 h-3 shrink-0 text-primary" />}
         <span className="min-w-0 flex-1 truncate">{label}</span>
-        <span className="shrink-0 text-[10px] font-bold tabular-nums text-muted-foreground">
+        <span className="shrink-0 text-xs font-bold tabular-nums text-muted-foreground">
           {count}
         </span>
       </span>
@@ -123,12 +123,12 @@ export const PollCard: React.FC<PollCardProps> = ({
           <p className="text-xs font-semibold break-words text-foreground">
             {question || unreadable}
           </p>
-          <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
+          <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
             <span className="font-bold">{mine ? "You" : poll.createdByLabel}</span>
             <span aria-hidden>·</span>
             <span>{formatRelative(poll.createdAt)}</span>
             {closed && (
-              <Badge variant="outline" className="h-3.5 px-1 py-0 text-[9px] font-semibold">
+              <Badge variant="outline" className="h-3.5 px-1 py-0 text-xs font-semibold">
                 Closed
               </Badge>
             )}
@@ -144,7 +144,7 @@ export const PollCard: React.FC<PollCardProps> = ({
                 onClick={onClosePoll}
                 disabled={busy}
                 title="Close voting"
-                className="h-6 gap-1 px-1.5 text-[10px]"
+                className="h-6 gap-1 px-1.5 text-xs"
               >
                 {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
                 <span className="hidden sm:inline">Close</span>
@@ -180,18 +180,18 @@ export const PollCard: React.FC<PollCardProps> = ({
         ))}
         {!decoded &&
           (decoding ? (
-            <div className="flex items-center gap-1.5 py-1 text-[11px] text-muted-foreground">
+            <div className="flex items-center gap-1.5 py-1 text-xs text-muted-foreground">
               <Loader2 className="w-3 h-3 animate-spin" />
               Opening poll…
             </div>
           ) : (
-            <p className="py-1 text-[11px] text-muted-foreground">
+            <p className="py-1 text-xs text-muted-foreground">
               The options and votes can't be read on this device yet.
             </p>
           ))}
       </div>
 
-      <p className="mt-2 text-[10px] text-muted-foreground">
+      <p className="mt-2 text-xs text-muted-foreground">
         {total} {total === 1 ? "vote" : "votes"}
         {closed
           ? " · voting closed"
@@ -265,21 +265,21 @@ export const PollsBand: React.FC<PollsBandProps> = ({
           className="flex min-w-0 flex-1 items-center gap-1.5 px-2.5 py-1.5 text-left"
         >
           <BarChart3 className="w-3.5 h-3.5 shrink-0 text-primary" />
-          <span className="text-[10px] font-bold uppercase tracking-wide text-primary">
+          <span className="text-overline font-bold text-primary">
             Polls
           </span>
           <Badge
             variant="outline"
-            className="h-4 shrink-0 border-primary/30 px-1 py-0 text-[9px] font-bold text-primary"
+            className="h-4 shrink-0 border-primary/30 px-1 py-0 text-xs font-bold text-primary"
           >
             {polls.length}
           </Badge>
           {!expanded && (
             <>
-              <span className="min-w-0 flex-1 truncate text-[11px] text-foreground">
+              <span className="min-w-0 flex-1 truncate text-xs text-foreground">
                 {latestDecoded?.question?.trim() || "Opening poll…"}
               </span>
-              <span className="shrink-0 text-[10px] text-muted-foreground">
+              <span className="shrink-0 text-xs text-muted-foreground">
                 {latest.votes.length} voted
               </span>
             </>
@@ -299,7 +299,7 @@ export const PollsBand: React.FC<PollsBandProps> = ({
             onClick={onNewPoll}
             title="Start a poll"
             aria-label="Start a poll"
-            className="mr-1 h-6 shrink-0 gap-0.5 px-1.5 text-[10px]"
+            className="mr-1 h-6 shrink-0 gap-0.5 px-1.5 text-xs"
           >
             <Plus className="w-3 h-3" />
           </Button>
@@ -416,7 +416,7 @@ export const PollComposer: React.FC<PollComposerProps> = ({
 
         <div className="space-y-3">
           <div className="space-y-1.5">
-            <label htmlFor="poll-question" className="text-[11px] font-bold text-foreground">
+            <label htmlFor="poll-question" className="text-xs font-bold text-foreground">
               Question
             </label>
             <Input
@@ -430,7 +430,7 @@ export const PollComposer: React.FC<PollComposerProps> = ({
           </div>
 
           <div className="space-y-1.5">
-            <span className="text-[11px] font-bold text-foreground">Options</span>
+            <span className="text-xs font-bold text-foreground">Options</span>
             {options.map((option, index) => (
               <div key={index} className="flex items-center gap-1.5">
                 <Input
@@ -461,7 +461,7 @@ export const PollComposer: React.FC<PollComposerProps> = ({
                 size="sm"
                 variant="ghost"
                 onClick={() => setOptions((prev) => [...prev, ""])}
-                className="h-7 gap-1 px-1.5 text-[11px]"
+                className="h-7 gap-1 px-1.5 text-xs"
               >
                 <Plus className="w-3 h-3" />
                 Add option

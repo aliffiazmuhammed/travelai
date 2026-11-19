@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Copy } from "lucide-react";
 import Navbar from "@/components/Navbar";
@@ -8,6 +9,7 @@ import { toast } from "sonner";
 import ItineraryDisplay from "@/components/ItineraryDisplay";
 import { MyTripsView } from "@/components/dashboard/MyTripsView";
 import { TripsGridSkeleton, ItinerarySkeleton } from "@/components/dashboard/TripSkeletons";
+import { AsyncErrorPanel, AsyncLiveStatus } from "@/components/states/AsyncState";
 import { useAuth } from "@/context/UserContext";
 import { useTripAccess } from "@/hooks/useTripAccess";
 import { isRevConflict, toastConflict } from "@/lib/conflicts";
@@ -23,6 +25,7 @@ const Dashboard: React.FC = () => {
   const [deletedTrips, setDeletedTrips] = useState<Trip[]>([]);
   const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState<unknown | null>(null);
   const [isSaving, setIsSaving] = useState<boolean>(false);
 
   // Milestone 6 §3.8: role → UI gating. Cosmetic only — the server enforces.
@@ -57,6 +60,7 @@ const Dashboard: React.FC = () => {
       if (showSpinner) setLoading(true);
       const data = await api.getTrips();
       setTrips(data);
+      setLoadError(null);
 
       // If passed state from TripPlanner, open the EXACT trip it created.
       // The old title match could open a different trip with the same title.
@@ -123,7 +127,9 @@ const Dashboard: React.FC = () => {
       }
     } catch (err: any) {
       console.error("Failed to fetch trips:", err);
-      if (showSpinner) toast.error("Failed to load your trips. Please check your connection.");
+      // A failure is shown in the content area, not only as a toast. When the
+      // last known list is still on screen, a quiet refresh keeps it instead.
+      setLoadError(err);
     } finally {
       if (showSpinner) setLoading(false);
     }
@@ -172,6 +178,7 @@ const Dashboard: React.FC = () => {
     try {
       const data = await api.getTrips();
       setTrips(data);
+      setLoadError(null);
       setSelectedTrip((prev) => {
         if (!prev || prev._id.startsWith("temp-")) return prev;
         const fresh = data.find((t) => t._id === prev._id);
@@ -214,7 +221,17 @@ const Dashboard: React.FC = () => {
     }
     try {
       await api.deleteTrip(tripId);
-      toast.success("Trip moved to Recently deleted.");
+      // C-07: soft delete is reversible, so the toast offers a real Undo.
+      toast.success("Trip moved to Recently deleted.", {
+        action: {
+          label: "Undo",
+          onClick: () => {
+            void handleRestoreTrip(tripId).catch(() => {
+              /* handleRestoreTrip already surfaced the failure */
+            });
+          },
+        },
+      });
       setTrips((prev) => prev.filter((t) => t._id !== tripId));
       if (trip) {
         setDeletedTrips((prev) => [
@@ -374,15 +391,28 @@ const Dashboard: React.FC = () => {
     <div className="min-h-screen bg-background flex flex-col">
       <Navbar />
 
-      <main className="flex-1 container mx-auto px-4 pt-24 pb-16">
+      <main id="main-content" tabIndex={-1} className="flex-1 container mx-auto px-4 pt-24 pb-16">
+        <AsyncLiveStatus message={loading ? "Loading your trips…" : null} />
         {/* E5 (F16): opening a card fetches the full document. Show the shape
             of the itinerary that is about to render instead of a spinner veil,
             so the transition feels like the page loading, not a stall. */}
-        {openingDetail && (
-          <div className="fixed inset-0 z-50 overflow-y-auto bg-background/80 backdrop-blur-sm px-4 pt-24">
-            <ItinerarySkeleton />
-          </div>
-        )}
+        <DialogPrimitive.Root open={Boolean(openingDetail)}>
+          <DialogPrimitive.Portal>
+            <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm" />
+            <DialogPrimitive.Content
+              aria-busy="true"
+              aria-describedby={undefined}
+              onInteractOutside={(event) => event.preventDefault()}
+              onEscapeKeyDown={(event) => event.preventDefault()}
+              className="fixed inset-0 z-50 overflow-y-auto px-4 pt-24 focus:outline-none"
+            >
+              <DialogPrimitive.Title className="sr-only">
+                Opening your itinerary
+              </DialogPrimitive.Title>
+              <ItinerarySkeleton />
+            </DialogPrimitive.Content>
+          </DialogPrimitive.Portal>
+        </DialogPrimitive.Root>
         {loading ? (
           <div className="mx-auto max-w-6xl space-y-6">
             {/* Mirrors the my-trips header: crumb, serif title, one quiet line,
@@ -405,7 +435,17 @@ const Dashboard: React.FC = () => {
               <div className="h-11 w-full rounded-xl skeleton-shimmer lg:w-[340px]" />
             </div>
             <TripsGridSkeleton />
+            <p role="status" className="sr-only">
+              Loading your trips…
+            </p>
           </div>
+        ) : !selectedTrip && trips.length === 0 && loadError ? (
+          <AsyncErrorPanel
+            className="mx-auto mt-6 max-w-2xl"
+            error={loadError}
+            subject="your trips"
+            onRetry={() => void loadTrips(true)}
+          />
         ) : selectedTrip ? (
           /* SINGLE TRIP DETAIL VIEW */
           <div className="space-y-6">

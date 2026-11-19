@@ -11,7 +11,7 @@ export function BootScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: palette.background }]}>
-      <AppText variant="title" tone="primary" style={styles.wordmark}>
+      <AppText variant="wordmarkLarge" tone="primary">
         waytowalk
       </AppText>
       <Skeleton width={132} height={10} />

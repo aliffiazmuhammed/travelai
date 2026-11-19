@@ -1,5 +1,5 @@
 import React from 'react';
-import { cn } from '@/lib/utils';
+import { PageHeader } from '@/components/ui/page-header';
 import { TravellerBreadcrumbs, type TravellerCrumb } from './TravellerBreadcrumbs';
 
 interface TravellerPageHeaderProps {
@@ -19,12 +19,14 @@ interface TravellerPageHeaderProps {
    * translucent card the discovery pages use.
    */
   tone?: 'plain' | 'hero';
+  headingId?: string;
+  headingTabIndex?: number;
   className?: string;
 }
 
 /**
- * One header for every traveller page: the trail, the title a person would
- * search for, one line of context and at most a small row of actions.
+ * Traveller adapter over the shared `PageHeader`: same trail, title ladder and
+ * spacing as every other page, with the traveller ink and accent.
  */
 export const TravellerPageHeader: React.FC<TravellerPageHeaderProps> = ({
   title,
@@ -32,58 +34,29 @@ export const TravellerPageHeader: React.FC<TravellerPageHeaderProps> = ({
   description,
   meta,
   actions,
-  icon: Icon,
+  icon,
   crumbs,
   children,
   tone = 'plain',
+  headingId,
+  headingTabIndex,
   className,
 }) => (
-  <header className={cn('space-y-4', className)}>
-    {crumbs?.length ? <TravellerBreadcrumbs items={crumbs} /> : null}
-    <div
-      className={cn(
-        'space-y-4',
-        tone === 'hero' &&
-          'rounded-3xl border border-border/80 bg-card/80 p-6 shadow-card backdrop-blur-md sm:p-8'
-      )}
-    >
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="min-w-0 space-y-2">
-          {eyebrow ? (
-            <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-primary">
-              {Icon ? <Icon className="h-3.5 w-3.5" aria-hidden /> : null}
-              {eyebrow}
-            </p>
-          ) : null}
-          <h1 className="flex flex-wrap items-center gap-2 text-2xl font-semibold tracking-tight text-foreground">
-            {title}
-            {meta}
-          </h1>
-          {description ? (
-            <p
-              className={cn(
-                'max-w-2xl text-sm leading-6 text-muted-foreground',
-                tone === 'hero' && 'sm:leading-relaxed'
-              )}
-            >
-              {description}
-            </p>
-          ) : null}
-        </div>
-        {actions ? (
-          <div className="flex flex-wrap items-center gap-2">{actions}</div>
-        ) : null}
-      </div>
-      {children ? (
-        <div
-          className={cn(
-            'space-y-4',
-            tone === 'hero' && 'border-t border-border/60 pt-4'
-          )}
-        >
-          {children}
-        </div>
-      ) : null}
-    </div>
-  </header>
+  <PageHeader
+    realm="traveller"
+    size="lg"
+    title={title}
+    eyebrow={eyebrow}
+    description={description}
+    meta={meta}
+    actions={actions}
+    icon={icon}
+    breadcrumbs={crumbs?.length ? <TravellerBreadcrumbs items={crumbs} /> : undefined}
+    tone={tone}
+    id={headingId}
+    headingTabIndex={headingTabIndex}
+    className={className}
+  >
+    {children}
+  </PageHeader>
 );

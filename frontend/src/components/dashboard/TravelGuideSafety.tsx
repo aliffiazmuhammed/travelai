@@ -43,7 +43,7 @@ export const TravelGuideSafety: React.FC<TravelGuideSafetyProps> = ({
         <Card className="rounded-3xl border border-border/70 shadow-card bg-card/80 backdrop-blur-sm">
           <CardHeader>
             <CardTitle className="text-base font-bold flex items-center gap-2">
-              <CloudRain className="w-4 h-4 text-blue-500" />
+              <CloudRain className="w-4 h-4 text-info-ink" />
               <span>Climate & Weather Forecast</span>
             </CardTitle>
             <CardDescription className="text-xs">
@@ -51,7 +51,7 @@ export const TravelGuideSafety: React.FC<TravelGuideSafetyProps> = ({
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-xs font-medium text-blue-900 dark:text-blue-100 leading-relaxed">
+            <div className="p-4 rounded-2xl bg-info/10 border border-info/20 text-xs font-medium text-info-ink leading-relaxed">
               {weather.expected_weather}
             </div>
 
@@ -62,7 +62,7 @@ export const TravelGuideSafety: React.FC<TravelGuideSafetyProps> = ({
               <ul className="space-y-1.5 text-xs text-foreground/85">
                 {weather.seasonal_highlights.map((h, i) => (
                   <li key={i} className="flex items-start gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 shrink-0" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-info mt-1.5 shrink-0" />
                     <span>{h}</span>
                   </li>
                 ))}
@@ -70,7 +70,7 @@ export const TravelGuideSafety: React.FC<TravelGuideSafetyProps> = ({
             </div>
 
             {weather.risks && weather.risks.length > 0 && (
-              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
+              <div className="p-3 rounded-xl bg-warning/10 border border-warning/20 text-xs text-warning-ink flex items-start gap-2">
                 <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                 <span>Weather Advisory: {weather.risks.join("; ")}</span>
               </div>
@@ -83,7 +83,7 @@ export const TravelGuideSafety: React.FC<TravelGuideSafetyProps> = ({
           <CardHeader>
             <CardTitle className="text-base font-bold flex items-center justify-between">
               <span className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                <CheckCircle2 className="w-4 h-4 text-success-ink" />
                 <span>Packing Essentials Checklist</span>
               </span>
               <span className="text-xs font-medium text-muted-foreground">
@@ -105,7 +105,7 @@ export const TravelGuideSafety: React.FC<TravelGuideSafetyProps> = ({
                   onClick={() => toggleItem(item)}
                   className={`flex items-start gap-3 p-3 rounded-2xl border transition-all cursor-pointer ${
                     isChecked
-                      ? "bg-emerald-500/10 border-emerald-500/30 line-through text-muted-foreground opacity-80"
+                      ? "bg-success/10 border-success/30 line-through text-muted-foreground opacity-80"
                       : "bg-muted/30 border-border/60 hover:bg-muted/60 text-foreground"
                   }`}
                 >
@@ -134,28 +134,28 @@ export const TravelGuideSafety: React.FC<TravelGuideSafetyProps> = ({
         <CardContent className="space-y-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <div className="p-3.5 rounded-2xl bg-muted/40 border border-border/60 space-y-1">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              <span className="text-overline font-bold text-muted-foreground">
                 Walking / Pedestrian
               </span>
               <p className="text-xs font-semibold text-foreground">{guide.walking}</p>
             </div>
 
             <div className="p-3.5 rounded-2xl bg-muted/40 border border-border/60 space-y-1">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              <span className="text-overline font-bold text-muted-foreground">
                 Auto-Rickshaws
               </span>
               <p className="text-xs font-semibold text-foreground">{guide.auto_rickshaw}</p>
             </div>
 
             <div className="p-3.5 rounded-2xl bg-muted/40 border border-border/60 space-y-1">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              <span className="text-overline font-bold text-muted-foreground">
                 Local Buses
               </span>
               <p className="text-xs font-semibold text-foreground">{guide.local_buses}</p>
             </div>
 
             <div className="p-3.5 rounded-2xl bg-muted/40 border border-border/60 space-y-1">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              <span className="text-overline font-bold text-muted-foreground">
                 Shared Cabs & Taxis
               </span>
               <p className="text-xs font-semibold text-foreground">{guide.shared_cabs}</p>
@@ -205,9 +205,9 @@ export const TravelGuideSafety: React.FC<TravelGuideSafetyProps> = ({
         </Card>
 
         {/* Cultural Etiquette */}
-        <Card className="rounded-3xl border border-purple-500/20 bg-purple-500/5 shadow-xs">
+        <Card className="rounded-3xl border border-accent/20 bg-accent/5 shadow-xs">
           <CardHeader>
-            <CardTitle className="text-sm font-bold flex items-center gap-2 text-purple-700 dark:text-purple-400">
+            <CardTitle className="text-sm font-bold flex items-center gap-2 text-accent-ink">
               <HeartHandshake className="w-4 h-4" />
               <span>Cultural Etiquette</span>
             </CardTitle>
@@ -216,7 +216,7 @@ export const TravelGuideSafety: React.FC<TravelGuideSafetyProps> = ({
             <ul className="space-y-2 text-xs text-foreground/85">
               {footnotes.cultural_etiquette.map((c, idx) => (
                 <li key={idx} className="flex items-start gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-1.5 shrink-0" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-accent mt-1.5 shrink-0" />
                   <span>{c}</span>
                 </li>
               ))}
@@ -246,7 +246,7 @@ export const TravelGuideSafety: React.FC<TravelGuideSafetyProps> = ({
             {/* Mobile Connectivity */}
             <div className="space-y-2 pt-2 border-t border-border/60">
               <div className="flex items-center gap-1.5 font-bold text-foreground">
-                <Wifi className="w-3.5 h-3.5 text-blue-500" />
+                <Wifi className="w-3.5 h-3.5 text-info-ink" />
                 <span>Network Coverage</span>
               </div>
               <div className="space-y-1 text-muted-foreground">

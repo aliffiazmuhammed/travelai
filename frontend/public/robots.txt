@@ -1,14 +1,21 @@
-User-agent: Googlebot
-Allow: /
-
-User-agent: Bingbot
-Allow: /
-
-User-agent: Twitterbot
-Allow: /
-
-User-agent: facebookexternalhit
-Allow: /
-
+# Public discovery pages are crawlable; private realms and unlisted share
+# links are not. The per-page `noindex` meta tag is the authoritative signal —
+# this file is defence in depth and also keeps crawlers out of authenticated
+# shells entirely.
 User-agent: *
 Allow: /
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /plan
+Disallow: /profile
+Disallow: /enquiries
+Disallow: /enquiry/
+Disallow: /proposals
+Disallow: /proposal/
+Disallow: /shared/
+Disallow: /conversation/
+Disallow: /invite/
+Disallow: /reset-password/
+Disallow: /agency/login
+Disallow: /agency/invite
+Disallow: /agency/onboarding

@@ -3,9 +3,13 @@
  * cover field, so a shared trip's photo is chosen from its destination text.
  *
  * `tripCover` is the one place that knows the Unsplash ids, which keeps the
- * landing strip, Explore cards and the dashboard from drifting apart. The CSP
- * allows `images.unsplash.com`; no other host is used here.
+ * landing strip, Explore cards and the dashboard from drifting apart. Requests
+ * go through this app's `/api/images/cover` proxy by default (C-21), so the
+ * browser never depends on Unsplash directly; set `VITE_IMAGE_CDN` to point at a
+ * configured image CDN that accepts the same `photo`/`w`/`q` query.
  */
+
+import { API_BASE_URL } from "@/config";
 
 const DESTINATION_PHOTOS: Record<string, string> = {
   // Hill stations and mountains
@@ -72,21 +76,41 @@ const SPECIFIC_PLACES = [
 
 const FALLBACK_PHOTO = "photo-1469854523086-cc02fe5d8800";
 
-const unsplash = (photo: string, width: number) =>
-  `https://images.unsplash.com/${photo}?auto=format&fit=crop&w=${width}&q=80`;
+/** Widths the card, list and hero slots actually render at. */
+export const TRIP_COVER_WIDTHS = [320, 480, 640, 800, 1200, 1600] as const;
+
+const IMAGE_CDN = ((import.meta.env.VITE_IMAGE_CDN as string) || "").replace(/\/+$/, "");
+const COVER_ENDPOINT = `${IMAGE_CDN || `${API_BASE_URL}/api/images/cover`}`;
+
+const coverUrl = (photo: string, width: number) =>
+  `${COVER_ENDPOINT}?photo=${encodeURIComponent(photo)}&w=${width}&q=80`;
+
+/** Picks the Unsplash id for arbitrary destination text. */
+function pickPhoto(text: string | undefined): string {
+  const haystack = (text ?? "").toLowerCase();
+
+  for (const place of SPECIFIC_PLACES) {
+    if (haystack.includes(place)) return DESTINATION_PHOTOS[place];
+  }
+  for (const [place, photo] of Object.entries(DESTINATION_PHOTOS)) {
+    if (haystack.includes(place)) return photo;
+  }
+  return FALLBACK_PHOTO;
+}
 
 /**
  * Picks a photo for arbitrary destination text ("Munnar, Kerala"). The width
  * matches the slot, so a hero and a card do not download the same file.
  */
 export function tripCoverUrl(text: string | undefined, width = 800): string {
-  const haystack = (text ?? "").toLowerCase();
+  return coverUrl(pickPhoto(text), width);
+}
 
-  for (const place of SPECIFIC_PLACES) {
-    if (haystack.includes(place)) return unsplash(DESTINATION_PHOTOS[place], width);
-  }
-  for (const [place, photo] of Object.entries(DESTINATION_PHOTOS)) {
-    if (haystack.includes(place)) return unsplash(photo, width);
-  }
-  return unsplash(FALLBACK_PHOTO, width);
+/**
+ * Responsive candidates for one destination, ordered smallest first. Pair with
+ * `sizes` on `AppImage` so a phone picks the 480px file, not the hero's 1600px.
+ */
+export function tripCoverSrcSet(text: string | undefined): string {
+  const photo = pickPhoto(text);
+  return TRIP_COVER_WIDTHS.map((width) => `${coverUrl(photo, width)} ${width}w`).join(", ");
 }

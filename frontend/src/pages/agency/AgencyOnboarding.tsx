@@ -17,7 +17,7 @@ const AgencyOnboarding: React.FC = () => {
   return (
     <div className="mx-auto flex min-h-[60vh] max-w-2xl items-center">
       <div className="w-full rounded-2xl border border-agency-line bg-agency-panel p-6 text-center shadow-sm sm:p-10">
-        <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-agency-accent-soft text-agency-accent">
+        <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-agency-accent-soft text-agency-accent-ink">
           <Building2 className="h-7 w-7" />
         </div>
 
@@ -41,7 +41,7 @@ const AgencyOnboarding: React.FC = () => {
 
         <div className="mt-7 divide-y divide-agency-line border-y border-agency-line text-left">
           <div className="flex items-start gap-3 py-4">
-            <Users className="mt-0.5 h-4 w-4 shrink-0 text-agency-accent" />
+            <Users className="mt-0.5 h-4 w-4 shrink-0 text-agency-accent-ink" />
             <div>
               <p className="text-sm font-semibold text-agency-ink">
                 Need a new workspace or another teammate?
@@ -53,7 +53,7 @@ const AgencyOnboarding: React.FC = () => {
             </div>
           </div>
           <div className="flex items-start gap-3 py-4">
-            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-agency-accent" />
+            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-agency-accent-ink" />
             <div>
               <p className="text-sm font-semibold text-agency-ink">
                 Your personal account stays personal.
@@ -65,7 +65,7 @@ const AgencyOnboarding: React.FC = () => {
             </div>
           </div>
           <div className="flex items-start gap-3 py-4">
-            <Mail className="mt-0.5 h-4 w-4 shrink-0 text-agency-accent" />
+            <Mail className="mt-0.5 h-4 w-4 shrink-0 text-agency-accent-ink" />
             <div>
               <p className="text-sm font-semibold text-agency-ink">
                 Already invited?
@@ -80,7 +80,7 @@ const AgencyOnboarding: React.FC = () => {
 
         <Button
           asChild
-          className="mt-7 h-11 rounded-lg bg-agency-accent px-6 text-white hover:bg-agency-accent/90"
+          className="mt-7 h-11 rounded-lg bg-agency-accent px-6 text-agency-accent-foreground hover:bg-agency-accent/90"
         >
           <Link to="/agency">Back to workspace</Link>
         </Button>

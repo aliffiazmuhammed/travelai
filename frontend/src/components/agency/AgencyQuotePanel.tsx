@@ -21,6 +21,8 @@ import ProposalPreviewDialog from '@/components/directory/ProposalPreviewDialog'
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ConfirmDestructive } from '@/components/ui/confirm-destructive';
+import { UnsavedChangesDialog } from '@/components/ui/unsaved-changes-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -33,6 +35,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { useAgency } from '@/context/AgencyContext';
 import { useAgencyAuth } from '@/context/AgencyAuthContext';
+import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import { formatAgencyDate } from '@/lib/agency';
 import { formatDateOnly } from '@/lib/date';
 import {
@@ -72,14 +75,14 @@ const statusLabel: Record<QuoteStatus, string> = {
 
 const statusClass: Record<QuoteStatus, string> = {
   draft:
-    'border-slate-300 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300',
-  sent: 'border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-300',
+    'border-border bg-muted text-muted-foreground dark:bg-background/60',
+  sent: 'border-info/30 bg-info/10 text-info-ink dark:border-info/40 dark:bg-info/20',
   accepted:
-    'border-teal-300 bg-teal-50 text-teal-800 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-300',
+    'border-agency-accent/30 bg-agency-accent-soft text-agency-accent-ink',
   expired:
-    'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300',
+    'border-warning/30 bg-warning/10 text-warning-ink dark:border-warning/40 dark:bg-warning/20',
   cancelled:
-    'border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300',
+    'border-destructive/30 bg-destructive/10 text-destructive-ink dark:border-destructive/40 dark:bg-destructive/20',
 };
 
 type LineEditor = {
@@ -454,9 +457,14 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
   const [editor, setEditor] = useState<QuoteFormState>(() =>
     emptyEditor(defaultTerms, fallbackPreparedBy)
   );
+  /** The last saved shape; any difference means the quote has unsaved edits. */
+  const [baseline, setBaseline] = useState<QuoteFormState>(() =>
+    emptyEditor(defaultTerms, fallbackPreparedBy)
+  );
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [action, setAction] = useState<'send' | 'accept' | 'cancel' | null>(null);
+  const [cancelOpen, setCancelOpen] = useState(false);
   const [previewMode, setPreviewMode] = useState<'internal' | 'client'>(
     canPlan ? 'internal' : 'client'
   );
@@ -503,11 +511,14 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
         : [];
       setShareDeclinedAt(shares[0]?.declinedAt ?? null);
       setSelectedVersionId(null);
+      const nextEditor = latest
+        ? editorFromQuote(latest)
+        : emptyEditor(defaultTerms, fallbackPreparedBy);
+      setEditor(nextEditor);
+      setBaseline(nextEditor);
       if (latest) {
-        setEditor(editorFromQuote(latest));
         setEditing(canPlan && latest.status === 'draft');
       } else {
-        setEditor(emptyEditor(defaultTerms, fallbackPreparedBy));
         setEditing(canPlan);
       }
     } catch (err) {
@@ -569,7 +580,9 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
       )
     );
     setSelectedVersionId(null);
-    setEditor(editorFromQuote(saved));
+    const nextEditor = editorFromQuote(saved);
+    setEditor(nextEditor);
+    setBaseline(nextEditor);
     setEditing(saved.status === 'draft' && canPlan);
   };
 
@@ -652,19 +665,24 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
     return result.quote;
   };
 
-  const handleSave = async () => {
+  const handleSave = async (): Promise<boolean> => {
     setSaving(true);
     try {
       const saved = await persist();
       if (saved) toast.success('Quote draft saved.');
+      return Boolean(saved);
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : 'Could not save this quote.'
       );
+      return false;
     } finally {
       setSaving(false);
     }
   };
+
+  const dirty = JSON.stringify(editor) !== JSON.stringify(baseline);
+  const guard = useUnsavedChangesGuard(dirty, handleSave);
 
   const handleSend = async () => {
     setAction('send');
@@ -726,13 +744,11 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
   };
 
   const handleCancel = async () => {
-    if (!window.confirm('Cancel this quote version? This cannot be undone.')) {
-      return;
-    }
     setAction('cancel');
     try {
       const result = await api.cancelAgencyQuote(agencyId, tripId);
       applySavedQuote(result.quote);
+      setCancelOpen(false);
       toast.success('Quote cancelled.');
     } catch (err) {
       toast.error(
@@ -744,18 +760,20 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
   };
 
   const startEditing = () => {
-    if (!quote) {
-      setEditor(emptyEditor(defaultTerms, fallbackPreparedBy));
-    } else {
-      setEditor(editorFromQuote(quote));
-    }
+    const nextEditor = quote
+      ? editorFromQuote(quote)
+      : emptyEditor(defaultTerms, fallbackPreparedBy);
+    setEditor(nextEditor);
+    setBaseline(nextEditor);
     setSelectedVersionId(null);
     setEditing(true);
   };
 
   const discardEdits = () => {
     if (!quote) return;
-    setEditor(editorFromQuote(quote));
+    const nextEditor = editorFromQuote(quote);
+    setEditor(nextEditor);
+    setBaseline(nextEditor);
     setEditing(false);
   };
 
@@ -856,10 +874,10 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
 
   if (loadError) {
     return (
-      <Card className="rounded-3xl border-rose-200 dark:border-rose-900/60">
+      <Card className="rounded-3xl border-destructive/30 dark:border-destructive/20">
         <CardContent className="space-y-3 py-14 text-center">
-          <AlertTriangle className="mx-auto h-6 w-6 text-rose-500" />
-          <p className="text-sm text-rose-700 dark:text-rose-300">{loadError}</p>
+          <AlertTriangle className="mx-auto h-6 w-6 text-destructive-ink" />
+          <p className="text-sm text-destructive-ink">{loadError}</p>
           <Button variant="outline" size="sm" onClick={() => void loadQuote()}>
             <RefreshCw className="mr-2 h-3.5 w-3.5" />
             Try again
@@ -874,36 +892,36 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
       <Card className="rounded-3xl border-border/70">
         <CardContent className="flex flex-wrap items-start justify-between gap-3 p-4 sm:p-5">
           <div className="flex items-start gap-3">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-teal-600 text-white">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-agency-accent text-white">
               <Receipt className="h-5 w-5" />
             </span>
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-lg font-semibold tracking-tight">
+                <h2 className="text-xl font-semibold tracking-tight">
                   Quote & pricing
                 </h2>
                 {quote ? (
                   <>
-                    <Badge variant="outline" className="font-mono text-[10px]">
+                    <Badge variant="outline" className="font-mono text-xs">
                       {quote.number}
                     </Badge>
-                    <Badge variant="outline" className="text-[10px]">
+                    <Badge variant="outline" className="text-xs">
                       v{quote.version}
                     </Badge>
                     <Badge
                       variant="outline"
-                      className={cn('text-[10px]', statusClass[quote.status])}
+                      className={cn('text-xs', statusClass[quote.status])}
                     >
                       {statusLabel[quote.status]}
                     </Badge>
                   </>
                 ) : (
-                  <Badge variant="outline" className="text-[10px] text-slate-500">
+                  <Badge variant="outline" className="text-xs text-muted-foreground">
                     Not created yet
                   </Badge>
                 )}
               </div>
-              <p className="mt-1 max-w-xl text-xs text-slate-500 dark:text-slate-400">
+              <p className="mt-1 max-w-xl text-xs text-muted-foreground">
                 Prices are computed by the server in {currency}. Sending locks
                 this version; later changes create a new version with the same
                 quote number.
@@ -922,7 +940,7 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
               <RefreshCw className="h-3.5 w-3.5" />
             </Button>
             {!canPlan ? (
-              <Badge variant="outline" className="gap-1 text-[10px] text-slate-500">
+              <Badge variant="outline" className="gap-1 text-xs text-muted-foreground">
                 <Lock className="h-3 w-3" />
                 Read-only
               </Badge>
@@ -942,7 +960,7 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
                   size="sm"
                   onClick={() => void handleSend()}
                   disabled={busy || editor.lineItems.length === 0}
-                  className="bg-teal-600 hover:bg-teal-700"
+                  className="bg-agency-accent hover:bg-agency-accent/90"
                 >
                   {action === 'send' ? (
                     <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -969,7 +987,7 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
                   size="sm"
                   onClick={() => void handleSend()}
                   disabled={busy}
-                  className="bg-teal-600 hover:bg-teal-700"
+                  className="bg-agency-accent hover:bg-agency-accent/90"
                 >
                   {action === 'send' ? (
                     <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -1005,7 +1023,7 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
                     size="sm"
                     onClick={() => void handleAccept()}
                     disabled={busy}
-                    className="bg-teal-600 hover:bg-teal-700"
+                    className="bg-agency-accent hover:bg-agency-accent/90"
                   >
                     {action === 'accept' ? (
                       <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -1019,7 +1037,7 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => void handleCancel()}
+                    onClick={() => setCancelOpen(true)}
                     disabled={busy}
                   >
                     {action === 'cancel' ? (
@@ -1052,16 +1070,16 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
       </Card>
 
       {canPlan && !quote?.acceptedAt && (plannedDayCount ?? 0) === 0 ? (
-        <Card className="rounded-3xl border-amber-200 bg-amber-50/60 dark:border-amber-900/60 dark:bg-amber-950/20">
+        <Card className="rounded-3xl border-warning/30 bg-warning/10 dark:border-warning/20 dark:bg-warning/20">
           <CardContent className="flex items-start gap-3 p-4">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-warning/10 text-warning-ink dark:bg-warning/20">
               <AlertTriangle className="h-4 w-4" />
             </span>
             <div>
               <p className="text-sm font-semibold">
                 This trip has no day-by-day plan yet
               </p>
-              <p className="mt-0.5 max-w-xl text-xs text-slate-600 dark:text-slate-400">
+              <p className="mt-0.5 max-w-xl text-xs text-muted-foreground">
                 The quote can still go out, but the traveller would open an
                 empty itinerary beside it. Add a few days first if you want
                 them to see what they are paying for.
@@ -1076,7 +1094,7 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
           className={cn(
             'rounded-3xl',
             shareDeclinedAt
-              ? 'border-rose-200 dark:border-rose-900/60'
+              ? 'border-destructive/30 dark:border-destructive/20'
               : 'border-border/70'
           )}
         >
@@ -1086,8 +1104,8 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
                 className={cn(
                   'grid h-9 w-9 shrink-0 place-items-center rounded-2xl',
                   shareDeclinedAt
-                    ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-300'
-                    : 'bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300'
+                    ? 'bg-destructive/10 text-destructive-ink dark:bg-destructive/20'
+                    : 'bg-info/10 text-info-ink dark:bg-info/20'
                 )}
               >
                 {shareDeclinedAt ? (
@@ -1104,7 +1122,7 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
                       ? `Shared with ${quote.client.name}`
                       : "Not in the traveller's thread yet"}
                 </p>
-                <p className="mt-0.5 max-w-xl text-xs text-slate-500 dark:text-slate-400">
+                <p className="mt-0.5 max-w-xl text-xs text-muted-foreground">
                   {shareDeclinedAt
                     ? `On ${formatAgencyDate(shareDeclinedAt)}. The quote is still open — send a new version or keep the conversation going in their enquiry.`
                     : liveShareId
@@ -1129,7 +1147,7 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
                   size="sm"
                   onClick={() => void handleShare()}
                   disabled={busy || sharing}
-                  className="bg-teal-600 hover:bg-teal-700"
+                  className="bg-agency-accent hover:bg-agency-accent/90"
                 >
                   {sharing ? (
                     <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -1158,9 +1176,9 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
       {!editing && !quote ? (
         <Card className="rounded-3xl border-dashed">
           <CardContent className="space-y-3 py-16 text-center">
-            <Receipt className="mx-auto h-8 w-8 text-slate-300 dark:text-slate-700" />
+            <Receipt className="mx-auto h-8 w-8 text-muted-foreground" />
             <h3 className="text-sm font-semibold">No quote for this trip yet</h3>
-            <p className="mx-auto max-w-md text-xs text-slate-500 dark:text-slate-400">
+            <p className="mx-auto max-w-md text-xs text-muted-foreground">
               {canPlan
                 ? 'Create a priced quote with client details, line items, taxes and validity.'
                 : 'A planner has not created a quote for this trip yet.'}
@@ -1221,7 +1239,7 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
               </CardHeader>
               <CardContent className="space-y-2">
                 {versions.length === 0 ? (
-                  <p className="rounded-xl border border-dashed border-slate-200 px-3 py-5 text-center text-xs text-slate-500 dark:border-slate-800">
+                  <p className="rounded-xl border border-dashed border-border px-3 py-5 text-center text-xs text-muted-foreground">
                     Versions appear here after the first save.
                   </p>
                 ) : (
@@ -1244,21 +1262,21 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
                         className={cn(
                           'w-full rounded-xl border px-3 py-2 text-left transition',
                           isSelected
-                            ? 'border-teal-300 bg-teal-50/70 dark:border-teal-800 dark:bg-teal-950/30'
-                            : 'border-slate-200 hover:border-slate-300 dark:border-slate-800 dark:hover:border-slate-700'
+                            ? 'border-agency-accent/30 bg-agency-accent-soft'
+                            : 'border-border hover:border-border'
                         )}
                       >
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <span className="flex items-center gap-2 text-xs font-semibold">
                             v{version.version}
                             {isLatest ? (
-                              <Badge variant="outline" className="text-[9px]">
+                              <Badge variant="outline" className="text-xs">
                                 Latest
                               </Badge>
                             ) : null}
                             <Badge
                               variant="outline"
-                              className={cn('text-[9px]', statusClass[version.status])}
+                              className={cn('text-xs', statusClass[version.status])}
                             >
                               {statusLabel[version.status]}
                             </Badge>
@@ -1267,7 +1285,7 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
                             {formatMoney(version.total, version.currency)}
                           </span>
                         </div>
-                        <div className="mt-1 flex items-center justify-between gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+                        <div className="mt-1 flex items-center justify-between gap-2 text-xs text-muted-foreground">
                           <span>{formatAgencyDate(version.createdAt)}</span>
                           {version.sentAt ? (
                             <span>Sent {formatAgencyDate(version.sentAt)}</span>
@@ -1278,7 +1296,7 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
                   })
                 )}
                 {editing ? (
-                  <p className="text-[11px] text-slate-500">
+                  <p className="text-xs text-muted-foreground">
                     The unsaved draft is not in history until you save.
                   </p>
                 ) : null}
@@ -1299,6 +1317,26 @@ const AgencyQuotePanel: React.FC<AgencyQuotePanelProps> = ({
           }
         />
       ) : null}
+
+      <ConfirmDestructive
+        open={cancelOpen}
+        onOpenChange={(open) => {
+          if (!open && action === 'cancel') return;
+          setCancelOpen(open);
+        }}
+        title="Cancel this quote?"
+        description="The client can no longer accept this version, and a cancelled quote cannot be reopened. You can still create a revised version afterwards."
+        confirmLabel="Cancel quote"
+        onConfirm={handleCancel}
+        busy={action === 'cancel'}
+        detail={
+          displayedQuote
+            ? `Quote ${displayedQuote.number} · version ${displayedQuote.version}`
+            : null
+        }
+      />
+
+      <UnsavedChangesDialog guard={guard} />
     </div>
   );
 };
@@ -1358,7 +1396,7 @@ const QuoteEditor: React.FC<QuoteEditorProps> = ({
                 : `New version ${nextVersion}`}
           </CardTitle>
           {mode !== 'new' ? (
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <p className="text-xs text-muted-foreground">
               {mode === 'draft'
                 ? 'Changes to a draft update this version in place.'
                 : 'Saving creates a new draft with the same quote number; the issued version stays unchanged.'}
@@ -1386,7 +1424,7 @@ const QuoteEditor: React.FC<QuoteEditorProps> = ({
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-[11px] text-slate-500">
+              <p className="text-xs text-muted-foreground">
                 Typed entries are added to the directory when you save; an
                 existing email reuses that client. The quote keeps a snapshot of
                 these fields, so directory edits never rewrite history.
@@ -1427,12 +1465,12 @@ const QuoteEditor: React.FC<QuoteEditorProps> = ({
               />
             </div>
             <div className="space-y-2">
-              <Label>Currency</Label>
+              <Label htmlFor="quote-currency">Currency</Label>
               <Select
                 value={form.currency}
                 onValueChange={(value) => update({ currency: value })}
               >
-                <SelectTrigger>
+                <SelectTrigger id="quote-currency">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1519,10 +1557,10 @@ const QuoteEditor: React.FC<QuoteEditorProps> = ({
           {form.lineItems.map((line, index) => (
             <div
               key={line.key}
-              className="space-y-2 rounded-2xl border border-slate-200 p-3 dark:border-slate-800"
+              className="space-y-2 rounded-2xl border border-border p-3"
             >
               <div className="flex items-center gap-2">
-                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
                   {index + 1}
                 </span>
                 <Input
@@ -1556,8 +1594,14 @@ const QuoteEditor: React.FC<QuoteEditorProps> = ({
               />
               <div className="grid grid-cols-3 gap-2">
                 <div className="space-y-1">
-                  <Label className="text-[11px] text-slate-500">Quantity</Label>
+                  <Label
+                    htmlFor={`quote-line-${line.key}-quantity`}
+                    className="text-xs text-muted-foreground"
+                  >
+                    Quantity
+                  </Label>
                   <Input
+                    id={`quote-line-${line.key}-quantity`}
                     type="number"
                     min={0.01}
                     max={MAX_QUANTITY}
@@ -1569,8 +1613,14 @@ const QuoteEditor: React.FC<QuoteEditorProps> = ({
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-[11px] text-slate-500">Unit price</Label>
+                  <Label
+                    htmlFor={`quote-line-${line.key}-unit-price`}
+                    className="text-xs text-muted-foreground"
+                  >
+                    Unit price
+                  </Label>
                   <Input
+                    id={`quote-line-${line.key}-unit-price`}
                     type="number"
                     min={0}
                     max={MAX_UNIT_PRICE}
@@ -1583,8 +1633,8 @@ const QuoteEditor: React.FC<QuoteEditorProps> = ({
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-[11px] text-slate-500">Line total</Label>
-                  <div className="flex h-10 items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm font-semibold dark:border-slate-800 dark:bg-slate-900">
+                  <span className="block text-xs text-muted-foreground">Line total</span>
+                  <div className="flex h-10 items-center rounded-md border border-border bg-muted px-3 text-sm font-semibold dark:bg-background">
                     {lineTotalFor(index)}
                   </div>
                 </div>
@@ -1597,7 +1647,7 @@ const QuoteEditor: React.FC<QuoteEditorProps> = ({
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-sm">Markup, tax and discount</CardTitle>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
+          <p className="text-xs text-muted-foreground">
             Markup is internal margin and never appears in the client preview.
           </p>
         </CardHeader>
@@ -1640,7 +1690,7 @@ const QuoteEditor: React.FC<QuoteEditorProps> = ({
               onChange={(event) => update({ discount: event.target.value })}
             />
           </div>
-          <p className="text-[11px] text-slate-500 sm:col-span-3">
+          <p className="text-xs text-muted-foreground sm:col-span-3">
             Tax is applied after markup and discount. The server recomputes every
             amount in minor units when you save.
           </p>
@@ -1651,7 +1701,7 @@ const QuoteEditor: React.FC<QuoteEditorProps> = ({
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
           <div>
             <CardTitle className="text-sm">Inclusions, exclusions and terms</CardTitle>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <p className="text-xs text-muted-foreground">
               One line per entry. Clear a box to remove that section from the quote.
             </p>
           </div>
@@ -1699,7 +1749,7 @@ const QuoteEditor: React.FC<QuoteEditorProps> = ({
         </CardContent>
       </Card>
 
-      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+      <p className="text-xs text-muted-foreground">
         {mode === 'draft'
           ? 'Saving updates this draft in place.'
           : mode === 'new'
@@ -1725,7 +1775,7 @@ const QuoteDetails: React.FC<{
       <CardTitle className="text-sm">
         Quote details
         {isOldVersion ? (
-          <span className="ml-2 text-xs font-normal text-slate-500">
+          <span className="ml-2 text-xs font-normal text-muted-foreground">
             viewing v{quote.version}; latest is v{latestVersion}
           </span>
         ) : null}
@@ -1733,18 +1783,18 @@ const QuoteDetails: React.FC<{
     </CardHeader>
     <CardContent className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2">
-        <div className="rounded-xl border border-slate-200 px-3 py-2.5 dark:border-slate-800">
-          <div className="text-[11px] uppercase tracking-wide text-slate-500">
+        <div className="rounded-xl border border-border px-3 py-2.5">
+          <div className="text-overline text-muted-foreground">
             Prepared for
           </div>
           <div className="mt-0.5 text-sm font-semibold">{quote.client.name}</div>
-          <div className="text-xs text-slate-500">
+          <div className="text-xs text-muted-foreground">
             {[quote.client.email, quote.client.phone].filter(Boolean).join(' · ') ||
               'No contact details'}
           </div>
         </div>
-        <div className="rounded-xl border border-slate-200 px-3 py-2.5 dark:border-slate-800">
-          <div className="text-[11px] uppercase tracking-wide text-slate-500">
+        <div className="rounded-xl border border-border px-3 py-2.5">
+          <div className="text-overline text-muted-foreground">
             Travellers
           </div>
           <div className="mt-0.5 flex items-center gap-1.5 text-sm font-semibold">
@@ -1754,21 +1804,21 @@ const QuoteDetails: React.FC<{
               ? ` · ${quote.client.children} child${quote.client.children === 1 ? '' : 'ren'}`
               : ''}
           </div>
-          <div className="text-xs text-slate-500">
+          <div className="text-xs text-muted-foreground">
             {quote.client.rooms !== undefined
               ? `${quote.client.rooms} room${quote.client.rooms === 1 ? '' : 's'}`
               : 'Room count not specified'}
           </div>
         </div>
-        <div className="rounded-xl border border-slate-200 px-3 py-2.5 dark:border-slate-800">
-          <div className="text-[11px] uppercase tracking-wide text-slate-500">
+        <div className="rounded-xl border border-border px-3 py-2.5">
+          <div className="text-overline text-muted-foreground">
             Validity
           </div>
           <div className="mt-0.5 flex items-center gap-1.5 text-sm font-semibold">
             <CalendarDays className="h-3.5 w-3.5" />
             {formatDateOnly(quote.validUntil)}
           </div>
-          <div className="text-xs text-slate-500">
+          <div className="text-xs text-muted-foreground">
             {quote.sentAt
               ? `Sent ${formatAgencyDate(quote.sentAt)}`
               : 'Not sent yet'}
@@ -1777,34 +1827,34 @@ const QuoteDetails: React.FC<{
               : ''}
           </div>
         </div>
-        <div className="rounded-xl border border-slate-200 px-3 py-2.5 dark:border-slate-800">
-          <div className="text-[11px] uppercase tracking-wide text-slate-500">
+        <div className="rounded-xl border border-border px-3 py-2.5">
+          <div className="text-overline text-muted-foreground">
             Total
           </div>
           <div className="mt-0.5 text-sm font-semibold">
             {formatMoney(quote.total, quote.currency)}
           </div>
-          <div className="text-xs text-slate-500">
+          <div className="text-xs text-muted-foreground">
             {formatMoney(quote.perPerson, quote.currency)} per person
           </div>
         </div>
       </div>
 
       <div className="space-y-2">
-        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Lines
         </div>
         {quote.lineItems.map((line, index) => (
           <div
             key={`${line.label}-${index}`}
-            className="flex items-start justify-between gap-3 rounded-xl border border-slate-200 px-3 py-2 dark:border-slate-800"
+            className="flex items-start justify-between gap-3 rounded-xl border border-border px-3 py-2"
           >
             <div className="min-w-0">
               <div className="text-sm font-medium">{line.label}</div>
               {line.description ? (
-                <div className="text-xs text-slate-500">{line.description}</div>
+                <div className="text-xs text-muted-foreground">{line.description}</div>
               ) : null}
-              <div className="text-[11px] text-slate-500">
+              <div className="text-xs text-muted-foreground">
                 {line.quantity} × {formatMoney(line.unitPrice, quote.currency)}
               </div>
             </div>
@@ -1816,7 +1866,7 @@ const QuoteDetails: React.FC<{
       </div>
 
       {canSeeMargin ? (
-        <div className="rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:bg-slate-900 dark:text-slate-400">
+        <div className="rounded-xl bg-muted px-3 py-2 text-xs text-muted-foreground dark:bg-background">
           Internal margin: markup {quote.markupPct ?? 0}% (
           {formatMoney(quote.markupAmount ?? 0, quote.currency)}). This never
           appears in the client preview.
@@ -1838,14 +1888,14 @@ const TermLists: React.FC<{ quote: AgencyQuote }> = ({ quote }) => {
   return (
     <div className="grid gap-3 sm:grid-cols-3">
       {sections.map((section) => (
-        <div key={section.title} className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+        <div key={section.title} className="rounded-xl border border-border p-3">
+          <div className="text-overline font-semibold text-muted-foreground">
             {section.title}
           </div>
-          <ul className="mt-1.5 space-y-1 text-xs text-slate-600 dark:text-slate-400">
+          <ul className="mt-1.5 space-y-1 text-xs text-muted-foreground">
             {section.items.map((item, index) => (
               <li key={`${item}-${index}`} className="flex gap-1.5">
-                <span className="text-slate-400">•</span>
+                <span className="text-muted-foreground">•</span>
                 <span>{item}</span>
               </li>
             ))}
@@ -1885,7 +1935,7 @@ const QuotePreviewCard: React.FC<QuotePreviewCardProps> = ({
   if (!data) {
     return (
       <Card>
-        <CardContent className="py-10 text-center text-xs text-slate-500">
+        <CardContent className="py-10 text-center text-xs text-muted-foreground">
           Fill in the client, dates and line items to see the preview.
         </CardContent>
       </Card>
@@ -1899,7 +1949,7 @@ const QuotePreviewCard: React.FC<QuotePreviewCardProps> = ({
 
   return (
     <Card className="overflow-hidden">
-      <CardHeader className="space-y-3 border-b bg-slate-50/70 pb-3 dark:bg-slate-900/40">
+      <CardHeader className="space-y-3 border-b bg-muted/70 pb-3 dark:bg-background/40">
         <div className="flex items-center justify-between gap-2">
           <CardTitle className="flex items-center gap-2 text-sm">
             {mode === 'client' ? (
@@ -1910,15 +1960,15 @@ const QuotePreviewCard: React.FC<QuotePreviewCardProps> = ({
             {mode === 'client' ? 'Client preview' : 'Internal preview'}
           </CardTitle>
           {canSeeMargin ? (
-            <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-950">
+            <div className="inline-flex rounded-lg border border-border bg-white p-0.5 dark:bg-background">
               <button
                 type="button"
                 onClick={() => onModeChange('internal')}
                 className={cn(
-                  'rounded-md px-2 py-1 text-[11px] font-medium',
+                  'rounded-md px-2 py-1 text-xs font-medium',
                   mode === 'internal'
-                    ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
-                    : 'text-slate-500'
+                    ? 'bg-foreground text-background'
+                    : 'text-muted-foreground'
                 )}
               >
                 Internal
@@ -1927,10 +1977,10 @@ const QuotePreviewCard: React.FC<QuotePreviewCardProps> = ({
                 type="button"
                 onClick={() => onModeChange('client')}
                 className={cn(
-                  'rounded-md px-2 py-1 text-[11px] font-medium',
+                  'rounded-md px-2 py-1 text-xs font-medium',
                   mode === 'client'
-                    ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
-                    : 'text-slate-500'
+                    ? 'bg-foreground text-background'
+                    : 'text-muted-foreground'
                 )}
               >
                 Client
@@ -1938,7 +1988,7 @@ const QuotePreviewCard: React.FC<QuotePreviewCardProps> = ({
             </div>
           ) : null}
         </div>
-        <p className="flex items-start gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+        <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
           <Lock className="mt-0.5 h-3 w-3 shrink-0" />
           {mode === 'client'
             ? 'Markup, internal margin and the preparing agent are hidden. The client only sees prices, terms and the trip content.'
@@ -1948,13 +1998,13 @@ const QuotePreviewCard: React.FC<QuotePreviewCardProps> = ({
       <CardContent className="space-y-4 p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="text-[11px] uppercase tracking-wide text-teal-700 dark:text-teal-300">
+            <div className="text-overline text-agency-accent-ink">
               {agencyName}
             </div>
-            <div className="mt-0.5 text-lg font-bold leading-tight">
+            <div className="mt-0.5 text-xl font-bold leading-tight">
               {tripTitle || 'Trip proposal'}
             </div>
-            <div className="text-[11px] text-slate-500 dark:text-slate-400">
+            <div className="text-xs text-muted-foreground">
               {[tripStartDate, tripEndDate]
                 .filter(Boolean)
                 .map((date) => formatAgencyDate(date as string))
@@ -1962,17 +2012,17 @@ const QuotePreviewCard: React.FC<QuotePreviewCardProps> = ({
             </div>
           </div>
           <div className="text-right">
-            <div className="font-mono text-[10px] text-slate-500">{data.number}</div>
+            <div className="font-mono text-xs text-muted-foreground">{data.number}</div>
             {data.version ? (
-              <div className="text-[10px] text-slate-500">v{data.version}</div>
+              <div className="text-xs text-muted-foreground">v{data.version}</div>
             ) : null}
             <Badge
               variant="outline"
               className={cn(
-                'mt-1 text-[9px]',
+                'mt-1 text-xs',
                 isDraft
-                  ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300'
-                  : 'border-teal-300 bg-teal-50 text-teal-800 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-300'
+                  ? 'border-warning/30 bg-warning/10 text-warning-ink dark:border-warning/40 dark:bg-warning/20'
+                  : 'border-agency-accent/30 bg-agency-accent-soft text-agency-accent-ink'
               )}
             >
               {isEditingPreview ? 'Draft preview' : isDraft ? 'Draft' : 'Issued'}
@@ -1980,10 +2030,10 @@ const QuotePreviewCard: React.FC<QuotePreviewCardProps> = ({
           </div>
         </div>
 
-        <div className="rounded-xl bg-slate-50 px-3 py-2 text-xs dark:bg-slate-900">
+        <div className="rounded-xl bg-muted px-3 py-2 text-xs dark:bg-background">
           <div className="flex flex-wrap items-baseline justify-between gap-1">
             <span className="font-semibold">{data.client.name || 'Client name'}</span>
-            <span className="text-slate-500">
+            <span className="text-muted-foreground">
               {data.client.adults} adult{data.client.adults === 1 ? '' : 's'}
               {data.client.children > 0
                 ? ` · ${data.client.children} child${data.client.children === 1 ? '' : 'ren'}`
@@ -1991,7 +2041,7 @@ const QuotePreviewCard: React.FC<QuotePreviewCardProps> = ({
             </span>
           </div>
           {data.client.email || data.client.phone ? (
-            <div className="mt-0.5 text-slate-500">
+            <div className="mt-0.5 text-muted-foreground">
               {[data.client.email, data.client.phone].filter(Boolean).join(' · ')}
             </div>
           ) : null}
@@ -2005,9 +2055,9 @@ const QuotePreviewCard: React.FC<QuotePreviewCardProps> = ({
                   {line.label || `Line ${index + 1}`}
                 </div>
                 {line.description ? (
-                  <div className="text-[11px] text-slate-500">{line.description}</div>
+                  <div className="text-xs text-muted-foreground">{line.description}</div>
                 ) : null}
-                <div className="text-[10px] text-slate-500">
+                <div className="text-xs text-muted-foreground">
                   {line.quantity} × {formatMoney(line.unitPrice, data.currency)}
                 </div>
               </div>
@@ -2073,19 +2123,19 @@ const QuotePreviewCard: React.FC<QuotePreviewCardProps> = ({
               {formatMoney(data.total, data.currency)}
             </span>
           </div>
-          <div className="flex items-center justify-between text-slate-500">
+          <div className="flex items-center justify-between text-muted-foreground">
             <span>Per person</span>
             <span>{formatMoney(data.perPerson, data.currency)}</span>
           </div>
           {hideMargin && data.markupAmount > 0 ? (
-            <p className="pt-1 text-[10px] leading-4 text-slate-500 dark:text-slate-400">
+            <p className="pt-1 text-xs leading-4 text-muted-foreground">
               The package price includes agency planning, sourcing and handling
               fees. Taxes and discounts are shown separately.
             </p>
           ) : null}
         </div>
 
-        <div className="flex items-center justify-between gap-2 rounded-xl border border-dashed border-slate-200 px-3 py-2 text-[11px] text-slate-600 dark:border-slate-800 dark:text-slate-400">
+        <div className="flex items-center justify-between gap-2 rounded-xl border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5">
             <CalendarDays className="h-3.5 w-3.5" />
             Valid until {formatDateOnly(data.validUntil)}
@@ -2103,7 +2153,7 @@ const QuotePreviewCard: React.FC<QuotePreviewCardProps> = ({
 
 const PreviewRow: React.FC<{ label: string; value: string }> = ({ label, value }) => (
   <div className="flex items-center justify-between gap-2">
-    <span className="text-slate-600 dark:text-slate-400">{label}</span>
+    <span className="text-muted-foreground">{label}</span>
     <span className="font-medium">{value}</span>
   </div>
 );
@@ -2119,10 +2169,10 @@ const TermPreview: React.FC<{ data: QuotePreviewData }> = ({ data }) => {
     <div className="space-y-2 border-t pt-3">
       {sections.map((section) => (
         <div key={section.title}>
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+          <div className="text-overline font-semibold text-muted-foreground">
             {section.title}
           </div>
-          <ul className="mt-1 space-y-0.5 text-[11px] text-slate-600 dark:text-slate-400">
+          <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
             {section.items.map((item, index) => (
               <li key={`${item}-${index}`}>• {item}</li>
             ))}

@@ -13,6 +13,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { AgencyEmptyState } from '@/components/agency/AgencyEmptyState';
+import { AsyncErrorPanel } from '@/components/states/AsyncState';
 import { AdminPagination } from '@/components/admin/AdminPagination';
 import { AgencyPageHeader } from '@/components/agency/AgencyPageHeader';
 import PhoneField from '@/components/PhoneField';
@@ -27,6 +28,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { ConfirmDestructive } from '@/components/ui/confirm-destructive';
 import { Label } from '@/components/ui/label';
 import {
   Table,
@@ -86,6 +88,7 @@ const AgencyClients: React.FC = () => {
   const [clients, setClients] = useState<AgencyClient[]>([]);
   const [clientPage, setClientPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [listError, setListError] = useState<unknown | null>(null);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -93,6 +96,7 @@ const AgencyClients: React.FC = () => {
   const [form, setForm] = useState<ClientForm>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<AgencyClient | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const listRequestRef = useRef(0);
 
@@ -108,10 +112,11 @@ const AgencyClients: React.FC = () => {
         );
         if (requestId === listRequestRef.current) {
           setClients(result.clients || []);
+          setListError(null);
         }
       } catch (err) {
         if (showSpinner && requestId === listRequestRef.current) {
-          toast.error(errorMessage(err, 'Could not load the client directory.'));
+          setListError(err);
         }
       } finally {
         if (showSpinner && requestId === listRequestRef.current) {
@@ -235,19 +240,13 @@ const AgencyClients: React.FC = () => {
     }
   };
 
-  const removeClient = async (client: AgencyClient) => {
-    if (!activeAgencyId) return;
-    if (
-      !window.confirm(
-        `Remove "${client.name}" from the client directory? Their trips keep the itinerary but are unlinked.`
-      )
-    ) {
-      return;
-    }
-    setBusyId(client._id);
+  const removeClient = async () => {
+    if (!activeAgencyId || !removeTarget) return;
+    setBusyId(removeTarget._id);
     try {
-      const result = await api.deleteAgencyClient(activeAgencyId, client._id);
-      setClients((prev) => prev.filter((entry) => entry._id !== client._id));
+      const result = await api.deleteAgencyClient(activeAgencyId, removeTarget._id);
+      setClients((prev) => prev.filter((entry) => entry._id !== removeTarget._id));
+      setRemoveTarget(null);
       toast.success(result.message || 'Client removed.');
     } catch (err) {
       toast.error(errorMessage(err, 'Could not remove this client.'));
@@ -271,7 +270,7 @@ const AgencyClients: React.FC = () => {
         meta={
           <Badge
             variant="outline"
-            className={cn('text-[10px]', agencyRoleBadgeClass(role || 'viewer'))}
+            className={cn('text-xs', agencyRoleBadgeClass(role || 'viewer'))}
           >
             {agencyRoleLabel(role || 'viewer')}
           </Badge>
@@ -292,14 +291,17 @@ const AgencyClients: React.FC = () => {
           <div className="relative min-w-0 flex-1 sm:max-w-sm">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-agency-muted" />
             <Input
+              type="search"
+              name="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search by name, company or email"
+              aria-label="Search clients"
               className="h-9 rounded-xl border-agency-line pl-9"
               maxLength={120}
             />
           </div>
-          <span className="text-[11px] tabular-nums text-agency-muted">
+          <span className="text-xs tabular-nums text-agency-muted">
             {clients.length} {clients.length === 1 ? 'client' : 'clients'}
           </span>
           <Button
@@ -316,9 +318,23 @@ const AgencyClients: React.FC = () => {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center gap-2 py-16 text-xs text-agency-muted">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading clients...
+          <div role="status" className="space-y-2 p-4">
+            <span className="sr-only">Loading clients…</span>
+            {Array.from({ length: 5 }).map((_, row) => (
+              <div
+                key={row}
+                aria-hidden="true"
+                className="h-16 rounded-xl border border-agency-line/60 skeleton-shimmer"
+              />
+            ))}
+          </div>
+        ) : listError && clients.length === 0 ? (
+          <div className="p-4">
+            <AsyncErrorPanel
+              error={listError}
+              subject="the client directory"
+              onRetry={() => void loadClients(true)}
+            />
           </div>
         ) : clients.length === 0 ? (
           <div className="p-4">
@@ -345,14 +361,15 @@ const AgencyClients: React.FC = () => {
             <div className="hidden md:block">
               <Table
                 containerClassName="max-h-[min(34rem,calc(100dvh-26rem))] overflow-y-auto"
+                scrollLabel="Clients table"
               >
                 <TableHeader className="sticky top-0 z-10 bg-agency-panel">
                   <TableRow className="hover:bg-transparent">
-                    <TableHead className="h-10 text-[11px] font-semibold uppercase tracking-[0.06em] text-agency-muted">Client</TableHead>
-                    <TableHead className="h-10 text-[11px] font-semibold uppercase tracking-[0.06em] text-agency-muted">Contact</TableHead>
-                    <TableHead className="h-10 text-[11px] font-semibold uppercase tracking-[0.06em] text-agency-muted">Company</TableHead>
-                    <TableHead className="h-10 text-[11px] font-semibold uppercase tracking-[0.06em] text-agency-muted">Added</TableHead>
-                    <TableHead className="h-10 text-right text-[11px] font-semibold uppercase tracking-[0.06em] text-agency-muted">Actions</TableHead>
+                    <TableHead className="h-10 text-overline font-semibold text-agency-muted">Client</TableHead>
+                    <TableHead className="h-10 text-overline font-semibold text-agency-muted">Contact</TableHead>
+                    <TableHead className="h-10 text-overline font-semibold text-agency-muted">Company</TableHead>
+                    <TableHead className="h-10 text-overline font-semibold text-agency-muted">Added</TableHead>
+                    <TableHead className="h-10 text-right text-overline font-semibold text-agency-muted">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -363,24 +380,24 @@ const AgencyClients: React.FC = () => {
                     >
                       <TableCell className="py-3">
                         <div className="flex items-center gap-3">
-                          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-agency-accent-soft text-[11px] font-bold text-agency-accent">
+                          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-agency-accent-soft text-xs font-bold text-agency-accent-ink">
                             {client.name.trim().slice(0, 1).toUpperCase() || 'C'}
                           </span>
                           <div className="min-w-0">
-                            <p className="truncate text-[13px] font-medium text-agency-ink">
+                            <p className="truncate text-sm font-medium text-agency-ink">
                               {client.name}
                             </p>
                             {client.sourceEnquiryId ? (
                               <Link
                                 to={`/agency/enquiries?enquiry=${client.sourceEnquiryId}`}
-                                className="inline-flex items-center gap-1 text-[11px] font-medium text-agency-accent hover:underline"
+                                className="inline-flex items-center gap-1 text-xs font-medium text-agency-accent-ink hover:underline"
                               >
                                 <Inbox className="h-3 w-3" />
                                 Came in through an enquiry
                               </Link>
                             ) : client.notes ? (
                               <p
-                                className="max-w-[22rem] truncate text-[11px] text-agency-muted"
+                                className="max-w-[22rem] truncate text-xs text-agency-muted"
                                 title={client.notes}
                               >
                                 {client.notes}
@@ -394,7 +411,7 @@ const AgencyClients: React.FC = () => {
                           {client.email ? (
                             <a
                               href={`mailto:${client.email}`}
-                              className="flex items-center gap-1.5 hover:text-agency-accent"
+                              className="flex items-center gap-1.5 hover:text-agency-accent-ink"
                             >
                               <Mail className="h-3 w-3" />
                               {client.email}
@@ -403,7 +420,7 @@ const AgencyClients: React.FC = () => {
                           {client.phone ? (
                             <a
                               href={`tel:${client.phone}`}
-                              className="flex items-center gap-1.5 hover:text-agency-accent"
+                              className="flex items-center gap-1.5 hover:text-agency-accent-ink"
                             >
                               <Phone className="h-3 w-3" />
                               {client.phone}
@@ -435,7 +452,7 @@ const AgencyClients: React.FC = () => {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => void removeClient(client)}
+                              onClick={() => setRemoveTarget(client)}
                               disabled={busyId === client._id}
                               aria-label={`Remove ${client.name}`}
                             >
@@ -460,7 +477,7 @@ const AgencyClients: React.FC = () => {
                   key={client._id}
                   className="flex flex-wrap items-start gap-3 px-4 py-3.5"
                 >
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-agency-accent-soft text-sm font-bold text-agency-accent">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-agency-accent-soft text-sm font-bold text-agency-accent-ink">
                     {client.name.trim().slice(0, 1).toUpperCase() || 'C'}
                   </span>
                   <div className="min-w-0 flex-1">
@@ -469,7 +486,7 @@ const AgencyClients: React.FC = () => {
                         {client.name}
                       </span>
                       {client.company ? (
-                        <Badge variant="outline" className="text-[10px]">
+                        <Badge variant="outline" className="text-xs">
                           {client.company}
                         </Badge>
                       ) : null}
@@ -492,7 +509,7 @@ const AgencyClients: React.FC = () => {
                     {client.sourceEnquiryId ? (
                       <Link
                         to={`/agency/enquiries?enquiry=${client.sourceEnquiryId}`}
-                        className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-agency-accent hover:underline"
+                        className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-agency-accent-ink hover:underline"
                       >
                         <Inbox className="h-3 w-3" />
                         Came in through an enquiry
@@ -518,7 +535,7 @@ const AgencyClients: React.FC = () => {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => void removeClient(client)}
+                        onClick={() => setRemoveTarget(client)}
                         disabled={busyId === client._id}
                         aria-label={`Remove ${client.name}`}
                       >
@@ -647,6 +664,26 @@ const AgencyClients: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDestructive
+        open={Boolean(removeTarget)}
+        onOpenChange={(open) => {
+          if (!open) setRemoveTarget(null);
+        }}
+        title={`Remove ${removeTarget?.name ?? 'this client'}?`}
+        description="They leave the client directory. Their trips keep the itinerary but are unlinked from this client, and you can add them again later."
+        confirmLabel="Remove client"
+        onConfirm={removeClient}
+        busy={Boolean(removeTarget && busyId === removeTarget._id)}
+        detail={
+          removeTarget ? (
+            <>
+              <span className="font-semibold">{removeTarget.name}</span>
+              {removeTarget.email ? <> · {removeTarget.email}</> : null}
+            </>
+          ) : null
+        }
+      />
     </div>
   );
 };

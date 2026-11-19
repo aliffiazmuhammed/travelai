@@ -10,7 +10,7 @@ const LandingChat = () => {
         />
         <div>
           <p className="text-xs font-bold text-foreground">Trip planning with waytowalk</p>
-          <p className="mt-1 text-[10px] text-muted-foreground">
+          <p className="mt-1 text-xs text-muted-foreground">
             Your route, ready to make your own
           </p>
         </div>
@@ -22,7 +22,7 @@ const LandingChat = () => {
         </div>
 
         <div className="max-w-[92%] rounded-2xl rounded-bl-md bg-muted/60 px-4 py-4 text-xs leading-6 text-foreground">
-          <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
+          <p className="mb-2 text-overline font-bold text-muted-foreground">
             waytowalk
           </p>
           Start in Kochi, take one scenic drive to Munnar, then slow down by the
@@ -31,7 +31,7 @@ const LandingChat = () => {
             {["Days 1–2 · Kochi", "Days 3–4 · Munnar", "Days 5–7 · Alleppey"].map((day) => (
               <span
                 key={day}
-                className="rounded-xl border border-border/70 bg-card px-2 py-3 text-center text-[9px] font-bold text-primary"
+                className="rounded-xl border border-border/70 bg-card px-2 py-3 text-center text-xs font-bold text-primary"
               >
                 {day}
               </span>

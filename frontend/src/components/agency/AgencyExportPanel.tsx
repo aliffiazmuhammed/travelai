@@ -67,13 +67,13 @@ const exportStatusLabel: Record<AgencyExportStatus, string> = {
 
 const exportStatusClass: Record<AgencyExportStatus, string> = {
   queued:
-    'border-slate-300 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300',
+    'border-border bg-muted text-muted-foreground dark:bg-background/60',
   rendering:
-    'border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-300',
+    'border-info/30 bg-info/10 text-info-ink dark:border-info/40 dark:bg-info/20',
   ready:
-    'border-teal-300 bg-teal-50 text-teal-800 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-300',
+    'border-agency-accent/30 bg-agency-accent-soft text-agency-accent-ink',
   failed:
-    'border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300',
+    'border-destructive/30 bg-destructive/10 text-destructive-ink dark:border-destructive/40 dark:bg-destructive/20',
 };
 
 const quoteStatusLabel: Record<QuoteStatus, string> = {
@@ -86,14 +86,14 @@ const quoteStatusLabel: Record<QuoteStatus, string> = {
 
 const quoteStatusClass: Record<QuoteStatus, string> = {
   draft:
-    'border-slate-300 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300',
-  sent: 'border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-300',
+    'border-border bg-muted text-muted-foreground dark:bg-background/60',
+  sent: 'border-info/30 bg-info/10 text-info-ink dark:border-info/40 dark:bg-info/20',
   accepted:
-    'border-teal-300 bg-teal-50 text-teal-800 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-300',
+    'border-agency-accent/30 bg-agency-accent-soft text-agency-accent-ink',
   expired:
-    'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300',
+    'border-warning/30 bg-warning/10 text-warning-ink dark:border-warning/40 dark:bg-warning/20',
   cancelled:
-    'border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300',
+    'border-destructive/30 bg-destructive/10 text-destructive-ink dark:border-destructive/40 dark:bg-destructive/20',
 };
 
 const errorMessage = (error: unknown, fallback: string): string =>
@@ -525,10 +525,10 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
 
   if (loadError) {
     return (
-      <Card className="rounded-3xl border-rose-200 dark:border-rose-900/60">
+      <Card className="rounded-3xl border-destructive/30 dark:border-destructive/20">
         <CardContent className="space-y-3 py-14 text-center">
-          <AlertTriangle className="mx-auto h-6 w-6 text-rose-500" />
-          <p className="text-sm text-rose-700 dark:text-rose-300">
+          <AlertTriangle className="mx-auto h-6 w-6 text-destructive-ink" />
+          <p className="text-sm text-destructive-ink">
             {loadError}
           </p>
           <Button variant="outline" size="sm" onClick={() => void loadData()}>
@@ -548,14 +548,14 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
             <History className="h-4 w-4" />
             Export history
           </span>
-          <span className="text-[11px] font-normal text-slate-500 dark:text-slate-400">
+          <span className="text-xs font-normal text-muted-foreground">
             PDFs are kept for 30 days
           </span>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
         {exports.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-slate-200 px-3 py-6 text-center text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
+          <p className="rounded-xl border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
             {canPlan
               ? 'Generated proposals appear here with their quote and template versions.'
               : 'No exports have been generated for this trip yet.'}
@@ -567,7 +567,7 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
             return (
               <div
                 key={job._id}
-                className="rounded-2xl border border-slate-200 p-3 dark:border-slate-800"
+                className="rounded-2xl border border-border p-3"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
@@ -577,14 +577,14 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
                       </p>
                       <Badge
                         variant="outline"
-                        className="text-[10px] capitalize"
+                        className="text-xs capitalize"
                       >
                         {job.audience}
                       </Badge>
                       <Badge
                         variant="outline"
                         className={cn(
-                          'text-[10px]',
+                          'text-xs',
                           exportStatusClass[job.status]
                         )}
                       >
@@ -600,13 +600,13 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
                       {job.expired ? (
                         <Badge
                           variant="outline"
-                          className="border-slate-300 text-[10px] text-slate-500 dark:border-slate-700"
+                          className="border-border text-xs text-muted-foreground"
                         >
                           Expired
                         </Badge>
                       ) : null}
                     </div>
-                    <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                    <p className="mt-1 text-xs text-muted-foreground">
                       {job.quoteNumber
                         ? `${job.quoteNumber} · v${job.quoteVersion ?? 1}`
                         : 'No quote pinned'}
@@ -618,16 +618,16 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
                       {job.attempts > 1 ? ` · attempt ${job.attempts}` : ''}
                     </p>
                     {job.status === 'failed' && job.error ? (
-                      <p className="mt-1 text-[11px] text-rose-600 dark:text-rose-400">
+                      <p className="mt-1 text-xs text-destructive-ink">
                         {job.error}
                       </p>
                     ) : null}
                     {job.status === 'ready' && !job.expired ? (
-                      <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
+                      <p className="mt-1 text-xs text-muted-foreground">
                         Download available until {formatAgencyDate(job.expiresAt)}
                       </p>
                     ) : job.expired ? (
-                      <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
+                      <p className="mt-1 text-xs text-muted-foreground">
                         Past the retention window. Generate a new export to
                         download again.
                       </p>
@@ -713,14 +713,14 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
             <Link2 className="h-4 w-4" />
             Client share links
           </span>
-          <span className="text-[11px] font-normal text-slate-500 dark:text-slate-400">
+          <span className="text-xs font-normal text-muted-foreground">
             Full links are shown only once, when created
           </span>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
         {shares.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-slate-200 px-3 py-6 text-center text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
+          <p className="rounded-xl border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
             {canPlan
               ? 'Share a ready client export to send the client a link they can view and accept without an account.'
               : 'No client share links have been created for this trip yet.'}
@@ -731,7 +731,7 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
             return (
               <div
                 key={link._id}
-                className="rounded-2xl border border-slate-200 p-3 dark:border-slate-800"
+                className="rounded-2xl border border-border p-3"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
@@ -744,7 +744,7 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
                       {link.acceptedAt ? (
                         <Badge
                           variant="outline"
-                          className="border-teal-300 bg-teal-50 text-[10px] text-teal-800 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-300"
+                          className="border-agency-accent/30 bg-agency-accent-soft text-xs text-agency-accent-ink"
                         >
                           Accepted
                         </Badge>
@@ -752,7 +752,7 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
                       {link.declinedAt ? (
                         <Badge
                           variant="outline"
-                          className="border-rose-300 bg-rose-50 text-[10px] text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300"
+                          className="border-destructive/30 bg-destructive/10 text-xs text-destructive-ink dark:border-destructive/40 dark:bg-destructive/20"
                         >
                           Declined
                         </Badge>
@@ -760,27 +760,27 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
                       {link.revokedAt ? (
                         <Badge
                           variant="outline"
-                          className="border-rose-300 bg-rose-50 text-[10px] text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300"
+                          className="border-destructive/30 bg-destructive/10 text-xs text-destructive-ink dark:border-destructive/40 dark:bg-destructive/20"
                         >
                           Revoked
                         </Badge>
                       ) : active ? (
                         <Badge
                           variant="outline"
-                          className="border-sky-300 bg-sky-50 text-[10px] text-sky-800 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-300"
+                          className="border-info/30 bg-info/10 text-xs text-info-ink dark:border-info/40 dark:bg-info/20"
                         >
                           Active
                         </Badge>
                       ) : (
                         <Badge
                           variant="outline"
-                          className="border-amber-300 bg-amber-50 text-[10px] text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
+                          className="border-warning/30 bg-warning/10 text-xs text-warning-ink dark:border-warning/40 dark:bg-warning/20"
                         >
                           Expired
                         </Badge>
                       )}
                     </div>
-                    <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                    <p className="mt-1 text-xs text-muted-foreground">
                       …{link.tokenHint}
                       {link.templateName ? ` · ${link.templateName}` : ''}
                       {' · created '}
@@ -788,7 +788,7 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
                       {' · valid until '}
                       {formatAgencyDate(link.expiresAt)}
                     </p>
-                    <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
+                    <p className="mt-1 text-xs text-muted-foreground">
                       {link.viewCount} view{link.viewCount === 1 ? '' : 's'}
                       {link.lastViewedAt
                         ? ` · last viewed ${formatAgencyDate(link.lastViewedAt)}`
@@ -834,14 +834,14 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
         <Card className="rounded-3xl border-border/70">
           <CardContent className="flex flex-wrap items-start justify-between gap-3 p-4 sm:p-5">
             <div className="flex items-start gap-3">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-indigo-600 text-white">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-admin-accent text-white">
                 <FileText className="h-5 w-5" />
               </span>
               <div>
-                <h2 className="text-lg font-semibold tracking-tight">
+                <h2 className="text-xl font-semibold tracking-tight">
                   Proposal exports
                 </h2>
-                <p className="mt-1 max-w-xl text-xs text-slate-500 dark:text-slate-400">
+                <p className="mt-1 max-w-xl text-xs text-muted-foreground">
                   Download finished PDFs for {tripTitle}. Generating new
                   documents is limited to planners and admins.
                 </p>
@@ -849,7 +849,7 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
             </div>
             <Badge
               variant="outline"
-              className="gap-1 text-[10px] text-slate-500"
+              className="gap-1 text-xs text-muted-foreground"
             >
               <Lock className="h-3 w-3" />
               Read-only
@@ -867,14 +867,14 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
       <Card className="rounded-3xl border-border/70">
         <CardContent className="flex flex-wrap items-start justify-between gap-3 p-4 sm:p-5">
           <div className="flex items-start gap-3">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-indigo-600 text-white">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-admin-accent text-white">
               <FileText className="h-5 w-5" />
             </span>
             <div>
-              <h2 className="text-lg font-semibold tracking-tight">
+              <h2 className="text-xl font-semibold tracking-tight">
                 Proposal exports
               </h2>
-              <p className="mt-1 max-w-xl text-xs text-slate-500 dark:text-slate-400">
+              <p className="mt-1 max-w-xl text-xs text-muted-foreground">
                 Choose a template, confirm the quote and generate a branded
                 PDF. The quote and template versions are pinned to each export;
                 previews and generations share a 20-per-hour limit.
@@ -913,7 +913,7 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
             </CardHeader>
             <CardContent className="space-y-2">
               {visibleTemplates.length === 0 ? (
-                <div className="space-y-2 rounded-xl border border-dashed border-slate-200 px-3 py-6 text-center text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                <div className="space-y-2 rounded-xl border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
                   <p>No active export templates are available yet.</p>
                   {canAdmin ? (
                     <Button asChild variant="outline" size="sm">
@@ -936,8 +936,8 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
                         className={cn(
                           'rounded-2xl border p-3 text-left transition',
                           selected
-                            ? 'border-teal-500 bg-teal-50/70 ring-1 ring-teal-500 dark:border-teal-500 dark:bg-teal-950/30'
-                            : 'border-slate-200 hover:border-teal-300 hover:bg-slate-50 dark:border-slate-800 dark:hover:border-teal-800 dark:hover:bg-slate-900/60'
+                            ? 'border-agency-accent/30 bg-agency-accent-soft ring-1 ring-agency-accent'
+                            : 'border-border hover:border-agency-accent/30 hover:bg-muted dark:hover:bg-background/60'
                         )}
                       >
                         <div className="flex items-start gap-2">
@@ -945,8 +945,8 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
                             className={cn(
                               'mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl',
                               template.audience === 'internal'
-                                ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300'
-                                : 'bg-teal-100 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300'
+                                ? 'bg-admin-accent/10 text-admin-accent-ink dark:bg-admin-accent/60'
+                                : 'bg-agency-accent-soft text-agency-accent-ink'
                             )}
                           >
                             {template.audience === 'internal' ? (
@@ -963,19 +963,19 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
                               {template.isDefault ? (
                                 <Badge
                                   variant="outline"
-                                  className="text-[9px]"
+                                  className="text-xs"
                                 >
                                   Default
                                 </Badge>
                               ) : null}
                             </div>
-                            <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
+                            <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
                               {template.description ||
                                 (template.audience === 'internal'
                                   ? 'Desk copy with internal estimates.'
                                   : 'Client-facing proposal document.')}
                             </p>
-                            <p className="mt-1.5 text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                            <p className="mt-1.5 text-overline text-muted-foreground">
                               {template.audience} ·{' '}
                               {template.builtinKey ? 'built-in' : 'custom'} · v
                               {templateVersionNumber(template)}
@@ -988,7 +988,7 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
                 </div>
               )}
               {!canAdmin ? (
-                <p className="flex items-center gap-1.5 pt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                <p className="flex items-center gap-1.5 pt-1 text-xs text-muted-foreground">
                   <Lock className="h-3 w-3" />
                   Internal summaries can only be generated by an admin.
                 </p>
@@ -1007,36 +1007,36 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
               {quote ? (
                 <>
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <Badge variant="outline" className="font-mono text-[10px]">
+                    <Badge variant="outline" className="font-mono text-xs">
                       {quote.number}
                     </Badge>
-                    <Badge variant="outline" className="text-[10px]">
+                    <Badge variant="outline" className="text-xs">
                       v{quote.version}
                     </Badge>
                     <Badge
                       variant="outline"
                       className={cn(
-                        'text-[10px]',
+                        'text-xs',
                         quoteStatusClass[quote.status]
                       )}
                     >
                       {quoteStatusLabel[quote.status]}
                     </Badge>
-                    <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                    <span className="text-xs text-muted-foreground">
                       Valid until {formatDateOnly(quote.validUntil)}
                     </span>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    <div className="rounded-xl bg-slate-50 p-2.5 dark:bg-slate-900/60">
-                      <span className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    <div className="rounded-xl bg-muted p-2.5 dark:bg-background/60">
+                      <span className="text-overline text-muted-foreground">
                         Total
                       </span>
                       <p className="mt-0.5 text-sm font-semibold">
                         {formatMoney(quote.total, quote.currency)}
                       </p>
                     </div>
-                    <div className="rounded-xl bg-slate-50 p-2.5 dark:bg-slate-900/60">
-                      <span className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    <div className="rounded-xl bg-muted p-2.5 dark:bg-background/60">
+                      <span className="text-overline text-muted-foreground">
                         Per person
                       </span>
                       <p className="mt-0.5 text-sm font-semibold">
@@ -1047,7 +1047,7 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
                   {quote.status === 'draft' ||
                   quote.status === 'expired' ||
                   quote.status === 'cancelled' ? (
-                    <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-2.5 text-[11px] text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300">
+                    <div className="flex items-start gap-2 rounded-xl border border-warning/30 bg-warning/10 p-2.5 text-xs text-warning-ink dark:border-warning/20 dark:bg-warning/30">
                       <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                       <span>
                         {quote.status === 'cancelled'
@@ -1060,8 +1060,8 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
                   ) : null}
                 </>
               ) : (
-                <div className="space-y-2 rounded-xl border border-dashed border-slate-200 p-3 text-center dark:border-slate-800">
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                <div className="space-y-2 rounded-xl border border-dashed border-border p-3 text-center">
+                  <p className="text-xs text-muted-foreground">
                     No quote for this trip yet. A client proposal needs a priced
                     quote before it can be exported.
                   </p>
@@ -1082,7 +1082,7 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
                   Open quote to create a new version
                 </Button>
               ) : null}
-              <p className="text-[11px] text-slate-400 dark:text-slate-500">
+              <p className="text-xs text-muted-foreground">
                 The export pins this quote version. Later edits create a new
                 quote version and do not change this document.
               </p>
@@ -1096,7 +1096,7 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
               <Eye className="h-4 w-4" />
               Live preview
               {preview ? (
-                <Badge variant="outline" className="text-[10px]">
+                <Badge variant="outline" className="text-xs">
                   {preview.pageCount}{' '}
                   {preview.pageCount === 1 ? 'page' : 'pages'}
                 </Badge>
@@ -1123,7 +1123,7 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
           </CardHeader>
           <CardContent className="space-y-3 p-4 pt-0">
             {generationBlocked ? (
-              <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-2.5 text-[11px] text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300">
+              <div className="flex items-start gap-2 rounded-xl border border-warning/30 bg-warning/10 p-2.5 text-xs text-warning-ink dark:border-warning/20 dark:bg-warning/30">
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <span>
                   {archivedBlockedReason ??
@@ -1134,7 +1134,7 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
             ) : null}
 
             {previewError ? (
-              <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-[11px] text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-300">
+              <div className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 p-2.5 text-xs text-destructive-ink dark:border-destructive/20 dark:bg-destructive/30">
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <span>{previewError}</span>
               </div>
@@ -1153,18 +1153,18 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
                     title={`${preview.template.name} preview`}
                     srcDoc={preview.html ?? ''}
                     sandbox=""
-                    className="h-[560px] w-full rounded-2xl border border-slate-200 bg-white"
+                    className="h-[560px] w-full rounded-2xl border border-border bg-white"
                   />
                 )}
                 <div className="space-y-2">
                   {watermark ? (
-                    <p className="flex items-start gap-1.5 text-[11px] text-amber-700 dark:text-amber-400">
+                    <p className="flex items-start gap-1.5 text-xs text-warning-ink">
                       <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
                       {watermark}
                     </p>
                   ) : null}
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    <p className="text-xs text-muted-foreground">
                       {preview.template.name} · v{preview.template.version}
                       {preview.quote
                         ? ` · ${preview.quote.number} v${preview.quote.version}`
@@ -1172,7 +1172,7 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
                     </p>
                     <Button
                       size="sm"
-                      className="bg-teal-600 hover:bg-teal-700"
+                      className="bg-agency-accent hover:bg-agency-accent/90"
                       onClick={() => setConfirmOpen(true)}
                       disabled={!canGenerate}
                     >
@@ -1187,17 +1187,17 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
                 type="button"
                 onClick={() => void handlePreview()}
                 disabled={previewLoading || generationBlocked}
-                className="flex h-[560px] w-full flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-6 text-center transition hover:border-teal-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-800 dark:bg-slate-900/40 dark:hover:border-teal-800"
+                className="flex h-[560px] w-full flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border bg-muted/60 px-6 text-center transition hover:border-agency-accent/30 hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60 dark:bg-background/40"
               >
                 {previewLoading ? (
-                  <Loader2 className="h-7 w-7 animate-spin text-teal-600" />
+                  <Loader2 className="h-7 w-7 animate-spin text-agency-accent-ink" />
                 ) : (
-                  <Eye className="h-7 w-7 text-slate-300 dark:text-slate-700" />
+                  <Eye className="h-7 w-7 text-muted-foreground" />
                 )}
                 <span className="text-sm font-semibold">
                   Preview the actual PDF layout
                 </span>
-                <span className="max-w-xs text-[11px] text-slate-500 dark:text-slate-400">
+                <span className="max-w-xs text-xs text-muted-foreground">
                   Rendered by the same engine as the download, using the
                   current trip, {selectedTemplate?.name ?? 'template'} and
                   pinned quote.
@@ -1225,9 +1225,9 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
               You can download it from the export history.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-2 rounded-2xl border border-slate-200 p-3 text-xs dark:border-slate-800">
+          <div className="space-y-2 rounded-2xl border border-border p-3 text-xs">
             <div className="flex items-center justify-between gap-3">
-              <span className="text-slate-500 dark:text-slate-400">
+              <span className="text-muted-foreground">
                 Template
               </span>
               <span className="text-right font-medium">
@@ -1236,7 +1236,7 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
               </span>
             </div>
             <div className="flex items-center justify-between gap-3">
-              <span className="text-slate-500 dark:text-slate-400">
+              <span className="text-muted-foreground">
                 Audience
               </span>
               <span className="font-medium capitalize">
@@ -1244,7 +1244,7 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
               </span>
             </div>
             <div className="flex items-center justify-between gap-3">
-              <span className="text-slate-500 dark:text-slate-400">Quote</span>
+              <span className="text-muted-foreground">Quote</span>
               <span className="text-right font-medium">
                 {preview?.quote
                   ? `${preview.quote.number} · v${preview.quote.version} · ${quoteStatusLabel[preview.quote.status]}`
@@ -1253,7 +1253,7 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
             </div>
             {preview?.quote ? (
               <div className="flex items-center justify-between gap-3">
-                <span className="text-slate-500 dark:text-slate-400">
+                <span className="text-muted-foreground">
                   Total
                 </span>
                 <span className="font-medium">
@@ -1262,11 +1262,11 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
               </div>
             ) : null}
             <div className="flex items-center justify-between gap-3">
-              <span className="text-slate-500 dark:text-slate-400">Pages</span>
+              <span className="text-muted-foreground">Pages</span>
               <span className="font-medium">{preview?.pageCount}</span>
             </div>
             {watermark ? (
-              <p className="flex items-start gap-1.5 rounded-lg bg-amber-50 p-2 text-[11px] text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+              <p className="flex items-start gap-1.5 rounded-lg bg-warning/10 p-2 text-xs text-warning-ink dark:bg-warning/30">
                 <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
                 {watermark}
               </p>
@@ -1281,7 +1281,7 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
               Cancel
             </Button>
             <Button
-              className="bg-teal-600 hover:bg-teal-700"
+              className="bg-agency-accent hover:bg-agency-accent/90"
               onClick={() => void handleGenerate()}
               disabled={!canGenerate}
             >
@@ -1314,8 +1314,8 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-900/60">
-              <span className="min-w-0 flex-1 break-all text-xs font-medium text-slate-700 dark:text-slate-300">
+            <div className="flex items-center gap-2 rounded-2xl border border-border bg-muted p-3 dark:bg-background/60">
+              <span className="min-w-0 flex-1 break-all text-xs font-medium text-muted-foreground">
                 {createdShare?.url}
               </span>
               <Button
@@ -1328,7 +1328,7 @@ const AgencyExportPanel: React.FC<AgencyExportPanelProps> = ({
                 Copy
               </Button>
             </div>
-            <p className="flex items-start gap-1.5 text-[11px] text-amber-700 dark:text-amber-400">
+            <p className="flex items-start gap-1.5 text-xs text-warning-ink">
               <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span>
                 This full link is shown only once. Anyone with it can open the

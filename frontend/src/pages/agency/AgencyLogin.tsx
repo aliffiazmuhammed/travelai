@@ -46,7 +46,7 @@ const AgencyBrand = ({ inverted = false }: { inverted?: boolean }) => (
       height="30"
       className="h-[30px] w-[148px]"
     />
-    <span className={`text-sm font-semibold ${inverted ? "text-white/70" : "text-agency-accent"}`}>
+    <span className={`text-sm font-semibold ${inverted ? "text-agency-accent-foreground/70" : "text-agency-accent-ink"}`}>
       Agency
     </span>
   </span>
@@ -173,7 +173,7 @@ const AgencyLogin: React.FC = () => {
     return (
       <div className="grid min-h-screen place-items-center bg-agency-canvas px-4">
         <div className="w-full max-w-md rounded-2xl border border-agency-line bg-agency-panel p-8 text-center shadow-sm">
-          <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-agency-accent-soft text-agency-accent">
+          <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-agency-accent-soft text-agency-accent-ink">
             <Building2 className="h-6 w-6" />
           </div>
           <div className="mt-4 space-y-1.5">
@@ -187,7 +187,7 @@ const AgencyLogin: React.FC = () => {
           </div>
           <Button
             asChild
-            className="mt-6 h-11 w-full rounded-lg bg-agency-accent text-white hover:bg-agency-accent/90"
+            className="mt-6 h-11 w-full rounded-lg bg-agency-accent text-agency-accent-foreground hover:bg-agency-accent/90"
           >
             <Link to="/dashboard">Back to my trips</Link>
           </Button>
@@ -198,7 +198,7 @@ const AgencyLogin: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-agency-canvas text-agency-ink lg:grid lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
-      <aside className="relative hidden overflow-hidden bg-agency-accent p-10 text-white lg:flex lg:flex-col lg:justify-between">
+      <aside className="relative hidden overflow-hidden bg-agency-accent p-10 text-agency-accent-foreground lg:flex lg:flex-col lg:justify-between">
         <svg
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.12]"
@@ -220,24 +220,24 @@ const AgencyLogin: React.FC = () => {
 
         <div className="relative max-w-md space-y-7">
           <div className="space-y-3">
-            <h1 className="font-display text-4xl font-semibold leading-[1.08] tracking-tight">
+            <p className="font-display text-4xl font-semibold leading-[1.08] tracking-tight">
               Your trips,
               <br />
               one calm workspace.
-            </h1>
-            <p className="text-sm leading-6 text-white/75">
+            </p>
+            <p className="text-sm leading-6 text-agency-accent-foreground/75">
               Sign in to manage enquiries, trips and the travellers you host.
             </p>
           </div>
           <ul className="space-y-5">
             {PROMISES.map(({ icon: Icon, title, body }) => (
               <li key={title} className="flex items-start gap-3.5">
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-white/25 text-white/90">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-agency-accent-foreground/25 text-agency-accent-foreground/90">
                   <Icon className="h-4 w-4" aria-hidden="true" />
                 </span>
                 <span>
                   <span className="block text-sm font-semibold">{title}</span>
-                  <span className="mt-0.5 block text-xs leading-5 text-white/60">
+                  <span className="mt-0.5 block text-xs leading-5 text-agency-accent-foreground/60">
                     {body}
                   </span>
                 </span>
@@ -246,7 +246,7 @@ const AgencyLogin: React.FC = () => {
           </ul>
         </div>
 
-        <p className="relative text-[11px] font-medium tracking-[0.2em] text-white/45">
+        <p className="relative text-xs font-medium tracking-[0.2em] text-agency-accent-foreground/45">
           TRAVEL FURTHER TOGETHER
         </p>
       </aside>
@@ -261,9 +261,9 @@ const AgencyLogin: React.FC = () => {
 
           <div className="rounded-2xl border border-agency-line bg-agency-panel p-6 shadow-sm sm:p-8">
             <header className="space-y-1.5">
-              <h2 className="font-display text-3xl font-semibold tracking-tight text-agency-ink">
+              <h1 className="font-display text-3xl font-semibold tracking-tight text-agency-ink">
                 Sign in to your agency
-              </h2>
+              </h1>
               <p className="text-sm leading-6 text-agency-muted">
                 {tenant
                   ? `Continue to ${tenant.name}.`
@@ -274,7 +274,7 @@ const AgencyLogin: React.FC = () => {
             <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
               {tenant ? (
                 <div className="flex items-center gap-3 rounded-xl border border-agency-line bg-agency-accent-soft px-3.5 py-3">
-                  <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-lg bg-agency-accent text-white">
+                  <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-lg bg-agency-accent text-agency-accent-foreground">
                     {tenant.logoUrl ? (
                       <img
                         src={tenant.logoUrl}
@@ -297,7 +297,7 @@ const AgencyLogin: React.FC = () => {
               ) : null}
 
               {error ? (
-                <div className="flex items-start gap-2.5 rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-sm font-medium text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200">
+                <div className="flex items-start gap-2.5 rounded-xl border border-destructive/30 bg-destructive/10 p-3.5 text-sm font-medium text-destructive-ink dark:border-destructive/40 dark:bg-destructive/20">
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                   <p>{error}</p>
                 </div>
@@ -309,6 +309,7 @@ const AgencyLogin: React.FC = () => {
                   <Building2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-agency-muted" />
                   <Input
                     id="workspace"
+                    name="workspace"
                     value={workspace}
                     onChange={(event) => {
                       setWorkspace(event.target.value);
@@ -333,6 +334,7 @@ const AgencyLogin: React.FC = () => {
                   <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-agency-muted" />
                   <Input
                     id="email"
+                    name="email"
                     type="email"
                     value={email}
                     onChange={(event) => {
@@ -340,7 +342,7 @@ const AgencyLogin: React.FC = () => {
                       if (error) setError(null);
                     }}
                     placeholder="you@agency.com"
-                    autoComplete="email"
+                    autoComplete="username"
                     className="h-11 border-agency-line bg-agency-panel pl-9"
                   />
                 </div>
@@ -352,6 +354,7 @@ const AgencyLogin: React.FC = () => {
                   <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-agency-muted" />
                   <Input
                     id="password"
+                    name="password"
                     type="password"
                     value={password}
                     onChange={(event) => {
@@ -367,7 +370,7 @@ const AgencyLogin: React.FC = () => {
 
               <Button
                 type="submit"
-                className="h-11 w-full rounded-lg bg-agency-accent text-white hover:bg-agency-accent/90"
+                className="h-11 w-full rounded-lg bg-agency-accent text-agency-accent-foreground hover:bg-agency-accent/90"
                 disabled={submitting}
               >
                 {submitting ? (
@@ -387,7 +390,7 @@ const AgencyLogin: React.FC = () => {
             Looking for your personal trips?{" "}
             <Link
               to="/auth"
-              className="font-semibold text-agency-accent hover:underline"
+              className="font-semibold text-agency-accent-ink hover:underline"
             >
               Personal sign in
             </Link>

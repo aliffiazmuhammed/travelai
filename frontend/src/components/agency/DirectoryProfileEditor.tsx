@@ -3,6 +3,7 @@ import {
   AlertCircle,
   Check,
   Eye,
+  EyeOff,
   Loader2,
   Lock,
   Save,
@@ -10,17 +11,8 @@ import {
   ShieldAlert,
   X,
 } from 'lucide-react';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
+import { ConfirmDestructive } from '@/components/ui/confirm-destructive';
+import { UnsavedChangesDialog } from '@/components/ui/unsaved-changes-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -40,6 +32,7 @@ import DirectoryProfilePreview, {
 } from '@/components/directory/DirectoryProfilePreview';
 import { useAgency } from '@/context/AgencyContext';
 import { useAgencyAssetUrl } from '@/hooks/useAgencyAssetUrl';
+import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import { formatAgencyDate } from '@/lib/agency';
 import { api } from '@/services/api';
 import type {
@@ -212,7 +205,7 @@ const TagField: React.FC<{
           />
         )}
       </div>
-      <p className="text-[11px] text-agency-muted">{hint}</p>
+      <p className="text-xs text-agency-muted">{hint}</p>
     </div>
   );
 };
@@ -229,6 +222,7 @@ const DirectoryProfileEditor: React.FC = () => {
   const [busy, setBusy] = useState<'save' | 'publish' | 'unpublish' | null>(
     null
   );
+  const [unpublishOpen, setUnpublishOpen] = useState(false);
 
   const logoUrl = useAgencyAssetUrl(activeAgency?.branding.logoUrl);
   const contactPhone = activeAgency?.branding.contactPhone ?? '';
@@ -313,6 +307,8 @@ const DirectoryProfileEditor: React.FC = () => {
       setBusy(null);
     }
   };
+
+  const guard = useUnsavedChangesGuard(dirty, async () => Boolean(await persist()));
 
   const handlePublish = async () => {
     if (!activeAgencyId || !draft || busy) return;
@@ -408,7 +404,7 @@ const DirectoryProfileEditor: React.FC = () => {
             Loading your public profile...
           </div>
         ) : loadError || !draft || !preview ? (
-          <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+          <div className="space-y-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning-ink dark:border-warning/20 dark:bg-warning/30">
             <p>{loadError ?? 'We could not load your public profile.'}</p>
             <Button variant="outline" size="sm" onClick={() => void load()}>
               Try again
@@ -426,7 +422,7 @@ const DirectoryProfileEditor: React.FC = () => {
               ) : null}
 
               {underReview ? (
-                <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+                <div className="flex items-start gap-2 rounded-xl border border-warning/30 bg-warning/10 px-3 py-2.5 text-xs text-warning-ink dark:border-warning/20 dark:bg-warning/30">
                   <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                   Our team is reviewing this profile. You can keep editing, but
                   it cannot be published until the review clears.
@@ -438,9 +434,9 @@ const DirectoryProfileEditor: React.FC = () => {
                   <Label htmlFor="directory-about">About your agency</Label>
                   <span
                     className={cn(
-                      'text-[11px] tabular-nums',
+                      'text-xs tabular-nums',
                       draft.about.trim().length < ABOUT_MIN
-                        ? 'text-amber-600 dark:text-amber-400'
+                        ? 'text-warning-ink'
                         : 'text-agency-muted'
                     )}
                   >
@@ -456,7 +452,7 @@ const DirectoryProfileEditor: React.FC = () => {
                   disabled={!editable}
                   placeholder="What kind of trips do you plan, for whom, and what makes your agency different?"
                 />
-                <p className="text-[11px] text-agency-muted">
+                <p className="text-xs text-agency-muted">
                   At least {ABOUT_MIN} characters to publish. Plain text; blank
                   lines separate paragraphs.
                 </p>
@@ -475,14 +471,15 @@ const DirectoryProfileEditor: React.FC = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Website</Label>
+                  <Label htmlFor="directory-website">Website</Label>
                   <Input
+                    id="directory-website"
                     value={activeAgency?.branding.website ?? ''}
                     readOnly
                     disabled
                     placeholder="Add a website in Profile above"
                   />
-                  <p className="text-[11px] text-agency-muted">
+                  <p className="text-xs text-agency-muted">
                     Comes from your agency profile.
                   </p>
                 </div>
@@ -510,7 +507,7 @@ const DirectoryProfileEditor: React.FC = () => {
               </div>
 
               <div className="space-y-2">
-                <Label>Services you offer</Label>
+                <span className="text-sm font-medium leading-none">Services you offer</span>
                 <div
                   role="group"
                   aria-label="Services you offer"
@@ -523,7 +520,7 @@ const DirectoryProfileEditor: React.FC = () => {
                       className={cn(
                         'flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-colors',
                         draft.services.includes(service.id)
-                          ? 'border-agency-accent/40 bg-agency-accent-soft text-agency-accent'
+                          ? 'border-agency-accent/40 bg-agency-accent-soft text-agency-accent-ink'
                           : 'border-agency-line hover:bg-agency-soft/60',
                         !editable && 'cursor-default opacity-80'
                       )}
@@ -556,7 +553,7 @@ const DirectoryProfileEditor: React.FC = () => {
               </div>
 
               <div className="space-y-2">
-                <Label>Languages your team works in</Label>
+                <span className="text-sm font-medium leading-none">Languages your team works in</span>
                 <div
                   role="group"
                   aria-label="Languages your team works in"
@@ -569,7 +566,7 @@ const DirectoryProfileEditor: React.FC = () => {
                       className={cn(
                         'flex cursor-pointer items-center gap-2 rounded-xl border px-2.5 py-2 text-sm transition-colors',
                         draft.languages.includes(language.code)
-                          ? 'border-agency-accent/40 bg-agency-accent-soft text-agency-accent'
+                          ? 'border-agency-accent/40 bg-agency-accent-soft text-agency-accent-ink'
                           : 'border-agency-line hover:bg-agency-soft/60',
                         !editable && 'cursor-default opacity-80'
                       )}
@@ -594,7 +591,7 @@ const DirectoryProfileEditor: React.FC = () => {
               </div>
 
               <div className="space-y-2">
-                <Label>Contact details</Label>
+                <span className="text-sm font-medium leading-none">Contact details</span>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-4 rounded-xl border border-agency-line px-3 py-2.5">
                     <div>
@@ -632,12 +629,12 @@ const DirectoryProfileEditor: React.FC = () => {
               </div>
 
               {canManage && !ready ? (
-                <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 dark:border-amber-900/50 dark:bg-amber-950/30">
-                  <div className="flex items-center gap-2 text-sm font-medium text-amber-900 dark:text-amber-100">
+                <div className="rounded-xl border border-warning/30 bg-warning/10 px-3 py-2.5 dark:border-warning/20 dark:bg-warning/30">
+                  <div className="flex items-center gap-2 text-sm font-medium text-warning-ink">
                     <AlertCircle className="h-4 w-4" />
                     Before you can publish
                   </div>
-                  <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs text-amber-900 dark:text-amber-100">
+                  <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs text-warning-ink">
                     {missing.map((item) => (
                       <li key={item}>{item}</li>
                     ))}
@@ -661,33 +658,13 @@ const DirectoryProfileEditor: React.FC = () => {
                       {published ? 'Save changes' : 'Save draft'}
                     </Button>
                     {published ? (
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="outline" disabled={busy !== null}>
-                            Unpublish
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>
-                              Remove your agency from the directory?
-                            </AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Travellers lose access to this page right away.
-                              Your profile stays saved, and you can publish it
-                              again any time.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Keep it live</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => void handleUnpublish()}
-                            >
-                              Unpublish
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                      <Button
+                        variant="outline"
+                        disabled={busy !== null}
+                        onClick={() => setUnpublishOpen(true)}
+                      >
+                        Unpublish
+                      </Button>
                     ) : (
                       <Button
                         onClick={() => void handlePublish()}
@@ -704,12 +681,12 @@ const DirectoryProfileEditor: React.FC = () => {
                   </>
                 ) : null}
                 {dirty ? (
-                  <span className="inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+                  <span className="inline-flex items-center gap-1 text-xs text-warning-ink">
                     <AlertCircle className="h-3.5 w-3.5" />
                     Unsaved changes
                   </span>
                 ) : published ? (
-                  <span className="inline-flex items-center gap-1 text-xs text-agency-accent">
+                  <span className="inline-flex items-center gap-1 text-xs text-agency-accent-ink">
                     <Check className="h-3.5 w-3.5" />
                     Saved changes appear on your public page
                   </span>
@@ -717,7 +694,7 @@ const DirectoryProfileEditor: React.FC = () => {
               </div>
 
               {published && profile?.publishedAt ? (
-                <p className="text-[11px] text-agency-muted">
+                <p className="text-xs text-agency-muted">
                   Published {formatAgencyDate(profile.publishedAt)}.
                 </p>
               ) : null}
@@ -729,7 +706,7 @@ const DirectoryProfileEditor: React.FC = () => {
               </div>
               <DirectoryProfilePreview profile={preview} />
               {dirty ? (
-                <p className="text-[11px] text-agency-muted">
+                <p className="text-xs text-agency-muted">
                   This preview follows your edits. Save to make them public.
                 </p>
               ) : null}
@@ -737,6 +714,24 @@ const DirectoryProfileEditor: React.FC = () => {
           </div>
         )}
       </CardContent>
+
+      <ConfirmDestructive
+        open={unpublishOpen}
+        onOpenChange={setUnpublishOpen}
+        icon={EyeOff}
+        title="Remove your agency from the directory?"
+        description="Travellers lose access to this page right away. Your profile stays saved, and you can publish it again any time."
+        confirmLabel="Unpublish"
+        cancelLabel="Keep it live"
+        detail={activeAgency?.name ? <>{activeAgency.name}</> : null}
+        onConfirm={async () => {
+          await handleUnpublish();
+          setUnpublishOpen(false);
+        }}
+        busy={busy === 'unpublish'}
+      />
+
+      <UnsavedChangesDialog guard={guard} />
     </Card>
   );
 };

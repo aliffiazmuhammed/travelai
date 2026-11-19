@@ -92,7 +92,7 @@ export const DiscussionDrawer: React.FC<DiscussionDrawerProps> = ({
         >
           <MessageCircle className="w-5 h-5" />
           {unread > 0 && (
-            <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-destructive text-destructive-foreground text-[10px] font-black grid place-items-center shadow">
+            <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-destructive text-destructive-foreground text-xs font-black grid place-items-center shadow">
               {unread > 9 ? "9+" : unread}
             </span>
           )}
@@ -126,13 +126,13 @@ export const DiscussionDrawer: React.FC<DiscussionDrawerProps> = ({
                   }
                   className={cn(
                     "w-2 h-2 rounded-full shrink-0",
-                    cryptoStatus === "ready" && "bg-emerald-500",
+                    cryptoStatus === "ready" && "bg-success",
                     (cryptoStatus === "starting" ||
                       cryptoStatus === "bootstrap" ||
                       cryptoStatus === "keyless") &&
-                      "bg-amber-400 animate-pulse",
+                      "bg-warning animate-pulse",
                     (cryptoStatus === "off" || cryptoStatus === "error") &&
-                      "bg-red-400"
+                      "bg-destructive"
                   )}
                 />
               )}
@@ -150,13 +150,13 @@ export const DiscussionDrawer: React.FC<DiscussionDrawerProps> = ({
                       {avatarSrc(entry.avatarUrl) && (
                         <AvatarImage src={avatarSrc(entry.avatarUrl)} alt={entry.label} />
                       )}
-                      <AvatarFallback className="text-[8px] font-bold bg-primary/10 text-primary">
+                      <AvatarFallback className="text-xs font-bold bg-primary/10 text-primary">
                         {initialsFor(entry.label)}
                       </AvatarFallback>
                     </Avatar>
                   ))}
                   {extraCount > 0 && (
-                    <span className="text-[9px] font-bold text-muted-foreground pl-1.5">
+                    <span className="text-xs font-bold text-muted-foreground pl-1.5">
                       +{extraCount}
                     </span>
                   )}

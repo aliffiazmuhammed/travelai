@@ -13,6 +13,13 @@ export interface SessionUser {
   createdAt?: string;
 }
 
+/** Phase 1B consent evidence sent with a new account. */
+export interface SignupConsent {
+  termsVersion: string;
+  privacyVersion: string;
+  marketingOptIn?: boolean;
+}
+
 interface AuthResponse {
   success: true;
   user: SessionUser;
@@ -43,11 +50,17 @@ export async function signin(email: string, password: string) {
 export async function signup(
   email: string,
   password: string,
-  name?: string
+  name?: string,
+  consent?: SignupConsent
 ) {
   const response = await apiRequest<AuthResponse>('/auth/signup', {
     method: 'POST',
-    body: { email, password, ...(name ? { name } : {}) },
+    body: {
+      email,
+      password,
+      ...(name ? { name } : {}),
+      ...(consent ? { consent } : {}),
+    },
     auth: false,
   });
   return startSession(response);

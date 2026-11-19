@@ -2,10 +2,15 @@ import React, { useState } from 'react';
 import { KeyRound, Loader2, LogOut, ShieldCheck } from 'lucide-react';
 import { AdminNotice } from '@/components/admin/AdminNotice';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { PasswordStrength } from '@/components/auth/PasswordStrength';
 import { usePlatformAuth } from '@/context/PlatformAuthContext';
+import {
+  DEFAULT_PASSWORD_POLICY,
+  passwordProblem,
+} from '@/lib/passwordPolicy';
 import { toast } from 'sonner';
 
 interface AdminPasswordChangeProps {
@@ -35,8 +40,12 @@ const AdminPasswordChange: React.FC<AdminPasswordChangeProps> = ({ forced = fals
       setError('Enter your current password.');
       return;
     }
-    if (newPassword.length < 6) {
-      setError('Your new password must be at least 6 characters.');
+    const problem = passwordProblem(newPassword, DEFAULT_PASSWORD_POLICY, {
+      email: user?.email,
+      name: user?.name,
+    });
+    if (problem) {
+      setError(problem);
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -76,6 +85,7 @@ const AdminPasswordChange: React.FC<AdminPasswordChangeProps> = ({ forced = fals
         </Label>
         <Input
           id="admin-current-password"
+          name="currentPassword"
           type="password"
           value={currentPassword}
           onChange={(event) => {
@@ -91,6 +101,7 @@ const AdminPasswordChange: React.FC<AdminPasswordChangeProps> = ({ forced = fals
         <Label htmlFor="admin-new-password">New password</Label>
         <Input
           id="admin-new-password"
+          name="newPassword"
           type="password"
           value={newPassword}
           onChange={(event) => {
@@ -98,15 +109,17 @@ const AdminPasswordChange: React.FC<AdminPasswordChangeProps> = ({ forced = fals
             if (error) setError(null);
           }}
           autoComplete="new-password"
+          maxLength={DEFAULT_PASSWORD_POLICY.maxLength}
           className="h-11"
         />
-        <p className="text-xs text-muted-foreground">At least 6 characters.</p>
+        <PasswordStrength value={newPassword} email={user?.email} name={user?.name} />
       </div>
 
       <div className="space-y-2">
         <Label htmlFor="admin-confirm-password">Confirm new password</Label>
         <Input
           id="admin-confirm-password"
+          name="confirmPassword"
           type="password"
           value={confirmPassword}
           onChange={(event) => {
@@ -120,7 +133,7 @@ const AdminPasswordChange: React.FC<AdminPasswordChangeProps> = ({ forced = fals
 
       <Button
         type="submit"
-        className="h-11 w-full bg-indigo-500 text-white hover:bg-indigo-400 focus-visible:ring-indigo-400"
+        className="h-11 w-full bg-admin-accent text-admin-accent-foreground hover:bg-admin-accent/90 focus-visible:ring-admin-accent"
         disabled={submitting}
       >
         {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden /> : null}
@@ -133,10 +146,10 @@ const AdminPasswordChange: React.FC<AdminPasswordChangeProps> = ({ forced = fals
     return (
       <Card className="rounded-2xl border-border bg-card">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <KeyRound className="h-4 w-4 text-indigo-400" aria-hidden />
+          <h2 className="flex items-center gap-2 text-base font-semibold leading-none tracking-tight">
+            <KeyRound className="h-4 w-4 text-admin-accent-ink" aria-hidden />
             Platform password
-          </CardTitle>
+          </h2>
           <CardDescription>
             Changing this affects your platform account only. Personal and agency
             passwords are untouched.
@@ -148,7 +161,7 @@ const AdminPasswordChange: React.FC<AdminPasswordChangeProps> = ({ forced = fals
   }
 
   return (
-    <div className="dark relative isolate grid min-h-screen place-items-center overflow-hidden bg-background px-4 py-10 text-foreground">
+    <div className="relative isolate grid min-h-screen place-items-center overflow-hidden bg-background px-4 py-10 text-foreground">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(60rem_32rem_at_50%_-10%,rgba(99,102,241,0.18),transparent_70%)]"
@@ -160,7 +173,7 @@ const AdminPasswordChange: React.FC<AdminPasswordChangeProps> = ({ forced = fals
 
       <div className="w-full max-w-md">
         <div className="mb-8 flex items-center justify-center gap-2.5">
-          <span className="grid h-10 w-10 place-items-center rounded-xl bg-indigo-500 text-white shadow-md shadow-indigo-500/25">
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-admin-accent text-admin-accent-foreground shadow-md shadow-admin-accent/25">
             <ShieldCheck className="h-5 w-5" aria-hidden />
           </span>
           <img src="/brand/waytowalk-logo-reverse.svg" alt="waytowalk" width="140" height="28" className="h-7 w-[140px]" />
@@ -169,7 +182,9 @@ const AdminPasswordChange: React.FC<AdminPasswordChangeProps> = ({ forced = fals
 
         <Card className="rounded-2xl border-border bg-card shadow-xl shadow-black/20">
           <CardHeader className="space-y-2">
-            <CardTitle className="text-2xl tracking-tight">Set your platform password</CardTitle>
+            <h1 className="text-2xl font-semibold leading-none tracking-tight">
+              Set your platform password
+            </h1>
             <CardDescription className="leading-6">
               {user?.email
                 ? `${user.email} was bootstrapped with a temporary password. `

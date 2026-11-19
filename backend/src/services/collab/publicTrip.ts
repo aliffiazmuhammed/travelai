@@ -35,6 +35,11 @@ export async function findPublicSharedTrip(shareId: string): Promise<any | null>
  * `publicProjection.test.ts` pins the key set. Everything session- or
  * payment-related (members, expenses, finance, generationMeta, versions…) is
  * structurally absent because it is never selected.
+ *
+ * Budgets are the one exception that lives inside `tripDetails`: the itinerary
+ * contract stores `budget_per_person` and `budget_breakdown` there. They are
+ * removed at this boundary by `withoutBudgetFields` because the share contract
+ * is private-by-default (C-02).
  */
 export function projectPublicTrip(trip: {
   _id?: any;
@@ -49,11 +54,34 @@ export function projectPublicTrip(trip: {
     _id: trip._id,
     title: trip.title,
     status: trip.status,
-    tripDetails: withShareMediaUrls(trip.tripDetails, trip.shareId),
+    tripDetails: withShareMediaUrls(
+      withoutBudgetFields(trip.tripDetails),
+      trip.shareId
+    ),
     // Drawn routes are part of the shared plan (E5 addition); not sensitive.
     customRoutes: trip.customRoutes || [],
     createdAt: trip.createdAt,
   };
+}
+
+/**
+ * Budgets are private on a share link (C-02). `tripDetails` is the one field
+ * that can still carry money: the itinerary contract stores the per-person
+ * figure and the category breakdown inside it. Strip them at this boundary so
+ * no component (including the Expenses tab) can render a budget the copy says
+ * stays private.
+ */
+const PRIVATE_BUDGET_KEYS = ['budget_per_person', 'budget_breakdown'] as const;
+
+function withoutBudgetFields(
+  details: Record<string, any> | undefined
+): Record<string, any> | undefined {
+  if (!details || typeof details !== 'object') return details;
+  const clone = { ...details };
+  for (const key of PRIVATE_BUDGET_KEYS) {
+    delete clone[key];
+  }
+  return clone;
 }
 
 /**

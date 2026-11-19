@@ -12,16 +12,7 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { ConfirmDestructive } from '@/components/ui/confirm-destructive';
 import {
   Dialog,
   DialogContent,
@@ -211,7 +202,7 @@ const AdminPlatformAdmins: React.FC = () => {
           <>
             <span
               aria-hidden
-              className="grid h-8 w-8 place-items-center rounded-xl border border-border bg-card text-indigo-300"
+              className="grid h-8 w-8 place-items-center rounded-xl border border-border bg-card text-admin-accent-ink"
             >
               <UserRoundCog className="h-4 w-4" />
             </span>
@@ -233,7 +224,7 @@ const AdminPlatformAdmins: React.FC = () => {
             </Button>
             <Button
               type="button"
-              className="rounded-full bg-indigo-500 text-white hover:bg-indigo-400"
+              className="rounded-full bg-admin-accent text-admin-accent-foreground hover:bg-admin-accent/90"
               onClick={() => {
                 setCreateError(null);
                 setCreateOpen(true);
@@ -253,7 +244,7 @@ const AdminPlatformAdmins: React.FC = () => {
         </AdminNotice>
       ) : (
         <p className="flex items-center gap-2 text-xs text-muted-foreground">
-          <ShieldCheck className="h-4 w-4 text-emerald-400" aria-hidden />
+          <ShieldCheck className="h-4 w-4 text-success-ink" aria-hidden />
           {activeTotal} active super-admin{activeTotal === 1 ? '' : 's'}
         </p>
       )}
@@ -282,13 +273,22 @@ const AdminPlatformAdmins: React.FC = () => {
       </div>
 
       {error ? (
-        <AdminNotice tone="error" title="Could not load platform admins">
+        <AdminNotice
+          tone="error"
+          title="Could not load platform admins"
+          action={
+            <Button type="button" variant="outline" size="sm" onClick={reload}>
+              Try again
+            </Button>
+          }
+        >
           {error}
         </AdminNotice>
       ) : null}
 
       <AdminTableFrame
         minWidth="860px"
+        scrollLabel="Platform administrators table"
         footer={
           <AdminPagination
             page={data?.page ?? page}
@@ -323,11 +323,17 @@ const AdminPlatformAdmins: React.FC = () => {
           ) : admins.length === 0 ? (
             <tr>
               <td colSpan={6}>
-                <AdminEmptyState
-                  icon={UserRoundCog}
-                  title="No platform admins match this search."
-                  description="Add another super-admin to give a teammate console access."
-                />
+                {error ? (
+                  <p className="px-4 py-10 text-center text-xs text-muted-foreground">
+                    The list could not be loaded. Use Try again above.
+                  </p>
+                ) : (
+                  <AdminEmptyState
+                    icon={UserRoundCog}
+                    title="No platform admins match this search."
+                    description="Add another super-admin to give a teammate console access."
+                  />
+                )}
               </td>
             </tr>
           ) : (
@@ -335,6 +341,11 @@ const AdminPlatformAdmins: React.FC = () => {
               const isSelf = account._id === user?._id;
               const disableBlocked =
                 account.status === 'active' && (isSelf || activeTotal <= 1);
+              const disableReason = !disableBlocked
+                ? undefined
+                : isSelf
+                  ? 'You cannot disable your own account'
+                  : 'The last active super-admin cannot be disabled';
 
               return (
                 <tr key={account._id} className={adminTableRowClass}>
@@ -347,7 +358,7 @@ const AdminPlatformAdmins: React.FC = () => {
                         {isSelf ? (
                           <Badge
                             variant="outline"
-                            className="border-indigo-500/40 bg-indigo-500/10 text-[10px] text-indigo-300"
+                            className="border-admin-accent/40 bg-admin-accent/10 text-xs text-admin-accent-ink"
                           >
                             You
                           </Badge>
@@ -361,7 +372,7 @@ const AdminPlatformAdmins: React.FC = () => {
                   </td>
                   <td className="px-4 py-3 text-xs">
                     {account.mustChangePassword ? (
-                      <span className="text-amber-300">Password change required</span>
+                      <span className="text-warning-ink">Password change required</span>
                     ) : (
                       <span className="text-muted-foreground">Completed</span>
                     )}
@@ -374,19 +385,24 @@ const AdminPlatformAdmins: React.FC = () => {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
+                      {disableReason ? (
+                        <span
+                          id={`disable-reason-${account._id}`}
+                          className="sr-only"
+                        >
+                          {disableReason}
+                        </span>
+                      ) : null}
                       <Button
                         type="button"
                         size="sm"
                         variant="ghost"
                         className="h-8 rounded-full"
                         disabled={disableBlocked}
-                        title={
-                          isSelf
-                            ? 'You cannot disable your own account'
-                            : account.status === 'active' && activeTotal <= 1
-                              ? 'The last active super-admin cannot be disabled'
-                              : undefined
+                        aria-describedby={
+                          disableReason ? `disable-reason-${account._id}` : undefined
                         }
+                        title={disableReason}
                         onClick={() =>
                           setStatusTarget({
                             account,
@@ -411,11 +427,11 @@ const AdminPlatformAdmins: React.FC = () => {
       </AdminTableFrame>
 
       <Dialog open={createOpen} onOpenChange={(open) => !createBusy && setCreateOpen(open)}>
-        {/* Portalled content leaves the console tree, so it carries the dark scope. */}
-        <DialogContent className="dark rounded-2xl border-border bg-card text-card-foreground sm:max-w-md">
+        {/* Portalled to <body>; it inherits the admin realm from <html>. */}
+        <DialogContent className="rounded-2xl border-border bg-card text-card-foreground sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <KeyRound className="h-4 w-4 text-indigo-400" />
+              <KeyRound className="h-4 w-4 text-admin-accent-ink" />
               Add platform admin
             </DialogTitle>
             <DialogDescription className="text-muted-foreground">
@@ -470,7 +486,7 @@ const AdminPlatformAdmins: React.FC = () => {
               </Button>
               <Button
                 type="submit"
-                className="rounded-full bg-indigo-500 text-white hover:bg-indigo-400"
+                className="rounded-full bg-admin-accent text-admin-accent-foreground hover:bg-admin-accent/90"
                 disabled={createBusy}
               >
                 {createBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -481,53 +497,26 @@ const AdminPlatformAdmins: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog
+      <ConfirmDestructive
         open={statusTarget !== null}
         onOpenChange={(open) => {
           if (!open && !statusBusy) setStatusTarget(null);
         }}
-      >
-        {/* Portalled content leaves the console tree, so it carries the dark scope. */}
-        <AlertDialogContent className="dark rounded-2xl border-border bg-card text-card-foreground">
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {statusTarget?.next === 'disabled'
-                ? 'Disable platform admin?'
-                : 'Enable platform admin?'}
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-muted-foreground">
-              {statusTarget?.next === 'disabled'
-                ? 'This immediately blocks the account from the console. Platform audit records are kept.'
-                : 'This restores access to the console for this administrator.'}
-              {statusTarget ? (
-                <span className="mt-2 block break-all text-foreground">
-                  {statusTarget.account.email}
-                </span>
-              ) : null}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={statusBusy} className="rounded-full">
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              disabled={statusBusy}
-              onClick={(event) => {
-                event.preventDefault();
-                void confirmStatusChange();
-              }}
-              className={
-                statusTarget?.next === 'disabled'
-                  ? 'rounded-full bg-rose-600 text-white hover:bg-rose-500'
-                  : 'rounded-full bg-indigo-500 text-white hover:bg-indigo-400'
-              }
-            >
-              {statusBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              {statusTarget?.next === 'disabled' ? 'Disable admin' : 'Enable admin'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        tone={statusTarget?.next === 'disabled' ? 'destructive' : 'warning'}
+        icon={statusTarget?.next === 'disabled' ? ShieldOff : ShieldCheck}
+        title={
+          statusTarget?.next === 'disabled' ? 'Disable platform admin?' : 'Enable platform admin?'
+        }
+        description={
+          statusTarget?.next === 'disabled'
+            ? 'This immediately blocks the account from the console. Platform audit records are kept.'
+            : 'This restores access to the console for this administrator.'
+        }
+        confirmLabel={statusTarget?.next === 'disabled' ? 'Disable admin' : 'Enable admin'}
+        detail={statusTarget ? <>{statusTarget.account.email}</> : null}
+        onConfirm={confirmStatusChange}
+        busy={statusBusy}
+      />
 
       <AdminTemporaryPassword
         open={credential !== null}

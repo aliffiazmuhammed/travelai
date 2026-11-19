@@ -21,7 +21,7 @@ export const TravellerBreadcrumbs: React.FC<{
 
   return (
     <nav aria-label="Breadcrumb" className={cn('min-w-0', className)}>
-      <ol className="flex flex-wrap items-center gap-1 text-[11px] font-semibold text-muted-foreground">
+      <ol className="flex flex-wrap items-center gap-1 text-xs font-semibold text-muted-foreground">
         <li className="flex items-center">
           <Link
             to="/"

@@ -78,7 +78,7 @@ export const InviteDialog: React.FC<InviteDialogProps> = ({ open, onClose, tripI
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="rounded-3xl max-w-md w-[92vw] sm:w-full p-5 sm:p-6 space-y-4">
         <DialogHeader className="space-y-1.5">
-          <DialogTitle className="text-lg font-bold flex items-center gap-2">
+          <DialogTitle className="text-xl font-bold flex items-center gap-2">
             <Link2 className="w-4 h-4 text-primary" />
             Invite collaborators
           </DialogTitle>
@@ -91,7 +91,7 @@ export const InviteDialog: React.FC<InviteDialogProps> = ({ open, onClose, tripI
 
         {created ? (
           <div className="space-y-3">
-            <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-700 dark:text-emerald-400 flex items-start gap-2 font-medium">
+            <div className="p-3 rounded-2xl bg-success/10 border border-success/30 dark:border-success/40 text-xs text-success-ink flex items-start gap-2 font-medium">
               <Check className="w-4 h-4 mt-0.5 shrink-0" />
               <span>
                 {roleLabel(created.invite.role)} invite ready for{" "}
@@ -112,9 +112,9 @@ export const InviteDialog: React.FC<InviteDialogProps> = ({ open, onClose, tripI
         ) : (
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold">What can they do?</Label>
+              <Label htmlFor="invite-role" className="text-xs font-bold">What can they do?</Label>
               <Select value={role} onValueChange={(value) => setRole(value as Exclude<TripRole, "owner">)}>
-                <SelectTrigger className="h-10 rounded-xl text-xs">
+                <SelectTrigger id="invite-role" className="h-10 rounded-xl text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -133,9 +133,9 @@ export const InviteDialog: React.FC<InviteDialogProps> = ({ open, onClose, tripI
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold">Uses</Label>
+                <Label htmlFor="invite-uses" className="text-xs font-bold">Uses</Label>
                 <Select value={String(maxUses)} onValueChange={(value) => setMaxUses(Number(value))}>
-                  <SelectTrigger className="h-10 rounded-xl text-xs">
+                  <SelectTrigger id="invite-uses" className="h-10 rounded-xl text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -148,9 +148,9 @@ export const InviteDialog: React.FC<InviteDialogProps> = ({ open, onClose, tripI
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold">Expires</Label>
+                <Label htmlFor="invite-expires" className="text-xs font-bold">Expires</Label>
                 <Select value={String(ttlHours)} onValueChange={(value) => setTtlHours(Number(value))}>
-                  <SelectTrigger className="h-10 rounded-xl text-xs">
+                  <SelectTrigger id="invite-expires" className="h-10 rounded-xl text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>

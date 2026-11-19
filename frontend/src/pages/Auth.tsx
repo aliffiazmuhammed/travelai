@@ -1,34 +1,57 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { AlertCircle, ArrowRight, Loader2 } from "lucide-react";
 import { useAuth } from "@/context/UserContext";
+import { DEFAULT_LEGAL_CONFIG, fetchAuthConfig, type LegalConfig } from "@/lib/authConfig";
+import { PasswordStrength } from "@/components/auth/PasswordStrength";
+import { PasswordInput } from "@/components/auth/PasswordInput";
+import { AuthPostcard } from "@/components/auth/AuthPostcard";
+import { AUTH_PHOTO_URL } from "@/components/auth/authPhoto";
+import { AppImage } from "@/components/ui/app-image";
+import { useIsDesktop } from "@/hooks/useMediaQuery";
+import WaytowalkLoader from "@/components/brand/WaytowalkLoader";
+import {
+  DEFAULT_PASSWORD_POLICY,
+  passwordProblem,
+  type PasswordPolicy,
+} from "@/lib/passwordPolicy";
 import { cn } from "@/lib/utils";
 
 type FieldErrors = {
   name?: string;
   email?: string;
   password?: string;
-  confirmPassword?: string;
+  consent?: string;
 };
 
-const PHOTO_URL =
-  "https://images.unsplash.com/photo-1476990789491-712b869b91a5?auto=format&fit=crop&w=1400&q=80";
-
 const Auth = () => {
+  const location = useLocation();
   const [isLogin, setIsLogin] = useState(true);
   const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  // An invite more than one account can see prefills the invited address after
+  // "sign out and continue with…", so the recovery is one click plus a password.
+  const [email, setEmail] = useState(
+    typeof location.state?.email === "string" ? location.state.email : ""
+  );
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [acceptedLegal, setAcceptedLegal] = useState(false);
+  const [marketingOptIn, setMarketingOptIn] = useState(false);
+  const [legalConfig, setLegalConfig] = useState<LegalConfig>(DEFAULT_LEGAL_CONFIG);
+  const [passwordPolicy, setPasswordPolicy] = useState<PasswordPolicy>(DEFAULT_PASSWORD_POLICY);
+  const [consentRequired, setConsentRequired] = useState(true);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const nameRef = useRef<HTMLInputElement>(null);
+  const emailRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
+  const consentRef = useRef<HTMLButtonElement>(null);
   const { signup, signin, loading, error, clearError, isAuthenticated } = useAuth();
   const navigate = useNavigate();
-
-  const location = useLocation();
+  const showPhoto = useIsDesktop();
   const from = location.state?.from?.pathname || "/dashboard";
   const fromState = location.state?.from?.state;
 
@@ -38,11 +61,30 @@ const Auth = () => {
     }
   }, [isAuthenticated, navigate, from, fromState]);
 
+  // Fetch the versions the server will accept. The local defaults keep the form
+  // usable if the API is briefly unavailable; a stale pair is rejected server-side.
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchAuthConfig(controller.signal)
+      .then((config) => {
+        setLegalConfig(config.legal);
+        setPasswordPolicy(config.password);
+        // The server owns whether accepting the current versions is a hard
+        // requirement; the form mirrors it instead of always enforcing.
+        setConsentRequired(config.consentRequired);
+      })
+      .catch(() => {
+        // Keep DEFAULT_LEGAL_CONFIG and DEFAULT_PASSWORD_POLICY.
+      });
+    return () => controller.abort();
+  }, []);
+
   const handleToggleMode = () => {
     setIsLogin(!isLogin);
     clearError();
     setFieldErrors({});
-    setConfirmPassword('');
+    setAcceptedLegal(false);
+    setMarketingOptIn(false);
   };
 
   /** Move to an explicit mode without re-toggling when the tab is already active. */
@@ -70,8 +112,8 @@ const Auth = () => {
     const trimmedName = name.trim();
     const next: FieldErrors = {};
 
-    if (!isLogin && !trimmedName) {
-      next.name = "Enter your name — agencies use it when they reply.";
+    if (trimmedName.length > 40) {
+      next.name = "Keep your name under 40 characters.";
     }
 
     if (!trimmedEmail) {
@@ -82,20 +124,40 @@ const Auth = () => {
 
     if (!password) {
       next.password = "Enter your password.";
-    } else if (!isLogin && password.length < 6) {
-      next.password = "Use at least 6 characters.";
+    } else if (!isLogin) {
+      const problem = passwordProblem(password, passwordPolicy, {
+        email: trimmedEmail,
+        name: trimmedName,
+      });
+      if (problem) next.password = problem;
     }
 
-    if (!isLogin) {
-      if (!confirmPassword) {
-        next.confirmPassword = "Re-enter your password to confirm it.";
-      } else if (password !== confirmPassword) {
-        next.confirmPassword = "These don't match the password above.";
-      }
+    if (!isLogin && consentRequired && !acceptedLegal) {
+      next.consent = "Please accept the Terms and Privacy Policy to create an account.";
     }
 
     if (Object.keys(next).length > 0) {
       setFieldErrors(next);
+      // Move focus after the errors exist in the DOM, so the field announces
+      // both aria-invalid and its aria-describedby error text.
+      const firstInvalid = (
+        ["name", "email", "password", "consent"] as const
+      ).find((field) => next[field]);
+      if (firstInvalid) {
+        const target =
+          firstInvalid === "name"
+            ? nameRef
+            : firstInvalid === "email"
+              ? emailRef
+              : firstInvalid === "password"
+                ? passwordRef
+                : consentRef;
+        requestAnimationFrame(() => {
+          target.current?.focus();
+          // focus() brings the input into view, but its error sits below it.
+          target.current?.scrollIntoView({ block: "center" });
+        });
+      }
       return;
     }
 
@@ -103,10 +165,21 @@ const Auth = () => {
       if (isLogin) {
         await signin(trimmedEmail, password);
       } else {
-        await signup(trimmedEmail, password, trimmedName);
+        await signup(trimmedEmail, password, trimmedName || undefined, {
+          termsVersion: legalConfig.termsVersion,
+          privacyVersion: legalConfig.privacyVersion,
+          marketingOptIn,
+        });
       }
     } catch {
       // Error is set in context
+    }
+  };
+
+  const handleLegalChange = (checked: boolean) => {
+    setAcceptedLegal(checked);
+    if (fieldErrors.consent) {
+      setFieldErrors((previous) => ({ ...previous, consent: undefined }));
     }
   };
 
@@ -124,20 +197,35 @@ const Auth = () => {
       ? "Sign in"
       : "Create account";
 
+  // While the initial session check (or a sign-in/sign-up round trip) is in
+  // flight, show the branded loader instead of an editable form that is about
+  // to redirect. A failed attempt clears `loading`, so the form and its error
+  // return together.
+  if (loading && !error) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <WaytowalkLoader size="md" caption="Checking your session…" />
+      </div>
+    );
+  }
+
   return (
     <div className="grid min-h-screen w-full bg-background lg:grid-cols-[48fr_52fr]">
-      {/* Photo panel — hidden on small screens, always dark-overlaid on large ones. */}
-      <aside className="relative hidden overflow-hidden bg-slate-950 lg:block">
-        <img
-          src={PHOTO_URL}
-          alt=""
-          loading="eager"
-          decoding="async"
-          className="absolute inset-0 h-full w-full object-cover"
-        />
+      {/* Photo panel — requested only at lg and above (C-21), so phones do not
+          download a desktop-sized photograph they never display. */}
+      {showPhoto && (
+        <aside className="relative overflow-hidden bg-background">
+          <AppImage
+            src={AUTH_PHOTO_URL}
+            alt=""
+            width={1920}
+            height={1080}
+            priority
+            className="absolute inset-0 h-full w-full object-cover"
+          />
         <div
           aria-hidden
-          className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/55 to-transparent"
+          className="absolute inset-0 bg-gradient-to-t from-muted/90 via-muted/55 to-transparent"
         />
         <div
           aria-hidden
@@ -148,38 +236,34 @@ const Auth = () => {
           <Link
             to="/"
             aria-label="waytowalk home"
-            className="w-fit rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+            className="w-fit rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-brand"
           >
             <img src="/brand/waytowalk-logo-reverse.svg" alt="waytowalk" width="156" height="32" className="h-8 w-[156px]" />
           </Link>
 
           <div className="max-w-md pb-4">
-            <h1 className="font-display text-4xl font-semibold leading-[1.08] tracking-tight text-white xl:text-5xl">
+            <p className="font-display text-4xl font-semibold leading-[1.08] tracking-tight text-white xl:text-5xl">
               Your next trip could start with someone else’s plan.
-            </h1>
+            </p>
             <p className="mt-6 max-w-sm text-sm leading-relaxed text-white/80 xl:text-base">
               One account for your trips, chats and enquiries.
             </p>
           </div>
         </div>
-      </aside>
+        </aside>
+      )}
 
       {/* Auth floor — very light, softly tinted, card centred. */}
-      <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-4 py-10 sm:px-6 lg:px-10 lg:py-12">
+      <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-4 py-5 sm:px-6 sm:py-10 lg:px-10 lg:py-12">
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_0%,hsl(var(--primary)/0.08),transparent_55%)]"
         />
 
         <div className="relative flex w-full max-w-[440px] flex-col items-center">
-          <Link
-            to="/"
-            aria-label="waytowalk home"
-            className="mb-6 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 lg:hidden"
-          >
-            <img src="/brand/waytowalk-logo-name.svg" alt="waytowalk" width="156" height="32" className="h-8 w-[156px] dark:hidden" />
-            <img src="/brand/waytowalk-logo-reverse.svg" alt="waytowalk" width="156" height="32" className="hidden h-8 w-[156px] dark:block" />
-          </Link>
+          {/* Compact postcard for phone widths; the desktop panel carries the
+              same local photograph (C-21). */}
+          <AuthPostcard />
 
           <Card className="w-full overflow-hidden rounded-3xl border-border/70 bg-card shadow-card">
             <div
@@ -212,9 +296,9 @@ const Auth = () => {
             </div>
 
             <CardHeader className="space-y-2 px-5 pb-5 pt-7 text-center sm:px-8 sm:pt-8">
-              <CardTitle className="font-display text-2xl font-semibold tracking-tight text-card-foreground sm:text-[28px]">
+              <h1 className="font-display text-2xl font-semibold tracking-tight text-card-foreground sm:text-3xl">
                 {isLogin ? "Welcome back" : "Create your account"}
-              </CardTitle>
+              </h1>
               <CardDescription className="mx-auto max-w-xs text-sm leading-relaxed">
                 {isLogin
                   ? "Pick up your trips, chats and enquiries where you left them."
@@ -225,7 +309,10 @@ const Auth = () => {
             <CardContent className="px-5 pb-5 sm:px-8 sm:pb-7">
               <form className="space-y-4" onSubmit={handleSubmit}>
                 {error && (
-                  <div className="p-3.5 rounded-xl bg-destructive/10 border border-destructive/25 text-destructive text-sm font-medium flex items-start gap-2.5 animate-fade-in">
+                  <div
+                    role="alert"
+                    className="p-3.5 rounded-xl bg-destructive/10 border border-destructive/25 text-destructive text-sm font-medium flex items-start gap-2.5 animate-fade-in"
+                  >
                     <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-destructive" />
                     <div className="flex-1 space-y-1">
                       <p>{error}</p>
@@ -248,24 +335,26 @@ const Auth = () => {
 
                 {!isLogin && (
                   <div className="space-y-2">
-                    <Label htmlFor="name">Your name</Label>
+                    <Label htmlFor="name">Name</Label>
                     <Input
                       id="name"
+                      ref={nameRef}
+                      name="name"
                       autoComplete="name"
                       placeholder="Asha Rao"
-                      className={cn("h-11 rounded-lg bg-card", fieldErrors.name && "border-destructive focus-visible:ring-destructive")}
+                      className={cn("h-12 rounded-lg bg-card", fieldErrors.name && "border-destructive focus-visible:ring-destructive")}
                       value={name}
                       onChange={handleInputChange("name", setName)}
                       aria-invalid={Boolean(fieldErrors.name)}
-                      aria-describedby={fieldErrors.name ? "name-error" : undefined}
+                      aria-describedby={fieldErrors.name ? "name-error" : "name-help"}
                     />
                     {fieldErrors.name ? (
-                      <p id="name-error" className="text-xs font-medium text-destructive">
+                      <p id="name-error" role="alert" className="text-sm font-medium text-destructive">
                         {fieldErrors.name}
                       </p>
                     ) : (
-                      <p className="text-xs text-muted-foreground">
-                        This is the name agencies see when you get in touch.
+                      <p id="name-help" className="text-sm text-muted-foreground">
+                        Optional — people see this on your trips.
                       </p>
                     )}
                   </div>
@@ -275,17 +364,19 @@ const Auth = () => {
                   <Label htmlFor="email">Email</Label>
                   <Input
                     id="email"
+                    ref={emailRef}
                     type="email"
+                    name="email"
                     autoComplete="email"
                     placeholder="you@example.com"
-                    className={cn("h-11 rounded-lg bg-card", fieldErrors.email && "border-destructive focus-visible:ring-destructive")}
+                    className={cn("h-12 rounded-lg bg-card", fieldErrors.email && "border-destructive focus-visible:ring-destructive")}
                     value={email}
                     onChange={handleInputChange("email", setEmail)}
                     aria-invalid={Boolean(fieldErrors.email)}
                     aria-describedby={fieldErrors.email ? "email-error" : undefined}
                   />
                   {fieldErrors.email && (
-                    <p id="email-error" className="text-xs font-medium text-destructive">
+                    <p id="email-error" role="alert" className="text-sm font-medium text-destructive">
                       {fieldErrors.email}
                     </p>
                   )}
@@ -303,43 +394,94 @@ const Auth = () => {
                       </Link>
                     )}
                   </div>
-                  <Input
+                  <PasswordInput
                     id="password"
-                    type="password"
+                    ref={passwordRef}
+                    name="password"
                     autoComplete={isLogin ? "current-password" : "new-password"}
-                    placeholder="••••••••"
-                    className={cn("h-11 rounded-lg bg-card", fieldErrors.password && "border-destructive focus-visible:ring-destructive")}
+                    placeholder={isLogin ? "••••••••" : "Choose a password"}
+                    maxLength={isLogin ? undefined : passwordPolicy.maxLength}
+                    className={cn("h-12 rounded-lg bg-card", fieldErrors.password && "border-destructive focus-visible:ring-destructive")}
                     value={password}
                     onChange={handleInputChange("password", setPassword)}
                     aria-invalid={Boolean(fieldErrors.password)}
-                    aria-describedby={fieldErrors.password ? "password-error" : undefined}
+                    aria-describedby={
+                      [fieldErrors.password ? "password-error" : null, !isLogin ? "password-requirements" : null]
+                        .filter(Boolean)
+                        .join(" ") || undefined
+                    }
                   />
                   {fieldErrors.password && (
-                    <p id="password-error" className="text-xs font-medium text-destructive">
+                    <p id="password-error" role="alert" className="text-sm font-medium text-destructive">
                       {fieldErrors.password}
                     </p>
+                  )}
+                  {!isLogin && (
+                    <PasswordStrength
+                      id="password-requirements"
+                      value={password}
+                      policy={passwordPolicy}
+                      email={email}
+                      name={name}
+                    />
                   )}
                 </div>
 
                 {!isLogin && (
-                  <div className="space-y-2">
-                    <Label htmlFor="confirm-password">Confirm Password</Label>
-                    <Input
-                      id="confirm-password"
-                      type="password"
-                      autoComplete="new-password"
-                      placeholder="••••••••"
-                      className={cn("h-11 rounded-lg bg-card", fieldErrors.confirmPassword && "border-destructive focus-visible:ring-destructive")}
-                      value={confirmPassword}
-                      onChange={handleInputChange("confirmPassword", setConfirmPassword)}
-                      aria-invalid={Boolean(fieldErrors.confirmPassword)}
-                      aria-describedby={fieldErrors.confirmPassword ? "confirm-password-error" : undefined}
-                    />
-                    {fieldErrors.confirmPassword && (
-                      <p id="confirm-password-error" className="text-xs font-medium text-destructive">
-                        {fieldErrors.confirmPassword}
+                  <div className="space-y-3 rounded-xl border border-border/70 bg-muted/30 p-3.5">
+                    <div className="flex items-start gap-3">
+                      <Checkbox
+                        id="accept-legal"
+                        ref={consentRef}
+                        name="acceptLegal"
+                        checked={acceptedLegal}
+                        onCheckedChange={(value) => handleLegalChange(value === true)}
+                        aria-labelledby="accept-legal-label"
+                        aria-invalid={Boolean(fieldErrors.consent)}
+                        aria-describedby={fieldErrors.consent ? "consent-error" : undefined}
+                        className="mt-0.5 h-6 w-6 shrink-0 rounded-[5px]"
+                      />
+                      <p id="accept-legal-label" className="min-w-0 text-sm leading-relaxed text-foreground">
+                        I agree to the{" "}
+                        <Link
+                          to={legalConfig.termsPath}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded-sm font-semibold text-primary underline underline-offset-4 hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        >
+                          Terms of Service
+                        </Link>{" "}
+                        and{" "}
+                        <Link
+                          to={legalConfig.privacyPath}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded-sm font-semibold text-primary underline underline-offset-4 hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        >
+                          Privacy Policy
+                        </Link>
+                        .
                       </p>
-                    )}
+                    </div>
+                    {fieldErrors.consent ? (
+                      <p id="consent-error" role="alert" className="text-sm font-medium text-destructive">
+                        {fieldErrors.consent}
+                      </p>
+                    ) : null}
+                    <div className="flex min-h-11 items-start gap-3 border-t border-border/60 pt-3">
+                      <Checkbox
+                        id="marketing-opt-in"
+                        checked={marketingOptIn}
+                        onCheckedChange={(value) => setMarketingOptIn(value === true)}
+                        className="mt-0.5 h-4 w-4 shrink-0 rounded-[4px]"
+                      />
+                      <label
+                        htmlFor="marketing-opt-in"
+                        className="min-w-0 cursor-pointer text-sm leading-relaxed text-muted-foreground"
+                      >
+                        Send me occasional trip ideas and product updates. (optional)
+                      </label>
+                    </div>
                   </div>
                 )}
 
@@ -358,24 +500,14 @@ const Auth = () => {
                 </Button>
               </form>
 
-              <div className="mt-5 flex items-center gap-3">
-                <span aria-hidden className="h-px flex-1 bg-border" />
-                <p className="text-center text-xs text-muted-foreground">
-                  {isLogin ? "New to waytowalk?" : "Already have an account?"}{" "}
-                  <button
-                    type="button"
-                    onClick={() => switchMode(!isLogin)}
-                    className="rounded-sm font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  >
-                    {isLogin ? "Create an account" : "Sign in"}
-                  </button>
+              <div className="mt-6 space-y-2 border-t border-border/60 pt-5 text-center">
+                <p className="text-sm font-medium text-foreground">
+                  Free to start — no card needed.
                 </p>
-                <span aria-hidden className="h-px flex-1 bg-border" />
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  Your trips stay private until you choose to share them.
+                </p>
               </div>
-
-              <p className="pt-6 text-center text-xs text-muted-foreground">
-                Free to start · No card needed
-              </p>
             </CardContent>
           </Card>
         </div>

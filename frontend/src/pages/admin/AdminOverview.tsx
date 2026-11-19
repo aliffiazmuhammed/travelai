@@ -161,7 +161,7 @@ const AdminOverview: React.FC = () => {
           <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
             <div className="min-w-0 space-y-1">
               <CardTitle className="flex items-center gap-2 text-base">
-                <ClipboardList className="h-4 w-4 text-indigo-400" aria-hidden />
+                <ClipboardList className="h-4 w-4 text-admin-accent-ink" aria-hidden />
                 Recent platform audit
               </CardTitle>
               <CardDescription>
@@ -196,15 +196,15 @@ const AdminOverview: React.FC = () => {
                     className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5"
                   >
                     <div className="min-w-0">
-                      <code className="text-xs font-medium text-indigo-300">
+                      <code className="text-xs font-medium text-admin-accent-ink">
                         {event.action}
                       </code>
-                      <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
                         {event.actorEmail ?? 'system'} · {event.targetType}
                         {event.targetId ? ` · ${event.targetId}` : ''}
                       </p>
                     </div>
-                    <span className="whitespace-nowrap text-[11px] tabular-nums text-muted-foreground">
+                    <span className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
                       {formatAdminDate(event.createdAt)}
                     </span>
                   </li>
@@ -307,9 +307,9 @@ const Shortcut: React.FC<{
 }> = ({ to, icon: Icon, title, description }) => (
   <Link
     to={to}
-    className="flex items-start gap-2.5 rounded-xl border border-border bg-muted/30 px-3 py-2.5 transition hover:border-indigo-500/40 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+    className="flex items-start gap-2.5 rounded-xl border border-border bg-muted/30 px-3 py-2.5 transition hover:border-admin-accent/40 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-admin-accent"
   >
-    <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-indigo-500/10 text-indigo-300">
+    <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-admin-accent/10 text-admin-accent-ink">
       <Icon className="h-3.5 w-3.5" aria-hidden />
     </span>
     <span className="min-w-0">
@@ -328,7 +328,7 @@ const Fact: React.FC<{
 }> = ({ icon: Icon, title, body }) => (
   <div className="rounded-xl border border-border/70 px-3 py-3">
     <p className="flex items-center gap-2 text-sm font-medium text-foreground">
-      <Icon className="h-3.5 w-3.5 text-indigo-300" aria-hidden />
+      <Icon className="h-3.5 w-3.5 text-admin-accent-ink" aria-hidden />
       {title}
     </p>
     <p className="mt-1 text-xs leading-5 text-muted-foreground">{body}</p>

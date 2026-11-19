@@ -50,7 +50,7 @@ function TopRow({ onBack, right }: { onBack: () => void; right?: ReactNode }) {
       >
         <Ionicons name="chevron-back" size={18} color={palette.foreground} />
       </Pressable>
-      <AppText variant="heading" tone="primary" style={styles.wordmark}>
+      <AppText variant="wordmark" tone="primary">
         waytowalk
       </AppText>
       {right ?? null}

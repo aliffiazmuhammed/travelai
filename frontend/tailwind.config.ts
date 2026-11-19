@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import plugin from "tailwindcss/plugin";
 
 export default {
   darkMode: ["class"],
@@ -14,8 +15,10 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ["Cabin", "ui-sans-serif", "system-ui", "sans-serif"],
-        display: ["Cabin", "ui-sans-serif", "system-ui", "sans-serif"],
+        // C-23: families are declared once in `src/styles/typography.css`.
+        sans: ["var(--font-sans)"],
+        display: ["var(--font-display)"],
+        mono: ["var(--font-mono)"],
       },
       backgroundImage: {
         "gradient-sky": "var(--gradient-sky)",
@@ -39,6 +42,26 @@ export default {
         destructive: {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
+          ink: "hsl(var(--destructive-ink))",
+        },
+        success: {
+          DEFAULT: "hsl(var(--success))",
+          foreground: "hsl(var(--success-foreground))",
+          ink: "hsl(var(--success-ink))",
+        },
+        warning: {
+          DEFAULT: "hsl(var(--warning))",
+          foreground: "hsl(var(--warning-foreground))",
+          ink: "hsl(var(--warning-ink))",
+        },
+        info: {
+          DEFAULT: "hsl(var(--info))",
+          foreground: "hsl(var(--info-foreground))",
+          ink: "hsl(var(--info-ink))",
+        },
+        "surface-brand": {
+          DEFAULT: "hsl(var(--surface-brand))",
+          ink: "hsl(var(--surface-brand-ink))",
         },
         muted: {
           DEFAULT: "hsl(var(--muted))",
@@ -46,6 +69,7 @@ export default {
         },
         accent: {
           DEFAULT: "hsl(var(--accent))",
+          ink: "hsl(var(--accent-ink))",
           foreground: "hsl(var(--accent-foreground))",
         },
         popover: {
@@ -64,7 +88,14 @@ export default {
           muted: "hsl(var(--agency-muted))",
           soft: "hsl(var(--agency-soft))",
           accent: "hsl(var(--agency-accent))",
+          "accent-ink": "hsl(var(--agency-accent-ink))",
+          "accent-foreground": "hsl(var(--agency-accent-foreground))",
           "accent-soft": "hsl(var(--agency-accent-soft))",
+        },
+        admin: {
+          accent: "hsl(var(--admin-accent))",
+          "accent-ink": "hsl(var(--admin-accent-ink))",
+          "accent-foreground": "hsl(var(--admin-accent-foreground))",
         },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
@@ -117,5 +148,11 @@ export default {
       },
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [
+    require("tailwindcss-animate"),
+    // C-14: touch pointers get a 44px target without loosening fine-pointer density.
+    plugin(({ addVariant }) => {
+      addVariant("coarse", "@media (pointer: coarse)");
+    }),
+  ],
 } satisfies Config;

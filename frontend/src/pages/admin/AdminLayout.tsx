@@ -157,9 +157,10 @@ const CloseSheetOnNavigate: React.FC = () => {
  *
  * This is a third, isolated realm: no trip navigation, no workspace switcher and
  * no cross-link into either product. The console is deliberately always dark —
- * an operator should know which realm they are in at a glance — so the whole
- * tree is scoped to `.dark` and reads from the same semantic tokens as the rest
- * of the product instead of carrying a parallel slate palette.
+ * an operator should know which realm they are in at a glance — so
+ * `ThemeProvider` applies `data-theme="admin"` plus `.dark` to `<html>`. Every
+ * page, portal and toast reads those semantic tokens instead of carrying a
+ * parallel slate palette.
  */
 const AdminLayout: React.FC = () => {
   const navigate = useNavigate();
@@ -202,11 +203,11 @@ const AdminLayout: React.FC = () => {
   const trail = crumbTrail(location.pathname);
 
   return (
-    <div className="dark min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-background text-foreground">
       <SidebarProvider>
         <a
           href="#admin-content"
-          className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-50 focus:rounded-md focus:bg-indigo-500 focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-white focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-indigo-300"
+          className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-50 focus:rounded-md focus:bg-admin-accent focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-admin-accent-foreground focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-admin-accent"
         >
           Skip to content
         </a>
@@ -218,21 +219,21 @@ const AdminLayout: React.FC = () => {
               to="/admin"
               className="flex items-center gap-2.5 rounded-lg p-2 outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:justify-center"
             >
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-indigo-500 text-white shadow-sm">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-admin-accent text-admin-accent-foreground shadow-sm">
                 <ShieldCheck className="h-5 w-5" aria-hidden />
               </span>
               <span className="min-w-0 leading-tight group-data-[collapsible=icon]:hidden">
                 <span className="block truncate text-sm font-semibold text-sidebar-foreground">
                   waytowalk
                 </span>
-                <span className="block truncate text-[11px] text-sidebar-foreground/60">
+                <span className="block truncate text-xs text-sidebar-foreground/60">
                   Platform console
                 </span>
               </span>
             </Link>
             <Badge
               variant="outline"
-              className="w-fit border-indigo-500/40 bg-indigo-500/10 text-[10px] font-semibold uppercase tracking-wide text-indigo-300 group-data-[collapsible=icon]:hidden"
+              className="w-fit border-admin-accent/40 bg-admin-accent/10 text-overline font-semibold text-admin-accent-ink group-data-[collapsible=icon]:hidden"
             >
               Isolated realm
             </Badge>
@@ -263,7 +264,7 @@ const AdminLayout: React.FC = () => {
                           {item.to === '/admin/applications' &&
                           pendingApplications !== null &&
                           pendingApplications > 0 ? (
-                            <SidebarMenuBadge className="bg-indigo-500/15 text-indigo-300">
+                            <SidebarMenuBadge className="bg-admin-accent/15 text-admin-accent-ink">
                               {pendingApplications > 99 ? '99+' : pendingApplications}
                             </SidebarMenuBadge>
                           ) : null}
@@ -286,7 +287,7 @@ const AdminLayout: React.FC = () => {
                 >
                   <Avatar className="h-8 w-8 shrink-0">
                     <AvatarImage src={avatarSrc(user?.avatarUrl)} alt="" />
-                    <AvatarFallback className="bg-indigo-500/15 text-xs font-semibold text-indigo-300">
+                    <AvatarFallback className="bg-admin-accent/15 text-xs font-semibold text-admin-accent-ink">
                       {initialsFor(displayName)}
                     </AvatarFallback>
                   </Avatar>
@@ -294,7 +295,7 @@ const AdminLayout: React.FC = () => {
                     <span className="block truncate text-sm font-medium text-sidebar-foreground">
                       {displayName}
                     </span>
-                    <span className="block truncate text-[11px] text-sidebar-foreground/60">
+                    <span className="block truncate text-xs text-sidebar-foreground/60">
                       {user?.email}
                     </span>
                   </span>
@@ -310,7 +311,7 @@ const AdminLayout: React.FC = () => {
                   <span className="block truncate text-xs text-muted-foreground">
                     {user?.email}
                   </span>
-                  <span className="mt-1 block truncate text-[11px] text-indigo-400">
+                  <span className="mt-1 block truncate text-xs text-admin-accent-ink">
                     Super admin · platform realm
                   </span>
                 </DropdownMenuLabel>
@@ -340,7 +341,7 @@ const AdminLayout: React.FC = () => {
           <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-border/80 bg-background/90 px-4 backdrop-blur md:px-6">
             <SidebarTrigger className="h-9 w-9" />
             <Breadcrumb className="min-w-0">
-              <BreadcrumbList className="flex-nowrap gap-1.5 text-[13px] sm:gap-2">
+              <BreadcrumbList className="flex-nowrap gap-1.5 text-sm sm:gap-2">
                 {trail.map((crumb, index) => {
                   const last = index === trail.length - 1;
                   return (
@@ -371,7 +372,7 @@ const AdminLayout: React.FC = () => {
             <div className="ml-auto flex items-center gap-1.5">
               <Badge
                 variant="outline"
-                className="hidden border-indigo-500/40 bg-indigo-500/10 text-[10px] font-semibold uppercase tracking-wide text-indigo-300 sm:inline-flex"
+                className="hidden border-admin-accent/40 bg-admin-accent/10 text-overline font-semibold text-admin-accent-ink sm:inline-flex"
               >
                 Super admin
               </Badge>
@@ -385,7 +386,7 @@ const AdminLayout: React.FC = () => {
               >
                 <Search className="h-3.5 w-3.5" aria-hidden />
                 <span className="hidden sm:inline">Search</span>
-                <kbd className="hidden rounded border border-border bg-muted px-1.5 py-0.5 font-sans text-[10px] font-medium text-muted-foreground sm:inline">
+                <kbd className="hidden rounded border border-border bg-muted px-1.5 py-0.5 font-sans text-xs font-medium text-muted-foreground sm:inline">
                   ⌘K
                 </kbd>
               </Button>

@@ -6,6 +6,7 @@ import type {
   TripKeyBackup,
 } from '@/lib/chatKeyBackupCrypto';
 import type {
+  AccountDeletionRequest,
   ExploreFilters,
   ExplorePage,
   GalleryTravelerProfile,
@@ -490,12 +491,47 @@ class ApiClient {
     });
   }
 
+  /**
+   * Read-only reset-link preflight. Never consumes the token, so the reset page
+   * can reject a dead link before rendering the form. A 400 means unusable.
+   */
+  async validatePasswordResetToken(token: string): Promise<{ success: boolean; valid: boolean }> {
+    return this.request('/api/auth/reset-password/validate', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    });
+  }
+
   /** Redeems a reset link; the response also signs the personal realm in. */
   async resetPassword(token: string, password: string): Promise<{ user: User; message: string }> {
     return this.request('/api/auth/reset-password', {
       method: 'POST',
       body: JSON.stringify({ token, password }),
     });
+  }
+
+  /**
+   * C-08 / D-F: queues a deletion request for the support team. Nothing is
+   * removed on click, and one open request per account is reused.
+   */
+  async requestAccountDeletion(reason?: string): Promise<{
+    success: boolean;
+    alreadyRequested: boolean;
+    message: string;
+    request: AccountDeletionRequest | null;
+  }> {
+    const trimmed = reason?.trim();
+    return this.request('/api/auth/account-deletion-request', {
+      method: 'POST',
+      body: JSON.stringify(trimmed ? { reason: trimmed } : {}),
+    });
+  }
+
+  async getAccountDeletionRequest(): Promise<{
+    success: boolean;
+    request: AccountDeletionRequest | null;
+  }> {
+    return this.request('/api/auth/account-deletion-request');
   }
 
   // Profile (Milestone 7, F14; Milestone 8 G2 adds handle + bio)
@@ -2185,18 +2221,28 @@ class ApiClient {
       onProgress: (data: StreamProgressEvent) => void;
       onComplete: (trip: Trip) => void;
       onError: (errorMessage: string) => void;
-    }
+    },
+    options: { signal?: AbortSignal; attemptId?: string } = {}
   ): Promise<void> {
+    const { signal, attemptId } = options;
     const url = `${this.baseUrl}/api/itinerary/generate-stream`;
+    const aborted = () => Boolean(signal?.aborted);
+    let settled = false;
 
     try {
       const streamHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+      // One key per submit→cancel→retry session so the retry cannot create a
+      // second trip if the first request finished saving as we cancelled.
+      if (attemptId) streamHeaders['x-generation-attempt'] = attemptId;
       await this.applyCsrf('POST', streamHeaders);
+      if (aborted()) return;
+
       const response = await fetch(url, {
         method: 'POST',
         headers: streamHeaders,
         credentials: 'include',
         body: JSON.stringify(input),
+        signal,
       });
 
       if (!response.ok) {
@@ -2222,32 +2268,44 @@ class ApiClient {
       const decoder = new TextDecoder('utf-8');
       let buffer = '';
 
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
+      try {
+        while (true) {
+          if (aborted()) {
+            await reader.cancel().catch(() => undefined);
+            return;
+          }
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+          const { value, done } = await reader.read();
+          if (done) break;
 
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (trimmed.startsWith('data:')) {
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith('data:')) continue;
+
             const jsonText = trimmed.slice(5).trim();
             if (!jsonText) continue;
 
             try {
               const event = JSON.parse(jsonText);
               if (event.type === 'progress') {
+                if (aborted()) return;
                 callbacks.onProgress({
                   stage: event.stage || 1,
                   progress: event.progress || 10,
                   message: event.message || 'Crafting itinerary...',
                 });
               } else if (event.type === 'complete') {
+                if (aborted()) return;
+                settled = true;
                 callbacks.onComplete(event.trip);
                 return;
               } else if (event.type === 'error') {
+                if (aborted()) return;
+                settled = true;
                 const isTechnical =
                   event.message &&
                   (event.message.includes('GoogleGenerativeAI') ||
@@ -2266,8 +2324,22 @@ class ApiClient {
             }
           }
         }
+      } finally {
+        if (aborted()) {
+          await reader.cancel().catch(() => undefined);
+        }
+      }
+
+      // The server ends without a terminal event only when the request was
+      // cancelled or the connection died. Say so instead of leaving a spinner.
+      if (!settled && !aborted()) {
+        callbacks.onError(
+          'The connection closed before your itinerary was ready. Nothing was saved — please try again.'
+        );
       }
     } catch (err: any) {
+      if (aborted() || err?.name === 'AbortError') return;
+
       const isNetwork =
         err.message &&
         (err.message.includes('fetch') ||

@@ -22,17 +22,7 @@ import {
 import { AgencyPageHeader } from '@/components/agency/AgencyPageHeader';
 import { AdminPagination } from '@/components/admin/AdminPagination';
 import { AgencySegmented } from '@/components/agency/AgencySegmented';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
+import { ConfirmDestructive } from '@/components/ui/confirm-destructive';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -60,6 +50,7 @@ import { agencyRoleBadgeClass, agencyRoleLabel, formatAgencyDate } from '@/lib/a
 import { EVENT_KIND_LABELS } from '@/lib/events';
 import { cn } from '@/lib/utils';
 import { api } from '@/services/api';
+import { AsyncErrorPanel } from '@/components/states/AsyncState';
 import type {
   AgencyAsset,
   AgencyEvent,
@@ -207,7 +198,7 @@ function statusOf(event: AgencyEvent): { label: string; className: string } {  i
     return {
       label: 'Under review',
       className:
-        'bg-rose-100 text-rose-700 hover:bg-rose-100 dark:bg-rose-950/60 dark:text-rose-300',
+        'bg-destructive/10 text-destructive-ink hover:bg-destructive/10 dark:bg-destructive/20',
     };
   }
   // Draft before closed: unpublishing a closed event leaves `closedAt` on the
@@ -231,7 +222,7 @@ function statusOf(event: AgencyEvent): { label: string; className: string } {  i
     return {
       label: 'Finished',
       className:
-        'bg-sky-100 text-sky-700 hover:bg-sky-100 dark:bg-sky-950/60 dark:text-sky-300',
+        'bg-info/10 text-info-ink hover:bg-info/10 dark:bg-info/20',
     };
   }
   return { label: 'Live', className: 'bg-primary text-primary-foreground hover:bg-primary' };
@@ -259,7 +250,7 @@ const EventCover: React.FC<{ url: string | null; className?: string }> = ({
     return (
       <span
         className={cn(
-          'grid shrink-0 place-items-center rounded-xl bg-agency-accent-soft text-agency-accent',
+          'grid shrink-0 place-items-center rounded-xl bg-agency-accent-soft text-agency-accent-ink',
           className
         )}
       >
@@ -352,7 +343,7 @@ const HighlightEditor: React.FC<{
           placeholder={values.length ? 'Add another' : 'Sunrise boat ride'}
         />
       </div>
-      <p className="text-[11px] text-agency-muted">
+      <p className="text-xs text-agency-muted">
         Up to {HIGHLIGHTS_MAX}. Enter or a comma adds a line.
       </p>
     </div>
@@ -381,11 +372,13 @@ const AgencyEvents: React.FC = () => {
 
   const [events, setEvents] = useState<AgencyEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [listError, setListError] = useState<unknown | null>(null);
   const [statusFilter, setStatusFilter] = useState<EventFilter>('all');
   const [eventPage, setEventPage] = useState(1);
   const [searchParams, setSearchParams] = useSearchParams();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<AgencyEvent | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AgencyEvent | null>(null);
   const [form, setForm] = useState<EventForm>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState<{ id: string; action: string } | null>(null);
@@ -421,10 +414,11 @@ const AgencyEvents: React.FC = () => {
       const result = await api.listAgencyEvents(activeAgencyId);
       if (requestId === listRequestRef.current) {
         setEvents(sortEvents(result.events || []));
+        setListError(null);
       }
     } catch (err) {
       if (requestId === listRequestRef.current) {
-        toast.error(errorMessage(err, 'Could not load your events.'));
+        setListError(err);
       }
     } finally {
       if (requestId === listRequestRef.current) setLoading(false);
@@ -777,7 +771,7 @@ const AgencyEvents: React.FC = () => {
         meta={
           <Badge
             variant="outline"
-            className={cn('text-[10px]', agencyRoleBadgeClass(role || 'viewer'))}
+            className={cn('text-xs', agencyRoleBadgeClass(role || 'viewer'))}
           >
             {agencyRoleLabel(role || 'viewer')}
           </Badge>
@@ -814,10 +808,22 @@ const AgencyEvents: React.FC = () => {
           ) : null}
 
           {loading ? (
-            <div className="flex items-center justify-center gap-2 py-16 text-sm text-agency-muted">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading events...
+            <div role="status" className="divide-y divide-agency-line">
+              <span className="sr-only">Loading events…</span>
+              {Array.from({ length: 4 }).map((_, row) => (
+                <div
+                  key={row}
+                  aria-hidden="true"
+                  className="h-24 skeleton-shimmer"
+                />
+              ))}
             </div>
+          ) : listError && events.length === 0 ? (
+            <AsyncErrorPanel
+              error={listError}
+              subject="your events"
+              onRetry={() => void loadEvents()}
+            />
           ) : events.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-agency-line px-6 py-14 text-center">
               <CalendarRange className="mx-auto h-8 w-8 text-agency-muted/40" />
@@ -872,28 +878,28 @@ const AgencyEvents: React.FC = () => {
                       />
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="truncate text-[13px] font-semibold text-agency-ink">
+                          <h3 className="truncate text-sm font-semibold text-agency-ink">
                             {event.title || 'Untitled event'}
                           </h3>
-                          <Badge className={cn('text-[10px]', status.className)}>
+                          <Badge className={cn('text-xs', status.className)}>
                             {status.label}
                           </Badge>
                           <Badge
                             variant="outline"
-                            className="border-agency-line text-[10px] text-agency-muted"
+                            className="border-agency-line text-xs text-agency-muted"
                           >
                             {EVENT_KIND_LABELS[event.kind]}
                           </Badge>
                           {event.interests.pending > 0 ? (
                             <Badge
                               variant="outline"
-                              className="border-agency-accent/30 bg-agency-accent-soft text-[10px] text-agency-accent"
+                              className="border-agency-accent/30 bg-agency-accent-soft text-xs text-agency-accent-ink"
                             >
                               {event.interests.pending} waiting
                             </Badge>
                           ) : null}
                           {actionBusy ? (
-                            <span className="inline-flex items-center gap-1 text-[11px] text-agency-muted">
+                            <span className="inline-flex items-center gap-1 text-xs text-agency-muted">
                               <Loader2 className="h-3 w-3 animate-spin" />
                               Working...
                             </span>
@@ -919,12 +925,12 @@ const AgencyEvents: React.FC = () => {
                         </p>
 
                         {event.hidden ? (
-                          <p className="mt-2 rounded-lg bg-rose-50 px-2.5 py-1.5 text-[11px] text-rose-800 dark:bg-rose-950/40 dark:text-rose-200">
+                          <p className="mt-2 rounded-lg bg-destructive/10 px-2.5 py-1.5 text-xs text-destructive-ink dark:bg-destructive/20">
                             Under review{event.hiddenReason ? `: ${event.hiddenReason}` : ''}.
                             Contact support before publishing it again.
                           </p>
                         ) : event.state === 'draft' && !event.readiness.ready ? (
-                          <p className="mt-2 text-[11px] text-amber-700 dark:text-amber-400">
+                          <p className="mt-2 text-xs text-warning-ink">
                             Before publishing: {event.readiness.missing.join(' ')}
                           </p>
                         ) : null}
@@ -1066,40 +1072,16 @@ const AgencyEvents: React.FC = () => {
                         event.state === 'draft' &&
                         !event.hidden &&
                         totalInterests === 0 ? (
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-agency-muted hover:text-destructive"
-                                disabled={Boolean(actionBusy)}
-                                aria-label={`Delete ${event.title || 'event'}`}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent className="rounded-2xl sm:rounded-2xl">
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Delete this event?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  The draft and its cover reference are removed.
-                                  Nothing was public yet, so no traveller loses a
-                                  page.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel className="rounded-xl text-xs font-bold">
-                                  Keep it
-                                </AlertDialogCancel>
-                                <AlertDialogAction
-                                  className="rounded-xl bg-destructive text-xs font-bold text-destructive-foreground hover:bg-destructive/90"
-                                  onClick={() => void deleteEvent(event)}
-                                >
-                                  Delete event
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-agency-muted hover:text-destructive"
+                            disabled={Boolean(actionBusy)}
+                            aria-label={`Delete ${event.title || 'event'}`}
+                            onClick={() => setDeleteTarget(event)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
                         ) : null}
                       </div>
                     </div>
@@ -1197,7 +1179,7 @@ const AgencyEvents: React.FC = () => {
                 placeholder="Forest walks, river dips and a night of stars, with naturalists who live nearby."
                 maxLength={280}
               />
-              <p className="text-[11px] text-agency-muted">
+              <p className="text-xs text-agency-muted">
                 One or two lines. This is what a traveller reads on the event
                 card.
               </p>
@@ -1247,7 +1229,7 @@ const AgencyEvents: React.FC = () => {
             </div>
 
             {dateOrderInvalid ? (
-              <p className="text-[11px] text-rose-600 sm:col-span-2 dark:text-rose-400">
+              <p className="text-xs text-destructive-ink sm:col-span-2">
                 The end date can't come before the start date.
               </p>
             ) : null}
@@ -1273,7 +1255,7 @@ const AgencyEvents: React.FC = () => {
             </div>
 
             <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="event-cover">Cover image</Label>
+              <Label htmlFor="event-cover-file">Cover image</Label>
               <div className="flex flex-wrap items-center gap-2">
                 <EventCover url={coverUrl} className="h-16 w-24" />
                 <Button
@@ -1314,7 +1296,7 @@ const AgencyEvents: React.FC = () => {
                   }}
                 />
               </div>
-              <p className="text-[11px] text-agency-muted">
+              <p className="text-xs text-agency-muted">
                 JPEG, PNG or WebP up to 2 MB. Images come from your agency asset
                 library, so you can reuse them elsewhere.
               </p>
@@ -1407,12 +1389,12 @@ const AgencyEvents: React.FC = () => {
                       <Badge
                         variant="outline"
                         className={cn(
-                          'text-[10px]',
+                          'text-xs',
                           interest.status === 'confirmed'
-                            ? 'border-agency-accent/30 bg-agency-accent-soft text-agency-accent'
+                            ? 'border-agency-accent/30 bg-agency-accent-soft text-agency-accent-ink'
                             : interest.status === 'declined'
-                              ? 'border-rose-300 text-rose-700 dark:border-rose-800 dark:text-rose-300'
-                              : 'border-amber-300 text-amber-800 dark:border-amber-800 dark:text-amber-300'
+                              ? 'border-destructive/30 text-destructive-ink dark:border-destructive/40'
+                              : 'border-warning/30 text-warning-ink dark:border-warning/40'
                         )}
                       >
                         {interest.status === 'confirmed'
@@ -1421,7 +1403,7 @@ const AgencyEvents: React.FC = () => {
                             ? 'Declined'
                             : 'Waiting'}
                       </Badge>
-                      <span className="text-[11px] text-agency-muted">
+                      <span className="text-xs text-agency-muted">
                         {interest.createdAt
                           ? `Asked ${formatAgencyDate(interest.createdAt)}`
                           : ''}
@@ -1432,7 +1414,7 @@ const AgencyEvents: React.FC = () => {
                       {interest.email ? (
                         <a
                           href={`mailto:${interest.email}`}
-                          className="inline-flex items-center gap-1 hover:text-agency-accent hover:underline"
+                          className="inline-flex items-center gap-1 hover:text-agency-accent-ink hover:underline"
                         >
                           <Mail className="h-3 w-3" />
                           {interest.email}
@@ -1441,7 +1423,7 @@ const AgencyEvents: React.FC = () => {
                       {interest.phone ? (
                         <a
                           href={`tel:${interest.phone}`}
-                          className="inline-flex items-center gap-1 hover:text-agency-accent hover:underline"
+                          className="inline-flex items-center gap-1 hover:text-agency-accent-ink hover:underline"
                         >
                           <Phone className="h-3 w-3" />
                           {interest.phone}
@@ -1480,11 +1462,12 @@ const AgencyEvents: React.FC = () => {
                         )}
                         Confirm
                       </Button>
+                      {/* Keep the destructive neighbour one target width away. */}
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className="h-7 rounded-lg px-2.5 text-xs text-agency-muted hover:text-destructive"
+                        className="h-7 rounded-lg px-2.5 text-xs text-agency-muted hover:text-destructive coarse:h-11 sm:ml-11"
                         disabled={deciding || interest.status === 'declined'}
                         onClick={() => void decideInterest(interest, 'declined')}
                       >
@@ -1492,7 +1475,7 @@ const AgencyEvents: React.FC = () => {
                         Decline
                       </Button>
                       {interest.status !== 'pending' && interest.decidedAt ? (
-                        <span className="text-[11px] text-agency-muted">
+                        <span className="text-xs text-agency-muted">
                           Decided {formatAgencyDate(interest.decidedAt)}
                         </span>
                       ) : null}
@@ -1510,6 +1493,24 @@ const AgencyEvents: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDestructive
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+        icon={Trash2}
+        title={<>Delete “{deleteTarget?.title}”?</>}
+        description="The draft and its cover reference are removed. Nothing was public yet, so no traveller loses a page. This cannot be undone."
+        confirmLabel="Delete event"
+        cancelLabel="Keep it"
+        onConfirm={async () => {
+          if (!deleteTarget) return;
+          await deleteEvent(deleteTarget);
+          setDeleteTarget(null);
+        }}
+        busy={Boolean(deleteTarget && busy?.id === deleteTarget.id && busy?.action === 'delete')}
+      />
     </div>
   );
 };

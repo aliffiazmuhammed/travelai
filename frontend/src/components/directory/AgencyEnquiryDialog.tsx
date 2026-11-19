@@ -235,8 +235,8 @@ const AgencyEnquiryDialog: React.FC<AgencyEnquiryDialogProps> = ({
 
         {sent ? (
           <div className="space-y-4 py-2">
-            <div className="flex items-start gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4">
-              <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
+            <div className="flex items-start gap-3 rounded-2xl border border-success/30 bg-success/10 p-4">
+              <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success-ink" />
               <div className="space-y-1 text-xs text-foreground">
                 <p className="font-bold">Your enquiry is with {agencyName}.</p>
                 <p className="text-muted-foreground">
@@ -253,7 +253,7 @@ const AgencyEnquiryDialog: React.FC<AgencyEnquiryDialogProps> = ({
 
             {ack ? (
               <div className="space-y-3 rounded-2xl border border-primary/20 bg-primary/5 p-3">
-                <p className="text-[11px] leading-relaxed text-muted-foreground">
+                <p className="text-xs leading-relaxed text-muted-foreground">
                   The thread with {agencyName} is in your enquiries, together with
                   every reply and any proposal they send.
                 </p>
@@ -335,7 +335,7 @@ const AgencyEnquiryDialog: React.FC<AgencyEnquiryDialogProps> = ({
         ) : (
           <form className="space-y-4" onSubmit={handleSubmit} noValidate>
             {packageId && packageTitle ? (
-              <div className="rounded-2xl border border-primary/20 bg-primary/5 px-3 py-2 text-[11px] text-primary">
+              <div className="rounded-2xl border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-primary">
                 Package: <span className="font-bold">{packageTitle}</span>
               </div>
             ) : null}
@@ -425,7 +425,7 @@ const AgencyEnquiryDialog: React.FC<AgencyEnquiryDialogProps> = ({
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label htmlFor="enquiry-start" className="text-[11px] font-semibold">
+                  <Label htmlFor="enquiry-start" className="text-xs font-semibold">
                     Start date
                   </Label>
                   <Input
@@ -439,7 +439,7 @@ const AgencyEnquiryDialog: React.FC<AgencyEnquiryDialogProps> = ({
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="enquiry-end" className="text-[11px] font-semibold">
+                  <Label htmlFor="enquiry-end" className="text-xs font-semibold">
                     End date <span className="font-normal text-muted-foreground">(optional)</span>
                   </Label>
                   <Input
@@ -453,7 +453,7 @@ const AgencyEnquiryDialog: React.FC<AgencyEnquiryDialogProps> = ({
                   />
                 </div>
               </div>
-              <label className="flex items-center gap-2 text-[11px] font-semibold text-foreground">
+              <label className="flex items-center gap-2 text-xs font-semibold text-foreground">
                 <Checkbox
                   checked={flexible}
                   onCheckedChange={(value) => setFlexible(value === true)}
@@ -496,12 +496,12 @@ const AgencyEnquiryDialog: React.FC<AgencyEnquiryDialogProps> = ({
                 placeholder="Who is travelling, the places you have in mind, and anything that matters (pace, food, accessibility)."
                 className="rounded-xl"
               />
-              <p className="text-right text-[10px] text-muted-foreground">
+              <p className="text-right text-xs text-muted-foreground">
                 {message.length}/{MESSAGE_MAX}
               </p>
             </div>
 
-            <label className="flex items-start gap-2 rounded-2xl border border-border/70 p-3 text-[11px] leading-relaxed text-muted-foreground">
+            <label className="flex items-start gap-2 rounded-2xl border border-border/70 p-3 text-xs leading-relaxed text-muted-foreground">
               <Checkbox
                 checked={consent}
                 onCheckedChange={(value) => setConsent(value === true)}
@@ -543,7 +543,7 @@ const AgencyEnquiryDialog: React.FC<AgencyEnquiryDialogProps> = ({
               </Button>
             </DialogFooter>
 
-            <p className="flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground">
+            <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
               <Mail className="h-3 w-3" />
               <MessageSquare className="h-3 w-3" />
               Replies arrive in the agency&apos;s waytowalk inbox, not by email.

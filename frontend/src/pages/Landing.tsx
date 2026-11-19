@@ -10,6 +10,7 @@ import Hero from "@/components/Hero";
 import LandingChat from "@/components/LandingChat";
 import { PublicEventCard } from "@/components/events/PublicEventCard";
 import { TripCover } from "@/components/gallery/TripCover";
+import { AppImage } from "@/components/ui/app-image";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -116,7 +117,7 @@ const faqs = [
 
 const Eyebrow = ({ children, light = false }: { children: React.ReactNode; light?: boolean }) => (
   <p
-    className={`mb-5 flex items-center gap-2.5 text-[11px] font-bold uppercase tracking-[0.18em] ${
+    className={`mb-5 flex items-center gap-2.5 text-xs font-bold uppercase tracking-[0.18em] ${
       light ? "text-[#F7F3EA]/70" : "text-primary"
     }`}
   >
@@ -128,7 +129,7 @@ const Eyebrow = ({ children, light = false }: { children: React.ReactNode; light
 const TextLink = ({ to, children, light = false }: { to: string; children: React.ReactNode; light?: boolean }) => (
   <Link
     to={to}
-    className={`inline-flex items-center gap-2 text-[13px] font-bold transition-all hover:gap-3 ${
+    className={`inline-flex items-center gap-2 text-sm font-bold transition-all hover:gap-3 ${
       light ? "text-[#F7F3EA]/75 hover:text-[#F7F3EA]" : "text-primary"
     }`}
   >
@@ -223,29 +224,29 @@ const LiveTripCard = ({ trip }: { trip: GalleryTripSummary }) => (
         className="h-full w-full rounded-none border-0"
       />
       {trip.durationDays > 0 && (
-        <span className="absolute right-4 top-4 rounded-full bg-[#F7F3EA]/95 px-3 py-2 text-[10px] font-bold text-[#173F35]">
+        <span className="absolute right-4 top-4 rounded-full bg-[#F7F3EA]/95 px-3 py-2 text-xs font-bold text-[#173F35]">
           {trip.durationDays} {trip.durationDays === 1 ? "day" : "days"}
         </span>
       )}
     </div>
     <div className="flex flex-1 flex-col p-5 sm:p-6">
-      <p className="mb-2.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
+      <p className="mb-2.5 flex items-center gap-1.5 text-overline font-bold text-muted-foreground">
         <MapPin className="h-3 w-3 shrink-0" aria-hidden="true" />
         <span className="truncate">{trip.destination || "Somewhere new"}</span>
       </p>
-      <h3 className="font-display text-[27px] font-medium leading-[1.08] tracking-[-0.02em] text-foreground transition-colors group-hover:text-primary">
+      <h3 className="font-display text-3xl font-medium leading-[1.08] tracking-[-0.02em] text-foreground transition-colors group-hover:text-primary">
         {trip.title}
       </h3>
       <p className="mb-5 mt-3 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
         {trip.summary || "A shared route, ready to explore and make your own."}
       </p>
-      <div className="mt-auto flex items-center justify-between gap-3 border-t border-border/70 pt-4 text-[10px] text-muted-foreground">
+      <div className="mt-auto flex items-center justify-between gap-3 border-t border-border/70 pt-4 text-xs text-muted-foreground">
         <span className="flex min-w-0 items-center gap-2 font-bold text-foreground">
           <Avatar className="h-7 w-7 shrink-0">
             {trip.publisher.avatarUrl && (
               <AvatarImage src={avatarSrc(trip.publisher.avatarUrl)} alt={trip.publisher.name} />
             )}
-            <AvatarFallback className="bg-primary/10 text-[9px] font-bold text-primary">
+            <AvatarFallback className="bg-primary/10 text-xs font-bold text-primary">
               {initialsFor(trip.publisher.name || trip.publisher.handle)}
             </AvatarFallback>
           </Avatar>
@@ -322,13 +323,13 @@ const Landing = () => {
         directoryEnabled={directoryEnabled === true}
       />
 
-      <main>
+      <main id="main-content" tabIndex={-1}>
         <section id="trips" className="scroll-mt-20 py-20 sm:py-24 lg:py-28" aria-labelledby="fresh-title">
           <div className={CONTAINER}>
             <div className="mb-10 flex flex-col items-start justify-between gap-5 sm:flex-row sm:items-end lg:gap-10">
               <div>
                 <Eyebrow>Live discovery</Eyebrow>
-                <h2 id="fresh-title" className="mb-3 font-display text-4xl font-medium leading-[1.04] tracking-[-0.035em] text-foreground sm:text-5xl lg:text-[50px]">
+                <h2 id="fresh-title" className="mb-3 font-display text-4xl font-medium leading-[1.04] tracking-[-0.035em] text-foreground sm:text-5xl lg:text-5xl">
                   Fresh from the trail.
                 </h2>
                 <p className="max-w-[570px] text-sm leading-7 text-muted-foreground sm:text-base sm:leading-8">
@@ -373,20 +374,23 @@ const Landing = () => {
         <section id="events" className="scroll-mt-20 pb-20 sm:pb-24 lg:pb-28" aria-labelledby="events-title">
           <div className={CONTAINER}>
             <div className="grid overflow-hidden rounded-[28px] bg-muted/50 md:grid-cols-[1.08fr_0.92fr]">
-              <img
+              <AppImage
                 src={groupCamp}
                 alt="A group gathered around a mountain campfire"
+                width={1400}
+                height={2100}
+                sizes="(min-width: 768px) 54vw, 100vw"
                 className="h-[280px] w-full object-cover sm:h-[330px] md:h-full md:min-h-[430px]"
               />
               <div className="flex flex-col items-start justify-center p-7 sm:p-10 lg:p-[55px]">
                 <Eyebrow>On the calendar</Eyebrow>
-                <h2 id="events-title" className="mb-5 font-display text-4xl font-medium leading-[1.04] tracking-[-0.035em] text-foreground sm:text-[45px]">
+                <h2 id="events-title" className="mb-5 font-display text-4xl font-medium leading-[1.04] tracking-[-0.035em] text-foreground sm:text-5xl">
                   Some journeys already have a date.
                 </h2>
                 <p className="mb-7 text-sm leading-7 text-muted-foreground sm:text-base sm:leading-8">
                   Discover agency-led camps, retreats and group departures. Ask about a place without building a trip of your own first.
                 </p>
-                <Button asChild variant="hero" size="lg" className="w-full rounded-full px-6 text-[13px] font-bold sm:w-auto">
+                <Button asChild variant="hero" size="lg" className="w-full rounded-full px-6 text-sm font-bold sm:w-auto">
                   <Link to={eventCta.to}>{eventCta.label} <ArrowRight className="ml-2 h-4 w-4" /></Link>
                 </Button>
               </div>
@@ -415,7 +419,7 @@ const Landing = () => {
             <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start lg:gap-10">
               <div>
                 <Eyebrow>How it works</Eyebrow>
-                <h2 id="how-title" className="font-display text-4xl font-medium leading-[1.04] tracking-[-0.035em] text-foreground sm:text-5xl lg:text-[50px]">
+                <h2 id="how-title" className="font-display text-4xl font-medium leading-[1.04] tracking-[-0.035em] text-foreground sm:text-5xl lg:text-5xl">
                   Someone's idea.<br />Your way forward.
                 </h2>
               </div>
@@ -427,11 +431,11 @@ const Landing = () => {
               <span className="absolute left-[9%] right-[9%] top-7 hidden h-px bg-secondary md:block" aria-hidden="true" />
               {steps.map((step, index) => (
                 <li key={step.title} className="relative pl-[75px] md:pl-0 md:pt-[82px]">
-                  <span className="absolute left-0 top-0 z-10 flex h-14 w-14 items-center justify-center rounded-full border border-secondary bg-background font-display text-[22px] font-medium text-primary">
+                  <span className="absolute left-0 top-0 z-10 flex h-14 w-14 items-center justify-center rounded-full border border-secondary bg-background font-display text-2xl font-medium text-primary">
                     {String(index + 1).padStart(2, "0")}
                   </span>
-                  <h3 className="mb-3 font-display text-[27px] font-medium leading-[1.1] text-foreground sm:text-[29px]">{step.title}</h3>
-                  <p className="text-[13px] leading-7 text-muted-foreground">{step.body}</p>
+                  <h3 className="mb-3 font-display text-3xl font-medium leading-[1.1] text-foreground">{step.title}</h3>
+                  <p className="text-sm leading-7 text-muted-foreground">{step.body}</p>
                 </li>
               ))}
             </ol>
@@ -441,17 +445,20 @@ const Landing = () => {
         <section id="agencies" className="scroll-mt-20 py-20 sm:py-24 lg:py-28" aria-labelledby="agencies-title">
           <div className={CONTAINER}>
             <div className="grid overflow-hidden rounded-[30px] bg-[#173F35] md:grid-cols-[1.08fr_0.92fr]">
-              <img
+              <AppImage
                 src={agencyTeam}
                 alt="A travel agency team working together"
+                width={1400}
+                height={2100}
+                sizes="(min-width: 768px) 54vw, 100vw"
                 className="h-[280px] w-full object-cover sm:h-[330px] md:h-full md:min-h-[530px]"
               />
               <div className="flex flex-col items-start justify-center p-7 text-[#F7F3EA]/80 sm:p-10 lg:p-[58px]">
                 <Eyebrow light>Travel agencies</Eyebrow>
-                <h2 id="agencies-title" className="mb-5 font-display text-4xl font-medium leading-[1.04] tracking-[-0.035em] text-[#F7F3EA] sm:text-[47px]">
+                <h2 id="agencies-title" className="mb-5 font-display text-4xl font-medium leading-[1.04] tracking-[-0.035em] text-[#F7F3EA] sm:text-5xl">
                   Prefer a professional to shape it?
                 </h2>
-                <p className="text-sm leading-7 sm:text-[15px] sm:leading-8">
+                <p className="text-sm leading-7 sm:text-base sm:leading-8">
                   Find an agency, ask a question, and receive a branded proposal you can review with your group.
                 </p>
                 <ul className="my-7 grid gap-3 text-xs text-[#F7F3EA]">
@@ -462,7 +469,7 @@ const Landing = () => {
                     </li>
                   ))}
                 </ul>
-                <Button asChild size="lg" className="w-full rounded-full bg-[#F7F3EA] px-6 text-[13px] font-bold text-[#173F35] hover:bg-[#F7F3EA]/90 sm:w-auto">
+                <Button asChild size="lg" className="w-full rounded-full bg-[#F7F3EA] px-6 text-sm font-bold text-[#173F35] hover:bg-[#F7F3EA]/90 sm:w-auto">
                   <Link to="/agencies">Meet travel agencies <ArrowRight className="ml-2 h-4 w-4" /></Link>
                 </Button>
                 <div className="mt-5">
@@ -477,7 +484,7 @@ const Landing = () => {
           <div className={`${CONTAINER} grid items-center gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:gap-[70px] xl:gap-[90px]`}>
             <div>
               <Eyebrow>When nothing fits</Eyebrow>
-              <h2 id="ai-title" className="mb-5 font-display text-4xl font-medium leading-[1.04] tracking-[-0.035em] text-foreground sm:text-5xl lg:text-[48px]">
+              <h2 id="ai-title" className="mb-5 font-display text-4xl font-medium leading-[1.04] tracking-[-0.035em] text-foreground sm:text-5xl">
                 Start with a blank page. Leave with a plan.
               </h2>
               <p className="mb-6 text-sm leading-7 text-muted-foreground sm:text-base sm:leading-8">
@@ -492,10 +499,10 @@ const Landing = () => {
                 ))}
               </ul>
               <div className="flex flex-col gap-3 sm:flex-row">
-                <Button asChild variant="hero" size="lg" className="rounded-full px-6 text-[13px] font-bold">
+                <Button asChild variant="hero" size="lg" className="rounded-full px-6 text-sm font-bold">
                   <Link to="/plan">Plan with AI <ArrowRight className="ml-2 h-4 w-4" /></Link>
                 </Button>
-                <Button asChild variant="outline" size="lg" className="rounded-full border-primary/30 bg-transparent px-6 text-[13px] font-bold text-primary hover:bg-primary/5">
+                <Button asChild variant="outline" size="lg" className="rounded-full border-primary/30 bg-transparent px-6 text-sm font-bold text-primary hover:bg-primary/5">
                   <Link to="/explore">See what others planned</Link>
                 </Button>
               </div>
@@ -508,18 +515,18 @@ const Landing = () => {
           <div className={`${CONTAINER} grid gap-12 lg:grid-cols-[0.78fr_1.22fr] lg:gap-[70px] xl:gap-[90px]`}>
             <div>
               <Eyebrow light>One shared plan</Eyebrow>
-              <h2 id="tools-title" className="mb-5 font-display text-4xl font-medium leading-[1.04] tracking-[-0.035em] text-[#F7F3EA] sm:text-5xl lg:text-[52px]">
+              <h2 id="tools-title" className="mb-5 font-display text-4xl font-medium leading-[1.04] tracking-[-0.035em] text-[#F7F3EA] sm:text-5xl">
                 The admin stays out of the adventure.
               </h2>
-              <p className="max-w-[400px] text-sm leading-7 sm:text-[15px] sm:leading-8">
+              <p className="max-w-[400px] text-sm leading-7 sm:text-base sm:leading-8">
                 When something feels like deciding, do it together. When it feels like admin, waytowalk keeps it quietly organised.
               </p>
             </div>
             <div className="grid border-l border-t border-[#F7F3EA]/20 sm:grid-cols-2">
               {tools.map((tool, index) => (
                 <article key={tool.title} className="min-h-[200px] border-b border-r border-[#F7F3EA]/20 p-7 sm:min-h-[220px] sm:p-[30px]">
-                  <span className="mb-8 block font-display text-lg font-medium text-accent sm:mb-10">{String(index + 1).padStart(2, "0")}</span>
-                  <h3 className="mb-3 font-display text-[26px] font-medium leading-[1.1] text-[#F7F3EA]">{tool.title}</h3>
+                  <span className="mb-8 block font-display text-xl font-medium text-accent-ink sm:mb-10">{String(index + 1).padStart(2, "0")}</span>
+                  <h3 className="mb-3 font-display text-3xl font-medium leading-[1.1] text-[#F7F3EA]">{tool.title}</h3>
                   <p className="text-xs leading-6">{tool.body}</p>
                 </article>
               ))}
@@ -532,7 +539,7 @@ const Landing = () => {
             <div className="mb-12 grid items-end gap-5 md:grid-cols-2 lg:gap-[60px]">
               <div>
                 <Eyebrow>In plain words</Eyebrow>
-                <h2 id="trust-title" className="font-display text-4xl font-medium leading-[1.04] tracking-[-0.035em] text-foreground sm:text-5xl lg:text-[50px]">Your trip stays yours.</h2>
+                <h2 id="trust-title" className="font-display text-4xl font-medium leading-[1.04] tracking-[-0.035em] text-foreground sm:text-5xl lg:text-5xl">Your trip stays yours.</h2>
               </div>
               <p className="max-w-[480px] text-sm leading-7 text-muted-foreground sm:text-base sm:leading-8">
                 Publishing a route doesn't expose the parts you kept private. Joining someone else's trip doesn't hand over your own.
@@ -541,8 +548,8 @@ const Landing = () => {
             <div className="grid border-t border-border/70 md:grid-cols-3">
               {trustRows.map((row, index) => (
                 <article key={row.title} className="border-b border-border/70 py-8 md:border-b-0 md:px-8 md:py-8 md:pr-8 md:first:pl-0 md:[&:not(:first-child)]:border-l lg:px-10 lg:first:pl-0">
-                  <span className="mb-6 flex h-10 w-10 items-center justify-center rounded-full bg-muted/60 font-display text-[17px] font-semibold text-primary">{String(index + 1).padStart(2, "0")}</span>
-                  <h3 className="mb-3 font-display text-[27px] font-medium text-foreground">{row.title}</h3>
+                  <span className="mb-6 flex h-10 w-10 items-center justify-center rounded-full bg-muted/60 font-display text-xl font-semibold text-primary">{String(index + 1).padStart(2, "0")}</span>
+                  <h3 className="mb-3 font-display text-3xl font-medium text-foreground">{row.title}</h3>
                   <p className="text-xs leading-6 text-muted-foreground">{row.body}</p>
                 </article>
               ))}
@@ -554,7 +561,7 @@ const Landing = () => {
           <div className={`${CONTAINER} grid gap-10 lg:grid-cols-[0.75fr_1.25fr] lg:gap-[70px] xl:gap-[100px]`}>
             <div>
               <Eyebrow>Before you ask</Eyebrow>
-              <h2 id="faq-title" className="mb-5 font-display text-4xl font-medium leading-[1.04] tracking-[-0.035em] text-foreground sm:text-[46px]">Good questions, straight answers.</h2>
+              <h2 id="faq-title" className="mb-5 font-display text-4xl font-medium leading-[1.04] tracking-[-0.035em] text-foreground sm:text-5xl">Good questions, straight answers.</h2>
               <p className="mb-5 max-w-[340px] text-sm leading-7 text-muted-foreground sm:text-base sm:leading-8">
                 The essentials about joining, publishing and planning with other people.
               </p>
@@ -563,7 +570,7 @@ const Landing = () => {
             <Accordion type="single" collapsible defaultValue={faqs[0].question} className="border-t border-border">
               {faqs.map((faq) => (
                 <AccordionItem key={faq.question} value={faq.question} className="border-border">
-                  <AccordionTrigger className="py-6 text-left text-[13px] font-bold text-primary hover:no-underline">
+                  <AccordionTrigger className="py-6 text-left text-sm font-bold text-primary hover:no-underline">
                     {faq.question}
                   </AccordionTrigger>
                   <AccordionContent className="max-w-[620px] pb-6 pr-8 text-xs leading-6 text-muted-foreground">
@@ -580,21 +587,21 @@ const Landing = () => {
             <div className="relative flex min-h-[430px] items-center overflow-hidden rounded-[30px] bg-[#173F35]">
               <div className="relative z-10 w-full p-7 sm:p-12 md:w-[70%] lg:p-[60px]">
                 <Eyebrow light>Real journeys. Your way.</Eyebrow>
-                <h2 className="mb-5 max-w-[660px] font-display text-4xl font-medium leading-[1.04] tracking-[-0.035em] text-[#F7F3EA] sm:text-5xl lg:text-[52px]">
+                <h2 className="mb-5 max-w-[660px] font-display text-4xl font-medium leading-[1.04] tracking-[-0.035em] text-[#F7F3EA] sm:text-5xl">
                   Your next trip could start with someone else's plan.
                 </h2>
                 <p className="mb-7 max-w-[550px] text-sm leading-7 text-[#F7F3EA]/75">
                   Take a look at what's already going. If nothing fits, plan it yourself—it still only takes one message.
                 </p>
                 <div className="flex flex-col gap-3 sm:flex-row">
-                  <Button asChild size="lg" className="rounded-full bg-[#F7F3EA] px-6 text-[13px] font-bold text-[#173F35] hover:bg-[#F7F3EA]/90">
+                  <Button asChild size="lg" className="rounded-full bg-[#F7F3EA] px-6 text-sm font-bold text-[#173F35] hover:bg-[#F7F3EA]/90">
                     <Link to="/explore">Browse trips <ArrowRight className="ml-2 h-4 w-4" /></Link>
                   </Button>
-                  <Button asChild size="lg" variant="outline" className="rounded-full border-white/40 bg-transparent px-6 text-[13px] font-bold text-white hover:bg-white/10 hover:text-white">
+                  <Button asChild size="lg" variant="outline" className="rounded-full border-white/40 bg-transparent px-6 text-sm font-bold text-white hover:bg-white/10 hover:text-white">
                     <Link to="/plan">Plan with AI</Link>
                   </Button>
                 </div>
-                <ul className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-[10px] font-semibold text-[#F7F3EA]/60">
+                <ul className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-xs font-semibold text-[#F7F3EA]/60">
                   {["Free to start", "No card needed"].map((item) => (
                     <li key={item} className="inline-flex items-center gap-2">
                       <span className="h-1 w-1 rounded-full bg-secondary" aria-hidden="true" />{item}
@@ -603,7 +610,7 @@ const Landing = () => {
                 </ul>
               </div>
               <div className="absolute inset-y-0 right-0 hidden w-[36%] md:block">
-                <img src={soloTraveller} alt="A traveller walking beside a desert stream" className="h-full w-full object-cover" />
+                <AppImage src={soloTraveller} alt="A traveller walking beside a desert stream" width={1400} height={2100} sizes="(min-width: 768px) 50vw, 100vw" className="h-full w-full object-cover" />
                 <div className="absolute inset-0 bg-gradient-to-r from-[#173F35] via-[#173F35]/20 to-transparent" />
               </div>
             </div>
@@ -619,45 +626,56 @@ const Landing = () => {
                 <img src="/brand/waytowalk-logo-name.svg" alt="waytowalk" width="164" height="34" className="h-[34px] w-[164px] dark:hidden" />
                 <img src="/brand/waytowalk-logo-reverse.svg" alt="waytowalk" width="164" height="34" className="hidden h-[34px] w-[164px] dark:block" />
               </Link>
-              <p className="font-display text-[23px] font-medium text-primary">Real journeys. Your way.</p>
-              <p className="mt-4 max-w-[320px] text-[11px] leading-6 text-muted-foreground">
+              <p className="font-display text-2xl font-medium text-primary">Real journeys. Your way.</p>
+              <p className="mt-4 max-w-[320px] text-xs leading-6 text-muted-foreground">
                 Find a trip worth joining, meet the people going, and keep the plan, map and chat in one place.
               </p>
             </div>
             <div>
-              <h3 className="mb-4 text-[10px] font-bold uppercase tracking-[0.12em] text-foreground">Discover</h3>
+              <h3 className="mb-4 text-overline font-bold text-foreground">Discover</h3>
               {[
                 { label: "Explore trips", to: "/explore" },
                 { label: "Events", to: "/explore#events" },
                 { label: "Agencies", to: "/agencies" },
                 { label: "Community guidelines", to: "/guidelines" },
               ].map((link) => (
-                <Link key={link.to} to={link.to} className="mb-3 block text-[11px] text-muted-foreground transition-colors hover:text-foreground">{link.label}</Link>
+                <Link key={link.to} to={link.to} className="mb-3 block text-xs text-muted-foreground transition-colors hover:text-foreground">{link.label}</Link>
               ))}
             </div>
             <div>
-              <h3 className="mb-4 text-[10px] font-bold uppercase tracking-[0.12em] text-foreground">Plan</h3>
+              <h3 className="mb-4 text-overline font-bold text-foreground">Plan</h3>
               {[
                 { label: "Plan a trip", to: "/plan" },
                 isAuthenticated ? { label: "My trips", to: "/dashboard" } : { label: "Create an account", to: "/auth" },
                 isAuthenticated ? { label: "Enquiries", to: "/enquiries" } : { label: "Sign in", to: "/auth" },
               ].map((link) => (
-                <Link key={link.to + link.label} to={link.to} className="mb-3 block text-[11px] text-muted-foreground transition-colors hover:text-foreground">{link.label}</Link>
+                <Link key={link.to + link.label} to={link.to} className="mb-3 block text-xs text-muted-foreground transition-colors hover:text-foreground">{link.label}</Link>
               ))}
             </div>
             <div>
-              <h3 className="mb-4 text-[10px] font-bold uppercase tracking-[0.12em] text-foreground">For agencies</h3>
+              <h3 className="mb-4 text-overline font-bold text-foreground">For agencies</h3>
               {[
                 { label: "Agency sign in", to: "/agency/login" },
                 { label: "Apply to join", to: "/agencies/apply" },
                 { label: "Directory profiles", to: "/agencies" },
               ].map((link) => (
-                <Link key={link.to + link.label} to={link.to} className="mb-3 block text-[11px] text-muted-foreground transition-colors hover:text-foreground">{link.label}</Link>
+                <Link key={link.to + link.label} to={link.to} className="mb-3 block text-xs text-muted-foreground transition-colors hover:text-foreground">{link.label}</Link>
               ))}
             </div>
           </div>
-          <div className="mt-12 flex flex-col gap-3 border-t border-border/70 pt-6 text-[10px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+          <div className="mt-12 flex flex-col gap-3 border-t border-border/70 pt-6 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
             <p>© 2026 waytowalk. Built with care for travellers.</p>
+            <nav aria-label="Legal" className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              <Link to="/terms" className="transition-colors hover:text-foreground">
+                Terms
+              </Link>
+              <Link to="/privacy" className="transition-colors hover:text-foreground">
+                Privacy
+              </Link>
+              <Link to="/guidelines" className="transition-colors hover:text-foreground">
+                Guidelines
+              </Link>
+            </nav>
             <p className="inline-flex items-center gap-1.5">
               <ShieldCheck className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
               Shared on purpose, private by default.

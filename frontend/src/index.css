@@ -1,3 +1,5 @@
+@import "./styles/typography.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -28,10 +30,45 @@ All colors MUST be HSL.
     --muted-foreground: 159 10.9% 36.1%;
 
     --accent: 13.2 76% 62.4%;
-    --accent-foreground: 165 46.5% 16.9%;
+    /* Coral stays the fill. Ink is the readable text-on-canvas role; the
+       darker foreground keeps normal text legible on a coral fill. */
+    --accent-ink: 13 75% 38%;
+    --accent-foreground: 165 46.5% 12%;
 
     --destructive: 0 65% 48%;
     --destructive-foreground: 0 0% 100%;
+    --destructive-ink: 343 79% 41%;
+
+    /* Status roles (C-12). Each role has a solid fill plus a readable ink.
+       Tints come from opacity modifiers (`bg-success/10`), so a call site
+       never defines its own dark variant. */
+    --success: 163 94% 24%;
+    --success-ink: 163 94% 24%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 32 95% 44%;
+    --warning-ink: 26 90% 37%;
+    --warning-foreground: 20 90% 10%;
+
+    --info: 201 96% 32%;
+    --info-ink: 201 96% 32%;
+    --info-foreground: 0 0% 100%;
+
+    /* Brand surface for solid brand panels (footer, CTA bands). */
+    --surface-brand: 165 46.5% 16.9%;
+    --surface-brand-ink: 41.5 44.8% 94.3%;
+
+    /* Partner (agency) and operator (admin) accents get global defaults so
+       shared artefacts — proposal documents, directory pages, pilot badges —
+       can use them outside their own theme scope. */
+    --agency-accent: 165 46.5% 16.9%;
+    --agency-accent-soft: 164.5 18.8% 90%;
+    --agency-accent-ink: 165 46.5% 16.9%;
+    --agency-accent-foreground: 41.5 44.8% 94.3%;
+
+    --admin-accent: 243 75% 59%;
+    --admin-accent-ink: 243 75% 45%;
+    --admin-accent-foreground: 0 0% 100%;
 
     --border: 142.5 11.8% 86.7%;
     --input: 142.5 11.8% 86.7%;
@@ -84,10 +121,36 @@ All colors MUST be HSL.
     --muted-foreground: 164.5 18.8% 72%;
 
     --accent: 13.2 76% 62.4%;
+    --accent-ink: 13 80% 70%;
     --accent-foreground: 165.5 47.5% 12%;
 
     --destructive: 0 70% 65%;
     --destructive-foreground: 165.5 47.5% 12%;
+    --destructive-ink: 353 96% 82%;
+
+    --success: 160 84% 39%;
+    --success-ink: 156 72% 67%;
+    --success-foreground: 165.5 47.5% 12%;
+
+    --warning: 38 92% 50%;
+    --warning-ink: 46 97% 65%;
+    --warning-foreground: 20 90% 10%;
+
+    --info: 199 89% 48%;
+    --info-ink: 199 95% 74%;
+    --info-foreground: 200 98% 10%;
+
+    --surface-brand: 164 34% 16%;
+    --surface-brand-ink: 41.5 44.8% 94.3%;
+
+    --agency-accent: 41.5 44.8% 94.3%;
+    --agency-accent-soft: 164 25% 22%;
+    --agency-accent-ink: 41.5 44.8% 94.3%;
+    --agency-accent-foreground: 165 46.5% 16.9%;
+
+    --admin-accent: 243 75% 59%;
+    --admin-accent-ink: 239 84% 80%;
+    --admin-accent-foreground: 0 0% 100%;
 
     --border: 162 22% 26%;
     --input: 162 22% 26%;
@@ -114,7 +177,9 @@ All colors MUST be HSL.
     --skeleton-highlight: 164 22% 27%;
   }
 
-  :root {
+  /* Agency realm. The selector lives on <html>, so portalled sheets, dialogs
+     and toasts inherit the same skin as the workspace. */
+  [data-theme="agency"] {
     --agency-canvas: 41.5 44.8% 94.3%;
     --agency-panel: 0 0% 100%;
     --agency-line: 142.5 11.8% 86.7%;
@@ -123,20 +188,9 @@ All colors MUST be HSL.
     --agency-soft: 164.5 18.8% 90%;
     --agency-accent: 165 46.5% 16.9%;
     --agency-accent-soft: 164.5 18.8% 90%;
-  }
+    --agency-accent-ink: 165 46.5% 16.9%;
+    --agency-accent-foreground: 41.5 44.8% 94.3%;
 
-  .dark {
-    --agency-canvas: 165.5 47.5% 12%;
-    --agency-panel: 164 34% 16%;
-    --agency-line: 162 22% 26%;
-    --agency-ink: 41.5 44.8% 94.3%;
-    --agency-muted: 164.5 18.8% 72%;
-    --agency-soft: 164 25% 22%;
-    --agency-accent: 41.5 44.8% 94.3%;
-    --agency-accent-soft: 164 25% 22%;
-  }
-
-  .agency-theme {
     --background: 41.5 44.8% 94.3%;
     --foreground: 160 17.1% 13.7%;
 
@@ -155,12 +209,27 @@ All colors MUST be HSL.
     --muted: 142.5 11.8% 90.7%;
     --muted-foreground: 159 10.9% 36.1%;
 
+    --accent: 13.2 76% 62.4%;
+    --accent-ink: 13 75% 38%;
+    --accent-foreground: 165 46.5% 12%;
+
     --border: 142.5 11.8% 86.7%;
     --input: 142.5 11.8% 86.7%;
     --ring: 165 46.5% 16.9%;
   }
 
-  .agency-theme.dark {
+  [data-theme="agency"].dark {
+    --agency-canvas: 165.5 47.5% 12%;
+    --agency-panel: 164 34% 16%;
+    --agency-line: 162 22% 26%;
+    --agency-ink: 41.5 44.8% 94.3%;
+    --agency-muted: 164.5 18.8% 72%;
+    --agency-soft: 164 25% 22%;
+    --agency-accent: 41.5 44.8% 94.3%;
+    --agency-accent-soft: 164 25% 22%;
+    --agency-accent-ink: 41.5 44.8% 94.3%;
+    --agency-accent-foreground: 165 46.5% 16.9%;
+
     --background: 165.5 47.5% 12%;
     --foreground: 41.5 44.8% 94.3%;
 
@@ -179,9 +248,60 @@ All colors MUST be HSL.
     --muted: 164 24% 20%;
     --muted-foreground: 164.5 18.8% 72%;
 
+    --accent: 13.2 76% 62.4%;
+    --accent-ink: 13 80% 70%;
+    --accent-foreground: 165.5 47.5% 12%;
+
     --border: 162 22% 26%;
     --input: 162 22% 26%;
     --ring: 41.5 44.8% 94.3%;
+  }
+
+  /* Platform admin is intentionally always dark. Its indigo accent is a
+     semantic role, so buttons do not depend on a raw indigo-500 utility. */
+  [data-theme="admin"],
+  [data-theme="admin"].dark {
+    --background: 165.5 47.5% 12%;
+    --foreground: 41.5 44.8% 94.3%;
+
+    --card: 164 34% 16%;
+    --card-foreground: 41.5 44.8% 94.3%;
+
+    --popover: 164 34% 16%;
+    --popover-foreground: 41.5 44.8% 94.3%;
+
+    --primary: 243 75% 59%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 164 25% 22%;
+    --secondary-foreground: 41.5 44.8% 94.3%;
+
+    --muted: 164 24% 20%;
+    --muted-foreground: 164.5 18.8% 72%;
+
+    --accent: 13.2 76% 62.4%;
+    --accent-ink: 13 80% 70%;
+    --accent-foreground: 165.5 47.5% 12%;
+
+    --admin-accent: 243 75% 59%;
+    --admin-accent-ink: 239 84% 80%;
+    --admin-accent-foreground: 0 0% 100%;
+
+    --destructive: 0 70% 65%;
+    --destructive-foreground: 165.5 47.5% 12%;
+
+    --border: 162 22% 26%;
+    --input: 162 22% 26%;
+    --ring: 239 84% 67%;
+
+    --sidebar-background: 165.5 47.5% 12%;
+    --sidebar-foreground: 41.5 44.8% 94.3%;
+    --sidebar-primary: 243 75% 59%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 164 25% 22%;
+    --sidebar-accent-foreground: 41.5 44.8% 94.3%;
+    --sidebar-border: 162 22% 26%;
+    --sidebar-ring: 239 84% 67%;
   }
 }
 
@@ -225,6 +345,15 @@ All colors MUST be HSL.
 }
 
 @layer utilities {
+  /* C-10: the 11px step exists only as an uppercase overline that repeats the
+     adjacent label. Everything else floors at 12px (`text-xs`). */
+  .text-overline {
+    font-size: 11px;
+    line-height: 1rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
   /* Utility to completely hide scrollbars while preserving scroll functionality */
   .no-scrollbar::-webkit-scrollbar,
   .scrollbar-none::-webkit-scrollbar {
@@ -420,6 +549,14 @@ All colors MUST be HSL.
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* C-30: looping or decorative utilities stop; progress spinners stay so a
+     loading state is still recognisable. Transitions are left alone. */
+  .animate-ping,
+  .animate-pulse,
+  .animate-bounce,
+  .animate-fade-in {
+    animation: none !important;
+  }
   .skeleton-shimmer {
     animation: none;
     background-image: none;
@@ -443,6 +580,17 @@ All colors MUST be HSL.
   }
   .ww-dots i {
     opacity: 0.7;
+  }
+}
+
+/* C-14: icon-only controls get a 44px hit area on touch pointers. Text
+   controls get theirs from the component variants; this covers page-level
+   icon buttons and icon links that are not a `Button`. */
+@media (pointer: coarse) {
+  button:has(> svg:only-child),
+  a:has(> svg:only-child) {
+    min-height: 2.75rem;
+    min-width: 2.75rem;
   }
 }
 

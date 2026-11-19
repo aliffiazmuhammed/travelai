@@ -9,12 +9,12 @@ import { cn } from '@/lib/utils';
  * looks the same across pages and reloads without inventing artwork.
  */
 const TONES = [
-  'bg-teal-600',
-  'bg-sky-700',
-  'bg-indigo-600',
-  'bg-emerald-700',
-  'bg-amber-600',
-  'bg-rose-600',
+  'bg-agency-accent',
+  'bg-info',
+  'bg-admin-accent',
+  'bg-success',
+  'bg-warning',
+  'bg-destructive',
 ] as const;
 
 function toneFor(seed: string): string {
@@ -52,8 +52,8 @@ export const AgencyLogoTile = ({
   return (
     <div
       className={cn(
-        'grid shrink-0 place-items-center overflow-hidden rounded-2xl border border-border/60 text-lg font-bold text-white shadow-xs',
-        showLogo ? 'bg-white dark:bg-slate-900' : toneFor(label),
+        'grid shrink-0 place-items-center overflow-hidden rounded-2xl border border-border/60 text-xl font-bold text-white shadow-xs',
+        showLogo ? 'bg-white dark:bg-background' : toneFor(label),
         className
       )}
     >

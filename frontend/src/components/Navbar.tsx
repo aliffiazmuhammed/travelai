@@ -5,7 +5,9 @@ import { Menu, Sun, Moon, LogOut, UserCircle2, Globe2, FileText, Search, Home, A
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import TravellerCommandMenu, { commandIconFor } from "@/components/traveller/TravellerCommandMenu";
+import { SkipLink } from "@/components/a11y/SkipLink";
 import { useAuth } from "@/context/UserContext";
+import { useTheme } from "@/context/ThemeContext";
 import { useGalleryEnabled } from "@/hooks/useGalleryEnabled";
 import { useAgencyDirectoryEnabled } from "@/hooks/useAgencyDirectoryEnabled";
 import { useEventsEnabled } from "@/hooks/useEventsEnabled";
@@ -28,10 +30,10 @@ const EnquiryBadge = ({ unread, proposals }: { unread: number; proposals: number
       title={label}
       aria-label={label}
       className={cn(
-        "ml-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none",
+        "ml-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs font-bold leading-none",
         unread > 0
           ? "bg-primary text-primary-foreground"
-          : "bg-indigo-600 text-white"
+          : "bg-admin-accent text-white"
       )}
     >
       {unread > 0 ? null : <FileText className="h-2.5 w-2.5" />}
@@ -42,9 +44,9 @@ const EnquiryBadge = ({ unread, proposals }: { unread: number; proposals: number
 
 const Navbar = () => {
   const { isAuthenticated, user, logout } = useAuth();
+  const { isDark, toggleMode } = useTheme();
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
-  const [isDark, setIsDark] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   // The navbar sits on every personal page, so the badge is a cheap read on
   // navigation rather than a second live stream (the pages that own one open
@@ -54,21 +56,6 @@ const Navbar = () => {
   // F14: the chip shows the display name (or the email local part without one).
   const displayName =
     user?.name?.trim() || user?.label || user?.email?.split("@")[0] || "Traveler";
-
-  // Synchronize Dark Mode on mount
-  useEffect(() => {
-    const isDarkSaved =
-      localStorage.getItem("travelai_theme") === "dark" ||
-      (!("travelai_theme" in localStorage) &&
-        window.matchMedia("(prefers-color-scheme: dark)").matches);
-
-    setIsDark(isDarkSaved);
-    if (isDarkSaved) {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-  }, []);
 
   // M9 R6/R7: refetch the badge counters when the page changes, and when a
   // page announces the counters moved without navigating (a thread marked read,
@@ -101,18 +88,6 @@ const Navbar = () => {
       window.removeEventListener(ENQUIRY_BADGE_EVENT, refresh);
     };
   }, [isAuthenticated, location.pathname]);
-
-  const toggleTheme = () => {
-    const nextDark = !isDark;
-    setIsDark(nextDark);
-    if (nextDark) {
-      document.documentElement.classList.add("dark");
-      localStorage.setItem("travelai_theme", "dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-      localStorage.setItem("travelai_theme", "light");
-    }
-  };
 
   // ⌘K / Ctrl+K opens the jump menu from anywhere the navbar is mounted.
   useEffect(() => {
@@ -192,7 +167,9 @@ const Navbar = () => {
   };
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border/70 bg-card/85 shadow-xs backdrop-blur-xl">
+    <>
+      <SkipLink />
+      <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border/70 bg-card/85 shadow-xs backdrop-blur-xl">
       <div className="container mx-auto px-4">
         <div className="flex h-16 items-center justify-between gap-3">
           {/* Wordmark */}
@@ -250,12 +227,12 @@ const Navbar = () => {
               type="button"
               variant="ghost"
               size="icon"
-              onClick={toggleTheme}
+              onClick={toggleMode}
               className="h-10 w-10 rounded-xl text-muted-foreground hover:text-foreground"
               aria-label={isDark ? "Switch to light theme" : "Switch to dark theme"}
             >
               {isDark ? (
-                <Sun className="h-4 w-4 text-amber-400" />
+                <Sun className="h-4 w-4 text-warning-ink" />
               ) : (
                 <Moon className="h-4 w-4 text-foreground/70" />
               )}
@@ -283,14 +260,14 @@ const Navbar = () => {
                   )}
                   <Link
                     to="/profile"
-                    className="flex min-h-[40px] items-center gap-2 rounded-full px-1.5 py-1 text-xs font-semibold text-foreground/90 transition-colors hover:bg-muted"
+                    className="flex min-h-[40px] items-center gap-2 rounded-full px-1.5 py-1 text-xs font-semibold text-foreground/90 transition-colors hover:bg-muted coarse:min-h-11"
                     title="Your profile"
                   >
                     <Avatar className="h-8 w-8 shrink-0">
                       {avatarSrc(user?.avatarUrl) && (
                         <AvatarImage src={avatarSrc(user?.avatarUrl)} alt={displayName} />
                       )}
-                      <AvatarFallback className="bg-primary/10 text-[10px] font-bold text-primary">
+                      <AvatarFallback className="bg-primary/10 text-xs font-bold text-primary">
                         {initialsFor(displayName)}
                       </AvatarFallback>
                     </Avatar>
@@ -313,7 +290,7 @@ const Navbar = () => {
                 <>
                   <Link
                     to="/auth"
-                    className="inline-flex min-h-[40px] items-center px-3 text-sm font-semibold text-foreground/80 transition-colors hover:text-foreground"
+                    className="inline-flex min-h-[40px] items-center px-3 text-sm font-semibold text-foreground/80 transition-colors hover:text-foreground coarse:min-h-11"
                   >
                     Sign in
                   </Link>
@@ -368,7 +345,7 @@ const Navbar = () => {
                   >
                     <Search className="h-4 w-4" />
                     Search or jump to…
-                    <kbd className="ml-auto rounded border border-border bg-card px-1.5 py-0.5 font-sans text-[10px] font-medium">
+                    <kbd className="ml-auto rounded border border-border bg-card px-1.5 py-0.5 font-sans text-xs font-medium">
                       ⌘K
                     </kbd>
                   </button>
@@ -403,6 +380,23 @@ const Navbar = () => {
                     })}
                   </div>
 
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-xs font-medium text-muted-foreground">
+                    {[
+                      { label: "Terms", to: "/terms" },
+                      { label: "Privacy", to: "/privacy" },
+                      { label: "Guidelines", to: "/guidelines" },
+                    ].map((link) => (
+                      <Link
+                        key={link.to}
+                        to={link.to}
+                        onClick={() => setIsOpen(false)}
+                        className="py-1 transition-colors hover:text-foreground"
+                      >
+                        {link.label}
+                      </Link>
+                    ))}
+                  </div>
+
                   <div className="h-px bg-border/60" />
 
                   {isAuthenticated ? (
@@ -416,7 +410,7 @@ const Navbar = () => {
                           {avatarSrc(user?.avatarUrl) && (
                             <AvatarImage src={avatarSrc(user?.avatarUrl)} alt={displayName} />
                           )}
-                          <AvatarFallback className="bg-primary/10 text-[11px] font-bold text-primary">
+                          <AvatarFallback className="bg-primary/10 text-xs font-bold text-primary">
                             {initialsFor(displayName)}
                           </AvatarFallback>
                         </Avatar>
@@ -424,7 +418,7 @@ const Navbar = () => {
                           <div className="truncate text-xs font-bold text-foreground">
                             {displayName}
                           </div>
-                          <div className="truncate text-[10px] text-muted-foreground">
+                          <div className="truncate text-xs text-muted-foreground">
                             {user?.email}
                           </div>
                         </div>
@@ -491,10 +485,11 @@ const Navbar = () => {
         isAuthenticated={isAuthenticated}
         isDark={isDark}
         travelHandle={user?.handle}
-        onToggleTheme={toggleTheme}
+        onToggleTheme={toggleMode}
         onSignOut={logout}
       />
     </nav>
+    </>
   );
 };
 

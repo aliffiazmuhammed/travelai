@@ -13,6 +13,7 @@ import {
 import { projectKeyState } from '../collab/chatKeys.js';
 import { roleOf } from '../collab/access.js';
 import { isAgencyActive } from '../agency/status.js';
+import { assertPasswordPolicy } from './passwordPolicy.js';
 
 export function parseBackupInput<T>(schema: z.ZodType<T>, input: unknown): T {
   const result = schema.safeParse(input);
@@ -114,7 +115,7 @@ export async function changePersonalPassword(userId: string, currentPassword: un
   if (backup && (!metadata || metadata.generation !== backup.generation || metadata.revision !== backup.expectedRevision)) throw conflict();
   await verifyPassword(user, String(currentPassword ?? ''));
   const next = String(newPassword ?? '');
-  if (next.length < 6) throw new AppError('Your new password must be at least 6 characters.', 400);
+  assertPasswordPolicy(next, { email: user.email, name: user.name });
   if (next === String(currentPassword ?? '')) throw new AppError('Your new password must be different from the current one.', 400);
   const update = credentialUpdate(user, await bcrypt.hash(next, 12), false);
   if (metadata && backup) Object.assign(update.$set, {

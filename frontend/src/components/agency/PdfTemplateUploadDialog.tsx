@@ -193,7 +193,7 @@ const PdfTemplateUploadDialog: React.FC<PdfTemplateUploadDialogProps> = ({
                   <SelectItem value="internal">Internal desk copy</SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              <p className="text-xs text-muted-foreground">
                 Client templates never expose cost or markup fields.
               </p>
             </div>
@@ -212,7 +212,7 @@ const PdfTemplateUploadDialog: React.FC<PdfTemplateUploadDialogProps> = ({
 
           <div className="space-y-2">
             <Label htmlFor="pdf-template-file">PDF design</Label>
-            <div className="rounded-2xl border border-dashed border-slate-300 p-4 text-center dark:border-slate-700">
+            <div className="rounded-2xl border border-dashed border-border p-4 text-center">
               <input
                 ref={fileInputRef}
                 id="pdf-template-file"
@@ -224,11 +224,11 @@ const PdfTemplateUploadDialog: React.FC<PdfTemplateUploadDialogProps> = ({
                   chooseFile(event.target.files?.[0] ?? null)
                 }
               />
-              <FileText className="mx-auto h-6 w-6 text-slate-400" />
-              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+              <FileText className="mx-auto h-6 w-6 text-muted-foreground" />
+              <p className="mt-2 text-xs text-muted-foreground">
                 {file ? (
                   <>
-                    <span className="font-medium text-slate-700 dark:text-slate-200">
+                    <span className="font-medium text-muted-foreground">
                       {file.name}
                     </span>{' '}
                     · {formatBytes(file.size)}
@@ -269,7 +269,7 @@ const PdfTemplateUploadDialog: React.FC<PdfTemplateUploadDialogProps> = ({
             Cancel
           </Button>
           <Button
-            className="bg-teal-600 hover:bg-teal-700"
+            className="bg-agency-accent hover:bg-agency-accent/90"
             onClick={() => void handleContinue()}
             disabled={continuing || !file}
           >

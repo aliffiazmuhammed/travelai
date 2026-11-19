@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { catchAsync } from '../utils/catchAsync.js';
 import {
+  inspectPasswordResetToken,
   requestPersonalPasswordReset,
   resetPasswordWithToken,
 } from '../services/auth/passwordReset.js';
@@ -14,6 +15,18 @@ const SAME_ANSWER =
 export const forgotPassword = catchAsync(async (req: Request, res: Response) => {
   await requestPersonalPasswordReset(req.body?.email);
   res.status(200).json({ success: true, message: SAME_ANSWER });
+});
+
+/**
+ * POST /api/auth/reset-password/validate — read-only link preflight.
+ *
+ * The reset page calls this on mount so an expired link is rejected before the
+ * password form is shown. It never consumes the token; a valid answer carries
+ * no account detail beyond "this link can be used".
+ */
+export const validateResetToken = catchAsync(async (req: Request, res: Response) => {
+  await inspectPasswordResetToken(req.body?.token);
+  res.status(200).json({ success: true, valid: true });
 });
 
 /** POST /api/auth/reset-password — consume the link and sign the user in. */

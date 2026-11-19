@@ -293,7 +293,7 @@ const AgencyTemplates: React.FC = () => {
       <AgencyPageHeader
         title="Templates"
         meta={
-          <Badge variant="outline" className="text-[10px]">
+          <Badge variant="outline" className="text-xs">
             {visibleTemplates.length}{' '}
             {visibleTemplates.length === 1 ? 'template' : 'templates'}
           </Badge>
@@ -308,7 +308,7 @@ const AgencyTemplates: React.FC = () => {
           ) : (
             <Badge
               variant="outline"
-              className="gap-1 text-[10px] text-agency-muted"
+              className="gap-1 text-xs text-agency-muted"
             >
               <Lock className="h-3 w-3" />
               Read-only
@@ -374,10 +374,13 @@ const AgencyTemplates: React.FC = () => {
           </CardContent>
         </Card>
       ) : error ? (
-        <Card className="rounded-2xl border-rose-200 bg-agency-panel shadow-none dark:border-rose-900/60">
+        <Card
+          role="alert"
+          className="rounded-2xl border-destructive/30 bg-agency-panel shadow-none dark:border-destructive/20"
+        >
           <CardContent className="space-y-3 py-14 text-center">
-            <AlertTriangle className="mx-auto h-6 w-6 text-rose-500" />
-            <p className="text-sm text-rose-700 dark:text-rose-300">{error}</p>
+            <AlertTriangle className="mx-auto h-6 w-6 text-destructive-ink" />
+            <p className="text-sm text-destructive-ink">{error}</p>
             <Button
               variant="outline"
               size="sm"
@@ -431,8 +434,8 @@ const AgencyTemplates: React.FC = () => {
                       className={cn(
                         'grid h-10 w-10 shrink-0 place-items-center rounded-xl',
                         internal
-                          ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300'
-                          : 'bg-agency-accent-soft text-agency-accent'
+                          ? 'bg-admin-accent/10 text-admin-accent-ink dark:bg-admin-accent/60'
+                          : 'bg-agency-accent-soft text-agency-accent-ink'
                       )}
                     >
                       {internal ? (
@@ -449,7 +452,7 @@ const AgencyTemplates: React.FC = () => {
                         <Badge
                           variant="outline"
                           className={cn(
-                            'text-[9px]',
+                            'text-xs',
                             templateStatusClass(template.status)
                           )}
                         >
@@ -458,14 +461,14 @@ const AgencyTemplates: React.FC = () => {
                         {template.isDefault ? (
                           <Badge
                             variant="outline"
-                            className="border-amber-300 bg-amber-50 text-[9px] text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
+                            className="border-warning/30 bg-warning/10 text-xs text-warning-ink dark:border-warning/40 dark:bg-warning/20"
                           >
                             <Star className="mr-1 h-2.5 w-2.5" />
                             Default
                           </Badge>
                         ) : null}
                       </div>
-                      <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-agency-muted">
+                      <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-agency-muted">
                         {template.description ||
                           (internal
                             ? 'Desk copy with internal estimates.'
@@ -475,28 +478,28 @@ const AgencyTemplates: React.FC = () => {
                   </div>
 
                   <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                    <Badge variant="outline" className="text-[9px]">
+                    <Badge variant="outline" className="text-xs">
                       {templateAudienceLabel(template.audience)}
                     </Badge>
-                    <Badge variant="outline" className="text-[9px]">
+                    <Badge variant="outline" className="text-xs">
                       {templateSourceLabel(template)}
                     </Badge>
                     <Badge
                       variant="outline"
                       className={cn(
-                        'text-[9px]',
+                        'text-xs',
                         template.engine === 'pdf-background'
-                          ? 'border-violet-300 bg-violet-50 text-violet-800 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-300'
+                          ? 'border-accent/30 bg-accent/10 text-accent-ink dark:border-accent/40 dark:bg-accent/40'
                           : undefined
                       )}
                     >
                       {templateEngineLabel(template)}
                     </Badge>
-                    <Badge variant="outline" className="text-[9px]">
+                    <Badge variant="outline" className="text-xs">
                       v{version}
                     </Badge>
                     {template.status === 'active' && template.activeVersion ? (
-                      <span className="text-[10px] text-agency-muted">
+                      <span className="text-xs text-agency-muted">
                         active version
                       </span>
                     ) : null}
@@ -530,12 +533,12 @@ const AgencyTemplates: React.FC = () => {
                       </Button>
                     ) : null}
                     {canManage && template.builtinKey ? (
-                      <span className="text-[10px] text-agency-muted">
+                      <span className="text-xs text-agency-muted">
                         Managed by waytowalk
                       </span>
                     ) : null}
                     {!canManage ? (
-                      <span className="flex items-center gap-1 text-[10px] text-agency-muted">
+                      <span className="flex items-center gap-1 text-xs text-agency-muted">
                         <Lock className="h-3 w-3" />
                         Read-only
                       </span>
@@ -592,7 +595,7 @@ const AgencyTemplates: React.FC = () => {
                   onClick={() => chooseUpload('pdf')}
                   className="flex w-full items-center gap-3 rounded-xl border border-agency-line bg-agency-panel p-4 text-left transition hover:border-agency-accent hover:bg-agency-soft/60"
                 >
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent/10 text-accent-ink dark:bg-accent/60">
                     <FileType2 className="h-5 w-5" />
                   </span>
                   <span>

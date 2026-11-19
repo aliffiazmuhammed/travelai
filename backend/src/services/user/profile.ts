@@ -22,6 +22,7 @@ import bcrypt from 'bcryptjs';
 import User from '../../models/User.js';
 import Trip from '../../models/Trip.js';
 import { AppError } from '../../utils/AppError.js';
+import { assertPasswordPolicy } from '../auth/passwordPolicy.js';
 import { userLabel } from '../collab/comments.js';
 import type { AvatarMimeType } from './avatar.js';
 import { assertAvatarBytes, deleteAvatarFile, sameAvatarStorage, saveAvatar } from './avatar.js';
@@ -326,9 +327,7 @@ export async function changePassword(
   }
 
   const next = String(newPassword ?? '');
-  if (next.length < 6) {
-    throw new AppError('Your new password must be at least 6 characters.', 400);
-  }
+  assertPasswordPolicy(next, { email: user.email, name: user.name });
   if (next === String(currentPassword ?? '')) {
     throw new AppError('Your new password must be different from the current one.', 400);
   }

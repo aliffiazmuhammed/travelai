@@ -10,10 +10,10 @@ import {
   AlertCircle,
   ArrowDown,
   CalendarDays,
-  Copy,
   Leaf,
   Loader2,
   Lock,
+  Plus,
   Sparkles,
   User,
   Users,
@@ -82,6 +82,12 @@ const SharedTrip: React.FC = () => {
       : "";
   const groupLabel = details?.group_type?.trim();
   const seasonLabel = details?.season?.trim();
+  // The payload rewrites day photos to share-scoped URLs, so a crawler that
+  // does run scripts still gets the cover rather than the generic card. The
+  // backend resolver does the same for non-JS crawlers.
+  const coverImage =
+    details?.day_by_day_itinerary?.find((day) => day?.image?.url)?.image?.url ??
+    "/brand/og-default.png";
 
   // Meta tags are written once the real title arrives — never while loading.
   useEffect(() => {
@@ -94,7 +100,10 @@ const SharedTrip: React.FC = () => {
           dayCount > 0
             ? `A ${dayCount}-day itinerary shared on waytowalk. Read-only: budgets and chat stay private.`
             : "An itinerary shared on waytowalk. Read-only: budgets and chat stay private.",
+        image: coverImage,
+        imageAlt: `${title} itinerary`,
         ogType: "article",
+        robots: "noindex, nofollow",
       });
     }
 
@@ -103,15 +112,16 @@ const SharedTrip: React.FC = () => {
       description:
         error || "The link you followed may be invalid or has been revoked.",
       ogType: "website",
+      robots: "noindex, nofollow",
     });
-  }, [loading, trip, title, dayCount, error]);
+  }, [loading, trip, title, dayCount, error, coverImage]);
 
   /**
-   * The public projection exposes no copy endpoint. Share-token pages can only
-   * send a visitor through the existing own-trip path (`/plan`), which is
-   * session-gated and returns them there after sign-in.
+   * The public projection exposes no copy endpoint, so the button must not
+   * promise one. It starts the visitor's own blank planner, which is exactly
+   * what the label says (C-02).
    */
-  const handleTakeCopy = () => navigate(PLAN_PATH);
+  const handleStartOwnTrip = () => navigate(PLAN_PATH);
 
   const scrollToPlan = () => {
     document
@@ -123,7 +133,7 @@ const SharedTrip: React.FC = () => {
     return (
       <div className="flex min-h-screen flex-col bg-background">
         <Navbar />
-        <main className="flex min-h-[60vh] flex-1 flex-col items-center justify-center space-y-4 pt-16">
+        <main id="main-content" tabIndex={-1} className="flex min-h-[60vh] flex-1 flex-col items-center justify-center space-y-4 pt-16">
           <Loader2 className="h-9 w-9 animate-spin text-primary" aria-hidden />
           <div className="space-y-1 text-center">
             <h1 className="text-base font-semibold text-foreground">
@@ -142,7 +152,7 @@ const SharedTrip: React.FC = () => {
     return (
       <div className="flex min-h-screen flex-col bg-background">
         <Navbar />
-        <main className="container mx-auto mt-16 max-w-lg flex-1 px-4 py-16">
+        <main id="main-content" tabIndex={-1} className="container mx-auto mt-16 max-w-lg flex-1 px-4 py-16">
           <div className="space-y-6 rounded-2xl border border-border bg-card p-8 text-center shadow-xs sm:p-12">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
               <AlertCircle className="h-7 w-7" aria-hidden />
@@ -173,11 +183,11 @@ const SharedTrip: React.FC = () => {
     <div className="flex min-h-screen flex-col bg-background">
       <Navbar />
 
-      <main className="flex-1 pt-16">
+      <main id="main-content" tabIndex={-1} className="flex-1 pt-16">
         {/* Public-view framing: one slim strip under the navbar. */}
         <div className="border-b border-primary/10 bg-primary/[0.05]">
           <div className="container mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5">
-            <p className="inline-flex items-center gap-2 text-[11px] font-semibold text-foreground sm:text-xs">
+            <p className="inline-flex items-center gap-2 text-xs font-semibold text-foreground sm:text-xs">
               <Lock className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />
               Public view · Shared itinerary
             </p>
@@ -185,8 +195,8 @@ const SharedTrip: React.FC = () => {
               className="hidden h-4 w-px bg-border sm:block"
               aria-hidden
             />
-            <p className="text-[11px] leading-relaxed text-muted-foreground sm:text-xs">
-              You're seeing a read-only copy. Budgets and chat stay private.
+            <p className="text-xs leading-relaxed text-muted-foreground sm:text-xs">
+              You're seeing a read-only view. Budgets and chat stay private.
             </p>
           </div>
         </div>
@@ -195,7 +205,7 @@ const SharedTrip: React.FC = () => {
           <div className="space-y-8 sm:space-y-10">
             <header className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start lg:gap-10 xl:grid-cols-[minmax(0,1fr)_32rem]">
               <div className="min-w-0">
-                <h1 className="break-words font-display text-3xl font-semibold leading-[1.08] tracking-tight text-foreground sm:text-4xl lg:text-[3.1rem]">
+                <h1 className="break-words font-display text-3xl font-semibold leading-[1.08] tracking-tight text-foreground sm:text-4xl lg:text-5xl">
                   {title}
                 </h1>
 
@@ -238,7 +248,7 @@ const SharedTrip: React.FC = () => {
                       Shared by the trip owner
                     </p>
                     <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                      A read-only copy of the plan they shared. Nothing else
+                      A read-only view of the plan they shared. Nothing else
                       travels with the link.
                     </p>
                   </div>
@@ -247,11 +257,11 @@ const SharedTrip: React.FC = () => {
                 <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                   <Button
                     type="button"
-                    onClick={handleTakeCopy}
+                    onClick={handleStartOwnTrip}
                     className="h-11 w-full gap-2 rounded-xl px-5 text-xs font-semibold sm:w-auto"
                   >
-                    <Copy className="h-4 w-4" aria-hidden />
-                    <span>Take a copy</span>
+                    <Plus className="h-4 w-4" aria-hidden />
+                    <span>Start planning your own trip</span>
                   </Button>
                   <Button
                     type="button"
@@ -279,18 +289,15 @@ const SharedTrip: React.FC = () => {
               aria-label="Shared itinerary"
               className="min-w-0 scroll-mt-20"
             >
-              {/* The shared itinerary opens with its own workspace title/stat
-                  strip. The public page owns the heading (and the plan's budget
-                  stays private), so that strip is suppressed at the wrapper
-                  level — the component's file and props are untouched. The
-                  bottom padding is trimmed so the prompt below follows on. */}
-              <div className="[&>div>*:first-child]:hidden [&>div]:pb-0">
-                <ItineraryDisplay
-                  data={details}
-                  customRoutes={trip.customRoutes}
-                  onNewPlan={() => navigate(PLAN_PATH)}
-                />
-              </div>
+              {/* The public page owns the heading and the share contract keeps
+                  budgets private, so the workspace header and Expenses tab are
+                  suppressed by `publicView` rather than wrappers/CSS. */}
+              <ItineraryDisplay
+                data={details}
+                customRoutes={trip.customRoutes}
+                onNewPlan={() => navigate(PLAN_PATH)}
+                publicView
+              />
 
               <div className="mt-4 rounded-2xl border border-dashed border-border bg-card/70 px-4 py-3.5 sm:px-5">
                 <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs leading-relaxed text-muted-foreground">
@@ -301,10 +308,10 @@ const SharedTrip: React.FC = () => {
                   <span>Want your own version?</span>
                   <button
                     type="button"
-                    onClick={handleTakeCopy}
+                    onClick={handleStartOwnTrip}
                     className="rounded font-semibold text-primary underline decoration-primary/40 underline-offset-4 transition-colors hover:decoration-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   >
-                    Take a copy
+                    Start planning your own trip
                   </button>
                   <span>and change anything.</span>
                 </p>

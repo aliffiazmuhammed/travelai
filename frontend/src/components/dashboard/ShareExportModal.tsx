@@ -7,16 +7,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmDestructive } from "@/components/ui/confirm-destructive";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -435,7 +426,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
               <Globe className="w-3.5 h-3.5 text-primary" />
               <span>Public Read-Only Web Link</span>
             </span>
-            <span className="text-[10px] text-muted-foreground">
+            <span className="text-xs text-muted-foreground">
               {shareId ? "Active" : canManageShare ? "Not yet generated" : "Owner only"}
             </span>
           </div>
@@ -447,6 +438,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                 <Input
                   readOnly
                   value={publicUrl}
+                  aria-label="Public share link"
                   className="h-10 text-xs bg-card rounded-xl border-border/80 font-mono"
                 />
                 <Button
@@ -456,7 +448,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                   onClick={handleCopyLink}
                   className="h-10 px-3.5 rounded-xl text-xs font-bold gap-1.5 shrink-0"
                 >
-                  {copiedLink ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
+                  {copiedLink ? <Check className="w-4 h-4 text-success-ink" /> : <Copy className="w-4 h-4" />}
                   <span>{copiedLink ? "Copied" : "Copy"}</span>
                 </Button>
               </div>
@@ -466,7 +458,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                 variant="ghost"
                 disabled={revokingShare}
                 onClick={() => setConfirmRevokeOpen(true)}
-                className="h-8 px-2.5 rounded-lg text-[11px] font-bold text-destructive hover:text-destructive gap-1.5"
+                className="h-8 px-2.5 rounded-lg text-xs font-bold text-destructive hover:text-destructive gap-1.5"
               >
                 {revokingShare ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -493,11 +485,11 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
             </Button>
             )
           ) : (
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
+            <p className="text-xs text-muted-foreground leading-relaxed">
               Only the trip owner can create or see the share link.
             </p>
           )}
-          <p className="text-[11px] text-muted-foreground leading-relaxed">
+          <p className="text-xs text-muted-foreground leading-relaxed">
             Anyone with this link can view the interactive itinerary without needing an account.
           </p>
         </div>
@@ -507,11 +499,11 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
           <div className="p-4 rounded-2xl bg-muted/30 border border-border/70 space-y-3">
             {hiddenOn && (
               <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 space-y-1">
-                <p className="flex items-center gap-1.5 text-[11px] font-bold text-foreground">
+                <p className="flex items-center gap-1.5 text-xs font-bold text-foreground">
                   <AlertTriangle className="w-3.5 h-3.5 text-destructive" />
                   Hidden from the gallery{hiddenOn ? ` since ${hiddenOn}` : ""}
                 </p>
-                <p className="text-[11px] leading-relaxed text-muted-foreground">
+                <p className="text-xs leading-relaxed text-muted-foreground">
                   {moderation?.source === "admin"
                     ? "A platform admin de-listed this trip after a review."
                     : "This trip was hidden automatically after several reports."}{" "}
@@ -522,7 +514,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                 </p>
                 <Link
                   to="/guidelines"
-                  className="inline-block text-[11px] font-bold text-primary hover:underline"
+                  className="inline-block text-xs font-bold text-primary hover:underline"
                 >
                   Read the community guidelines
                 </Link>
@@ -534,7 +526,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                 <Globe className="w-3.5 h-3.5 text-primary" />
                 <span>Publish to gallery</span>
               </span>
-              <span className="text-[10px] text-muted-foreground">
+              <span className="text-xs text-muted-foreground">
                 {published
                   ? publishedOn
                     ? `Published ${publishedOn}`
@@ -543,22 +535,22 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
               </span>
             </div>
 
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
+            <p className="text-xs text-muted-foreground leading-relaxed">
               Lists this trip on your public traveler page. The day-by-day places,
               stays, transport and tips become public; budget, expenses, members,
               chat and your email never do.
             </p>
 
             {!handle && (
-              <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
-                <p className="text-[11px] font-bold text-foreground">
+              <div className="rounded-xl border border-warning/30 bg-warning/5 p-3 space-y-2">
+                <p className="text-xs font-bold text-foreground">
                   Choose a traveler handle first
                 </p>
-                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                <p className="text-xs text-muted-foreground leading-relaxed">
                   A published trip needs a public @handle so it has a profile to
                   live on.
                 </p>
-                <Button asChild variant="outline" size="sm" className="h-8 rounded-lg text-[11px] font-bold">
+                <Button asChild variant="outline" size="sm" className="h-8 rounded-lg text-xs font-bold">
                   <Link to="/profile">Open profile settings</Link>
                 </Button>
               </div>
@@ -566,7 +558,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
 
             {/* Exactly what the public card shows */}
             <div className="rounded-2xl border border-border/70 bg-card p-3 space-y-2">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              <p className="text-overline font-bold text-muted-foreground">
                 Public preview
               </p>
               <div className="flex items-center gap-2">
@@ -574,27 +566,27 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                   {user?.avatarUrl && (
                     <AvatarImage src={avatarSrc(user.avatarUrl)} alt={publisherName} />
                   )}
-                  <AvatarFallback className="text-[10px] font-bold bg-primary/10 text-primary">
+                  <AvatarFallback className="text-xs font-bold bg-primary/10 text-primary">
                     {initialsFor(publisherName)}
                   </AvatarFallback>
                 </Avatar>
                 <div className="min-w-0">
                   <p className="text-xs font-bold truncate text-foreground">{publisherName}</p>
-                  <p className="text-[10px] text-muted-foreground truncate">
+                  <p className="text-xs text-muted-foreground truncate">
                     {handle ? `@${handle}` : "No handle yet"}
                   </p>
                 </div>
               </div>
               <div className="space-y-0.5">
                 <p className="text-sm font-black text-foreground leading-snug">{destination}</p>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   {datePreview}
                   {data.season ? ` · ${data.season}` : ""}
                   {data.group_type ? ` · ${data.group_type}` : ""}
                 </p>
               </div>
               {summary.trim() && (
-                <p className="text-[11px] leading-relaxed text-foreground/80 line-clamp-3">
+                <p className="text-xs leading-relaxed text-foreground/80 line-clamp-3">
                   {summary.trim()}
                 </p>
               )}
@@ -603,7 +595,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                   {parsedTags.tags.slice(0, 6).map((tag) => (
                     <span
                       key={tag}
-                      className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary"
+                      className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary"
                     >
                       #{tag}
                     </span>
@@ -625,7 +617,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                 placeholder="What makes this trip worth copying?"
                 className="rounded-xl text-xs resize-none bg-card"
               />
-              <p className="text-right text-[10px] text-muted-foreground">
+              <p className="text-right text-xs text-muted-foreground">
                 {summary.length}/280
               </p>
             </div>
@@ -641,7 +633,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                 placeholder="hills, slow-travel, weekend"
                 className="h-9 rounded-xl text-xs bg-card"
               />
-              <p className="text-[10px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Comma separated, up to 6.
               </p>
             </div>
@@ -651,7 +643,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                 <Label htmlFor="hide-exact-dates" className="text-xs font-bold">
                   Hide exact dates
                 </Label>
-                <p className="text-[10px] text-muted-foreground leading-relaxed">
+                <p className="text-xs text-muted-foreground leading-relaxed">
                   {hideExactDates
                     ? `Shows “${datePreview}” with no start or end date.`
                     : `Shows the exact dates: ${datePreview}.`}
@@ -666,7 +658,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
             </div>
 
             {publishError && (
-              <p className="text-[11px] font-semibold text-destructive">{publishError}</p>
+              <p className="text-xs font-semibold text-destructive">{publishError}</p>
             )}
 
             <div className="flex flex-wrap items-center gap-2">
@@ -693,7 +685,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                   size="sm"
                   disabled={publishBusy}
                   onClick={() => setConfirmUnpublishOpen(true)}
-                  className="h-9 rounded-xl text-[11px] font-bold text-destructive hover:text-destructive gap-1.5"
+                  className="h-9 rounded-xl text-xs font-bold text-destructive hover:text-destructive gap-1.5"
                 >
                   Unpublish
                 </Button>
@@ -702,7 +694,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
               {handle && (
                 <Link
                   to={`/travelers/${handle}`}
-                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline"
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
                 >
                   View traveler page
                   <ExternalLink className="w-3 h-3" />
@@ -732,7 +724,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
             <span className="text-xs font-bold text-primary-foreground">
               {pdfBusy ? "Building PDF..." : "Download PDF"}
             </span>
-            <span className="text-[10px] text-primary-foreground/80">
+            <span className="text-xs text-primary-foreground/80">
               Clean A4 itinerary
             </span>
           </Button>
@@ -745,12 +737,12 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
             className="flex flex-col items-center justify-center p-3 h-auto rounded-2xl border-border/70 hover:border-primary/40 space-y-1.5 text-center"
           >
             <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-              {copiedText ? <Check className="w-4 h-4 text-emerald-500" /> : <FileText className="w-4 h-4" />}
+              {copiedText ? <Check className="w-4 h-4 text-success-ink" /> : <FileText className="w-4 h-4" />}
             </div>
             <span className="text-xs font-bold text-foreground">
               {copiedText ? "Copied Text" : "Copy as Text"}
             </span>
-            <span className="text-[10px] text-muted-foreground">For WhatsApp / Email</span>
+            <span className="text-xs text-muted-foreground">For WhatsApp / Email</span>
           </Button>
 
           {/* Download JSON */}
@@ -760,11 +752,11 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
             onClick={handleDownloadJson}
             className="flex flex-col items-center justify-center p-3 h-auto rounded-2xl border-border/70 hover:border-primary/40 space-y-1.5 text-center"
           >
-            <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-success/10 text-success-ink flex items-center justify-center">
               <Download className="w-4 h-4" />
             </div>
             <span className="text-xs font-bold text-foreground">Export JSON</span>
-            <span className="text-[10px] text-muted-foreground">Full data backup</span>
+            <span className="text-xs text-muted-foreground">Full data backup</span>
           </Button>
         </div>
 
@@ -775,7 +767,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
             variant="ghost"
             size="sm"
             onClick={handlePrint}
-            className="rounded-xl text-[11px] font-semibold text-muted-foreground hover:text-foreground gap-1.5"
+            className="rounded-xl text-xs font-semibold text-muted-foreground hover:text-foreground gap-1.5"
           >
             <Printer className="w-3.5 h-3.5" />
             <span>Or use browser print (full screen view)</span>
@@ -784,63 +776,31 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
       </DialogContent>
 
       {/* Revoking is irreversible for the old URL — confirm before taking it down */}
-      <AlertDialog open={confirmRevokeOpen} onOpenChange={setConfirmRevokeOpen}>
-        <AlertDialogContent className="rounded-3xl max-w-md w-[92vw] sm:w-full p-5 sm:p-6">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-lg font-bold">Stop sharing this trip?</AlertDialogTitle>
-            <AlertDialogDescription className="text-xs leading-relaxed">
-              The public link stops working immediately. Anyone who bookmarked
-              the old URL loses access, and you will need to create a new link
-              to share it again.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="gap-2 sm:gap-0">
-            <AlertDialogCancel className="rounded-xl text-xs font-semibold h-10">
-              Keep sharing
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(event) => {
-                event.preventDefault();
-                void handleRevokeShare();
-              }}
-              className="rounded-xl text-xs font-bold h-10 bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {revokingShare ? "Revoking…" : "Stop sharing"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDestructive
+        open={confirmRevokeOpen}
+        onOpenChange={setConfirmRevokeOpen}
+        icon={Share2}
+        title="Stop sharing this trip?"
+        description="The public link stops working immediately. Anyone who bookmarked the old URL loses access, and you will need to create a new link to share it again."
+        confirmLabel="Stop sharing"
+        cancelLabel="Keep sharing"
+        onConfirm={handleRevokeShare}
+        busy={revokingShare}
+      />
 
       {/* Unpublishing hides the trip from the gallery immediately; the unlisted
           share link, if any, keeps working. */}
-      <AlertDialog open={confirmUnpublishOpen} onOpenChange={setConfirmUnpublishOpen}>
-        <AlertDialogContent className="rounded-3xl max-w-md w-[92vw] sm:w-full p-5 sm:p-6">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-lg font-bold">
-              Remove this trip from the gallery?
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-xs leading-relaxed">
-              Your traveler page stops listing it right away. If you have an
-              unlisted share link it keeps working, and you can publish the trip
-              again at any time.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="gap-2 sm:gap-0">
-            <AlertDialogCancel className="rounded-xl text-xs font-semibold h-10">
-              Keep it published
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(event) => {
-                event.preventDefault();
-                void handleSaveGallery(false);
-              }}
-              className="rounded-xl text-xs font-bold h-10 bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {publishBusy ? "Unpublishing…" : "Unpublish"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDestructive
+        open={confirmUnpublishOpen}
+        onOpenChange={setConfirmUnpublishOpen}
+        icon={Globe}
+        title="Remove this trip from the gallery?"
+        description="Your traveler page stops listing it right away. If you have an unlisted share link it keeps working, and you can publish the trip again at any time."
+        confirmLabel="Unpublish"
+        cancelLabel="Keep it published"
+        onConfirm={() => handleSaveGallery(false)}
+        busy={publishBusy}
+      />
     </Dialog>
   );
 };

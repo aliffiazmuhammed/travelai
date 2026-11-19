@@ -42,6 +42,16 @@ export interface IUser extends Document {
   mustChangePassword: boolean;
   lastLoginAt?: Date;
   passwordChangedAt?: Date;
+  /**
+   * Phase 1B consent evidence: the exact policy versions accepted at sign-up
+   * and the server time the record was written. Absent for accounts created
+   * before consent shipped, which is expected, not an error.
+   */
+  acceptedTermsVersion?: string;
+  acceptedPrivacyVersion?: string;
+  acceptedAt?: Date;
+  /** Optional marketing permission, deliberately separate from legal consent. */
+  marketingOptIn?: boolean;
   /** Bumped on password change/disable; stale JWTs fail on the next request. */
   tokenVersion: number;
   /** Personal-only encrypted recovery metadata; never part of publicUser. */
@@ -150,6 +160,12 @@ const userSchema = new Schema<IUser>(
     },
     lastLoginAt: { type: Date },
     passwordChangedAt: { type: Date },
+    // Phase 1B: versioned consent, written once at sign-up. Never select these
+    // into a public projection — they are account evidence, not profile data.
+    acceptedTermsVersion: { type: String, maxlength: 40 },
+    acceptedPrivacyVersion: { type: String, maxlength: 40 },
+    acceptedAt: { type: Date },
+    marketingOptIn: { type: Boolean, default: undefined },
     tokenVersion: {
       type: Number,
       default: 0,

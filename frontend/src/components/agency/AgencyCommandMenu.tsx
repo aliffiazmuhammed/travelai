@@ -75,9 +75,9 @@ const AgencyCommandMenu: React.FC<AgencyCommandMenuProps> = ({
                 value={`${section.label} ${item.label}`}
                 onSelect={() => go(item.to)}
               >
-                <item.icon className="mr-2 h-4 w-4 text-slate-400" aria-hidden />
+                <item.icon className="mr-2 h-4 w-4 text-muted-foreground" aria-hidden />
                 {item.label}
-                <ArrowRight className="ml-auto h-3.5 w-3.5 text-slate-300" aria-hidden />
+                <ArrowRight className="ml-auto h-3.5 w-3.5 text-muted-foreground" aria-hidden />
               </CommandItem>
             ))}
           </CommandGroup>
@@ -89,7 +89,7 @@ const AgencyCommandMenu: React.FC<AgencyCommandMenuProps> = ({
               value="plan a trip with ai new trip"
               onSelect={() => go('/agency/trips/new')}
             >
-              <Sparkles className="mr-2 h-4 w-4 text-teal-600" aria-hidden />
+              <Sparkles className="mr-2 h-4 w-4 text-agency-accent-ink" aria-hidden />
               Plan a trip with AI
             </CommandItem>
           ) : null}
@@ -98,7 +98,7 @@ const AgencyCommandMenu: React.FC<AgencyCommandMenuProps> = ({
               value="new event create event"
               onSelect={() => go('/agency/events?new=1')}
             >
-              <CalendarPlus className="mr-2 h-4 w-4 text-slate-400" aria-hidden />
+              <CalendarPlus className="mr-2 h-4 w-4 text-muted-foreground" aria-hidden />
               New event
             </CommandItem>
           ) : null}
@@ -107,12 +107,12 @@ const AgencyCommandMenu: React.FC<AgencyCommandMenuProps> = ({
               value="new client add client"
               onSelect={() => go('/agency/clients?new=1')}
             >
-              <UserRound className="mr-2 h-4 w-4 text-slate-400" aria-hidden />
+              <UserRound className="mr-2 h-4 w-4 text-muted-foreground" aria-hidden />
               New client
             </CommandItem>
           ) : null}
           <CommandItem value="workspace home travelai" onSelect={() => go('/')}>
-            <Home className="mr-2 h-4 w-4 text-slate-400" aria-hidden />
+            <Home className="mr-2 h-4 w-4 text-muted-foreground" aria-hidden />
             waytowalk home
           </CommandItem>
           <CommandItem
@@ -122,18 +122,18 @@ const AgencyCommandMenu: React.FC<AgencyCommandMenuProps> = ({
               onSignOut();
             }}
           >
-            <LogOut className="mr-2 h-4 w-4 text-slate-400" aria-hidden />
+            <LogOut className="mr-2 h-4 w-4 text-muted-foreground" aria-hidden />
             Sign out of agency
           </CommandItem>
         </CommandGroup>
       </CommandList>
-      <div className="flex items-center justify-between gap-3 border-t border-slate-200 px-3 py-2 text-[11px] text-slate-500 dark:border-slate-800 dark:text-slate-400">
+      <div className="flex items-center justify-between gap-3 border-t border-border px-3 py-2 text-xs text-muted-foreground">
         <span className="inline-flex items-center gap-1.5">
           <Building2 className="h-3 w-3" aria-hidden />
           Agency workspace
         </span>
         <span className="inline-flex items-center gap-1">
-          <kbd className="rounded border border-slate-200 bg-slate-50 px-1 py-0.5 font-sans text-[10px] dark:border-slate-700 dark:bg-slate-800">
+          <kbd className="rounded border border-border bg-muted px-1 py-0.5 font-sans text-xs">
             Esc
           </kbd>
           to close

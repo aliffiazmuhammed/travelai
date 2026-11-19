@@ -6,11 +6,11 @@ import { cn } from '@/lib/utils';
 type Tone = 'teal' | 'sky' | 'violet' | 'amber' | 'slate';
 
 const toneClasses: Record<Tone, string> = {
-  teal: 'bg-teal-50 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300',
-  sky: 'bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300',
-  violet: 'bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300',
-  amber: 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300',
-  slate: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
+  teal: 'bg-agency-accent-soft text-agency-accent-ink',
+  sky: 'bg-info/10 text-info-ink dark:bg-info/20',
+  violet: 'bg-accent/10 text-accent-ink dark:bg-accent/50',
+  amber: 'bg-warning/10 text-warning-ink dark:bg-warning/20',
+  slate: 'bg-muted text-muted-foreground',
 };
 
 /**
@@ -39,7 +39,7 @@ export const AgencyStatTile: React.FC<{
         <Icon className="h-5 w-5" />
       </span>
       <div className="min-w-0">
-        <p className="text-[1.75rem] font-semibold leading-none tabular-nums text-agency-ink">
+        <p className="text-3xl font-semibold leading-none tabular-nums text-agency-ink">
           {value === undefined || value === null ? '—' : value}
         </p>
         <p className="mt-1 text-sm font-medium text-agency-ink">{label}</p>

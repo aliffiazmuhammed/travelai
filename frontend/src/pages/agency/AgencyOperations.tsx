@@ -51,15 +51,15 @@ const AUDIT_FILTERS: { value: string; label: string }[] = [
 ];
 
 const LEVEL_STYLES: Record<AgencyUsageLevel, string> = {
-  ok: 'bg-teal-500',
-  warning: 'bg-amber-500',
-  over: 'bg-rose-500',
+  ok: 'bg-agency-accent',
+  warning: 'bg-warning',
+  over: 'bg-destructive',
 };
 
 const LEVEL_TEXT: Record<AgencyUsageLevel, string> = {
-  ok: 'text-teal-700 dark:text-teal-400',
-  warning: 'text-amber-700 dark:text-amber-400',
-  over: 'text-rose-700 dark:text-rose-400',
+  ok: 'text-agency-accent-ink',
+  warning: 'text-warning-ink',
+  over: 'text-destructive-ink',
 };
 
 function formatMb(bytes: number): string {
@@ -118,7 +118,15 @@ const UsageBar: React.FC<UsageBarProps> = ({
           {usedText} / {capText}
         </span>
       </div>
-      <div className="h-2 w-full overflow-hidden rounded-full bg-agency-soft">
+      <div
+        role="meter"
+        aria-label={`${label} usage`}
+        aria-valuemin={0}
+        aria-valuemax={Math.max(cap, 1)}
+        aria-valuenow={Math.min(used, Math.max(cap, 1))}
+        aria-valuetext={`${usedText} of ${capText} used (${percent}%)`}
+        className="h-2 w-full overflow-hidden rounded-full bg-agency-soft"
+      >
         <div
           className={cn('h-full rounded-full transition-all', LEVEL_STYLES[level])}
           style={{ width: `${percent}%` }}
@@ -233,7 +241,7 @@ const AgencyOperations: React.FC = () => {
       <AgencyPageHeader
         title="Operations"
         meta={
-          <Badge variant="outline" className="text-[10px]">
+          <Badge variant="outline" className="text-xs">
             <ShieldCheck className="mr-1 h-3 w-3" />
             Owner / admin
           </Badge>
@@ -267,7 +275,7 @@ const AgencyOperations: React.FC = () => {
             <Gauge className="h-4 w-4" />
             Plan usage
             {usage ? (
-              <Badge variant="outline" className="text-[10px] capitalize">
+              <Badge variant="outline" className="text-xs capitalize">
                 {usage.plan.tierId}
               </Badge>
             ) : null}
@@ -328,7 +336,7 @@ const AgencyOperations: React.FC = () => {
             <CardTitle className="flex items-center gap-2 text-sm font-semibold text-agency-ink">
               <ScrollText className="h-4 w-4" />
               Audit log
-              <Badge variant="outline" className="text-[10px]">
+              <Badge variant="outline" className="text-xs">
                 {total}
               </Badge>
             </CardTitle>
@@ -363,7 +371,7 @@ const AgencyOperations: React.FC = () => {
             <div className="max-h-[min(32rem,calc(100dvh-24rem))] overflow-auto rounded-lg border border-agency-line">
               <table className="w-full min-w-[640px] text-left text-xs">
                 <thead className="sticky top-0 z-10 bg-agency-panel">
-                  <tr className="border-b border-agency-line text-[11px] font-semibold uppercase tracking-[0.06em] text-agency-muted">
+                  <tr className="border-b border-agency-line text-overline font-semibold text-agency-muted">
                     <th className="py-2.5 pl-3 pr-3 font-semibold">Time</th>
                     <th className="py-2.5 pr-3 font-semibold">Actor</th>
                     <th className="py-2.5 pr-3 font-semibold">Action</th>
@@ -386,7 +394,7 @@ const AgencyOperations: React.FC = () => {
                         {actorLabel(entry)}
                       </td>
                       <td className="py-2.5 pr-3">
-                        <Badge variant="outline" className="text-[10px]">
+                        <Badge variant="outline" className="text-xs">
                           {actionLabel(entry.action)}
                         </Badge>
                       </td>

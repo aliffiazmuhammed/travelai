@@ -4,7 +4,7 @@ import { queryClient } from '../lib/queryClient';
 import { keyBackup } from '../lib/chatKeyBackup';
 import { api } from '../services/api';
 
-import type { User, AuthContextType, ProfileUpdateInput } from '@/types';
+import type { User, AuthContextType, ProfileUpdateInput, SignupConsent } from '@/types';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -113,7 +113,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     await api.changePassword(currentPassword, newPassword);
   };
 
-  const signup = async (email: string, password: string, name?: string) => {
+  const signup = async (
+    email: string,
+    password: string,
+    name?: string,
+    consent?: SignupConsent
+  ) => {
     setLoading(true);
     setError(null);
     try {
@@ -124,6 +129,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           email: email.trim().toLowerCase(),
           password,
           ...(name?.trim() ? { name: name.trim() } : {}),
+          ...(consent ? { consent } : {}),
         }),
         credentials: 'include',
       });

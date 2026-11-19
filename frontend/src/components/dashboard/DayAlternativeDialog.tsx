@@ -43,7 +43,7 @@ export const DayAlternativeDialog: React.FC<DayAlternativeDialogProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="rounded-2xl max-w-lg w-[94vw] sm:w-full p-5 sm:p-6 max-h-[92vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-lg font-black flex items-center gap-2">
+          <DialogTitle className="text-xl font-black flex items-center gap-2">
             <Wand2 className="w-4 h-4 text-primary" />
             Indoor Alternative for Day {dayNumber}
           </DialogTitle>
@@ -58,7 +58,7 @@ export const DayAlternativeDialog: React.FC<DayAlternativeDialogProps> = ({
           {suggestion?.weather && (
             <div className="flex items-center gap-2 flex-wrap">
               <WeatherBadge day={suggestion.weather} />
-              <span className="text-[11px] text-muted-foreground font-semibold">
+              <span className="text-xs text-muted-foreground font-semibold">
                 {new Date(`${suggestion.weather.date}T00:00:00Z`).toDateString()}
               </span>
             </div>
@@ -104,7 +104,7 @@ export const DayAlternativeDialog: React.FC<DayAlternativeDialogProps> = ({
                           {activity.title || activity.name || `Activity ${index + 1}`}
                         </span>
                         {activity.time && (
-                          <Badge variant="outline" className="text-[10px] px-2 py-0 border-border/60">
+                          <Badge variant="outline" className="text-xs px-2 py-0 border-border/60">
                             <Clock className="w-2.5 h-2.5 mr-1 text-primary" />
                             {activity.time}
                           </Badge>
@@ -112,7 +112,7 @@ export const DayAlternativeDialog: React.FC<DayAlternativeDialogProps> = ({
                         {activity.approx_cost != null && Number(activity.approx_cost) > 0 && (
                           <Badge
                             variant="secondary"
-                            className="text-[10px] px-2 py-0 text-emerald-600 dark:text-emerald-400"
+                            className="text-xs px-2 py-0 text-success-ink"
                           >
                             {formatMoney(Number(activity.approx_cost))}
                           </Badge>
@@ -124,7 +124,7 @@ export const DayAlternativeDialog: React.FC<DayAlternativeDialogProps> = ({
                         </p>
                       )}
                       {activity.location_name && (
-                        <p className="text-[11px] font-semibold text-muted-foreground inline-flex items-center gap-1">
+                        <p className="text-xs font-semibold text-muted-foreground inline-flex items-center gap-1">
                           <MapPin className="w-2.5 h-2.5 text-primary" />
                           {activity.location_name}
                         </p>

@@ -75,23 +75,29 @@ const dark: Palette = {
 
 export const palettes = { light, dark } as const;
 
-/** Registered names from @expo-google-fonts/cabin in the root layout. */
+/** Registered names from @expo-google-fonts/manrope in the root layout. */
 export const fontFamily = {
-  regular: 'Cabin_400Regular',
-  medium: 'Cabin_500Medium',
-  semibold: 'Cabin_600SemiBold',
-  bold: 'Cabin_700Bold',
+  regular: 'Manrope_400Regular',
+  medium: 'Manrope_500Medium',
+  semibold: 'Manrope_600SemiBold',
+  bold: 'Manrope_700Bold',
 } as const;
 
+/** Registered display face from @expo-google-fonts/newsreader in the root layout. */
+export const displayFamily = 'Newsreader_600SemiBold';
+
 export const typography = {
-  display: { fontFamily: fontFamily.bold, fontSize: 34, lineHeight: 40, letterSpacing: -0.6 },
-  title: { fontFamily: fontFamily.semibold, fontSize: 26, lineHeight: 32, letterSpacing: -0.4 },
-  heading: { fontFamily: fontFamily.semibold, fontSize: 20, lineHeight: 26, letterSpacing: -0.2 },
+  display: { fontFamily: displayFamily, fontSize: 34, lineHeight: 40, letterSpacing: -0.6 },
+  title: { fontFamily: displayFamily, fontSize: 26, lineHeight: 32, letterSpacing: -0.4 },
+  heading: { fontFamily: displayFamily, fontSize: 20, lineHeight: 26, letterSpacing: -0.2 },
   body: { fontFamily: fontFamily.regular, fontSize: 16, lineHeight: 24 },
   bodyStrong: { fontFamily: fontFamily.semibold, fontSize: 16, lineHeight: 24 },
   label: { fontFamily: fontFamily.semibold, fontSize: 14, lineHeight: 20, letterSpacing: 0.1 },
   caption: { fontFamily: fontFamily.regular, fontSize: 12, lineHeight: 16 },
   button: { fontFamily: fontFamily.semibold, fontSize: 16, lineHeight: 20, letterSpacing: 0.2 },
+  /** The logotype stays in the UI face; display headings are serif. */
+  wordmark: { fontFamily: fontFamily.bold, fontSize: 20, lineHeight: 26, letterSpacing: -0.2 },
+  wordmarkLarge: { fontFamily: fontFamily.bold, fontSize: 26, lineHeight: 32, letterSpacing: -0.4 },
 } as const;
 
 export const space = {

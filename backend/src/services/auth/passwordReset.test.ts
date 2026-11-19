@@ -6,6 +6,7 @@ import PasswordResetToken from '../../models/PasswordResetToken.js';
 import { env } from '../../config/env.js';
 import {
   PASSWORD_RESET_TTL_MINUTES,
+  inspectPasswordResetToken,
   mintResetToken,
   resetLinkFor,
   resetPasswordWithToken,
@@ -123,7 +124,7 @@ test('a short new password never burns the link', async () => {
 
   await assert.rejects(
     () => resetPasswordWithToken('a'.repeat(43), 'short'),
-    (error: any) => error.statusCode === 400 && /at least 6 characters/.test(error.message)
+    (error: any) => error.statusCode === 400 && /at least 8 characters/.test(error.message)
   );
   assert.equal(lookedUp, false);
 });
@@ -160,6 +161,65 @@ test('a token that belongs to a closed account is rejected', async () => {
     (error: any) => error.statusCode === 400 && error.message === INVALID_LINK
   );
   assert.equal(claimed, false);
+});
+
+test('preflight rejects an empty link without touching the database', async () => {
+  let lookedUp = false;
+  (PasswordResetToken as any).findOne = () => {
+    lookedUp = true;
+    return query(null);
+  };
+
+  await assert.rejects(
+    () => inspectPasswordResetToken('   '),
+    (error: any) => error.statusCode === 400 && error.message === INVALID_LINK
+  );
+  assert.equal(lookedUp, false);
+});
+
+test('preflight accepts a live token without claiming it', async () => {
+  let claimed = false;
+  const tokenFilters: any[] = [];
+  (PasswordResetToken as any).findOne = (filter: any) => {
+    tokenFilters.push(filter);
+    return query({ _id: 'tok-1', userId: 'u1' });
+  };
+  (User as any).findOne = (filter: any) => {
+    assert.deepEqual(filter, { _id: 'u1', accountType: 'personal', status: 'active' });
+    return query({ _id: 'u1', email: 'meera@example.com', tokenVersion: 0 });
+  };
+  (PasswordResetToken as any).findOneAndUpdate = async () => {
+    claimed = true;
+    return null;
+  };
+
+  const raw = mintResetToken();
+  await inspectPasswordResetToken(raw);
+
+  assert.equal(tokenFilters.length, 1);
+  assert.equal(tokenFilters[0].tokenHash, resetTokenHash(raw));
+  assert.equal(tokenFilters[0].usedAt, null);
+  assert.ok(tokenFilters[0].expiresAt.$gt instanceof Date);
+  assert.equal(claimed, false);
+});
+
+test('preflight treats a used or expired link as invalid', async () => {
+  (PasswordResetToken as any).findOne = () => query(null);
+
+  await assert.rejects(
+    () => inspectPasswordResetToken(mintResetToken()),
+    (error: any) => error.statusCode === 400 && error.message === INVALID_LINK
+  );
+});
+
+test('preflight rejects a live token whose account is closed', async () => {
+  (PasswordResetToken as any).findOne = () => query({ _id: 'tok-1', userId: 'u-closed' });
+  (User as any).findOne = () => query(null);
+
+  await assert.rejects(
+    () => inspectPasswordResetToken(mintResetToken()),
+    (error: any) => error.statusCode === 400 && error.message === INVALID_LINK
+  );
 });
 
 test('reusing the current password is refused before the token is claimed', async () => {

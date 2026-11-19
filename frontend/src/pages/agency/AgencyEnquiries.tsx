@@ -54,6 +54,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
+import { Field } from '@/components/ui/field';
 import { AdminPagination } from '@/components/admin/AdminPagination';
 import { AgencyEmptyState } from '@/components/agency/AgencyEmptyState';
 import { AgencyPageHeader } from '@/components/agency/AgencyPageHeader';
@@ -181,27 +182,27 @@ const EnquiryDetail: React.FC<EnquiryDetailProps> = ({
   <div className="space-y-5">
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
-        <h2 className="text-lg font-semibold text-agency-ink">
+        <h2 className="text-xl font-semibold text-agency-ink">
           {enquiry.contact.name}
         </h2>
         <Badge
           variant="outline"
           className={cn(
-            'text-[10px]',
+            'text-xs',
             agencyEnquiryStatusBadgeClass(enquiry.status)
           )}
         >
           {AGENCY_ENQUIRY_STATUS_LABELS[enquiry.status]}
         </Badge>
         {enquiry.package ? (
-          <Badge variant="secondary" className="text-[10px]">
+          <Badge variant="secondary" className="text-xs">
             {enquiry.package.title}
           </Badge>
         ) : null}
         {enquiry.proposals?.lastDeclinedAt ? (
           <Badge
             variant="outline"
-            className="gap-1 border-rose-300 bg-rose-50 text-[10px] text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300"
+            className="gap-1 border-destructive/30 bg-destructive/10 text-xs text-destructive-ink dark:border-destructive/40 dark:bg-destructive/20"
           >
             <XCircle className="h-2.5 w-2.5" />
             Proposal declined {formatAgencyDate(enquiry.proposals.lastDeclinedAt)}
@@ -222,7 +223,7 @@ const EnquiryDetail: React.FC<EnquiryDetailProps> = ({
     <div className="grid gap-2 rounded-xl border border-agency-line p-3 text-xs sm:grid-cols-2">
       <a
         href={`mailto:${enquiry.contact.email}`}
-        className="inline-flex items-center gap-1.5 text-agency-ink/80 hover:text-agency-accent"
+        className="inline-flex items-center gap-1.5 text-agency-ink/80 hover:text-agency-accent-ink"
       >
         <Mail className="h-3.5 w-3.5 text-agency-muted" />
         {enquiry.contact.email}
@@ -230,7 +231,7 @@ const EnquiryDetail: React.FC<EnquiryDetailProps> = ({
       {enquiry.contact.phone ? (
         <a
           href={`tel:${enquiry.contact.phone}`}
-          className="inline-flex items-center gap-1.5 text-agency-ink/80 hover:text-agency-accent"
+          className="inline-flex items-center gap-1.5 text-agency-ink/80 hover:text-agency-accent-ink"
         >
           <Phone className="h-3.5 w-3.5 text-agency-muted" />
           {enquiry.contact.phone}
@@ -262,28 +263,28 @@ const EnquiryDetail: React.FC<EnquiryDetailProps> = ({
 
     <div className="space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="flex items-center gap-1.5 text-[11px] font-medium text-agency-muted">
+        <p className="flex items-center gap-1.5 text-xs font-medium text-agency-muted">
           <MessageSquare className="h-3.5 w-3.5" />
           Conversation
         </p>
         {enquiry.unread.agency > 0 ? (
-          <Badge variant="secondary" className="text-[10px]">
+          <Badge variant="secondary" className="text-xs">
             {enquiry.unread.agency} unread
           </Badge>
         ) : enquiry.replyCount > 0 ? (
-          <span className="text-[10px] text-agency-muted">
+          <span className="text-xs text-agency-muted">
             {enquiry.replyCount} {enquiry.replyCount === 1 ? 'reply' : 'replies'}
           </span>
         ) : null}
       </div>
 
       {detailLoading ? (
-        <div className="flex items-center justify-center gap-2 rounded-xl border border-agency-line py-10 text-[11px] text-agency-muted">
+        <div className="flex items-center justify-center gap-2 rounded-xl border border-agency-line py-10 text-xs text-agency-muted">
           <Loader2 className="h-4 w-4 animate-spin" />
           Loading the thread…
         </div>
       ) : detailError ? (
-        <p className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-[11px] font-medium text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200">
+        <p className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs font-medium text-destructive-ink dark:border-destructive/40 dark:bg-destructive/20">
           {detailError}
         </p>
       ) : (
@@ -303,7 +304,7 @@ const EnquiryDetail: React.FC<EnquiryDetailProps> = ({
       )}
 
       {enquiry.conversationExpiresAt ? (
-        <p className="text-[10px] text-agency-muted">
+        <p className="text-xs text-agency-muted">
           The traveller's private guest link works until{' '}
           {formatAgencyDate(enquiry.conversationExpiresAt)}.
         </p>
@@ -311,7 +312,7 @@ const EnquiryDetail: React.FC<EnquiryDetailProps> = ({
     </div>
 
     {enquiry.status === 'lost' && enquiry.lostReason ? (
-      <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200">
+      <div className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive-ink dark:border-destructive/40 dark:bg-destructive/20">
         <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         <span>
           <span className="font-semibold">Lost:</span> {enquiry.lostReason}
@@ -319,7 +320,7 @@ const EnquiryDetail: React.FC<EnquiryDetailProps> = ({
       </div>
     ) : null}
 
-    <div className="space-y-1 text-[11px] text-agency-muted">
+    <div className="space-y-1 text-xs text-agency-muted">
       <p className="font-medium text-agency-ink/80">Timeline</p>
       {enquiry.repliedAt ? <p>Replied {formatAgencyDate(enquiry.repliedAt)}</p> : null}
       {enquiry.convertedAt ? (
@@ -340,7 +341,7 @@ const EnquiryDetail: React.FC<EnquiryDetailProps> = ({
             onValueChange={(value) => onChangeStatus(value as AgencyEnquiryStatus)}
             disabled={busy !== null}
           >
-            <SelectTrigger className="h-8 w-[150px] text-xs">
+            <SelectTrigger className="h-8 w-[150px] text-xs" aria-label="Enquiry status">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -387,7 +388,7 @@ const EnquiryDetail: React.FC<EnquiryDetailProps> = ({
               onValueChange={onAssign}
               disabled={busy !== null}
             >
-              <SelectTrigger className="h-8 w-[180px] text-xs">
+              <SelectTrigger className="h-8 w-[180px] text-xs" aria-label="Assign this enquiry">
                 <SelectValue placeholder="Assign to…" />
               </SelectTrigger>
               <SelectContent>
@@ -406,7 +407,7 @@ const EnquiryDetail: React.FC<EnquiryDetailProps> = ({
           {enquiry.client ? (
             <Badge
               variant="outline"
-              className="gap-1 border-teal-300 bg-teal-50 text-[10px] text-teal-800 dark:border-teal-900 dark:bg-teal-950/40 dark:text-teal-300"
+              className="gap-1 border-agency-accent/30 bg-agency-accent-soft text-xs text-agency-accent-ink"
             >
               <BriefcaseBusiness className="h-3 w-3" />
               {enquiry.client.name}
@@ -456,7 +457,7 @@ const EnquiryDetail: React.FC<EnquiryDetailProps> = ({
           )}
         </div>
         {!quoteHref ? (
-          <p className="text-[11px] text-agency-muted">
+          <p className="text-xs text-agency-muted">
             {enquiry.client
               ? enquiry.package
                 ? 'No client trip is linked to this lead yet. Starting one opens a copy of the package plan with these dates, ready to quote.'
@@ -468,7 +469,7 @@ const EnquiryDetail: React.FC<EnquiryDetailProps> = ({
         ) : null}
       </div>
     ) : (
-      <p className="rounded-xl border border-dashed border-agency-line p-3 text-[11px] text-agency-muted">
+      <p className="rounded-xl border border-dashed border-agency-line p-3 text-xs text-agency-muted">
         Viewers can read the inbox. Ask an owner, admin or planner to reply,
         claim or quote a lead.
       </p>
@@ -923,21 +924,21 @@ const AgencyEnquiries: React.FC = () => {
       value: summary ? String(summary.byStatus.new) : '—',
       hint: 'Waiting for a first reply',
       icon: Inbox,
-      iconClass: 'text-sky-600 dark:text-sky-400',
+      iconClass: 'text-info-ink',
     },
     {
       label: 'Open leads',
       value: summary ? String(summary.open) : '—',
       hint: 'New, replied or quoted',
       icon: MessageSquare,
-      iconClass: 'text-amber-600 dark:text-amber-400',
+      iconClass: 'text-warning-ink',
     },
     {
       label: 'Replied this week',
       value: summary ? String(summary.repliedThisWeek) : '—',
       hint: 'Rolling 7 days',
       icon: CheckCircle2,
-      iconClass: 'text-teal-600 dark:text-teal-400',
+      iconClass: 'text-agency-accent-ink',
     },
     {
       label: 'Conversion rate',
@@ -946,7 +947,7 @@ const AgencyEnquiries: React.FC = () => {
         ? `${summary.byStatus.won} won of ${summary.total}`
         : 'Won ÷ all leads',
       icon: Trophy,
-      iconClass: 'text-violet-600 dark:text-violet-400',
+      iconClass: 'text-accent-ink',
     },
   ];
 
@@ -959,10 +960,10 @@ const AgencyEnquiries: React.FC = () => {
           <>
             {liveMode === 'live' ? (
               <span
-                className="inline-flex items-center gap-1.5 rounded-full border border-teal-200 bg-teal-50 px-2.5 py-1 text-[10px] font-medium text-teal-700 dark:border-teal-900 dark:bg-teal-950/40 dark:text-teal-300"
+                className="inline-flex items-center gap-1.5 rounded-full border border-agency-accent/30 bg-agency-accent-soft px-2.5 py-1 text-xs font-medium text-agency-accent-ink"
                 title="New leads and replies appear here as they arrive"
               >
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-teal-500" />
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-agency-accent" />
                 Live
               </span>
             ) : null}
@@ -990,14 +991,14 @@ const AgencyEnquiries: React.FC = () => {
       >
         {summaryCards.map(({ label, value, hint, icon: Icon, iconClass }) => (
           <div key={label} className="bg-agency-panel px-4 py-3.5">
-            <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.06em] text-agency-muted">
+            <p className="flex items-center gap-1.5 text-overline font-medium text-agency-muted">
               <Icon className={cn('h-3.5 w-3.5', iconClass)} />
               {label}
             </p>
             <p className="mt-1.5 text-2xl font-semibold leading-none tabular-nums text-agency-ink">
               {value}
             </p>
-            <p className="mt-1 text-[11px] text-agency-muted">{hint}</p>
+            <p className="mt-1 text-xs text-agency-muted">{hint}</p>
           </div>
         ))}
       </section>
@@ -1019,14 +1020,14 @@ const AgencyEnquiries: React.FC = () => {
                   : summary?.byStatus[option.value],
             }))}
           />
-          <p className="text-[11px] tabular-nums text-agency-muted">
+          <p className="text-xs tabular-nums text-agency-muted">
             {total} {total === 1 ? 'lead' : 'leads'}
           </p>
         </div>
 
       {error ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 p-4">
-          <p className="text-xs font-medium text-rose-700 dark:text-rose-300">{error}</p>
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 p-4">
+          <p className="text-xs font-medium text-destructive-ink">{error}</p>
           <Button
             type="button"
             size="sm"
@@ -1037,9 +1038,15 @@ const AgencyEnquiries: React.FC = () => {
           </Button>
         </div>
       ) : loading ? (
-        <div className="flex items-center justify-center gap-2 py-16 text-xs text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Opening the inbox…
+        <div role="status" className="space-y-2 p-3">
+          <span className="sr-only">Opening the inbox…</span>
+          {Array.from({ length: 5 }).map((_, row) => (
+            <div
+              key={row}
+              aria-hidden="true"
+              className="h-20 rounded-xl border border-border/60 skeleton-shimmer"
+            />
+          ))}
         </div>
       ) : enquiries.length === 0 ? (
         <AgencyEmptyState
@@ -1064,15 +1071,16 @@ const AgencyEnquiries: React.FC = () => {
           <Table
             className="min-w-[1024px] table-fixed"
             containerClassName="max-h-[min(34rem,calc(100dvh-24rem))] min-h-[16rem] overflow-y-auto"
+            scrollLabel="Enquiries table"
           >
             <TableHeader className="sticky top-0 z-10 bg-agency-panel">
               <TableRow className="hover:bg-transparent">
-                <TableHead className="h-10 w-[25%] px-3 text-[11px] font-semibold uppercase tracking-[0.06em] text-agency-muted">Traveller</TableHead>
-                <TableHead className="h-10 w-[27%] px-3 text-[11px] font-semibold uppercase tracking-[0.06em] text-agency-muted">Trip or package</TableHead>
-                <TableHead className="h-10 w-[128px] px-3 text-[11px] font-semibold uppercase tracking-[0.06em] text-agency-muted">Status</TableHead>
-                <TableHead className="h-10 w-[148px] px-3 text-[11px] font-semibold uppercase tracking-[0.06em] text-agency-muted">Owner</TableHead>
-                <TableHead className="h-10 w-[104px] px-3 text-[11px] font-semibold uppercase tracking-[0.06em] text-agency-muted">Proposal</TableHead>
-                <TableHead className="h-10 w-[120px] px-3 text-[11px] font-semibold uppercase tracking-[0.06em] text-agency-muted">Last activity</TableHead>
+                <TableHead className="h-10 w-[25%] px-3 text-overline font-semibold text-agency-muted">Traveller</TableHead>
+                <TableHead className="h-10 w-[27%] px-3 text-overline font-semibold text-agency-muted">Trip or package</TableHead>
+                <TableHead className="h-10 w-[128px] px-3 text-overline font-semibold text-agency-muted">Status</TableHead>
+                <TableHead className="h-10 w-[148px] px-3 text-overline font-semibold text-agency-muted">Owner</TableHead>
+                <TableHead className="h-10 w-[104px] px-3 text-overline font-semibold text-agency-muted">Proposal</TableHead>
+                <TableHead className="h-10 w-[120px] px-3 text-overline font-semibold text-agency-muted">Last activity</TableHead>
                 <TableHead className="h-10 w-11 px-2 text-right">
                   <span className="sr-only">Open</span>
                 </TableHead>
@@ -1105,43 +1113,43 @@ const AgencyEnquiries: React.FC = () => {
                   >
                     <TableCell className="px-3 py-3">
                       <div className="flex items-center gap-2.5">
-                        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-agency-accent-soft text-[11px] font-bold text-agency-accent">
+                        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-agency-accent-soft text-xs font-bold text-agency-accent-ink">
                           {enquiry.contact.name.trim().slice(0, 1).toUpperCase() || 'L'}
                         </span>
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
                             <span
                               className={cn(
-                                'truncate text-[13px] text-agency-ink',
+                                'truncate text-sm text-agency-ink',
                                 unread > 0 ? 'font-semibold' : 'font-medium'
                               )}
                             >
                               {enquiry.contact.name}
                             </span>
                             {unread > 0 ? (
-                              <span className="inline-flex h-4 min-w-[1rem] shrink-0 items-center justify-center rounded-full bg-agency-accent px-1 text-[10px] font-semibold text-white">
+                              <span className="inline-flex h-4 min-w-[1rem] shrink-0 items-center justify-center rounded-full bg-agency-accent px-1 text-xs font-semibold text-agency-accent-foreground">
                                 {unread}
                               </span>
                             ) : null}
                           </div>
-                          <p className="truncate text-[11px] text-agency-muted">
+                          <p className="truncate text-xs text-agency-muted">
                             {enquiry.contact.email}
                           </p>
                         </div>
                       </div>
                     </TableCell>
                     <TableCell className="px-3 py-3">
-                      <p className="truncate text-[13px] font-medium text-agency-ink">
+                      <p className="truncate text-sm font-medium text-agency-ink">
                         {enquiry.package?.title ?? 'Profile enquiry'}
                       </p>
-                      <p className="truncate text-[11px] text-agency-muted">
+                      <p className="truncate text-xs text-agency-muted">
                         {datesLabel(enquiry)} · {partyLabel(enquiry)}
                         {enquiry.budgetBand
                           ? ` · ${AGENCY_ENQUIRY_BUDGET_LABELS[enquiry.budgetBand]}`
                           : ''}
                       </p>
                       {enquiry.client ? (
-                        <p className="mt-0.5 flex items-center gap-1 truncate text-[11px] font-medium text-agency-accent">
+                        <p className="mt-0.5 flex items-center gap-1 truncate text-xs font-medium text-agency-accent-ink">
                           <BriefcaseBusiness className="h-3 w-3 shrink-0" />
                           {enquiry.client.name}
                         </p>
@@ -1184,7 +1192,7 @@ const AgencyEnquiries: React.FC = () => {
                         <Badge
                           variant="outline"
                           className={cn(
-                            'text-[10px]',
+                            'text-xs',
                             agencyEnquiryStatusBadgeClass(enquiry.status)
                           )}
                         >
@@ -1232,7 +1240,7 @@ const AgencyEnquiries: React.FC = () => {
                       {enquiry.proposals?.lastDeclinedAt ? (
                         <Badge
                           variant="outline"
-                          className="gap-1 border-rose-300 bg-rose-50 text-[10px] text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300"
+                          className="gap-1 border-destructive/30 bg-destructive/10 text-xs text-destructive-ink dark:border-destructive/40 dark:bg-destructive/20"
                           title={`Traveller declined the proposal on ${formatAgencyDate(
                             enquiry.proposals.lastDeclinedAt
                           )}`}
@@ -1242,11 +1250,11 @@ const AgencyEnquiries: React.FC = () => {
                         </Badge>
                       ) : enquiry.proposals && enquiry.proposals.count > 0 ? (
                         <>
-                          <Badge variant="outline" className="text-[10px]">
+                          <Badge variant="outline" className="text-xs">
                             {enquiry.proposals.count} sent
                           </Badge>
                           {enquiry.proposals.lastAt ? (
-                            <p className="mt-0.5 text-[11px] text-agency-muted">
+                            <p className="mt-0.5 text-xs text-agency-muted">
                               {formatAgencyDate(enquiry.proposals.lastAt)}
                             </p>
                           ) : null}
@@ -1259,7 +1267,7 @@ const AgencyEnquiries: React.FC = () => {
                       <p className="text-xs font-medium text-agency-ink">
                         {stamp ? formatAgencyDate(stamp) : '—'}
                       </p>
-                      <p className="text-[11px] text-agency-muted">
+                      <p className="text-xs text-agency-muted">
                         {enquiry.lastMessageAt
                           ? enquiry.lastMessageBy === 'agency'
                             ? 'You replied'
@@ -1356,6 +1364,14 @@ const AgencyEnquiries: React.FC = () => {
               workspace and can be cleared by reopening the lead.
             </DialogDescription>
           </DialogHeader>
+          {lostTarget ? (
+            <div className="rounded-xl border border-border/70 bg-muted/40 px-3 py-2.5 text-xs leading-5 text-muted-foreground">
+              <span className="font-semibold text-foreground">
+                {lostTarget.contact.name}
+              </span>
+              {lostTarget.package ? <> · {lostTarget.package.title}</> : null}
+            </div>
+          ) : null}
           <div className="flex flex-wrap gap-1.5">
             {LOST_REASON_PRESETS.map((preset) => (
               <button
@@ -1363,7 +1379,7 @@ const AgencyEnquiries: React.FC = () => {
                 type="button"
                 onClick={() => setLostReason(preset)}
                 className={cn(
-                  'rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors',
+                  'rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors coarse:min-h-11 coarse:px-4',
                   lostReason === preset
                     ? 'border-destructive/40 bg-destructive/10 text-destructive'
                     : 'border-border/70 text-muted-foreground hover:text-foreground'
@@ -1373,13 +1389,24 @@ const AgencyEnquiries: React.FC = () => {
               </button>
             ))}
           </div>
-          <Textarea
-            value={lostReason}
-            onChange={(event) => setLostReason(event.target.value)}
-            placeholder="Budget, dates, chose another agency…"
-            maxLength={200}
-            rows={3}
-          />
+          <Field
+            id="enquiry-lost-reason"
+            label="Why is this enquiry lost?"
+            hint="Shown on the enquiry timeline. Up to 200 characters."
+            required
+          >
+            {(control) => (
+              <Textarea
+                {...control}
+                name="lostReason"
+                value={lostReason}
+                onChange={(event) => setLostReason(event.target.value)}
+                placeholder="Budget, dates, chose another agency…"
+                maxLength={200}
+                rows={3}
+              />
+            )}
+          </Field>
           <DialogFooter>
             <Button
               type="button"

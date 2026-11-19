@@ -321,7 +321,7 @@ export default function ExploreScreen() {
       >
         <View style={styles.page}>
           <View style={styles.topRow}>
-            <AppText variant="heading" tone="primary" style={styles.wordmark}>
+            <AppText variant="wordmark" tone="primary">
               waytowalk
             </AppText>
             <Pressable

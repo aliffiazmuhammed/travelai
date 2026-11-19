@@ -14,6 +14,7 @@ import invitesRoutes from './routes/invites.routes.js';
 import geoRoutes from './routes/geo.routes.js';
 import travelersRoutes from './routes/travelers.routes.js';
 import exploreRoutes from './routes/explore.routes.js';
+import imagesRoutes from './routes/images.routes.js';
 import eventsRoutes from './routes/events.routes.js';
 import agenciesRoutes from './routes/agencies.routes.js';
 import agencyApplicationsRoutes from './routes/agencyApplications.routes.js';
@@ -47,6 +48,7 @@ import { CSRF_HEADER, issueCsrfCookie, verifyCsrf } from './middleware/csrf.midd
 import { isAllowedCorsOrigin, isSameOriginRequest } from './services/collab/httpOrigins.js';
 import { healthState } from './utils/health.js';
 import { buildCspDirectives } from './config/csp.js';
+import { applyMetaToHtml, resolveHtmlMeta } from './services/seo/shareMeta.js';
 
 const app = express();
 
@@ -252,6 +254,9 @@ app.use('/api/travelers', travelersRoutes);
 // Public gallery listing and trip pages (G3): same rule — anonymous, and every
 // row leaves through the gallery projection rather than a raw trip document.
 app.use('/api/explore', exploreRoutes);
+// Same-origin destination covers (C-21): a narrow proxy for the public photo
+// catalogue, so the browser never depends on the third-party host directly.
+app.use('/api/images', imagesRoutes);
 // Public agency events (M10 E1): dated camps and group trips listed in
 // Explore. Anonymous and projection-only; closed windows keep a readable page.
 app.use('/api/events', eventsRoutes);
@@ -327,6 +332,17 @@ if (agencyStorageProvider() === 'cloudinary') {
 if (shouldServeStatic && frontendDist) {
   console.log(`📦 Serving static frontend files from: ${frontendDist}`);
   app.use(express.static(frontendDist));
+
+  // CSP-safe share metadata (C-20): read the built shell once, then replace the
+  // head tags per request. Chat crawlers (WhatsApp, Slack, iMessage) do not run
+  // JavaScript, so this is the only place they see a real title and image.
+  const shellPath = path.join(frontendDist, 'index.html');
+  let shellTemplate: string | null = null;
+  const readShell = (): string => {
+    if (shellTemplate === null) shellTemplate = fs.readFileSync(shellPath, 'utf8');
+    return shellTemplate;
+  };
+
   // Express 5 compatible SPA fallback (app.use prevents path-to-regexp v8 wildcard syntax error)
   app.use((req, res, next) => {
     if (req.method !== 'GET') {
@@ -335,7 +351,16 @@ if (shouldServeStatic && frontendDist) {
     if (req.path.startsWith('/api')) {
       return res.status(404).json({ success: false, error: `Route ${req.originalUrl} not found` });
     }
-    res.sendFile(path.join(frontendDist, 'index.html'));
+
+    const origin = `${req.protocol}://${req.get('host')}`;
+    void resolveHtmlMeta(req.path, origin)
+      .then((meta) => {
+        res.type('html').send(applyMetaToHtml(readShell(), meta));
+      })
+      .catch(() => {
+        // Metadata must never break a page load; fall back to the plain shell.
+        res.sendFile(shellPath);
+      });
   });
 } else {
   // Default API root message when not serving static frontend

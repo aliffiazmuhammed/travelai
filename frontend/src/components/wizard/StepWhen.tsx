@@ -85,7 +85,7 @@ export const StepWhen: React.FC<StepWhenProps> = ({
                 aria-pressed={isSelected}
                 onClick={() => applyPreset(preset.days)}
                 className={cn(
-                  "inline-flex min-h-[40px] items-center gap-1.5 rounded-full border px-4 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  "inline-flex min-h-[40px] items-center gap-1.5 rounded-full border px-4 text-xs font-medium transition-colors coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   isSelected
                     ? "border-primary/50 bg-primary/10 text-primary"
                     : "border-border/80 bg-card text-foreground/80 hover:border-primary/40 hover:text-foreground"
@@ -127,7 +127,7 @@ export const StepWhen: React.FC<StepWhenProps> = ({
                     <span className="block font-semibold text-foreground">
                       {formatDateWithWeekday(startDate)}
                     </span>
-                    <span className="block text-[11px] text-muted-foreground">
+                    <span className="block text-xs text-muted-foreground">
                       Trip begins
                     </span>
                   </span>
@@ -178,7 +178,7 @@ export const StepWhen: React.FC<StepWhenProps> = ({
                     <span className="block font-semibold text-foreground">
                       {formatDateWithWeekday(endDate)}
                     </span>
-                    <span className="block text-[11px] text-muted-foreground">
+                    <span className="block text-xs text-muted-foreground">
                       Trip concludes
                     </span>
                   </span>
@@ -220,7 +220,7 @@ export const StepWhen: React.FC<StepWhenProps> = ({
               {startDate && formatDateShort(startDate)} – {endDate && formatDate(endDate)}
             </p>
           </div>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1 text-[11px] font-semibold text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1 text-xs font-semibold text-muted-foreground">
             {durationDays <= 3 ? (
               <>
                 <Zap className="h-3 w-3" aria-hidden="true" /> Short break

@@ -88,7 +88,7 @@ export const ConversationThread: React.FC<ConversationThreadProps> = ({
         ) : null}
 
         {messages.length === 0 ? (
-          <p className="flex items-center justify-center gap-1.5 py-6 text-[11px] text-muted-foreground">
+          <p className="flex items-center justify-center gap-1.5 py-6 text-xs text-muted-foreground">
             <MessageSquare className="h-3.5 w-3.5" />
             {emptyHint}
           </p>
@@ -120,13 +120,14 @@ export const ConversationThread: React.FC<ConversationThreadProps> = ({
             value={body}
             onChange={(event) => setBody(event.target.value)}
             placeholder={placeholder}
+            aria-label="Reply message"
             maxLength={MAX_BODY}
             rows={3}
             className="rounded-2xl text-xs"
             disabled={sending}
           />
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[10px] text-muted-foreground">
+            <span className="text-xs text-muted-foreground">
               {body.length}/{MAX_BODY}
             </span>
             <Button
@@ -143,7 +144,7 @@ export const ConversationThread: React.FC<ConversationThreadProps> = ({
               Send message
             </Button>
           </div>
-          {error ? <p className="text-[11px] font-semibold text-destructive">{error}</p> : null}
+          {error ? <p className="text-xs font-semibold text-destructive">{error}</p> : null}
         </form>
       ) : null}
     </div>
@@ -169,13 +170,13 @@ const Bubble: React.FC<{
     >
       <div
         className={cn(
-          'flex flex-wrap items-center gap-1.5 text-[10px]',
+          'flex flex-wrap items-center gap-1.5 text-xs',
           mine ? 'text-primary-foreground/80' : 'text-muted-foreground'
         )}
       >
         <span className="font-bold">{mine ? 'You' : author}</span>
         {label ? (
-          <span className="rounded-full border border-current/30 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide">
+          <span className="rounded-full border border-current/30 px-1.5 py-0.5 text-overline font-bold">
             {label}
           </span>
         ) : null}

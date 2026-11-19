@@ -34,16 +34,6 @@ import {
 } from '@/components/admin/AdminTableFrame';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Dialog,
@@ -52,6 +42,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { ConfirmDestructive } from '@/components/ui/confirm-destructive';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -125,6 +116,8 @@ const AdminAgencyRecord: React.FC = () => {
 
   const [fromUserId, setFromUserId] = useState('');
   const [toUserId, setToUserId] = useState('');
+  /** C-07: tenant ownership transfer is never a single click. */
+  const [transferPhrase, setTransferPhrase] = useState('');
 
   const [statusTarget, setStatusTarget] = useState<PlatformAgencyStatus | null>(null);
   const [removeTarget, setRemoveTarget] = useState<PlatformAgencyMember | null>(null);
@@ -224,6 +217,11 @@ const AdminAgencyRecord: React.FC = () => {
   const nonOwners = useMemo(
     () => (agency?.members ?? []).filter((member) => member.role !== 'owner'),
     [agency]
+  );
+
+  const transferTargetEmail = useMemo(
+    () => nonOwners.find((member) => member.userId === toUserId)?.email ?? '',
+    [nonOwners, toUserId]
   );
 
   const finish = (next: PlatformAgencyDetail) => setAgency(next);
@@ -531,8 +529,8 @@ const AdminAgencyRecord: React.FC = () => {
               size="sm"
               className={`h-9 gap-1.5 rounded-full px-3 text-xs text-white ${
                 agency.status === 'active'
-                  ? 'bg-rose-600 hover:bg-rose-500'
-                  : 'bg-emerald-600 hover:bg-emerald-500'
+                  ? 'bg-destructive hover:bg-destructive/90'
+                  : 'bg-success hover:bg-success/90'
               }`}
               onClick={() =>
                 setStatusTarget(agency.status === 'active' ? 'suspended' : 'active')
@@ -605,7 +603,7 @@ const AdminAgencyRecord: React.FC = () => {
             <Card className="rounded-2xl border-border bg-card shadow-sm">
               <CardHeader className="space-y-1">
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <Building2 className="h-4 w-4 text-indigo-300" aria-hidden />
+                  <Building2 className="h-4 w-4 text-admin-accent-ink" aria-hidden />
                   Tenant
                 </CardTitle>
                 <CardDescription>
@@ -621,7 +619,7 @@ const AdminAgencyRecord: React.FC = () => {
                 <MiniStat label="Billing email" value={agency.billing?.contactEmail ?? '—'} />
                 {agency.billing?.notes ? (
                   <div className="sm:col-span-2 rounded-xl border border-border bg-muted/30 px-3 py-2">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    <p className="text-overline font-semibold text-muted-foreground">
                       Notes
                     </p>
                     <p className="mt-1 whitespace-pre-line text-xs leading-5 text-foreground/80">
@@ -635,7 +633,7 @@ const AdminAgencyRecord: React.FC = () => {
             <Card className="rounded-2xl border-border bg-card shadow-sm">
               <CardHeader className="space-y-1">
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <Crown className="h-4 w-4 text-amber-300" aria-hidden />
+                  <Crown className="h-4 w-4 text-warning-ink" aria-hidden />
                   Owners
                 </CardTitle>
                 <CardDescription>
@@ -668,7 +666,7 @@ const AdminAgencyRecord: React.FC = () => {
                         </span>
                         <Badge
                           variant="outline"
-                          className="border-amber-500/40 bg-amber-500/10 text-[10px] uppercase tracking-wide text-amber-300"
+                          className="border-warning/40 bg-warning/10 text-overline text-warning-ink"
                         >
                           Owner
                         </Badge>
@@ -697,7 +695,7 @@ const AdminAgencyRecord: React.FC = () => {
             <Card className="rounded-2xl border-border bg-card shadow-sm">
               <CardHeader className="space-y-1">
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <Gauge className="h-4 w-4 text-indigo-300" aria-hidden />
+                  <Gauge className="h-4 w-4 text-admin-accent-ink" aria-hidden />
                   Current plan and usage
                 </CardTitle>
                 <CardDescription>
@@ -737,7 +735,7 @@ const AdminAgencyRecord: React.FC = () => {
             <Card className="rounded-2xl border-border bg-card shadow-sm">
               <CardHeader className="space-y-1">
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-300" aria-hidden />
+                  <CheckCircle2 className="h-4 w-4 text-success-ink" aria-hidden />
                   Change plan
                 </CardTitle>
                 <CardDescription>
@@ -812,7 +810,7 @@ const AdminAgencyRecord: React.FC = () => {
                 </p>
                 <Button
                   type="button"
-                  className="h-9 bg-indigo-500 text-white hover:bg-indigo-400"
+                  className="h-9 bg-admin-accent text-admin-accent-foreground hover:bg-admin-accent/90"
                   onClick={() => void applyPlan()}
                   disabled={busy === 'plan' || !planTierId}
                 >
@@ -834,7 +832,7 @@ const AdminAgencyRecord: React.FC = () => {
               <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3 space-y-0">
                 <div className="min-w-0 space-y-1">
                   <CardTitle className="flex items-center gap-2 text-base">
-                    <Globe2 className="h-4 w-4 text-sky-300" aria-hidden />
+                    <Globe2 className="h-4 w-4 text-info-ink" aria-hidden />
                     Public profile
                   </CardTitle>
                   <CardDescription>
@@ -917,7 +915,7 @@ const AdminAgencyRecord: React.FC = () => {
                         <Button
                           type="button"
                           size="sm"
-                          className="h-8 gap-1.5 rounded-full bg-emerald-600 px-3 text-xs text-white hover:bg-emerald-500"
+                          className="h-8 gap-1.5 rounded-full bg-success px-3 text-xs text-white hover:bg-success/90"
                           onClick={() => void restoreProfile()}
                           disabled={busy !== null}
                         >
@@ -929,7 +927,7 @@ const AdminAgencyRecord: React.FC = () => {
                           type="button"
                           size="sm"
                           variant="outline"
-                          className="h-8 gap-1.5 rounded-full border-rose-500/40 px-3 text-xs text-rose-300 hover:bg-rose-500/10 hover:text-rose-200"
+                          className="h-8 gap-1.5 rounded-full border-destructive/40 px-3 text-xs text-destructive-ink hover:bg-destructive/10 hover:text-destructive-ink"
                           onClick={() => {
                             setDirectoryHideReason('');
                             setDirectoryHideTarget({ kind: 'profile' });
@@ -983,7 +981,7 @@ const AdminAgencyRecord: React.FC = () => {
                       <td className="px-4 py-3">
                         <p className="font-medium">{pkg.title || 'Untitled package'}</p>
                         {pkg.hiddenAt ? (
-                          <p className="text-[11px] text-rose-300">
+                          <p className="text-xs text-destructive-ink">
                             Hidden {formatAdminDate(pkg.hiddenAt)}
                             {pkg.hiddenReason ? ` — ${pkg.hiddenReason}` : ''}
                           </p>
@@ -994,10 +992,10 @@ const AdminAgencyRecord: React.FC = () => {
                           variant="outline"
                           className={
                             pkg.hiddenAt
-                              ? 'border-rose-500/40 bg-rose-500/10 text-[10px] text-rose-300'
+                              ? 'border-destructive/40 bg-destructive/10 text-xs text-destructive-ink'
                               : pkg.state === 'published'
-                                ? 'border-emerald-500/40 bg-emerald-500/10 text-[10px] text-emerald-300'
-                                : 'text-[10px] text-muted-foreground'
+                                ? 'border-success/40 bg-success/10 text-xs text-success-ink'
+                                : 'text-xs text-muted-foreground'
                           }
                         >
                           {pkg.hiddenAt ? 'hidden' : pkg.state}
@@ -1015,7 +1013,7 @@ const AdminAgencyRecord: React.FC = () => {
                               type="button"
                               size="sm"
                               variant="ghost"
-                              className="h-8 gap-1.5 rounded-full px-3 text-xs text-emerald-300 hover:bg-emerald-500/10 hover:text-emerald-200"
+                              className="h-8 gap-1.5 rounded-full px-3 text-xs text-success-ink hover:bg-success/10 hover:text-success-ink"
                               onClick={() => void restorePackage(pkg)}
                               disabled={busy !== null}
                             >
@@ -1027,7 +1025,7 @@ const AdminAgencyRecord: React.FC = () => {
                               type="button"
                               size="sm"
                               variant="ghost"
-                              className="h-8 gap-1.5 rounded-full px-3 text-xs text-rose-300 hover:bg-rose-500/10 hover:text-rose-200"
+                              className="h-8 gap-1.5 rounded-full px-3 text-xs text-destructive-ink hover:bg-destructive/10 hover:text-destructive-ink"
                               onClick={() => {
                                 setDirectoryHideReason('');
                                 setDirectoryHideTarget({
@@ -1118,8 +1116,8 @@ const AdminAgencyRecord: React.FC = () => {
                           variant="outline"
                           className={
                             member.status === 'active'
-                              ? 'border-emerald-500/40 bg-emerald-500/10 text-[10px] text-emerald-300'
-                              : 'border-rose-500/40 bg-rose-500/10 text-[10px] text-rose-300'
+                              ? 'border-success/40 bg-success/10 text-xs text-success-ink'
+                              : 'border-destructive/40 bg-destructive/10 text-xs text-destructive-ink'
                           }
                         >
                           {member.status}
@@ -1145,7 +1143,7 @@ const AdminAgencyRecord: React.FC = () => {
                             type="button"
                             size="icon"
                             variant="ghost"
-                            className="h-8 w-8 text-rose-300 hover:bg-rose-500/10 hover:text-rose-200"
+                            className="h-8 w-8 text-destructive-ink hover:bg-destructive/10 hover:text-destructive-ink"
                             onClick={() => setRemoveTarget(member)}
                             title="Remove member"
                             aria-label={`Remove ${member.email}`}
@@ -1163,7 +1161,7 @@ const AdminAgencyRecord: React.FC = () => {
             <Card className="rounded-2xl border-border bg-card shadow-sm">
               <CardHeader className="space-y-1">
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <UserPlus className="h-4 w-4 text-indigo-300" aria-hidden />
+                  <UserPlus className="h-4 w-4 text-admin-accent-ink" aria-hidden />
                   Invite a member
                 </CardTitle>
                 <CardDescription>
@@ -1213,7 +1211,7 @@ const AdminAgencyRecord: React.FC = () => {
                   />
                   <Button
                     type="button"
-                    className="h-9 bg-indigo-500 text-white hover:bg-indigo-400"
+                    className="h-9 bg-admin-accent text-admin-accent-foreground hover:bg-admin-accent/90"
                     onClick={() => void createInvite()}
                     disabled={busy === 'invite' || (inviteKind === 'email' && !inviteEmail.trim())}
                   >
@@ -1243,7 +1241,7 @@ const AdminAgencyRecord: React.FC = () => {
                       </Button>
                     }
                   >
-                    <span className="break-all font-mono text-[11px]">{inviteLink}</span>
+                    <span className="break-all font-mono text-xs">{inviteLink}</span>
                   </AdminNotice>
                 ) : null}
               </CardContent>
@@ -1256,7 +1254,7 @@ const AdminAgencyRecord: React.FC = () => {
             <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3 space-y-0">
               <div className="min-w-0 space-y-1">
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <ClipboardList className="h-4 w-4 text-indigo-300" aria-hidden />
+                  <ClipboardList className="h-4 w-4 text-admin-accent-ink" aria-hidden />
                   Recent platform audit
                 </CardTitle>
                 <CardDescription>
@@ -1288,14 +1286,14 @@ const AdminAgencyRecord: React.FC = () => {
                   {agency.recentAudit.map((event) => (
                     <li key={event._id} className="px-3.5 py-2.5">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <code className="text-xs font-medium text-indigo-300">
+                        <code className="text-xs font-medium text-admin-accent-ink">
                           {event.action}
                         </code>
-                        <span className="text-[11px] tabular-nums text-muted-foreground">
+                        <span className="text-xs tabular-nums text-muted-foreground">
                           {formatAdminDate(event.createdAt)}
                         </span>
                       </div>
-                      <p className="mt-0.5 text-[11px] text-muted-foreground">
+                      <p className="mt-0.5 text-xs text-muted-foreground">
                         {event.actorEmail ?? 'system'} · {event.targetType}
                         {auditSummary(event.metadata)
                           ? ` · ${auditSummary(event.metadata)}`
@@ -1310,140 +1308,65 @@ const AdminAgencyRecord: React.FC = () => {
         ) : null}
       </div>
 
-      <AlertDialog
+      <ConfirmDestructive
         open={statusTarget !== null}
         onOpenChange={(next) => {
           if (!next && busy !== 'status') setStatusTarget(null);
         }}
-      >
-        <AlertDialogContent className="dark rounded-2xl border-border bg-card text-card-foreground">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              {statusTarget === 'suspended' ? (
-                <ShieldOff className="h-4 w-4 text-rose-400" aria-hidden />
-              ) : (
-                <ShieldCheck className="h-4 w-4 text-emerald-400" aria-hidden />
-              )}
-              {statusTarget === 'suspended' ? 'Suspend this tenant?' : 'Reactivate this tenant?'}
-            </AlertDialogTitle>
-            <AlertDialogDescription className="leading-6">
-              {statusTarget === 'suspended'
-                ? 'Agency sign-in, every staff route and every public proposal link will fail closed immediately. Personal accounts and other tenants are unaffected.'
-                : 'Agency staff can sign in again. Previously invalidated sessions stay invalid; users sign in fresh.'}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={busy === 'status'}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={busy === 'status'}
-              onClick={(event) => {
-                event.preventDefault();
-                void changeStatus();
-              }}
-              className={
-                statusTarget === 'suspended'
-                  ? 'bg-rose-600 text-white hover:bg-rose-500'
-                  : 'bg-emerald-600 text-white hover:bg-emerald-500'
-              }
-            >
-              {busy === 'status' ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-              ) : null}
-              {statusTarget === 'suspended' ? 'Suspend tenant' : 'Reactivate tenant'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        tone={statusTarget === 'suspended' ? 'destructive' : 'warning'}
+        icon={statusTarget === 'suspended' ? ShieldOff : ShieldCheck}
+        title={statusTarget === 'suspended' ? 'Suspend this tenant?' : 'Reactivate this tenant?'}
+        description={
+          statusTarget === 'suspended'
+            ? 'Agency sign-in, every staff route and every public proposal link will fail closed immediately. Personal accounts and other tenants are unaffected.'
+            : 'Agency staff can sign in again. Previously invalidated sessions stay invalid; users sign in fresh.'
+        }
+        confirmLabel={statusTarget === 'suspended' ? 'Suspend tenant' : 'Reactivate tenant'}
+        detail={agency ? <>{agency.name}</> : null}
+        onConfirm={changeStatus}
+        busy={busy === 'status'}
+      />
 
-      <AlertDialog
+      <ConfirmDestructive
         open={removeTarget !== null}
         onOpenChange={(next) => {
           if (!next && busy !== 'remove') setRemoveTarget(null);
         }}
-      >
-        <AlertDialogContent className="dark rounded-2xl border-border bg-card text-card-foreground">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <Trash2 className="h-4 w-4 text-rose-400" aria-hidden />
-              Remove this member?
-            </AlertDialogTitle>
-            <AlertDialogDescription className="leading-6">
-              The membership is deleted and the account's current session stops on its next
-              request. The account row remains for a future re-invite. The last owner can
-              never be removed.
-              {removeTarget ? (
-                <span className="mt-2 block break-all text-foreground/80">
-                  {removeTarget.email} · {removeTarget.role}
-                </span>
-              ) : null}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={busy === 'remove'}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={busy === 'remove'}
-              onClick={(event) => {
-                event.preventDefault();
-                void removeMember();
-              }}
-              className="bg-rose-600 text-white hover:bg-rose-500"
-            >
-              {busy === 'remove' ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-              ) : null}
-              Remove member
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        icon={Trash2}
+        title="Remove this member?"
+        description="The membership is deleted and the account's current session stops on its next request. The account row remains for a future re-invite. The last owner can never be removed."
+        confirmLabel="Remove member"
+        detail={removeTarget ? <>{removeTarget.email} · {removeTarget.role}</> : null}
+        onConfirm={removeMember}
+        busy={busy === 'remove'}
+      />
 
-      <AlertDialog
+      <ConfirmDestructive
         open={resetTarget !== null}
         onOpenChange={(next) => {
           if (!next && busy !== 'reset') setResetTarget(null);
         }}
-      >
-        <AlertDialogContent className="dark rounded-2xl border-border bg-card text-card-foreground">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <KeyRound className="h-4 w-4 text-amber-400" aria-hidden />
-              Reset workspace password?
-            </AlertDialogTitle>
-            <AlertDialogDescription className="leading-6">
-              A one-time password is issued and the account must change it at the next
-              sign-in. Every existing session for this agency account is invalidated. A
-              personal account with the same email is never touched.
-              {resetTarget ? (
-                <span className="mt-2 block break-all text-foreground/80">
-                  {resetTarget.email}
-                </span>
-              ) : null}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={busy === 'reset'}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={busy === 'reset'}
-              onClick={(event) => {
-                event.preventDefault();
-                void resetPassword();
-              }}
-              className="bg-amber-600 text-white hover:bg-amber-500"
-            >
-              {busy === 'reset' ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-              ) : null}
-              Issue temporary password
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        tone="warning"
+        icon={KeyRound}
+        title="Reset workspace password?"
+        description="A one-time password is issued and the account must change it at the next sign-in. Every existing session for this agency account is invalidated. A personal account with the same email is never touched."
+        confirmLabel="Issue temporary password"
+        detail={resetTarget ? <>{resetTarget.email}</> : null}
+        onConfirm={resetPassword}
+        busy={busy === 'reset'}
+      />
 
-      <Dialog open={transferOpen} onOpenChange={setTransferOpen}>
-        <DialogContent className="dark rounded-2xl border-border bg-card text-card-foreground sm:max-w-lg">
+      <Dialog
+        open={transferOpen}
+        onOpenChange={(next) => {
+          setTransferOpen(next);
+          if (!next) setTransferPhrase('');
+        }}
+      >
+        <DialogContent className="rounded-2xl border-border bg-card text-card-foreground sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Crown className="h-4 w-4 text-amber-400" aria-hidden />
+              <Crown className="h-4 w-4 text-warning-ink" aria-hidden />
               Transfer ownership
             </DialogTitle>
             <DialogDescription className="leading-6">
@@ -1453,9 +1376,9 @@ const AdminAgencyRecord: React.FC = () => {
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label>Current owner</Label>
+              <Label htmlFor="transfer-from-owner">Current owner</Label>
               <Select value={fromUserId} onValueChange={setFromUserId}>
-                <SelectTrigger className="h-9">
+                <SelectTrigger id="transfer-from-owner" className="h-9">
                   <SelectValue placeholder="Choose an owner" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1468,9 +1391,15 @@ const AdminAgencyRecord: React.FC = () => {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>New owner</Label>
-              <Select value={toUserId} onValueChange={setToUserId}>
-                <SelectTrigger className="h-9">
+              <Label htmlFor="transfer-to-owner">New owner</Label>
+              <Select
+                value={toUserId}
+                onValueChange={(value) => {
+                  setToUserId(value);
+                  setTransferPhrase('');
+                }}
+              >
+                <SelectTrigger id="transfer-to-owner" className="h-9">
                   <SelectValue placeholder="Choose a member" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1482,11 +1411,39 @@ const AdminAgencyRecord: React.FC = () => {
                 </SelectContent>
               </Select>
             </div>
+            {transferTargetEmail ? (
+              <div className="space-y-1.5">
+                <Label htmlFor="transfer-phrase">Type the new owner's email to confirm</Label>
+                <Input
+                  id="transfer-phrase"
+                  value={transferPhrase}
+                  onChange={(event) => setTransferPhrase(event.target.value)}
+                  placeholder={transferTargetEmail}
+                  autoComplete="off"
+                  spellCheck={false}
+                  disabled={busy === 'transfer'}
+                  aria-describedby="transfer-phrase-hint"
+                />
+                <p
+                  id="transfer-phrase-hint"
+                  className="break-all text-xs leading-relaxed text-muted-foreground"
+                >
+                  Type <span className="font-semibold text-foreground">{transferTargetEmail}</span>{" "}
+                  exactly. This cannot be undone from here.
+                </p>
+              </div>
+            ) : null}
             <Button
               type="button"
-              className="w-full bg-amber-600 text-white hover:bg-amber-500"
+              className="w-full bg-warning text-warning-foreground hover:bg-warning/90"
               onClick={() => void transferOwner()}
-              disabled={busy === 'transfer' || !fromUserId || !toUserId}
+              disabled={
+                busy === 'transfer' ||
+                !fromUserId ||
+                !toUserId ||
+                !transferTargetEmail ||
+                transferPhrase.trim().toLowerCase() !== transferTargetEmail.toLowerCase()
+              }
             >
               {busy === 'transfer' ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
@@ -1508,10 +1465,10 @@ const AdminAgencyRecord: React.FC = () => {
           }
         }}
       >
-        <DialogContent className="dark rounded-2xl border-border bg-card text-card-foreground sm:max-w-lg">
+        <DialogContent className="rounded-2xl border-border bg-card text-card-foreground sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <EyeOff className="h-4 w-4 text-rose-400" aria-hidden />
+              <EyeOff className="h-4 w-4 text-destructive-ink" aria-hidden />
               {directoryHideTarget?.kind === 'package'
                 ? 'Hide this package?'
                 : 'Hide this profile?'}
@@ -1538,7 +1495,7 @@ const AdminAgencyRecord: React.FC = () => {
             </div>
             <Button
               type="button"
-              className="w-full bg-rose-600 text-white hover:bg-rose-500"
+              className="w-full bg-destructive text-white hover:bg-destructive/90"
               onClick={() => void confirmDirectoryHide()}
               disabled={busy === 'directory-hide' || !directoryHideReason.trim()}
             >
@@ -1573,7 +1530,7 @@ const MiniStat: React.FC<{ label: string; value: string; mono?: boolean }> = ({
   mono,
 }) => (
   <div className="rounded-xl border border-border bg-muted/30 px-3 py-2">
-    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+    <p className="text-overline font-semibold text-muted-foreground">
       {label}
     </p>
     <p

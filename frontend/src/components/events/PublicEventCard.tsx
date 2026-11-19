@@ -56,7 +56,7 @@ export const PublicEventCard = ({
               <CalendarRange className="h-10 w-10" />
             </div>
           )}
-          <span className="absolute left-3 top-3 rounded-full bg-background/85 px-2.5 py-1 text-[10px] font-bold text-foreground backdrop-blur">
+          <span className="absolute left-3 top-3 rounded-full bg-background/85 px-2.5 py-1 text-xs font-bold text-foreground backdrop-blur">
             {EVENT_KIND_LABELS[event.kind]}
           </span>
         </div>
@@ -75,7 +75,7 @@ export const PublicEventCard = ({
           </p>
         )}
 
-        <div className="space-y-1.5 text-[11px] text-muted-foreground">
+        <div className="space-y-1.5 text-xs text-muted-foreground">
           <p className="inline-flex items-center gap-1.5 font-semibold text-foreground/80">
             <CalendarDays className="h-3.5 w-3.5" />
             {event.dates.label || event.dates.startDate}
@@ -88,7 +88,7 @@ export const PublicEventCard = ({
           )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-3 text-[11px]">
+        <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-3 text-xs">
           <span className="font-bold text-foreground">{eventPriceLabel(event)}</span>
           {spots && (
             <span
@@ -105,7 +105,7 @@ export const PublicEventCard = ({
         </div>
 
         {showAgency && (
-          <div className="flex items-center justify-between gap-2 pt-0.5 text-[11px]">
+          <div className="flex items-center justify-between gap-2 pt-0.5 text-xs">
             <span className="truncate font-semibold text-muted-foreground">
               {event.agency.name}
             </span>

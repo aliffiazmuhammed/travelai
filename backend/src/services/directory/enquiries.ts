@@ -147,6 +147,18 @@ export interface AgencyEnquiryPage {
   nextCursor: string | null;
   hasMore: boolean;
   total: number;
+  /**
+   * Traveller history only: one tally per pill, computed from every own row so
+   * the counts do not shrink as the list pages in.
+   */
+  counts?: OwnEnquiryCounts;
+}
+
+export interface OwnEnquiryCounts {
+  all: number;
+  replied: number;
+  quote: number;
+  open: number;
 }
 
 export interface EnquirySubmissionInput {
@@ -868,6 +880,32 @@ export async function listOwnEnquiries(input: {
     });
   }
 
+  // Pills stay honest across pages: tally every own row once, not just the page
+  // on screen. A proposal only counts while it is still waiting for an answer.
+  // This runs first so the page query below stays the last observed filter.
+  const allRows = (await AgencyEnquiry.find(base)
+    .select('_id status clientId')
+    .lean()) as any[];
+  const proposalCounts = await liveProposalsByEnquiry(allRows, {
+    unansweredOnly: true,
+  });
+  const counts: OwnEnquiryCounts = {
+    all: allRows.length,
+    replied: 0,
+    quote: 0,
+    open: 0,
+  };
+  for (const row of allRows) {
+    if (row.status === 'replied') counts.replied += 1;
+    if (row.status === 'new') counts.open += 1;
+    if (
+      row.status === 'quoted' ||
+      (proposalCounts.get(String(row._id))?.count ?? 0) > 0
+    ) {
+      counts.quote += 1;
+    }
+  }
+
   const [rows, total] = await Promise.all([
     AgencyEnquiry.find({ $and: pageClauses })
       .sort({ createdAt: -1, _id: -1 })
@@ -943,6 +981,7 @@ export async function listOwnEnquiries(input: {
     nextCursor: rows.length > limit && last ? encodeEnquiryCursor(last) : null,
     hasMore: rows.length > limit,
     total,
+    counts,
   };
 }
 

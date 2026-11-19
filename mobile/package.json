@@ -9,10 +9,12 @@
     "ios": "expo start --ios",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "test:chat-recovery": "tsx --test tests/chatKeyBackup.test.ts tests/keyBackupSession.test.ts"
+    "test:chat-recovery": "tsx --test tests/chatKeyBackup.test.ts tests/keyBackupSession.test.ts",
+    "test:auth-policy": "tsx --test tests/passwordPolicy.test.ts"
   },
   "dependencies": {
-    "@expo-google-fonts/cabin": "^0.4.2",
+    "@expo-google-fonts/manrope": "^0.4.3",
+    "@expo-google-fonts/newsreader": "^0.4.1",
     "@expo/metro-runtime": "~58.0.17",
     "@expo/vector-icons": "^15.0.2",
     "@noble/ciphers": "^2.4.0",

@@ -56,7 +56,7 @@ const AssetSelect: React.FC<AssetSelectProps> = ({
 }) => (
   <div className="space-y-1.5">
     {label ? (
-      <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
+      <span className="text-xs font-medium text-muted-foreground">
         {label}
       </span>
     ) : null}
@@ -65,7 +65,7 @@ const AssetSelect: React.FC<AssetSelectProps> = ({
       onValueChange={(next) => onChange(next === NONE_VALUE ? '' : next)}
       disabled={disabled}
     >
-      <SelectTrigger className="h-9 text-xs">
+      <SelectTrigger className="h-9 text-xs" aria-label={label || undefined}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -160,28 +160,28 @@ const TemplateAssetMapping: React.FC<TemplateAssetMappingProps> = ({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 className="text-sm font-semibold">Asset mapping</h3>
-          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+          <p className="text-xs text-muted-foreground">
             Assets are copied into this version. Later changes in Settings
             never alter an approved proposal.
           </p>
         </div>
         <Link
           to="/agency/settings"
-          className="text-[11px] font-medium text-teal-700 hover:underline dark:text-teal-400"
+          className="text-xs font-medium text-agency-accent-ink hover:underline"
         >
           Manage brand assets
         </Link>
       </div>
 
       {assetsLoading ? (
-        <div className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-4 text-xs text-slate-500 dark:border-slate-800">
+        <div className="flex items-center gap-2 rounded-xl border border-border px-3 py-4 text-xs text-muted-foreground">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
           Loading brand assets...
         </div>
       ) : (
         <>
-          <div className="grid gap-3 rounded-2xl border border-slate-200 p-3 dark:border-slate-800 sm:grid-cols-2">
-            <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500 dark:text-slate-400 sm:col-span-2">
+          <div className="grid gap-3 rounded-2xl border border-border p-3 sm:grid-cols-2">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground sm:col-span-2">
               <ImageIcon className="h-3.5 w-3.5" />
               Images
             </div>
@@ -209,7 +209,7 @@ const TemplateAssetMapping: React.FC<TemplateAssetMappingProps> = ({
               noneLabel="No cover image"
               disabled={disabled}
             />
-            <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500 dark:text-slate-400 sm:col-span-2 sm:mt-1">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground sm:col-span-2 sm:mt-1">
               <Type className="h-3.5 w-3.5" />
               Fonts
             </div>
@@ -231,13 +231,13 @@ const TemplateAssetMapping: React.FC<TemplateAssetMappingProps> = ({
             />
           </div>
 
-          <div className="rounded-2xl border border-slate-200 p-3 dark:border-slate-800">
+          <div className="rounded-2xl border border-border p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                <span className="text-xs font-medium text-muted-foreground">
                   Day images
                 </span>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                <p className="text-xs text-muted-foreground">
                   One image per itinerary position, matched as Day 1, Day 2,
                   and so on.
                 </p>
@@ -259,7 +259,7 @@ const TemplateAssetMapping: React.FC<TemplateAssetMappingProps> = ({
             </div>
 
             {dayAssets.length === 0 ? (
-              <p className="mt-2 rounded-xl border border-dashed border-slate-200 px-3 py-4 text-center text-[11px] text-slate-500 dark:border-slate-800 dark:text-slate-400">
+              <p className="mt-2 rounded-xl border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
                 No day images mapped. Add one for each day the template shows a
                 photo.
               </p>
@@ -283,7 +283,7 @@ const TemplateAssetMapping: React.FC<TemplateAssetMappingProps> = ({
                       }
                       disabled={disabled}
                     >
-                      <SelectTrigger className="h-9 text-xs">
+                      <SelectTrigger className="h-9 text-xs" aria-label={`Day for image ${index + 1}`}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -315,7 +315,7 @@ const TemplateAssetMapping: React.FC<TemplateAssetMappingProps> = ({
                       type="button"
                       variant="ghost"
                       size="icon"
-                      className="h-9 w-9 text-slate-400 hover:text-destructive"
+                      className="h-9 w-9 text-muted-foreground hover:text-destructive"
                       onClick={() =>
                         patch({
                           dayAssets: dayAssets.filter(
@@ -337,7 +337,7 @@ const TemplateAssetMapping: React.FC<TemplateAssetMappingProps> = ({
       )}
 
       {!assetsLoading && images.length === 0 && fonts.length === 0 ? (
-        <p className="text-[11px] text-amber-700 dark:text-amber-400">
+        <p className="text-xs text-warning-ink">
           No brand assets are available yet. Upload images and fonts in{' '}
           <Link to="/agency/settings" className="underline">
             Settings

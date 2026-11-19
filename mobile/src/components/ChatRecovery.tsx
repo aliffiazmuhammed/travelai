@@ -33,6 +33,7 @@ export function ChatRecoverySheet({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [confirmReplace, setConfirmReplace] = useState(false);
   const alive = useRef(true);
   const pendingDraft = useRef<BackupDraft | null>(null);
 
@@ -164,7 +165,21 @@ export function ChatRecoverySheet({ onClose }: { onClose: () => void }) {
             <>
               {snapshot.status !== 'ready' ? <TextField label="Saved recovery code" value={code} onChangeText={setCode} placeholder="WTK1-…" autoCapitalize="none" autoCorrect={false} autoComplete="off" secureTextEntry editable={!loading} /> : null}
               {snapshot.status !== 'ready' ? <Button label="Use recovery code" variant="secondary" disabled={!code || loading} onPress={() => prepare(true)} /> : null}
-              {snapshot.status === 'ready' || snapshot.status === 'recoveryNeeded' ? <Button label={snapshot.status === 'ready' ? 'Replace recovery code' : 'Try this device’s saved key'} variant="secondary" disabled={loading} onPress={() => prepare(false)} /> : null}
+              {snapshot.status === 'ready' ? (
+                confirmReplace ? (
+                  <>
+                    <AppText variant="caption" tone="muted">
+                      Replacing creates a new code. The old code stops working for future recovery, though a copied old backup can still be opened with it.
+                    </AppText>
+                    <Button label="Replace recovery code" variant="secondary" disabled={loading} onPress={() => { setConfirmReplace(false); prepare(false); }} />
+                    <Button label="Keep my current code" variant="ghost" disabled={loading} onPress={() => setConfirmReplace(false)} />
+                  </>
+                ) : (
+                  <Button label="Replace recovery code" variant="secondary" disabled={loading} onPress={() => setConfirmReplace(true)} />
+                )
+              ) : snapshot.status === 'recoveryNeeded' ? (
+                <Button label="Try this device’s saved key" variant="secondary" disabled={loading} onPress={() => prepare(false)} />
+              ) : null}
               <AppText variant="caption" tone="muted">Without a matching saved code or backup key, unavailable history cannot be recovered. Existing device chats may still work. Nothing will be erased or replaced automatically.</AppText>
             </>
           ) : null}
@@ -210,7 +225,7 @@ function RecoverySettings({ snapshot }: { snapshot: BackupSnapshot }) {
 
   return (
     <Card style={styles.card}>
-      <AppText variant="heading">Chat backup & recovery</AppText>
+      <AppText variant="heading">Advanced: chat backup</AppText>
       <AppText tone="muted">{descriptions[snapshot.status]}</AppText>
       <Button label={snapshot.status === 'ready' ? 'Recovery settings' : 'Open chat recovery'} variant="secondary" onPress={() => setOpen(true)} />
       {snapshot.status === 'ready' ? (

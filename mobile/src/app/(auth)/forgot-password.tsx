@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { Keyboard, Pressable, StyleSheet } from 'react-native';
+import { useRef, useState, type ComponentRef } from 'react';
+import { Keyboard, Pressable, StyleSheet, TextInput } from 'react-native';
 
 import { ApiError } from '@/api/client';
 import { requestPasswordReset } from '@/api/passwordReset';
@@ -12,7 +12,9 @@ const EMAIL = /^\S+@\S+\.\S+$/;
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
+  const emailRef = useRef<ComponentRef<typeof TextInput>>(null);
   const [email, setEmail] = useState('');
+  const [fieldError, setFieldError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState<string | null>(null);
@@ -21,11 +23,22 @@ export default function ForgotPasswordScreen() {
     if (submitting) return;
 
     const trimmed = email.trim();
-    if (!trimmed) return setError('Enter your email address.');
-    if (!EMAIL.test(trimmed)) return setError('That email address looks incomplete.');
+    const problem = !trimmed
+      ? 'Enter your email address.'
+      : !EMAIL.test(trimmed)
+        ? 'That email address looks incomplete.'
+        : null;
+
+    if (problem) {
+      setError(null);
+      setFieldError(problem);
+      requestAnimationFrame(() => emailRef.current?.focus());
+      return;
+    }
 
     Keyboard.dismiss();
     setError(null);
+    setFieldError(null);
     setSubmitting(true);
     try {
       const result = await requestPasswordReset(trimmed);
@@ -64,11 +77,17 @@ export default function ForgotPasswordScreen() {
         <>
           <InlineError message={error} />
           <TextField
+            ref={emailRef}
             label="Email"
             filled
             value={email}
-            onChangeText={setEmail}
+            onChangeText={(value) => {
+              setEmail(value);
+              if (fieldError) setFieldError(null);
+              if (error) setError(null);
+            }}
             placeholder="you@example.com"
+            error={fieldError ?? undefined}
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
@@ -80,7 +99,7 @@ export default function ForgotPasswordScreen() {
           <Button
             label="Send reset link"
             size="lg"
-            variant="accent"
+            variant="primary"
             loading={submitting}
             onPress={submit}
             style={styles.submit}

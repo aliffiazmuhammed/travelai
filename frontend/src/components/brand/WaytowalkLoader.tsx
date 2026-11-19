@@ -54,7 +54,7 @@ const WaytowalkLoader = ({
         <circle className="ww-waypoint" cx="298" cy="29.5" r="21" />
       </svg>
       {caption && (
-        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+        <p className="text-overline font-bold text-muted-foreground">
           {caption}
         </p>
       )}

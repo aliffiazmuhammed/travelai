@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ConfirmDestructive } from '@/components/ui/confirm-destructive';
 import {
   Dialog,
   DialogContent,
@@ -91,6 +92,7 @@ const TemplateManagerDialog: React.FC<TemplateManagerDialogProps> = ({
   );
   const [savingDetails, setSavingDetails] = useState(false);
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [previewVersionNumber, setPreviewVersionNumber] = useState<
     number | null
@@ -219,17 +221,11 @@ const TemplateManagerDialog: React.FC<TemplateManagerDialogProps> = ({
   };
 
   const archive = async () => {
-    if (
-      !window.confirm(
-        `Archive "${template.name}"? Existing exports keep their pinned version, but this template cannot be chosen for new exports.`
-      )
-    ) {
-      return;
-    }
     setBusyAction('archive');
     try {
       await api.archiveAgencyTemplate(agencyId, template._id);
       toast.success('Template archived. Existing exports are unchanged.');
+      setArchiveOpen(false);
       onOpenChange(false);
       await onRefreshTemplates();
     } catch (error) {
@@ -255,14 +251,14 @@ const TemplateManagerDialog: React.FC<TemplateManagerDialogProps> = ({
               {template.name}
               <Badge
                 variant="outline"
-                className={cn('text-[10px]', templateStatusClass(template.status))}
+                className={cn('text-xs', templateStatusClass(template.status))}
               >
                 {templateStatusLabel(template.status)}
               </Badge>
               {template.isDefault ? (
                 <Badge
                   variant="outline"
-                  className="border-amber-300 bg-amber-50 text-[10px] text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
+                  className="border-warning/30 bg-warning/10 text-xs text-warning-ink dark:border-warning/40 dark:bg-warning/20"
                 >
                   <Star className="mr-1 h-2.5 w-2.5" />
                   Default
@@ -278,7 +274,7 @@ const TemplateManagerDialog: React.FC<TemplateManagerDialogProps> = ({
           </DialogHeader>
 
           {template.status === 'archived' ? (
-            <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-2.5 text-[11px] text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300">
+            <div className="flex items-start gap-2 rounded-xl border border-warning/30 bg-warning/10 p-2.5 text-xs text-warning-ink dark:border-warning/20 dark:bg-warning/30">
               <Archive className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span>
                 Archived templates cannot be chosen for new exports. Activate a
@@ -286,7 +282,7 @@ const TemplateManagerDialog: React.FC<TemplateManagerDialogProps> = ({
               </span>
             </div>
           ) : template.status === 'draft' ? (
-            <div className="flex items-start gap-2 rounded-xl border border-sky-200 bg-sky-50 p-2.5 text-[11px] text-sky-800 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-300">
+            <div className="flex items-start gap-2 rounded-xl border border-info/30 bg-info/10 p-2.5 text-xs text-info-ink dark:border-info/20 dark:bg-info/30">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span>
                 This template is a draft. Preview a version against a real trip,
@@ -295,7 +291,7 @@ const TemplateManagerDialog: React.FC<TemplateManagerDialogProps> = ({
             </div>
           ) : null}
 
-          <div className="space-y-2 rounded-2xl border border-slate-200 p-3 dark:border-slate-800">
+          <div className="space-y-2 rounded-2xl border border-border p-3">
             <h3 className="text-sm font-semibold">Details</h3>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
@@ -345,7 +341,7 @@ const TemplateManagerDialog: React.FC<TemplateManagerDialogProps> = ({
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h3 className="text-sm font-semibold">Versions</h3>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                <p className="text-xs text-muted-foreground">
                   Versions are immutable.{' '}
                   {isPdfDesign
                     ? 'Saving a layout creates a new version;'
@@ -372,12 +368,12 @@ const TemplateManagerDialog: React.FC<TemplateManagerDialogProps> = ({
             </div>
 
             {versionsLoading ? (
-              <div className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-4 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
+              <div className="flex items-center gap-2 rounded-xl border border-border px-3 py-4 text-xs text-muted-foreground">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 Loading versions...
               </div>
             ) : versionsError ? (
-              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-300">
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive-ink dark:border-destructive/20 dark:bg-destructive/30">
                 <span className="flex items-center gap-1.5">
                   <AlertTriangle className="h-3.5 w-3.5" />
                   {versionsError}
@@ -392,7 +388,7 @@ const TemplateManagerDialog: React.FC<TemplateManagerDialogProps> = ({
                 </Button>
               </div>
             ) : versions.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-slate-200 px-3 py-6 text-center text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
+              <p className="rounded-xl border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
                 No versions yet.
               </p>
             ) : (
@@ -405,18 +401,18 @@ const TemplateManagerDialog: React.FC<TemplateManagerDialogProps> = ({
                   return (
                     <div
                       key={version.version}
-                      className="rounded-2xl border border-slate-200 p-3 dark:border-slate-800"
+                      className="rounded-2xl border border-border p-3"
                     >
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-1.5">
-                            <Badge variant="outline" className="text-[10px]">
+                            <Badge variant="outline" className="text-xs">
                               v{version.version}
                             </Badge>
                             {isLive ? (
                               <Badge
                                 variant="outline"
-                                className="border-teal-300 bg-teal-50 text-[10px] text-teal-800 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-300"
+                                className="border-agency-accent/30 bg-agency-accent-soft text-xs text-agency-accent-ink"
                               >
                                 <CheckCircle2 className="mr-1 h-2.5 w-2.5" />
                                 Active
@@ -425,10 +421,10 @@ const TemplateManagerDialog: React.FC<TemplateManagerDialogProps> = ({
                             <Badge
                               variant="outline"
                               className={cn(
-                                'text-[10px]',
+                                'text-xs',
                                 version.previewedAt
-                                  ? 'border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-300'
-                                  : 'border-slate-300 text-slate-500 dark:border-slate-700 dark:text-slate-400'
+                                  ? 'border-info/30 bg-info/10 text-info-ink dark:border-info/40 dark:bg-info/20'
+                                  : 'border-border text-muted-foreground'
                               )}
                             >
                               {version.previewedAt
@@ -436,7 +432,7 @@ const TemplateManagerDialog: React.FC<TemplateManagerDialogProps> = ({
                                 : 'Not previewed'}
                             </Badge>
                           </div>
-                          <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                          <p className="mt-1 text-xs text-muted-foreground">
                             {version.pageCount}{' '}
                             {version.pageCount === 1 ? 'page' : 'pages'}
                             {version.sourceBytes
@@ -445,7 +441,7 @@ const TemplateManagerDialog: React.FC<TemplateManagerDialogProps> = ({
                             {' · uploaded '}
                             {formatAgencyDate(version.createdAt)}
                           </p>
-                          <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
+                          <p className="mt-1 text-xs text-muted-foreground">
                             {version.previewedAt
                               ? `Previewed ${formatAgencyDate(version.previewedAt)} against a real trip.`
                               : 'Preview this version against a real trip to unlock activation.'}
@@ -500,7 +496,7 @@ const TemplateManagerDialog: React.FC<TemplateManagerDialogProps> = ({
                           </Button>
                           <Button
                             size="sm"
-                            className="bg-teal-600 hover:bg-teal-700"
+                            className="bg-agency-accent hover:bg-agency-accent/90"
                             onClick={() => void activateVersion(version)}
                             disabled={busy || isLive || !version.previewedAt}
                             title={
@@ -537,8 +533,8 @@ const TemplateManagerDialog: React.FC<TemplateManagerDialogProps> = ({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-rose-600 hover:text-rose-700 dark:text-rose-400"
-                  onClick={() => void archive()}
+                  className="text-destructive-ink hover:text-destructive-ink"
+                  onClick={() => setArchiveOpen(true)}
                   disabled={busy || savingDetails}
                 >
                   {busyAction === 'archive' ? (
@@ -625,6 +621,22 @@ const TemplateManagerDialog: React.FC<TemplateManagerDialogProps> = ({
           }}
         />
       ) : null}
+
+      <ConfirmDestructive
+        open={archiveOpen}
+        onOpenChange={(next) => {
+          if (!next && busyAction === 'archive') return;
+          setArchiveOpen(next);
+        }}
+        tone="warning"
+        icon={Archive}
+        title={`Archive “${template.name}”?`}
+        description="Existing exports keep their pinned version, but this template can no longer be chosen for new exports. Archiving cannot be undone."
+        confirmLabel="Archive template"
+        onConfirm={archive}
+        busy={busyAction === 'archive'}
+        detail={`Version ${template.version} · ${templateStatusLabel(template.status)}`}
+      />
     </>
   );
 };

@@ -136,7 +136,7 @@ const AgencyPackageDialog: React.FC<AgencyPackageDialogProps> = ({
         ) : detail ? (
           <div className="space-y-5">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="secondary" className="gap-1 text-[11px]">
+              <Badge variant="secondary" className="gap-1 text-xs">
                 <CalendarDays className="h-3 w-3" />
                 {nightsLabel(detail.nights)}
               </Badge>
@@ -148,7 +148,7 @@ const AgencyPackageDialog: React.FC<AgencyPackageDialogProps> = ({
                 {detail.highlights.map((highlight) => (
                   <span
                     key={highlight}
-                    className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground"
+                    className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground"
                   >
                     {highlight}
                   </span>
@@ -199,7 +199,7 @@ const AgencyPackageDialog: React.FC<AgencyPackageDialogProps> = ({
                     <Badge
                       key={inclusion}
                       variant="secondary"
-                      className="bg-teal-50 text-teal-800 dark:bg-teal-950/60 dark:text-teal-200"
+                      className="bg-agency-accent-soft text-agency-accent-ink"
                     >
                       {inclusion}
                     </Badge>

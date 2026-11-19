@@ -11,7 +11,7 @@ const AdminAccount: React.FC = () => (
   <div className="max-w-xl space-y-6">
     <div>
       <h1 className="text-2xl font-semibold tracking-tight">Account</h1>
-      <p className="mt-1 text-sm text-slate-400">
+      <p className="mt-1 text-sm text-muted-foreground">
         Security settings for your platform account only.
       </p>
     </div>

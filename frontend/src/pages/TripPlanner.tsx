@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   format,
@@ -14,15 +14,8 @@ import { ArrowLeft, ArrowRight, RotateCcw, Sparkles } from "lucide-react";
 import { API_BASE_URL } from "@/config";
 import { WizardProgress, WizardStep } from "@/components/wizard/WizardProgress";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+  ConfirmDestructive,
+} from "@/components/ui/confirm-destructive";
 import { StepWhere } from "@/components/wizard/StepWhere";
 import { StepWhen } from "@/components/wizard/StepWhen";
 import { StepWho } from "@/components/wizard/StepWho";
@@ -66,6 +59,14 @@ const ALL_STYLES = [
   "Shopping",
 ];
 
+/** Idempotency key for one submit→cancel→retry generation session. */
+const createAttemptId = (): string => {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `attempt_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+};
+
 interface TripPlannerProps {
   /** A2: set by the agency shell to create a tenant trip. */
   agencyId?: string;
@@ -85,6 +86,10 @@ const TripPlanner: React.FC<TripPlannerProps> = ({
   // Wizard Navigation
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [resetOpen, setResetOpen] = useState<boolean>(false);
+  /** Set once when a saved draft is adopted, so the page explains the jump. */
+  const [restoredDraft, setRestoredDraft] = useState<{ at: string | null } | null>(
+    null
+  );
 
   // Form State
   const [destination, setDestination] = useState<string>("");
@@ -111,6 +116,31 @@ const TripPlanner: React.FC<TripPlannerProps> = ({
   const [streamProgress, setStreamProgress] = useState<number>(10);
   const [streamMessage, setStreamMessage] = useState<string>("Initializing trip planner AI...");
 
+  // Generation lifecycle guards (C-03). Refs avoid the one-render window where
+  // state has not flushed yet, and keep the abort/attempt identity stable
+  // across cancel-then-retry.
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const attemptIdRef = useRef<string | null>(null);
+  const cancelledRef = useRef(false);
+  const submittingRef = useRef(false);
+  const mountedRef = useRef(true);
+  const navigateTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      cancelledRef.current = true;
+      abortControllerRef.current?.abort();
+      abortControllerRef.current = null;
+      submittingRef.current = false;
+      if (navigateTimerRef.current !== null) {
+        window.clearTimeout(navigateTimerRef.current);
+        navigateTimerRef.current = null;
+      }
+    };
+  }, []);
+
   // Restore Draft from LocalStorage on mount
   useEffect(() => {
     try {
@@ -128,6 +158,13 @@ const TripPlanner: React.FC<TripPlannerProps> = ({
         if (parsed.language) setLanguage(parsed.language);
         if (parsed.pace) setPace(parsed.pace);
         if (Array.isArray(parsed.dietary)) setDietary(parsed.dietary);
+        // Only announce a draft that actually holds a trip. The save effect
+        // writes defaults on first visit, and those should not read as restored.
+        if (typeof parsed.destination === "string" && parsed.destination.trim()) {
+          setRestoredDraft({
+            at: typeof parsed.savedAt === "string" ? parsed.savedAt : null,
+          });
+        }
       } else {
         // No draft: carry over the group and style choices from the last trip
         // so a repeat traveler never re-enters the same preferences.
@@ -152,6 +189,7 @@ const TripPlanner: React.FC<TripPlannerProps> = ({
   useEffect(() => {
     try {
       const draft = {
+        savedAt: new Date().toISOString(),
         destination,
         startDate: startDate ? startDate.toISOString() : undefined,
         endDate: endDate ? endDate.toISOString() : undefined,
@@ -184,6 +222,7 @@ const TripPlanner: React.FC<TripPlannerProps> = ({
 
   // Validation Logic per step
   const isStepValid = (stepId: number): boolean => {
+    const today = startOfToday();
     switch (stepId) {
       case 1:
         return destination.trim().length > 0;
@@ -191,6 +230,7 @@ const TripPlanner: React.FC<TripPlannerProps> = ({
         return (
           !!startDate &&
           !!endDate &&
+          !isBefore(startDate, today) &&
           !isBefore(endDate, startDate) &&
           differenceInCalendarDays(endDate, startDate) >= 0
         );
@@ -205,6 +245,8 @@ const TripPlanner: React.FC<TripPlannerProps> = ({
           destination.trim().length > 0 &&
           !!startDate &&
           !!endDate &&
+          !isBefore(startDate, today) &&
+          !isBefore(endDate, startDate) &&
           adultsCount >= 1 &&
           budgetPerPerson >= 1000 &&
           selectedInterests.length > 0
@@ -244,7 +286,23 @@ const TripPlanner: React.FC<TripPlannerProps> = ({
     }
   };
 
+  /**
+   * Stops the active stream without consuming the attempt key: a later retry
+   * reuses it so the server can replay instead of creating a second trip.
+   */
+  const stopActiveGeneration = () => {
+    cancelledRef.current = true;
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    if (navigateTimerRef.current !== null) {
+      window.clearTimeout(navigateTimerRef.current);
+      navigateTimerRef.current = null;
+    }
+  };
+
   const handleReset = () => {
+    stopActiveGeneration();
+    attemptIdRef.current = null;
     localStorage.removeItem(LOCAL_STORAGE_KEY);
     setDestination("");
     setStartDate(addDays(new Date(), 7));
@@ -258,6 +316,7 @@ const TripPlanner: React.FC<TripPlannerProps> = ({
     setPace("balanced");
     setDietary([]);
     setCurrentStep(1);
+    setRestoredDraft(null);
   };
 
   // Interests Handlers
@@ -284,6 +343,8 @@ const TripPlanner: React.FC<TripPlannerProps> = ({
   };
 
   const handleCancelOverlay = () => {
+    stopActiveGeneration();
+    setError(null);
     setIsOverlayOpen(false);
     setLoading(false);
   };
@@ -308,10 +369,27 @@ const TripPlanner: React.FC<TripPlannerProps> = ({
 
   // Final Itinerary Generation Submission with Real-time AI Streaming
   const handleSubmitItinerary = async () => {
+    // Synchronous guard: two clicks before React flushes `loading` must not
+    // start two streams (and therefore two trips).
+    if (submittingRef.current || loading) return;
+
     if (!isStepValid(6)) {
       setError("Please complete all required fields before generating.");
       return;
     }
+
+    submittingRef.current = true;
+    cancelledRef.current = false;
+
+    // Reuse the key after a cancel/error so retry cannot duplicate a trip.
+    const attemptId = attemptIdRef.current ?? createAttemptId();
+    attemptIdRef.current = attemptId;
+
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    const isCurrentAttempt = () =>
+      mountedRef.current && !cancelledRef.current && !controller.signal.aborted;
 
     setLoading(true);
     setError(null);
@@ -339,58 +417,103 @@ const TripPlanner: React.FC<TripPlannerProps> = ({
         ...(agencyId ? { agencyId } : {}),
       };
 
-      await api.generateItineraryStream(payload, {
-        onProgress: (evt) => {
-          setStreamStage(evt.stage);
-          setStreamProgress(evt.progress);
-          setStreamMessage(evt.message);
-        },
-        onComplete: (trip) => {
-          setStreamProgress(100);
-          setStreamMessage("Your personalized itinerary is ready!");
-          localStorage.removeItem(LOCAL_STORAGE_KEY);
-          try {
-            localStorage.setItem(
-              LAST_PREFS_KEY,
-              JSON.stringify({
-                groupType,
-                adultsCount,
-                childrenCount,
-                budgetPerPerson,
-                selectedInterests,
-                language,
-                pace,
-                dietary,
-              })
-            );
-          } catch (e) {
-            console.warn("Could not save trip preferences", e);
-          }
-          setTimeout(() => {
-            setIsOverlayOpen(false);
+      await api.generateItineraryStream(
+        payload,
+        {
+          onProgress: (evt) => {
+            if (!isCurrentAttempt()) return;
+            setStreamStage(evt.stage);
+            setStreamProgress(evt.progress);
+            setStreamMessage(evt.message);
+          },
+          onComplete: (trip) => {
+            if (!isCurrentAttempt()) return;
+            // This attempt produced (or replayed) its trip; the next submit is
+            // a new logical attempt with a new key.
+            attemptIdRef.current = null;
+            setStreamProgress(100);
+            setStreamMessage("Your personalized itinerary is ready!");
+            localStorage.removeItem(LOCAL_STORAGE_KEY);
+            try {
+              localStorage.setItem(
+                LAST_PREFS_KEY,
+                JSON.stringify({
+                  groupType,
+                  adultsCount,
+                  childrenCount,
+                  budgetPerPerson,
+                  selectedInterests,
+                  language,
+                  pace,
+                  dietary,
+                })
+              );
+            } catch (e) {
+              console.warn("Could not save trip preferences", e);
+            }
+            navigateTimerRef.current = window.setTimeout(() => {
+              navigateTimerRef.current = null;
+              // Back/unmount between "ready" and the hand-off must not navigate.
+              if (!mountedRef.current || cancelledRef.current) return;
+              setIsOverlayOpen(false);
+              setLoading(false);
+              // Hand off the exact document id as well as the payload. The old
+              // title match could open a *different* trip with the same title.
+              navigate(
+                agencyId ? `/agency/trips/${trip._id}` : "/dashboard",
+                { state: { itinerary: trip.tripDetails, tripId: trip._id } }
+              );
+            }, 800);
+          },
+          onError: (errMessage) => {
+            if (!isCurrentAttempt()) return;
+            setError(errMessage);
             setLoading(false);
-            // Hand off the exact document id as well as the payload. The old
-            // title match could open a *different* trip with the same title.
-            navigate(
-              agencyId ? `/agency/trips/${trip._id}` : "/dashboard",
-              { state: { itinerary: trip.tripDetails, tripId: trip._id } }
-            );
-          }, 800);
+          },
         },
-        onError: (errMessage) => {
-          setError(errMessage);
-          setLoading(false);
-        },
-      });
-    } catch (err: any) {
+        { signal: controller.signal, attemptId }
+      );
+    } catch (err: unknown) {
+      if (!isCurrentAttempt()) return;
       console.error("Error generating trip itinerary:", err);
-      setError(err.message || "Failed to generate itinerary. Please check your connection.");
+      setError(
+        err instanceof Error && err.message
+          ? err.message
+          : "Failed to generate itinerary. Please check your connection."
+      );
       setLoading(false);
+    } finally {
+      submittingRef.current = false;
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
     }
   };
 
   const currentHeading = STEP_HEADLINES[currentStep - 1];
   const currentStepMeta = WIZARD_STEPS[currentStep - 1];
+  const stepValid = isStepValid(currentStep);
+  const stepHint = (() => {
+    if (stepValid) return null;
+    switch (currentStep) {
+      case 1:
+        return "Add a destination to continue.";
+      case 2:
+        if (!startDate || !endDate) return "Choose a start and end date to continue.";
+        if (isBefore(startDate, startOfToday())) {
+          return "Choose a start date from today onward. Past dates cannot generate a trip.";
+        }
+        return "The end date must be on or after the start date.";
+      case 3:
+        return "Add at least one adult traveller.";
+      case 4:
+        return "Set a budget per person of at least 1,000.";
+      case 5:
+        return "Pick at least one travel style.";
+      default:
+        return "Complete the earlier steps before generating the plan.";
+    }
+  })();
 
   return (
     <div
@@ -403,6 +526,8 @@ const TripPlanner: React.FC<TripPlannerProps> = ({
       {!embedded && <Navbar />}
 
       <main
+        id="main-content"
+        tabIndex={-1}
         className={
           embedded
             ? "mx-auto w-full max-w-3xl flex-1 px-0 pb-10 pt-2"
@@ -425,6 +550,37 @@ const TripPlanner: React.FC<TripPlannerProps> = ({
               : "One message is enough — you can change every detail later."}
           </p>
         </header>
+
+        {restoredDraft ? (
+          <div
+            role="status"
+            className="mt-6 flex items-start gap-3 rounded-xl border border-info/25 bg-info/10 px-4 py-3 text-left"
+          >
+            <RotateCcw className="mt-0.5 h-4 w-4 shrink-0 text-info-ink" aria-hidden="true" />
+            <p className="min-w-0 flex-1 text-xs leading-5 text-info-ink">
+              We restored the trip you started
+              {restoredDraft.at
+                ? (() => {
+                    const at = new Date(restoredDraft.at);
+                    return Number.isNaN(at.getTime())
+                      ? " earlier"
+                      : ` on ${format(at, "d MMM yyyy")}`;
+                  })()
+                : " earlier"}
+              . Check the dates before generating — past dates need updating.
+            </p>
+            <button
+              type="button"
+              onClick={() => setRestoredDraft(null)}
+              aria-label="Dismiss restored draft notice"
+              className="rounded-md p-1 text-info-ink transition-colors hover:bg-info/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <span aria-hidden="true" className="block text-sm leading-none">
+                ×
+              </span>
+            </button>
+          </div>
+        ) : null}
 
         {/* Six-step rail */}
         <div className="mt-8 sm:mt-10">
@@ -521,7 +677,7 @@ const TripPlanner: React.FC<TripPlannerProps> = ({
 
             {/* AI promise, shown alongside every editable step */}
             {currentStep < WIZARD_STEPS.length && (
-              <div className="mt-7 flex items-center gap-2 text-xs font-semibold text-accent">
+              <div className="mt-7 flex items-center gap-2 text-xs font-semibold text-accent-ink">
                 <Sparkles className="h-4 w-4 shrink-0" aria-hidden="true" />
                 <span>AI will draft a day-by-day plan you can edit.</span>
               </div>
@@ -565,7 +721,8 @@ const TripPlanner: React.FC<TripPlannerProps> = ({
               <Button
                 type="button"
                 variant="hero"
-                disabled={!isStepValid(currentStep)}
+                disabled={!stepValid}
+                aria-describedby={stepHint ? "wizard-step-hint" : undefined}
                 onClick={handleNext}
                 className="h-11 rounded-xl px-5 text-xs font-bold gap-1.5 shadow-soft"
               >
@@ -586,6 +743,17 @@ const TripPlanner: React.FC<TripPlannerProps> = ({
           </div>
         </div>
 
+        {stepHint ? (
+          <p
+            id="wizard-step-hint"
+            role="status"
+            className="mt-3 flex items-start gap-1.5 text-xs leading-5 text-muted-foreground sm:justify-end sm:text-right"
+          >
+            <span aria-hidden="true">•</span>
+            <span>{stepHint}</span>
+          </p>
+        ) : null}
+
         {/* Live AI Generation Streaming Overlay */}
         <GenerationOverlay
           isOpen={isOverlayOpen}
@@ -603,30 +771,17 @@ const TripPlanner: React.FC<TripPlannerProps> = ({
           onCancel={handleCancelOverlay}
         />
 
-        <AlertDialog open={resetOpen} onOpenChange={setResetOpen}>
-          <AlertDialogContent className="rounded-3xl max-w-md w-[92vw] sm:w-full p-5 sm:p-6">
-            <AlertDialogHeader>
-              <AlertDialogTitle className="font-display text-lg font-semibold">
-                Start over?
-              </AlertDialogTitle>
-              <AlertDialogDescription className="text-xs leading-relaxed">
-                Everything you've entered so far will be cleared. Trips you
-                already generated are saved and won't be affected.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter className="gap-2 sm:gap-0">
-              <AlertDialogCancel className="rounded-xl text-xs font-semibold h-10">
-                Keep my answers
-              </AlertDialogCancel>
-              <AlertDialogAction
-                className="rounded-xl text-xs font-bold h-10"
-                onClick={handleReset}
-              >
-                Clear and restart
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <ConfirmDestructive
+          open={resetOpen}
+          onOpenChange={setResetOpen}
+          tone="warning"
+          icon={RotateCcw}
+          title="Start over?"
+          description="Everything you've entered so far will be cleared. Trips you already generated are saved and won't be affected."
+          confirmLabel="Clear and restart"
+          cancelLabel="Keep my answers"
+          onConfirm={handleReset}
+        />
       </main>
     </div>
   );

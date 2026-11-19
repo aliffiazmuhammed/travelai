@@ -18,6 +18,7 @@ import {
 import { toast } from 'sonner';
 import ProposalPreviewDialog from '@/components/directory/ProposalPreviewDialog';
 import { AgencyLogoTile } from '@/components/directory/AgencyLogoTile';
+import ProposalAnswer from '@/components/proposals/ProposalAnswer';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -28,6 +29,7 @@ import {
   formatAgencyDate,
 } from '@/lib/agency';
 import { formatMoney } from '@/lib/currency';
+import { proposalAnswerState, proposalIsLive } from '@/lib/proposalAnswer';
 import { cn } from '@/lib/utils';
 import { notifyEnquiryBadgeChanged } from '@/lib/enquiryBadge';
 import { useEnquiryLiveRefresh } from '@/hooks/useEnquiryEvents';
@@ -163,29 +165,21 @@ const ProposalAttachment: React.FC<{
   onAccept?: (proposal: AgencyProposalSummary) => Promise<void>;
   onDecline?: (proposal: AgencyProposalSummary) => Promise<void>;
 }> = ({ proposal, party, dates, onPreview, onAsk, onAccept, onDecline }) => {
-  const [answering, setAnswering] = useState<'accept' | 'decline' | null>(null);
-  const [working, setWorking] = useState(false);
-  const [answerError, setAnswerError] = useState<string | null>(null);
-
   const quote = proposal.quote;
-  const accepted = Boolean(proposal.acceptedAt) || quote?.status === 'accepted';
-  const declined = Boolean(proposal.declinedAt);
-  const settled = Boolean(proposal.settledByAcceptedTrip) && !accepted && !declined;
-  const open = quote?.status === 'sent' && !accepted && !declined && !settled;
-  const canAnswer = Boolean(onAccept && onDecline) && open;
+  const { accepted, declined, settled, open } = proposalAnswerState(proposal);
 
   const status = accepted
-    ? { label: 'Accepted', tone: 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300' }
+    ? { label: 'Accepted', tone: 'border-success/30 bg-success/10 text-success-ink dark:border-success/40 dark:bg-success/20' }
     : declined
-      ? { label: 'Declined', tone: 'border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300' }
+      ? { label: 'Declined', tone: 'border-destructive/30 bg-destructive/10 text-destructive-ink dark:border-destructive/40 dark:bg-destructive/20' }
       : settled
         ? { label: 'Another version accepted', tone: 'border-border bg-muted text-muted-foreground' }
         : quote?.status === 'expired'
-          ? { label: 'Expired', tone: 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300' }
+          ? { label: 'Expired', tone: 'border-warning/30 bg-warning/10 text-warning-ink dark:border-warning/40 dark:bg-warning/20' }
           : quote?.status === 'cancelled'
-            ? { label: 'Withdrawn', tone: 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300' }
+            ? { label: 'Withdrawn', tone: 'border-warning/30 bg-warning/10 text-warning-ink dark:border-warning/40 dark:bg-warning/20' }
             : open
-              ? { label: 'Awaiting you', tone: 'border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300' }
+              ? { label: 'Awaiting you', tone: 'border-info/30 bg-info/10 text-info-ink dark:border-info/40 dark:bg-info/20' }
               : { label: 'Proposal', tone: 'border-border bg-muted text-muted-foreground' };
 
   const nights = nightsBetween(dates);
@@ -197,23 +191,6 @@ const ProposalAttachment: React.FC<{
     .filter(Boolean)
     .join(' · ');
 
-  const confirm = async () => {
-    const handler = answering === 'accept' ? onAccept : onDecline;
-    if (!answering || !handler) return;
-    setWorking(true);
-    setAnswerError(null);
-    try {
-      await handler(proposal);
-      setAnswering(null);
-    } catch (err) {
-      setAnswerError(
-        err instanceof Error && err.message ? err.message : 'Your answer could not be sent.'
-      );
-    } finally {
-      setWorking(false);
-    }
-  };
-
   return (
     <div className="rounded-2xl border border-primary/15 bg-primary/[0.04] p-3.5">
       <div className="flex items-start gap-3">
@@ -223,7 +200,7 @@ const ProposalAttachment: React.FC<{
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="text-overline font-semibold text-muted-foreground">
                 {quote ? `Proposal ${quote.number}` : 'Proposal'}
                 {quote ? ` · version ${quote.version}` : ''}
               </p>
@@ -231,21 +208,21 @@ const ProposalAttachment: React.FC<{
                 {proposal.trip.title}
               </p>
             </div>
-            <Badge variant="outline" className={cn('shrink-0 text-[10px]', status.tone)}>
+            <Badge variant="outline" className={cn('shrink-0 text-xs', status.tone)}>
               {status.label}
             </Badge>
           </div>
 
           {summary ? (
-            <p className="mt-1 text-[11px] text-muted-foreground">{summary}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{summary}</p>
           ) : null}
 
           {quote ? (
             <div className="mt-2.5 border-t border-border/60 pt-2.5">
-              <p className="text-[10px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Total (for {travellersLabel(party)})
               </p>
-              <p className="text-lg font-semibold tabular-nums text-foreground">
+              <p className="text-xl font-semibold tabular-nums text-foreground">
                 {formatMoney(quote.total, quote.currency)}
               </p>
             </div>
@@ -256,44 +233,24 @@ const ProposalAttachment: React.FC<{
               type="button"
               size="sm"
               variant="outline"
-              className="h-8 rounded-full border-primary/40 px-3 text-[11px] font-semibold text-primary hover:bg-primary/10 hover:text-primary"
+              className="h-8 rounded-full border-primary/40 px-3 text-xs font-semibold text-primary hover:bg-primary/10 hover:text-primary"
               onClick={() => onPreview(proposal)}
             >
               View proposal
             </Button>
-            {canAnswer && !answering ? (
-              <>
-                <Button
-                  type="button"
-                  size="sm"
-                  className="h-8 rounded-full px-3 text-[11px] font-semibold"
-                  onClick={() => {
-                    setAnswerError(null);
-                    setAnswering('accept');
-                  }}
-                >
-                  Accept
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className="h-8 rounded-full px-3 text-[11px] font-semibold text-muted-foreground hover:text-destructive"
-                  onClick={() => {
-                    setAnswerError(null);
-                    setAnswering('decline');
-                  }}
-                >
-                  Decline
-                </Button>
-              </>
+            {onAccept && onDecline ? (
+              <ProposalAnswer
+                proposal={proposal}
+                onAccept={onAccept}
+                onDecline={onDecline}
+              />
             ) : null}
             {onAsk ? (
               <Button
                 type="button"
                 size="sm"
                 variant="ghost"
-                className="h-8 rounded-full px-3 text-[11px] font-semibold text-muted-foreground"
+                className="h-8 rounded-full px-3 text-xs font-semibold text-muted-foreground"
                 onClick={onAsk}
               >
                 Ask about this
@@ -301,44 +258,8 @@ const ProposalAttachment: React.FC<{
             ) : null}
           </div>
 
-          {answering ? (
-            <div className="mt-2.5 space-y-1.5 border-t border-border/60 pt-2.5">
-              <p className="text-[11px] font-medium text-foreground">
-                {answering === 'accept'
-                  ? 'Accepting confirms this quote and tells the agency. No payment is taken here.'
-                  : 'Declining closes this version. The conversation stays open.'}
-              </p>
-              <div className="flex flex-wrap items-center gap-1.5">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={answering === 'decline' ? 'destructive' : 'default'}
-                  className="h-8 rounded-full px-3 text-[11px] font-semibold"
-                  onClick={() => void confirm()}
-                  disabled={working}
-                >
-                  {working ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
-                  {answering === 'accept' ? 'Confirm acceptance' : 'Confirm decline'}
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className="h-8 rounded-full px-3 text-[11px] font-semibold"
-                  onClick={() => setAnswering(null)}
-                  disabled={working}
-                >
-                  Cancel
-                </Button>
-              </div>
-              {answerError ? (
-                <p className="text-[11px] font-semibold text-destructive">{answerError}</p>
-              ) : null}
-            </div>
-          ) : null}
-
           {declined ? (
-            <p className="mt-2 text-[10px] text-muted-foreground">
+            <p className="mt-2 text-xs text-muted-foreground">
               You declined this version. It stays in this conversation — message{' '}
               {proposal.agency.name} if you want a new one.
             </p>
@@ -488,7 +409,7 @@ export const EnquiryTimeline: React.FC<EnquiryTimelineProps> = ({
             {group.key ? (
               <div className="flex items-center gap-3">
                 <span className="h-px flex-1 bg-border/70" aria-hidden />
-                <span className="text-[11px] font-medium text-muted-foreground">
+                <span className="text-xs font-medium text-muted-foreground">
                   {dayLabel(group.key)}
                 </span>
                 <span className="h-px flex-1 bg-border/70" aria-hidden />
@@ -504,7 +425,7 @@ export const EnquiryTimeline: React.FC<EnquiryTimelineProps> = ({
                   <AgencyLogoTile
                     name={agency.name}
                     logoUrl={agency.logoUrl ?? null}
-                    className="mt-0.5 h-8 w-8 rounded-lg text-[11px]"
+                    className="mt-0.5 h-8 w-8 rounded-lg text-xs"
                   />
                 ) : null}
                 <div className={cn('min-w-0 max-w-[85%] sm:max-w-[75%]', entry.mine && 'text-right')}>
@@ -520,7 +441,7 @@ export const EnquiryTimeline: React.FC<EnquiryTimelineProps> = ({
                   </div>
                   <div
                     className={cn(
-                      'mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground',
+                      'mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground',
                       entry.mine ? 'justify-end' : 'justify-start'
                     )}
                   >
@@ -528,7 +449,7 @@ export const EnquiryTimeline: React.FC<EnquiryTimelineProps> = ({
                       <span className="font-semibold text-foreground/70">{entry.author}</span>
                     ) : null}
                     {entry.label ? (
-                      <span className="rounded-full border border-border/70 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide">
+                      <span className="rounded-full border border-border/70 px-1.5 py-0.5 text-overline font-semibold">
                         {entry.label}
                       </span>
                     ) : null}
@@ -556,7 +477,7 @@ export const EnquiryTimeline: React.FC<EnquiryTimelineProps> = ({
         ))}
 
         {messages.length === 0 ? (
-          <p className="flex items-center justify-center gap-1.5 py-6 text-[11px] text-muted-foreground">
+          <p className="flex items-center justify-center gap-1.5 py-6 text-xs text-muted-foreground">
             <MessageSquare className="h-3.5 w-3.5" aria-hidden />
             {emptyHint}
           </p>
@@ -627,12 +548,12 @@ export const EnquiryTimeline: React.FC<EnquiryTimelineProps> = ({
           {body.length > 0 || error ? (
             <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 px-1">
               {error ? (
-                <p className="text-[11px] font-semibold text-destructive">{error}</p>
+                <p className="text-xs font-semibold text-destructive">{error}</p>
               ) : (
                 <span />
               )}
               {body.length > 0 ? (
-                <span className="text-[10px] tabular-nums text-muted-foreground">
+                <span className="text-xs tabular-nums text-muted-foreground">
                   {body.length}/{MAX_BODY}
                 </span>
               ) : null}
@@ -640,7 +561,7 @@ export const EnquiryTimeline: React.FC<EnquiryTimelineProps> = ({
           ) : null}
         </form>
       ) : (
-        <p className="shrink-0 border-t border-border/70 px-4 py-3 text-[11px] text-muted-foreground">
+        <p className="shrink-0 border-t border-border/70 px-4 py-3 text-xs text-muted-foreground">
           This conversation no longer accepts new replies.
         </p>
       )}
@@ -764,13 +685,7 @@ export const EnquiryThreadPane: React.FC<EnquiryThreadPaneProps> = ({
   );
 
   const hasLiveProposal = useMemo(
-    () =>
-      proposals.some(
-        (proposal) =>
-          !proposal.acceptedAt &&
-          !proposal.declinedAt &&
-          !proposal.settledByAcceptedTrip
-      ),
+    () => proposals.some((proposal) => proposalIsLive(proposal)),
     [proposals]
   );
 
@@ -842,12 +757,12 @@ export const EnquiryThreadPane: React.FC<EnquiryThreadPaneProps> = ({
               variant="ghost"
               size="sm"
               onClick={onClose}
-              className="-ml-2 h-7 rounded-full px-2 text-[11px] font-semibold text-muted-foreground lg:hidden"
+              className="-ml-2 h-7 rounded-full px-2 text-xs font-semibold text-muted-foreground lg:hidden"
             >
               <ArrowLeft className="mr-1 h-3.5 w-3.5" />
               All enquiries
             </Button>
-            <h2 className="flex flex-wrap items-center gap-2 font-display text-lg font-semibold leading-tight tracking-tight text-foreground">
+            <h2 className="flex flex-wrap items-center gap-2 font-display text-xl font-semibold leading-tight tracking-tight text-foreground">
               {conversation.agency.slug ? (
                 <Link
                   to={`/agencies/${encodeURIComponent(conversation.agency.slug)}`}
@@ -861,7 +776,7 @@ export const EnquiryThreadPane: React.FC<EnquiryThreadPaneProps> = ({
               <Badge
                 variant="outline"
                 className={cn(
-                  'shrink-0 text-[10px]',
+                  'shrink-0 text-xs',
                   travellerEnquiryStatusBadgeClass(conversation.status, hasLiveProposal)
                 )}
               >
@@ -869,15 +784,15 @@ export const EnquiryThreadPane: React.FC<EnquiryThreadPaneProps> = ({
               </Badge>
             </h2>
             {replyTime ? (
-              <p className="text-[11px] text-muted-foreground">{replyTime}</p>
+              <p className="text-xs text-muted-foreground">{replyTime}</p>
             ) : null}
-            <p className="truncate text-[11px] text-muted-foreground">
+            <p className="truncate text-xs text-muted-foreground">
               {conversation.enquiry.packageTitle ?? 'General enquiry'} · Sent{' '}
               {conversation.enquiry.createdAt
                 ? formatAgencyDate(conversation.enquiry.createdAt)
                 : 'recently'}
             </p>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1">
                 <Users className="h-3 w-3" aria-hidden />
                 {travellersLabel(conversation.enquiry.party)}
@@ -898,7 +813,7 @@ export const EnquiryThreadPane: React.FC<EnquiryThreadPaneProps> = ({
         {conversation.agency.slug ? (
           <Link
             to={`/agencies/${encodeURIComponent(conversation.agency.slug)}`}
-            className="inline-flex shrink-0 items-center gap-1 rounded-full px-1 py-0.5 text-[11px] font-semibold text-primary transition-colors hover:underline"
+            className="inline-flex shrink-0 items-center gap-1 rounded-full px-1 py-0.5 text-xs font-semibold text-primary transition-colors hover:underline"
           >
             View agency
             <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />

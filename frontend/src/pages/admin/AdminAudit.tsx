@@ -231,7 +231,7 @@ const AdminAudit: React.FC = () => {
             <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden />
             More filters
             {moreFilterCount > 0 ? (
-              <span className="rounded-full bg-indigo-500/15 px-1.5 text-[10px] font-semibold text-indigo-300">
+              <span className="rounded-full bg-admin-accent/15 px-1.5 text-xs font-semibold text-admin-accent-ink">
                 {moreFilterCount}
               </span>
             ) : null}
@@ -248,7 +248,7 @@ const AdminAudit: React.FC = () => {
             className="grid gap-2 border-t border-border pt-3 sm:grid-cols-2 xl:grid-cols-4"
           >
             <div className="space-y-1.5">
-              <Label htmlFor="audit-actor" className="text-[11px] text-muted-foreground">
+              <Label htmlFor="audit-actor" className="text-xs text-muted-foreground">
                 Actor account id
               </Label>
               <div className="relative">
@@ -276,7 +276,7 @@ const AdminAudit: React.FC = () => {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="audit-target" className="text-[11px] text-muted-foreground">
+              <Label htmlFor="audit-target" className="text-xs text-muted-foreground">
                 Target id
               </Label>
               <div className="relative">
@@ -304,7 +304,7 @@ const AdminAudit: React.FC = () => {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="audit-from" className="text-[11px] text-muted-foreground">
+              <Label htmlFor="audit-from" className="text-xs text-muted-foreground">
                 From
               </Label>
               <Input
@@ -320,7 +320,7 @@ const AdminAudit: React.FC = () => {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="audit-to" className="text-[11px] text-muted-foreground">
+              <Label htmlFor="audit-to" className="text-xs text-muted-foreground">
                 To
               </Label>
               <Input
@@ -339,7 +339,20 @@ const AdminAudit: React.FC = () => {
       </div>
 
       {error ? (
-        <AdminNotice tone="error" title="The audit trail did not load">
+        <AdminNotice
+          tone="error"
+          title="The audit trail did not load"
+          action={
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setReloadKey((key) => key + 1)}
+            >
+              Try again
+            </Button>
+          }
+        >
           {error}
         </AdminNotice>
       ) : null}
@@ -383,24 +396,30 @@ const AdminAudit: React.FC = () => {
           ) : entries.length === 0 ? (
             <tr>
               <td colSpan={6}>
-                <AdminEmptyState
-                  icon={ClipboardList}
-                  title="Nothing matches these filters"
-                  description="Widen the date range, clear an id, or search for part of an action name."
-                  action={
-                    anyFilter ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="h-8 rounded-full px-3 text-xs"
-                        onClick={resetFilters}
-                      >
-                        Clear filters
+                {error ? (
+                  <p className="px-4 py-10 text-center text-xs text-muted-foreground">
+                    The trail could not be loaded. Use Try again above.
+                  </p>
+                ) : (
+                  <AdminEmptyState
+                    icon={ClipboardList}
+                    title="Nothing matches these filters"
+                    description="Widen the date range, clear an id, or search for part of an action name."
+                    action={
+                      anyFilter ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-8 rounded-full px-3 text-xs"
+                          onClick={resetFilters}
+                        >
+                          Clear filters
                       </Button>
                     ) : undefined
                   }
-                />
+                  />
+                )}
               </td>
             </tr>
           ) : (
@@ -410,22 +429,22 @@ const AdminAudit: React.FC = () => {
                   {formatAdminDate(entry.createdAt)}
                 </td>
                 <td className="px-4 py-3">
-                  <code className="text-xs font-medium text-indigo-300">{entry.action}</code>
+                  <code className="text-xs font-medium text-admin-accent-ink">{entry.action}</code>
                 </td>
                 <td className="px-4 py-3 text-xs">{entry.actorEmail ?? 'system'}</td>
                 <td className="px-4 py-3 text-xs">
                   <Badge
                     variant="outline"
-                    className="text-[10px] uppercase tracking-wide text-muted-foreground"
+                    className="text-overline text-muted-foreground"
                   >
                     {entry.targetType}
                   </Badge>
                   {entry.targetId ? (
-                    <p className="mt-1 break-all font-mono text-[10px] text-muted-foreground">
+                    <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
                       {targetHref(entry.targetType, entry.targetId) ? (
                         <Link
                           to={targetHref(entry.targetType, entry.targetId)!}
-                          className="text-indigo-300 underline-offset-2 hover:text-indigo-200 hover:underline"
+                          className="text-admin-accent-ink underline-offset-2 hover:text-admin-accent-ink hover:underline"
                         >
                           {entry.targetId}
                         </Link>
@@ -435,10 +454,10 @@ const AdminAudit: React.FC = () => {
                     </p>
                   ) : null}
                 </td>
-                <td className="max-w-[320px] px-4 py-3 text-[11px] text-muted-foreground">
+                <td className="max-w-[320px] px-4 py-3 text-xs text-muted-foreground">
                   {summarizeMetadata(entry.metadata) || '—'}
                 </td>
-                <td className="whitespace-nowrap px-4 py-3 font-mono text-[10px] text-muted-foreground">
+                <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-muted-foreground">
                   {entry.ip ?? '—'}
                 </td>
               </tr>

@@ -1,72 +1,140 @@
-import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertCircle, ArrowRight, CheckCircle2, Loader2 } from "lucide-react";
-import { api } from "@/services/api";
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
+import { AlertCircle, ArrowRight, CheckCircle2, Loader2, RefreshCw } from "lucide-react";
+import { api, ApiError } from "@/services/api";
+import { useAuth } from "@/context/UserContext";
+import { queryClient } from "@/lib/queryClient";
+import {
+  forgetRememberedResetEmail,
+  readRememberedResetEmail,
+  resetLinkFailureState,
+  type ResetLinkState,
+} from "@/lib/authRecovery";
+import { PasswordStrength } from "@/components/auth/PasswordStrength";
+import { PasswordInput } from "@/components/auth/PasswordInput";
+import { AuthPostcard } from "@/components/auth/AuthPostcard";
+import { AUTH_PHOTO_URL } from "@/components/auth/authPhoto";
+import { AppImage } from "@/components/ui/app-image";
+import { useIsDesktop } from "@/hooks/useMediaQuery";
+import {
+  DEFAULT_PASSWORD_POLICY,
+  passwordProblem,
+} from "@/lib/passwordPolicy";
 import { cn } from "@/lib/utils";
 
-const PHOTO_URL =
-  "https://images.unsplash.com/photo-1476990789491-712b869b91a5?auto=format&fit=crop&w=1400&q=80";
-
+/**
+ * `checking` runs the read-only preflight before the form exists, so an expired
+ * or used link is rejected here rather than after the visitor picks a password.
+ * `retry` is reserved for a network/server failure — we never claim a link is
+ * dead when we simply could not ask.
+ */
 const ResetPassword = () => {
   const { token } = useParams<{ token: string }>();
+  const navigate = useNavigate();
+  const { refreshUser } = useAuth();
+  const passwordRef = useRef<HTMLInputElement>(null);
+  const showPhoto = useIsDesktop();
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [fieldErrors, setFieldErrors] = useState<{ password?: string; confirmPassword?: string }>({});
+  const [fieldError, setFieldError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
+  const [linkState, setLinkState] = useState<ResetLinkState>(token ? "checking" : "invalid");
+  const [linkError, setLinkError] = useState<string | null>(null);
+  const [checkAttempt, setCheckAttempt] = useState(0);
+  const [resetEmail] = useState(readRememberedResetEmail);
+
+  useEffect(() => {
+    if (!token) {
+      setLinkState("invalid");
+      return;
+    }
+
+    let cancelled = false;
+    setLinkState("checking");
+    setLinkError(null);
+
+    api
+      .validatePasswordResetToken(token)
+      .then(() => {
+        if (!cancelled) setLinkState("ready");
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        // A 400 is the server's "this link is not usable" answer. Anything
+        // else (offline, 5xx, throttled) is transient and gets a retry.
+        const nextState = resetLinkFailureState(
+          err instanceof ApiError ? err.status : undefined
+        );
+        setLinkState(nextState);
+        if (nextState === "invalid") return;
+        setLinkError(
+          err instanceof Error && err.message
+            ? err.message
+            : "We couldn't check this link. Please try again."
+        );
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token, checkAttempt]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setFieldErrors({});
+    setFieldError(null);
     setError(null);
 
-    const next: { password?: string; confirmPassword?: string } = {};
-    if (!password) {
-      next.password = "Choose a new password.";
-    } else if (password.length < 6) {
-      next.password = "Use at least 6 characters.";
-    }
-    if (!confirmPassword) {
-      next.confirmPassword = "Re-enter your password to confirm it.";
-    } else if (password !== confirmPassword) {
-      next.confirmPassword = "These don't match the password above.";
-    }
-    if (Object.keys(next).length > 0) {
-      setFieldErrors(next);
+    const problem = password ? passwordProblem(password) : "Choose a new password.";
+    if (problem) {
+      setFieldError(problem);
+      requestAnimationFrame(() => {
+        passwordRef.current?.focus();
+        passwordRef.current?.scrollIntoView({ block: "center" });
+      });
       return;
     }
 
     setSaving(true);
     try {
       await api.resetPassword(token ?? '', password);
+      // The response already switched the realm cookie. Drop cached data from
+      // whatever account was signed in before, then adopt the fresh session so
+      // the dashboard renders this account without a document reload.
+      queryClient.clear();
+      forgetRememberedResetEmail();
+      await refreshUser();
       setDone(true);
-    } catch (err: any) {
-      setError(err?.message || "We couldn't update your password. Please try again.");
+    } catch (err) {
+      setError(
+        err instanceof Error && err.message
+          ? err.message
+          : "We couldn't update your password. Please try again."
+      );
     } finally {
       setSaving(false);
     }
   };
 
-  const unusable = !token;
-
   return (
     <div className="grid min-h-screen w-full bg-background lg:grid-cols-[48fr_52fr]">
-      <aside className="relative hidden overflow-hidden bg-slate-950 lg:block">
-        <img
-          src={PHOTO_URL}
+      {/* The desktop photograph is requested only at lg and above (C-21). */}
+      {showPhoto && (
+      <aside className="relative overflow-hidden bg-background">
+        <AppImage
+          src={AUTH_PHOTO_URL}
           alt=""
-          loading="eager"
-          decoding="async"
+          width={1920}
+          height={1080}
+          priority
           className="absolute inset-0 h-full w-full object-cover"
         />
         <div
           aria-hidden
-          className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/55 to-transparent"
+          className="absolute inset-0 bg-gradient-to-t from-muted/90 via-muted/55 to-transparent"
         />
         <div
           aria-hidden
@@ -77,78 +145,129 @@ const ResetPassword = () => {
           <Link
             to="/"
             aria-label="waytowalk home"
-            className="w-fit rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+            className="w-fit rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-brand"
           >
             <img src="/brand/waytowalk-logo-reverse.svg" alt="waytowalk" width="156" height="32" className="h-8 w-[156px]" />
           </Link>
 
           <div className="max-w-md pb-4">
-            <h1 className="font-display text-4xl font-semibold leading-[1.08] tracking-tight text-white xl:text-5xl">
+            <p className="font-display text-4xl font-semibold leading-[1.08] tracking-tight text-white xl:text-5xl">
               Pick up your trips right where you left them.
-            </h1>
+            </p>
             <p className="mt-6 max-w-sm text-sm leading-relaxed text-white/80 xl:text-base">
               Choose a password you'll remember and we'll sign you in on this device.
             </p>
           </div>
         </div>
       </aside>
+      )}
 
-      <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-4 py-10 sm:px-6 lg:px-10 lg:py-12">
+      <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-4 py-5 sm:px-6 sm:py-10 lg:px-10 lg:py-12">
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_0%,hsl(var(--primary)/0.08),transparent_55%)]"
         />
 
         <div className="relative flex w-full max-w-[440px] flex-col items-center">
-          <Link
-            to="/"
-            aria-label="waytowalk home"
-            className="mb-6 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 lg:hidden"
-          >
-            <img src="/brand/waytowalk-logo-name.svg" alt="waytowalk" width="156" height="32" className="h-8 w-[156px] dark:hidden" />
-            <img src="/brand/waytowalk-logo-reverse.svg" alt="waytowalk" width="156" height="32" className="hidden h-8 w-[156px] dark:block" />
-          </Link>
+          <AuthPostcard />
 
           <Card className="w-full overflow-hidden rounded-3xl border-border/70 bg-card shadow-card">
             <CardHeader className="space-y-2 px-5 pb-5 pt-7 text-center sm:px-8 sm:pt-8">
-              <CardTitle className="font-display text-2xl font-semibold tracking-tight text-card-foreground sm:text-[28px]">
-                {done ? "You're all set" : "Choose a new password"}
-              </CardTitle>
+              <h1 className="font-display text-2xl font-semibold tracking-tight text-card-foreground sm:text-3xl">
+                {linkState === "invalid"
+                  ? "This link has expired"
+                  : linkState === "retry"
+                    ? "We couldn't check this link"
+                    : done
+                      ? "You're all set"
+                      : "Choose a new password"}
+              </h1>
               <CardDescription className="mx-auto max-w-xs text-sm leading-relaxed">
-                {done
-                  ? "Your password is updated and this device is signed in."
-                  : "Use at least 6 characters. This link works once and expires after an hour."}
+                {linkState === "invalid"
+                  ? "Reset links work once and expire after an hour. Send yourself a fresh one to continue."
+                  : linkState === "retry"
+                    ? "The link may still be fine — we just couldn't reach the server."
+                    : done
+                      ? "Your password is updated and this device is signed in."
+                      : linkState === "checking"
+                        ? "Checking that this link is still usable…"
+                        : "This link works once and expires after an hour."}
               </CardDescription>
             </CardHeader>
 
             <CardContent className="px-5 pb-5 sm:px-8 sm:pb-7">
-              {done ? (
+              {linkState === "checking" ? (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="flex flex-col items-center gap-3 py-8 text-center"
+                >
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" aria-hidden="true" />
+                  <p className="text-sm font-medium text-muted-foreground">
+                    Checking your reset link…
+                  </p>
+                </div>
+              ) : linkState === "invalid" ? (
+                <div className="space-y-5">
+                  <div
+                    role="alert"
+                    className="flex items-start gap-2.5 rounded-xl border border-destructive/25 bg-destructive/10 p-3.5 text-sm font-medium text-destructive"
+                  >
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                    <p>
+                      This link is invalid, already used, or has expired. Nothing has changed on
+                      your account.
+                    </p>
+                  </div>
+                  <Button asChild variant="hero" size="lg" className="w-full rounded-xl font-semibold">
+                    <Link to="/forgot-password">
+                      Send a new link
+                      <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    </Link>
+                  </Button>
+                </div>
+              ) : linkState === "retry" ? (
+                <div className="space-y-5">
+                  <div
+                    role="alert"
+                    className="flex items-start gap-2.5 rounded-xl border border-destructive/25 bg-destructive/10 p-3.5 text-sm font-medium text-destructive"
+                  >
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                    <p>{linkError}</p>
+                  </div>
+                  <div className="space-y-3">
+                    <Button
+                      type="button"
+                      variant="hero"
+                      size="lg"
+                      className="w-full rounded-xl font-semibold"
+                      onClick={() => setCheckAttempt((attempt) => attempt + 1)}
+                    >
+                      <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                      Try again
+                    </Button>
+                    <Button asChild variant="outline" size="lg" className="w-full rounded-xl">
+                      <Link to="/forgot-password">Send a new link instead</Link>
+                    </Button>
+                  </div>
+                </div>
+              ) : done ? (
                 <div className="space-y-5">
                   <div className="flex items-start gap-3 rounded-xl border border-primary/25 bg-primary/10 p-3.5 text-sm text-foreground">
                     <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
                     <p>Your trips, chats and enquiries are ready when you are.</p>
                   </div>
                   <Button asChild variant="hero" size="lg" className="w-full rounded-xl font-semibold">
-                    <a href="/dashboard">
+                    <Link to="/dashboard">
                       Go to your dashboard
                       <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                    </a>
-                  </Button>
-                </div>
-              ) : unusable ? (
-                <div className="space-y-5">
-                  <div className="flex items-start gap-2.5 rounded-xl border border-destructive/25 bg-destructive/10 p-3.5 text-sm font-medium text-destructive">
-                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                    <p>This reset link is incomplete. Ask for a new one to continue.</p>
-                  </div>
-                  <Button asChild variant="outline" size="lg" className="w-full rounded-xl">
-                    <Link to="/forgot-password">Request a new link</Link>
+                    </Link>
                   </Button>
                 </div>
               ) : (
                 <form className="space-y-4" onSubmit={handleSubmit}>
                   {error && (
-                    <div className="flex items-start gap-2.5 rounded-xl border border-destructive/25 bg-destructive/10 p-3.5 text-sm font-medium text-destructive">
+                    <div role="alert" className="flex items-start gap-2.5 rounded-xl border border-destructive/25 bg-destructive/10 p-3.5 text-sm font-medium text-destructive">
                       <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                       <div className="flex-1 space-y-1">
                         <p>{error}</p>
@@ -162,53 +281,48 @@ const ResetPassword = () => {
                     </div>
                   )}
 
+                  {resetEmail ? (
+                    <input
+                      type="email"
+                      name="username"
+                      autoComplete="username"
+                      value={resetEmail}
+                      readOnly
+                      tabIndex={-1}
+                      aria-hidden="true"
+                      className="sr-only"
+                    />
+                  ) : null}
                   <div className="space-y-2">
                     <Label htmlFor="password">New password</Label>
-                    <Input
+                    <PasswordInput
                       id="password"
-                      type="password"
+                      ref={passwordRef}
+                      name="password"
                       autoComplete="new-password"
                       autoFocus
-                      placeholder="••••••••"
-                      className={cn("h-11 rounded-lg bg-card", fieldErrors.password && "border-destructive focus-visible:ring-destructive")}
+                      placeholder="Choose a password"
+                      maxLength={DEFAULT_PASSWORD_POLICY.maxLength}
+                      className={cn("h-12 rounded-lg bg-card", fieldError && "border-destructive focus-visible:ring-destructive")}
                       value={password}
                       onChange={(e) => {
                         setPassword(e.target.value);
-                        setFieldErrors((prev) => ({ ...prev, password: undefined }));
+                        setFieldError(null);
                         setError(null);
                       }}
-                      aria-invalid={Boolean(fieldErrors.password)}
-                      aria-describedby={fieldErrors.password ? "password-error" : undefined}
+                      aria-invalid={Boolean(fieldError)}
+                      aria-describedby={
+                        [fieldError ? "password-error" : null, "password-requirements"]
+                          .filter(Boolean)
+                          .join(" ")
+                      }
                     />
-                    {fieldErrors.password && (
-                      <p id="password-error" className="text-xs font-medium text-destructive">
-                        {fieldErrors.password}
+                    {fieldError && (
+                      <p id="password-error" role="alert" className="text-sm font-medium text-destructive">
+                        {fieldError}
                       </p>
                     )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="confirm-password">Confirm new password</Label>
-                    <Input
-                      id="confirm-password"
-                      type="password"
-                      autoComplete="new-password"
-                      placeholder="••••••••"
-                      className={cn("h-11 rounded-lg bg-card", fieldErrors.confirmPassword && "border-destructive focus-visible:ring-destructive")}
-                      value={confirmPassword}
-                      onChange={(e) => {
-                        setConfirmPassword(e.target.value);
-                        setFieldErrors((prev) => ({ ...prev, confirmPassword: undefined }));
-                        setError(null);
-                      }}
-                      aria-invalid={Boolean(fieldErrors.confirmPassword)}
-                      aria-describedby={fieldErrors.confirmPassword ? "confirm-password-error" : undefined}
-                    />
-                    {fieldErrors.confirmPassword && (
-                      <p id="confirm-password-error" className="text-xs font-medium text-destructive">
-                        {fieldErrors.confirmPassword}
-                      </p>
-                    )}
+                    <PasswordStrength id="password-requirements" value={password} />
                   </div>
 
                   <Button

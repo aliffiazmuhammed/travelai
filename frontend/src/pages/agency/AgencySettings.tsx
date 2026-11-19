@@ -19,6 +19,8 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ConfirmDestructive } from '@/components/ui/confirm-destructive';
+import { UnsavedChangesDialog } from '@/components/ui/unsaved-changes-dialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -30,6 +32,7 @@ import { api } from '@/services/api';
 import { useAgency } from '@/context/AgencyContext';
 import { useAgencyAuth } from '@/context/AgencyAuthContext';
 import { useAgencyAssetUrl } from '@/hooks/useAgencyAssetUrl';
+import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import { agencyRoleBadgeClass, agencyRoleLabel } from '@/lib/agency';
 import {
   DEFAULT_PHONE_COUNTRY,
@@ -128,6 +131,7 @@ const AgencySettings: React.FC = () => {
   const [assetsLoading, setAssetsLoading] = useState(false);
   const [assetsError, setAssetsError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [assetRemoveTarget, setAssetRemoveTarget] = useState<AgencyAsset | null>(null);
   const [fontFamily, setFontFamily] = useState('');
   const [licenseNote, setLicenseNote] = useState('');
   const [accountName, setAccountName] = useState(user?.name ?? '');
@@ -195,6 +199,123 @@ const AgencySettings: React.FC = () => {
       cancelled = true;
     };
   }, [activeAgencyId]);
+
+  // Every field belongs to exactly one tab, so the header action saves only the
+  // section the user can see. Hidden tabs keep their unsaved edits.
+  const brandDirty = activeAgency
+    ? name.trim() !== activeAgency.name.trim() ||
+      gstin.trim().toUpperCase() !== (activeAgency.gstin ?? '').toUpperCase() ||
+      website.trim() !== (activeAgency.branding.website ?? '') ||
+      contactEmail.trim() !== (activeAgency.branding.contactEmail ?? '') ||
+      (toE164(contactPhoneCountry, contactPhone) ?? '') !==
+        (activeAgency.branding.contactPhone ?? '') ||
+      address.trim() !== (activeAgency.branding.address ?? '') ||
+      primaryColor.trim() !== (activeAgency.branding.primaryColor ?? DEFAULT_PRIMARY) ||
+      accentColor.trim() !== (activeAgency.branding.accentColor ?? DEFAULT_ACCENT) ||
+      fontHeading.trim() !== (activeAgency.branding.fontHeading ?? '') ||
+      fontBody.trim() !== (activeAgency.branding.fontBody ?? '')
+    : false;
+
+  const termsDirty = activeAgency
+    ? toTermLines(defaultInclusions).join('\n') !==
+        (activeAgency.defaultTerms?.inclusions ?? []).join('\n') ||
+      toTermLines(defaultExclusions).join('\n') !==
+        (activeAgency.defaultTerms?.exclusions ?? []).join('\n') ||
+      toTermLines(defaultTerms).join('\n') !==
+        (activeAgency.defaultTerms?.terms ?? []).join('\n')
+    : false;
+
+  const dirty = brandDirty || termsDirty;
+
+  const save = async (scope: 'brand' | 'quotes'): Promise<boolean> => {
+    if (!canManage || !activeAgencyId) return false;
+    if (scope === 'brand' && name.trim().length < 2) {
+      toast.error('Agency name must be at least 2 characters.');
+      return false;
+    }
+    if (scope === 'brand') {
+      const phoneError = validatePhone(contactPhoneCountry, contactPhone, {
+        required: false,
+      });
+      if (phoneError) {
+        toast.error(phoneError);
+        return false;
+      }
+    }
+
+    setSaving(true);
+    try {
+      const updates: {
+        name?: string;
+        gstin?: string;
+        branding?: Partial<AgencyBranding>;
+        defaultTerms?: { inclusions: string[]; exclusions: string[]; terms: string[] };
+      } = {};
+
+      if (scope === 'brand') {
+        updates.name = name.trim();
+        updates.gstin = gstin.trim();
+        // Every optional value is sent, including blanks: an empty string is how
+        // the API clears a field that previously had a value.
+        updates.branding = {
+          primaryColor: primaryColor.trim(),
+          accentColor: accentColor.trim(),
+          fontHeading: fontHeading.trim(),
+          fontBody: fontBody.trim(),
+          website: website.trim(),
+          contactEmail: contactEmail.trim(),
+          contactPhone: toE164(contactPhoneCountry, contactPhone) ?? '',
+          address: address.trim(),
+        };
+      } else {
+        updates.defaultTerms = {
+          inclusions: toTermLines(defaultInclusions),
+          exclusions: toTermLines(defaultExclusions),
+          terms: toTermLines(defaultTerms),
+        };
+      }
+
+      const result = await api.updateAgency(activeAgencyId, updates);
+      replaceAgency(result.agency);
+
+      if (scope === 'brand') {
+        // Reflect server normalisation (trimming, lowercase email, uppercase GSTIN).
+        setName(result.agency.name);
+        setGstin(result.agency.gstin ?? '');
+        setWebsite(result.agency.branding.website ?? '');
+        setContactEmail(result.agency.branding.contactEmail ?? '');
+        const savedPhone = splitPhone(result.agency.branding.contactPhone);
+        setContactPhone(savedPhone.national);
+        setContactPhoneCountry(savedPhone.countryIso);
+        setAddress(result.agency.branding.address ?? '');
+        setPrimaryColor(result.agency.branding.primaryColor ?? DEFAULT_PRIMARY);
+        setAccentColor(result.agency.branding.accentColor ?? DEFAULT_ACCENT);
+        setFontHeading(result.agency.branding.fontHeading ?? '');
+        setFontBody(result.agency.branding.fontBody ?? '');
+        toast.success('Brand and contact details saved.');
+      } else {
+        setDefaultInclusions((result.agency.defaultTerms?.inclusions ?? []).join('\n'));
+        setDefaultExclusions((result.agency.defaultTerms?.exclusions ?? []).join('\n'));
+        setDefaultTerms((result.agency.defaultTerms?.terms ?? []).join('\n'));
+        toast.success('Quote defaults saved.');
+      }
+      return true;
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : 'We could not save those settings.'
+      );
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const guard = useUnsavedChangesGuard(dirty, async () => {
+    let saved = true;
+    if (brandDirty) saved = await save('brand');
+    if (saved && termsDirty) saved = await save('quotes');
+    return saved;
+  });
 
   if (loading && !activeAgency) {
     return (
@@ -303,15 +424,14 @@ const AgencySettings: React.FC = () => {
     }
   };
 
-  const removeAsset = async (asset: AgencyAsset) => {
-    if (!activeAgencyId) return;
-    const label = asset.originalName || assetKindLabel(asset.kind).toLowerCase();
-    if (!window.confirm(`Remove "${label}" from the brand library?`)) return;
-
+  const removeAsset = async () => {
+    if (!activeAgencyId || !assetRemoveTarget) return;
+    const asset = assetRemoveTarget;
     setBusy(asset._id);
     try {
       const result = await api.deleteAgencyAsset(activeAgencyId, asset._id);
       setAssets((prev) => prev.filter((entry) => entry._id !== asset._id));
+      setAssetRemoveTarget(null);
       if (result.agency) {
         replaceAgency(result.agency);
         // Deleting a font also clears it from the typography settings.
@@ -350,73 +470,6 @@ const AgencySettings: React.FC = () => {
     navigate('/agency/login', { replace: true });
   };
 
-  const save = async () => {
-    if (!canManage || !activeAgencyId) return;
-    if (name.trim().length < 2) {
-      toast.error('Agency name must be at least 2 characters.');
-      return;
-    }
-    const phoneError = validatePhone(contactPhoneCountry, contactPhone, {
-      required: false,
-    });
-    if (phoneError) {
-      toast.error(phoneError);
-      return;
-    }
-
-    setSaving(true);
-    try {
-      // Every optional value is sent, including blanks: an empty string is how
-      // the API clears a field that previously had a value.
-      const branding: Partial<AgencyBranding> = {
-        primaryColor: primaryColor.trim(),
-        accentColor: accentColor.trim(),
-        fontHeading: fontHeading.trim(),
-        fontBody: fontBody.trim(),
-        website: website.trim(),
-        contactEmail: contactEmail.trim(),
-        contactPhone:
-          toE164(contactPhoneCountry, contactPhone) ?? '',
-        address: address.trim(),
-      };
-
-      const result = await api.updateAgency(activeAgencyId, {
-        name: name.trim(),
-        gstin: gstin.trim(),
-        branding,
-        defaultTerms: {
-          inclusions: toTermLines(defaultInclusions),
-          exclusions: toTermLines(defaultExclusions),
-          terms: toTermLines(defaultTerms),
-        },
-      });
-      replaceAgency(result.agency);
-      // Reflect server normalisation (trimming, lowercase email, uppercase GSTIN).
-      setName(result.agency.name);
-      setGstin(result.agency.gstin ?? '');
-      setWebsite(result.agency.branding.website ?? '');
-      setContactEmail(result.agency.branding.contactEmail ?? '');
-      const savedPhone = splitPhone(result.agency.branding.contactPhone);
-      setContactPhone(savedPhone.national);
-      setContactPhoneCountry(savedPhone.countryIso);
-      setAddress(result.agency.branding.address ?? '');
-      setPrimaryColor(result.agency.branding.primaryColor ?? DEFAULT_PRIMARY);
-      setAccentColor(result.agency.branding.accentColor ?? DEFAULT_ACCENT);
-      setFontHeading(result.agency.branding.fontHeading ?? '');
-      setFontBody(result.agency.branding.fontBody ?? '');
-      setDefaultInclusions((result.agency.defaultTerms?.inclusions ?? []).join('\n'));
-      setDefaultExclusions((result.agency.defaultTerms?.exclusions ?? []).join('\n'));
-      setDefaultTerms((result.agency.defaultTerms?.terms ?? []).join('\n'));
-      toast.success('Agency settings saved.');
-    } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : 'We could not save the agency settings.'
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
   return (
     <div className="space-y-5">
       <input
@@ -424,6 +477,7 @@ const AgencySettings: React.FC = () => {
         type="file"
         accept={IMAGE_ACCEPT}
         className="hidden"
+        aria-label="Upload logo"
         onChange={(event) => {
           const file = event.target.files?.[0];
           event.target.value = '';
@@ -435,6 +489,7 @@ const AgencySettings: React.FC = () => {
         type="file"
         accept={IMAGE_ACCEPT}
         className="hidden"
+        aria-label="Upload mascot"
         onChange={(event) => {
           const file = event.target.files?.[0];
           event.target.value = '';
@@ -446,6 +501,7 @@ const AgencySettings: React.FC = () => {
         type="file"
         accept={IMAGE_ACCEPT}
         className="hidden"
+        aria-label="Upload image"
         onChange={(event) => {
           const file = event.target.files?.[0];
           event.target.value = '';
@@ -457,6 +513,7 @@ const AgencySettings: React.FC = () => {
         type="file"
         accept={FONT_ACCEPT}
         className="hidden"
+        aria-label="Upload font"
         onChange={(event) => {
           const file = event.target.files?.[0];
           event.target.value = '';
@@ -469,24 +526,29 @@ const AgencySettings: React.FC = () => {
         meta={
           <Badge
             variant="outline"
-            className={cn('text-[10px]', agencyRoleBadgeClass(activeAgency.role))}
+            className={cn('text-xs', agencyRoleBadgeClass(activeAgency.role))}
           >
             {agencyRoleLabel(activeAgency.role)}
           </Badge>
         }
         description="Your brand identity for client pages, quotes and exports, plus your personal agency account. Files stay private to this agency; only the logo and details you choose in the public profile reach travellers."
         actions={
-          canManage ? (
+          canManage && (section === 'brand' || section === 'quotes') ? (
             <Button
-              onClick={() => void save()}
-              disabled={saving || name.trim().length < 2}
+              onClick={() => void save(section)}
+              disabled={
+                saving ||
+                (section === 'brand'
+                  ? !brandDirty || name.trim().length < 2
+                  : !termsDirty)
+              }
             >
               {saving ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
                 <Save className="mr-2 h-4 w-4" />
               )}
-              Save changes
+              {section === 'brand' ? 'Save brand' : 'Save quote defaults'}
             </Button>
           ) : null
         }
@@ -555,7 +617,7 @@ const AgencySettings: React.FC = () => {
                   disabled={!canManage}
                   className="font-mono uppercase"
                 />
-                <p className="text-[11px] text-agency-muted">
+                <p className="text-xs text-agency-muted">
                   Optional. Printed on quotes and invoices in later milestones.
                 </p>
               </div>
@@ -629,7 +691,7 @@ const AgencySettings: React.FC = () => {
                     />
                   ) : (
                     <span
-                      className="grid h-full w-full place-items-center text-lg font-bold text-white"
+                      className="grid h-full w-full place-items-center text-xl font-bold text-white"
                       style={{ backgroundColor: previewPrimary }}
                     >
                       {initial}
@@ -751,7 +813,7 @@ const AgencySettings: React.FC = () => {
                     Loading brand assets...
                   </div>
                 ) : assetsError ? (
-                  <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+                  <p className="rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning-ink dark:border-warning/20 dark:bg-warning/30">
                     {assetsError}
                   </p>
                 ) : images.length === 0 ? (
@@ -772,17 +834,17 @@ const AgencySettings: React.FC = () => {
                         />
                         <div className="flex items-center justify-between gap-2 px-2 py-1.5">
                           <div className="min-w-0">
-                            <div className="truncate text-[11px] font-medium">
+                            <div className="truncate text-xs font-medium">
                               {assetKindLabel(asset.kind)}
                             </div>
-                            <div className="text-[10px] text-agency-muted">
+                            <div className="text-xs text-agency-muted">
                               {formatBytes(asset.bytes)}
                             </div>
                           </div>
                           {canManage ? (
                             <button
                               type="button"
-                              onClick={() => void removeAsset(asset)}
+                              onClick={() => setAssetRemoveTarget(asset)}
                               disabled={busy === asset._id}
                               className="rounded-md p-1 text-agency-muted transition-colors hover:text-destructive disabled:opacity-50"
                               aria-label={`Remove ${assetKindLabel(asset.kind)}`}
@@ -879,12 +941,12 @@ const AgencySettings: React.FC = () => {
                           </span>
                           {fontHeading === font.fontFamily ||
                           fontBody === font.fontFamily ? (
-                            <Badge variant="secondary" className="text-[10px]">
+                            <Badge variant="secondary" className="text-xs">
                               In use
                             </Badge>
                           ) : null}
                         </div>
-                        <div className="truncate text-[11px] text-agency-muted">
+                        <div className="truncate text-xs text-agency-muted">
                           {font.originalName || 'Font file'} ·{' '}
                           {formatBytes(font.bytes)} · {font.licenseNote}
                         </div>
@@ -892,7 +954,7 @@ const AgencySettings: React.FC = () => {
                       {canManage ? (
                         <button
                           type="button"
-                          onClick={() => void removeAsset(font)}
+                          onClick={() => setAssetRemoveTarget(font)}
                           disabled={busy === font._id}
                           className="rounded-md p-1.5 text-agency-muted transition-colors hover:text-destructive disabled:opacity-50"
                           aria-label={`Remove ${font.fontFamily || 'font'}`}
@@ -942,6 +1004,7 @@ const AgencySettings: React.FC = () => {
                     maxLength={7}
                     disabled={!canManage}
                     className="font-mono"
+                    aria-label="Primary colour hex value"
                     placeholder={DEFAULT_PRIMARY}
                   />
                 </div>
@@ -963,6 +1026,7 @@ const AgencySettings: React.FC = () => {
                     maxLength={7}
                     disabled={!canManage}
                     className="font-mono"
+                    aria-label="Accent colour hex value"
                     placeholder={DEFAULT_ACCENT}
                   />
                 </div>
@@ -997,7 +1061,7 @@ const AgencySettings: React.FC = () => {
                   <option key={font._id} value={font.fontFamily} />
                 ))}
               </datalist>
-              <p className="text-[11px] text-agency-muted">
+              <p className="text-xs text-agency-muted">
                 Pick a family from your uploaded fonts, or type any family name.
               </p>
             </CardContent>
@@ -1031,7 +1095,7 @@ const AgencySettings: React.FC = () => {
                         />
                       ) : (
                         <span
-                          className="grid h-full w-full place-items-center text-lg font-bold text-white"
+                          className="grid h-full w-full place-items-center text-xl font-bold text-white"
                           style={{ backgroundColor: previewPrimary }}
                         >
                           {initial}
@@ -1054,7 +1118,7 @@ const AgencySettings: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="mt-4 space-y-2 rounded-xl bg-agency-soft px-3 py-2.5 text-[11px] text-agency-ink/80">
+                  <div className="mt-4 space-y-2 rounded-xl bg-agency-soft px-3 py-2.5 text-xs text-agency-ink/80">
                     <div className="flex items-center justify-between gap-3">
                       <span className="truncate">
                         {toE164(contactPhoneCountry, contactPhone) ||
@@ -1072,7 +1136,7 @@ const AgencySettings: React.FC = () => {
                       {address.trim() || 'Address from the profile card'}
                     </div>
                     {gstin.trim() ? (
-                      <div className="font-mono text-[10px] uppercase">
+                      <div className="font-mono text-overline">
                         GSTIN {gstin.trim()}
                       </div>
                     ) : null}
@@ -1085,7 +1149,7 @@ const AgencySettings: React.FC = () => {
                         alt=""
                         className="h-8 w-8 object-contain"
                       />
-                      <span className="text-[11px] text-agency-muted">
+                      <span className="text-xs text-agency-muted">
                         Your mascot appears on empty states and client pages.
                       </span>
                     </div>
@@ -1144,9 +1208,9 @@ const AgencySettings: React.FC = () => {
                   disabled={!canManage}
                 />
               </div>
-              <p className="text-[11px] text-agency-muted">
+              <p className="text-xs text-agency-muted">
                 One entry per line. Up to 30 lines per list, 300 characters each.
-                Save changes above to apply them.
+                Save quote defaults above to apply them.
               </p>
             </CardContent>
           </Card>
@@ -1156,7 +1220,7 @@ const AgencySettings: React.FC = () => {
           <Card className="rounded-2xl border-agency-line bg-agency-panel shadow-none">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-sm font-semibold text-agency-ink">
-                <UserRound className="h-4 w-4 text-agency-accent" />
+                <UserRound className="h-4 w-4 text-agency-accent-ink" />
                 Your account
               </CardTitle>
               <CardDescription className="text-xs leading-5 text-agency-muted">
@@ -1167,12 +1231,12 @@ const AgencySettings: React.FC = () => {
             <CardContent>
               <form className="space-y-4" onSubmit={saveAccountName}>
                 <div className="space-y-2">
-                  <Label>Workspace</Label>
-                  <Input value={sessionAgency?.name ?? ''} readOnly disabled />
+                  <Label htmlFor="agency-account-workspace">Workspace</Label>
+                  <Input id="agency-account-workspace" value={sessionAgency?.name ?? ''} readOnly disabled />
                 </div>
                 <div className="space-y-2">
-                  <Label>Email</Label>
-                  <Input value={user?.email ?? ''} readOnly disabled />
+                  <Label htmlFor="agency-account-email">Email</Label>
+                  <Input id="agency-account-email" value={user?.email ?? ''} readOnly disabled />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="account-name">Display name</Label>
@@ -1209,6 +1273,24 @@ const AgencySettings: React.FC = () => {
           <AgencyPasswordChange />
         </div>
       </div>
+
+      <ConfirmDestructive
+        open={Boolean(assetRemoveTarget)}
+        onOpenChange={(open) => {
+          if (!open) setAssetRemoveTarget(null);
+        }}
+        title={`Remove ${assetRemoveTarget?.originalName || 'this asset'}?`}
+        description="It leaves the brand library for good. Anything that already uses it keeps rendering, but you will need to upload it again to use it in new work."
+        confirmLabel="Remove asset"
+        onConfirm={removeAsset}
+        busy={Boolean(assetRemoveTarget && busy === assetRemoveTarget._id)}
+        detail={
+          assetRemoveTarget
+            ? `${assetKindLabel(assetRemoveTarget.kind)} · ${assetRemoveTarget.originalName || 'Untitled asset'}`
+            : null
+        }
+      />
+      <UnsavedChangesDialog guard={guard} />
     </div>
   );
 };

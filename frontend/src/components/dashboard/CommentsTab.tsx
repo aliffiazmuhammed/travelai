@@ -4,16 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmDestructive } from "@/components/ui/confirm-destructive";
 import { toast } from "sonner";
 import {
   BarChart3,
@@ -1011,7 +1002,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
 
   const typingLine =
     typingLabels.length > 0 ? (
-      <div className="flex items-center gap-2 px-1 text-[11px] font-semibold text-primary">
+      <div className="flex items-center gap-2 px-1 text-xs font-semibold text-primary">
         <span className="relative flex h-2 w-2 shrink-0">
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-60" />
           <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
@@ -1029,7 +1020,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
     ) : null;
 
   const botThinkingLine = botThinking ? (
-    <div className="flex items-center gap-2 px-1 text-[11px] font-semibold text-violet-600 dark:text-violet-400">
+    <div className="flex items-center gap-2 px-1 text-xs font-semibold text-accent-ink">
       <Bot className="h-3.5 w-3.5 shrink-0" />
       <span>waytowalk is thinking…</span>
     </div>
@@ -1044,7 +1035,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
    */
   const botDisclosure =
     botAskActive && !botThinking ? (
-      <div className="flex items-start gap-1.5 rounded-xl border border-violet-300/50 bg-violet-500/5 px-2.5 py-1.5 text-[11px] font-semibold leading-snug text-violet-700 dark:border-violet-500/30 dark:text-violet-300">
+      <div className="flex items-start gap-1.5 rounded-xl border border-accent/50 bg-accent/5 px-2.5 py-1.5 text-xs font-semibold leading-snug text-accent-ink dark:border-accent/30">
         <Sparkles className="mt-px h-3.5 w-3.5 shrink-0" />
         <span>
           Asking waytowalk{anchorDay ? ` about Day ${anchorDay}` : ""}
@@ -1089,7 +1080,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
    */
   const sendNotice =
     cryptoApi.status !== 'ready' ? (
-      <div className="flex flex-col items-center justify-center gap-1 text-[10px] text-muted-foreground">
+      <div className="flex flex-col items-center justify-center gap-1 text-xs text-muted-foreground">
         <div className="flex items-center justify-center gap-1.5">
           <span>
             {cryptoApi.status === 'keyless'
@@ -1126,7 +1117,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
       <div
         role="listbox"
         aria-label="Mention waytowalk"
-        className="absolute bottom-full left-0 right-0 z-30 mb-1.5 overflow-hidden rounded-2xl border border-violet-300/60 bg-popover p-1 shadow-lg dark:border-violet-500/30"
+        className="absolute bottom-full left-0 right-0 z-30 mb-1.5 overflow-hidden rounded-2xl border border-accent/60 bg-popover p-1 shadow-lg dark:border-accent/30"
       >
         <button
           type="button"
@@ -1139,18 +1130,18 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
             event.preventDefault();
             insertMention("menu");
           }}
-          className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors hover:bg-violet-500/10"
+          className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors hover:bg-accent/10"
         >
-          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-violet-500/10 text-violet-600 dark:text-violet-300">
+          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent/10 text-accent-ink">
             <Sparkles className="h-3.5 w-3.5" />
           </span>
           <span className="min-w-0 flex-1">
             <span className="block text-xs font-bold text-foreground">waytowalk</span>
-            <span className="block truncate text-[11px] text-muted-foreground">
+            <span className="block truncate text-xs text-muted-foreground">
               Answers from the recent messages here
             </span>
           </span>
-          <kbd className="hidden shrink-0 rounded-md border border-border/70 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground sm:block">
+          <kbd className="hidden shrink-0 rounded-md border border-border/70 px-1.5 py-0.5 text-xs font-semibold text-muted-foreground sm:block">
             Enter
           </kbd>
         </button>
@@ -1171,13 +1162,13 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
           onClick={() => insertMention("chip")}
           disabled={state.submitting}
           title="Ask waytowalk about this trip"
-          className="inline-flex items-center gap-1.5 rounded-full border border-violet-300/60 bg-violet-500/5 px-2.5 py-1 text-[11px] font-bold text-violet-700 transition-colors hover:bg-violet-500/10 disabled:opacity-50 dark:border-violet-500/30 dark:text-violet-300"
+          className="inline-flex items-center gap-1.5 rounded-full border border-accent/60 bg-accent/5 px-2.5 py-1 text-xs font-bold text-accent-ink transition-colors hover:bg-accent/10 disabled:opacity-50 dark:border-accent/30"
         >
           <Sparkles className="h-3.5 w-3.5" />
           Ask waytowalk
         </button>
         {!aiHintDismissed && (
-          <span className="inline-flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground">
+          <span className="inline-flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
             <span className="truncate">Each ask includes the last few messages here.</span>
             <button
               type="button"
@@ -1203,7 +1194,8 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
             setAnchorDay(event.target.value ? Number(event.target.value) : null)
           }
           title="Anchor this message to a trip day"
-          className="h-9 shrink-0 cursor-pointer self-center rounded-full border border-border/60 bg-muted/40 px-2.5 text-[11px] font-bold text-muted-foreground outline-none"
+          aria-label="Anchor this message to a trip day"
+          className="h-9 shrink-0 cursor-pointer self-center rounded-full border border-border/60 bg-muted/40 px-2.5 text-xs font-bold text-muted-foreground outline-none"
         >
           <option value="">Trip</option>
           {anchoredDays.slice(0, 12).map((day) => (
@@ -1254,6 +1246,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
             rows={1}
             maxLength={COMMENT_MAX_LEN}
             disabled={state.submitting}
+            aria-label={anchorDay ? `Message about Day ${anchorDay}` : "Message the trip"}
             className="max-h-28 min-h-0 w-full resize-none overflow-y-auto border-0 bg-transparent px-1 py-2 text-sm shadow-none focus-visible:ring-0"
           />
         </div>
@@ -1338,7 +1331,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
               type="button"
               onClick={() => setAnchorDay(null)}
               className={cn(
-                "px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors",
+                "px-2.5 py-1 rounded-full text-xs font-bold border transition-colors",
                 anchorDay === null
                   ? "bg-primary/10 text-primary border-primary/30"
                   : "border-border/60 text-muted-foreground hover:text-foreground"
@@ -1352,7 +1345,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
                 type="button"
                 onClick={() => setAnchorDay(anchorDay === day ? null : day)}
                 className={cn(
-                  "px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors",
+                  "px-2.5 py-1 rounded-full text-xs font-bold border transition-colors",
                   anchorDay === day
                     ? "bg-primary/10 text-primary border-primary/30"
                     : "border-border/60 text-muted-foreground hover:text-foreground"
@@ -1539,7 +1532,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
             {cryptoApi.status === 'ready' ? (
               /* WhatsApp-style: one quiet line at the top of the chat, no
                  technical detail, no icons, nothing to act on. */
-              <div className="py-1 text-center text-[11px] text-muted-foreground">
+              <div className="py-1 text-center text-xs text-muted-foreground">
                 Messages are end-to-end encrypted.
               </div>
             ) : null}
@@ -1567,7 +1560,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
                 <h3 className="font-extrabold text-foreground text-sm uppercase tracking-wider">
                   Trip chat
                 </h3>
-                <Badge variant="outline" className="text-[10px]">
+                <Badge variant="outline" className="text-xs">
                   {dayFilter === null ? comments.length : visible.length}
                 </Badge>
               </div>
@@ -1575,7 +1568,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
 
             {cryptoApi.status === "ready" && (
               /* WhatsApp-style: the single, plain statement about the chat. */
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Messages are end-to-end encrypted.
               </p>
             )}
@@ -1617,7 +1610,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
                   type="button"
                   onClick={() => setDayFilter(null)}
                   className={cn(
-                    "px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors",
+                    "px-2.5 py-1 rounded-full text-xs font-bold border transition-colors",
                     dayFilter === null
                       ? "bg-primary/10 text-primary border-primary/30"
                       : "border-border/60 text-muted-foreground hover:text-foreground"
@@ -1631,7 +1624,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
                     type="button"
                     onClick={() => setDayFilter(dayFilter === day ? null : day)}
                     className={cn(
-                      "px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors",
+                      "px-2.5 py-1 rounded-full text-xs font-bold border transition-colors",
                       dayFilter === day
                         ? "bg-primary/10 text-primary border-primary/30"
                         : "border-border/60 text-muted-foreground hover:text-foreground"
@@ -1663,49 +1656,36 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
       )}
 
       {/* Moderation / self-removal confirm (§19.7) */}
-      <AlertDialog
+      <ConfirmDestructive
         open={pendingDelete !== null}
         onOpenChange={(open) => {
           if (!open) setPendingDelete(null);
         }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remove this message?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {pendingDelete?.isYou
-                ? "Your message disappears for everyone, but a removal record is kept."
-                : "It disappears for everyone — but the removal keeps its author and time for the audit trail."}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Keep it</AlertDialogCancel>
-            <AlertDialogAction onClick={() => void confirmDelete()}>
-              Remove
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        icon={Trash2}
+        title="Remove this message?"
+        description={
+          pendingDelete?.isYou
+            ? "Your message disappears for everyone, but a removal record is kept."
+            : "It disappears for everyone — but the removal keeps its author and time for the audit trail."
+        }
+        confirmLabel="Remove message"
+        cancelLabel="Keep it"
+        onConfirm={() => confirmDelete()}
+      />
 
       {/* F10 recovery: a locked device can move the chat forward, honestly */}
-      <AlertDialog open={resetChatOpen} onOpenChange={setResetChatOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Start a new chat on this device?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Older messages will stay locked and can't be read here. New messages and polls will be private
-              again. Only do this if this device never unlocks — if another member's chat is open, their app
-              will usually unlock this one for you.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={resettingChat}>Keep trying</AlertDialogCancel>
-            <AlertDialogAction disabled={resettingChat} onClick={() => void startNewChat()}>
-              {resettingChat ? "Starting…" : "Start new chat"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDestructive
+        open={resetChatOpen}
+        onOpenChange={setResetChatOpen}
+        tone="warning"
+        icon={RotateCcw}
+        title="Start a new chat on this device?"
+        description="Older messages will stay locked and can't be read here. New messages and polls will be private again. Only do this if this device never unlocks — if another member's chat is open, their app will usually unlock this one for you."
+        confirmLabel="Start new chat"
+        cancelLabel="Keep trying"
+        onConfirm={() => startNewChat()}
+        busy={resettingChat}
+      />
 
       {/* Start-a-poll dialog (F13a) — sealed by the caller before it is sent */}
       <PollComposer
@@ -1737,14 +1717,14 @@ const DecisionCard: React.FC<DecisionCardProps> = ({ row, canUnmark, isBusy, onU
       <p className="text-xs font-semibold text-foreground whitespace-pre-wrap break-words">
         {row.body}
       </p>
-      <div className="flex items-center gap-1.5 flex-wrap mt-0.5 text-[10px] text-muted-foreground">
+      <div className="flex items-center gap-1.5 flex-wrap mt-0.5 text-xs text-muted-foreground">
         <span className="font-bold">{row.label}</span>
         <span aria-hidden>·</span>
         <span>{formatRelative(row.createdAt)}</span>
         {row.day !== undefined && (
           <Badge
             variant="outline"
-            className="text-[9px] px-1 py-0 h-3.5 border-border/60 text-muted-foreground"
+            className="text-xs px-1 py-0 h-3.5 border-border/60 text-muted-foreground"
           >
             Day {row.day}
           </Badge>
@@ -1764,7 +1744,7 @@ const DecisionCard: React.FC<DecisionCardProps> = ({ row, canUnmark, isBusy, onU
         onClick={onUnmark}
         disabled={isBusy}
         title={row.isYou ? "Unmark your decision" : "Moderate — unmark this decision"}
-        className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-foreground gap-1 shrink-0"
+        className="h-6 px-1.5 text-xs text-muted-foreground hover:text-foreground gap-1 shrink-0"
       >
         {isBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
         <span className="hidden sm:inline">Unmark</span>
@@ -1810,10 +1790,10 @@ const DecisionsStrip: React.FC<DecisionsStripProps> = ({
           className="flex w-full items-center gap-1.5 px-3 py-2 text-left"
         >
           <Pin className="w-3.5 h-3.5 text-primary shrink-0" />
-          <span className="text-[10px] font-semibold tracking-wide text-muted-foreground shrink-0">
+          <span className="text-xs font-semibold tracking-wide text-muted-foreground shrink-0">
             Decisions
           </span>
-          <Badge variant="outline" className="shrink-0 text-[10px]">
+          <Badge variant="outline" className="shrink-0 text-xs">
             {decisions.length}
           </Badge>
           {!expanded && (
@@ -1849,10 +1829,10 @@ const DecisionsStrip: React.FC<DecisionsStripProps> = ({
     <div className="space-y-1.5">
       <div className="flex items-center gap-1.5">
         <Pin className="w-3.5 h-3.5 text-primary" />
-        <span className="text-[10px] font-semibold tracking-wide text-muted-foreground">
+        <span className="text-xs font-semibold tracking-wide text-muted-foreground">
           Decisions
         </span>
-        <Badge variant="outline" className="text-[10px]">
+        <Badge variant="outline" className="text-xs">
           {decisions.length}
         </Badge>
       </div>
@@ -1952,7 +1932,7 @@ const CommentRow: React.FC<CommentRowProps> = ({
   if (row.deletedAt) {
     return (
       <div className="flex items-center justify-center py-1.5">
-        <span className="text-[11px] text-muted-foreground/70 italic">
+        <span className="text-xs text-muted-foreground/70 italic">
           {row.isYou ? "Your message was removed" : "A message was removed"}
         </span>
       </div>
@@ -1987,7 +1967,7 @@ const CommentRow: React.FC<CommentRowProps> = ({
       {!isMine && (
         <Avatar className="h-7 w-7 shrink-0 self-end">
           {isBot ? (
-            <AvatarFallback className="bg-violet-500/15 text-violet-600 dark:text-violet-300">
+            <AvatarFallback className="bg-accent/15 text-accent-ink">
               <Bot className="h-4 w-4" />
             </AvatarFallback>
           ) : (
@@ -1995,7 +1975,7 @@ const CommentRow: React.FC<CommentRowProps> = ({
               {avatarSrc(row.avatarUrl) && (
                 <AvatarImage src={avatarSrc(row.avatarUrl)} alt={row.label} />
               )}
-              <AvatarFallback className="text-[10px] font-bold bg-primary/10 text-primary">
+              <AvatarFallback className="text-xs font-bold bg-primary/10 text-primary">
                 {initialsFor(row.label)}
               </AvatarFallback>
             </>
@@ -2009,7 +1989,7 @@ const CommentRow: React.FC<CommentRowProps> = ({
           isMine
             ? "bg-primary text-primary-foreground rounded-br-sm"
             : isBot
-              ? "bg-violet-500/10 text-foreground rounded-bl-sm"
+              ? "bg-accent/10 text-foreground rounded-bl-sm"
               : "bg-muted text-foreground rounded-bl-sm",
           actionsOpen && "ring-2 ring-primary/40"
         )}
@@ -2019,8 +1999,8 @@ const CommentRow: React.FC<CommentRowProps> = ({
           <div className="flex items-center gap-1.5 flex-wrap">
             <span
               className={cn(
-                "text-[11px] font-bold",
-                isBot && "text-violet-600 dark:text-violet-300"
+                "text-xs font-bold",
+                isBot && "text-accent-ink"
               )}
             >
               {isBot ? "waytowalk" : row.label}
@@ -2028,7 +2008,7 @@ const CommentRow: React.FC<CommentRowProps> = ({
             {isBot && (
               <Badge
                 variant="outline"
-                className="text-[9px] px-1 py-0 h-3.5 gap-0.5 border-violet-400/50 text-violet-600 dark:text-violet-300"
+                className="text-xs px-1 py-0 h-3.5 gap-0.5 border-accent/50 text-accent-ink"
               >
                 <Sparkles className="h-2 w-2" /> AI
               </Badge>
@@ -2036,7 +2016,7 @@ const CommentRow: React.FC<CommentRowProps> = ({
             {row.day !== undefined && (
               <Badge
                 variant="outline"
-                className="text-[9px] px-1 py-0 h-3.5 border-border/60 text-muted-foreground"
+                className="text-xs px-1 py-0 h-3.5 border-border/60 text-muted-foreground"
               >
                 Day {row.day}
               </Badge>
@@ -2103,8 +2083,8 @@ const CommentRow: React.FC<CommentRowProps> = ({
             memory (see lib/assistantCardState) and survive a reopened drawer.
             A multi-edit answer renders one row per edit and applies as one set. */}
         {botCard && !proposalDismissed && (
-          <div className="mt-1.5 rounded-xl border border-violet-300/60 bg-background/85 p-2.5 dark:border-violet-500/30">
-            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-violet-600 dark:text-violet-300">
+          <div className="mt-1.5 rounded-xl border border-accent/60 bg-background/85 p-2.5 dark:border-accent/30">
+            <div className="flex items-center gap-1.5 text-overline font-bold text-accent-ink">
               <Bot className="h-3 w-3" />
               <span>
                 {botCard.proposals.length > 1 ? "Proposed changes" : "Proposed change"}
@@ -2114,7 +2094,7 @@ const CommentRow: React.FC<CommentRowProps> = ({
               className={cn(
                 "mt-1 space-y-2",
                 botCard.proposals.length > 1 &&
-                  "divide-y divide-violet-300/40 dark:divide-violet-500/25"
+                  "divide-y divide-accent/40 dark:divide-accent/25"
               )}
             >
               {botCard.proposals.map((proposal, index) => (
@@ -2122,7 +2102,7 @@ const CommentRow: React.FC<CommentRowProps> = ({
                   <p className="text-sm font-bold">{proposalLabel(proposal)}</p>
                   {proposal.kind === "activity_choices" ? (
                     <div className="mt-1.5 space-y-1.5">
-                      <p className="text-[11px] leading-snug text-muted-foreground">
+                      <p className="text-xs leading-snug text-muted-foreground">
                         {proposal.index !== undefined && proposal.expect !== undefined
                           ? `Pick one to replace “${proposal.expect}”.`
                           : "Pick one to add it to the day."}
@@ -2134,9 +2114,9 @@ const CommentRow: React.FC<CommentRowProps> = ({
                             type="button"
                             onClick={() => onApplyProposal?.(option)}
                             disabled={isBusy || !canApplyProposal || proposalApplied}
-                            className="flex w-full items-start gap-2 rounded-lg border border-violet-300/60 bg-background px-2.5 py-2 text-left text-xs font-semibold leading-snug transition-colors hover:bg-violet-500/10 disabled:cursor-default disabled:opacity-60 dark:border-violet-500/30"
+                            className="flex w-full items-start gap-2 rounded-lg border border-accent/60 bg-background px-2.5 py-2 text-left text-xs font-semibold leading-snug transition-colors hover:bg-accent/10 disabled:cursor-default disabled:opacity-60 dark:border-accent/30"
                           >
-                            <Plus className="mt-0.5 h-3 w-3 shrink-0 text-violet-600 dark:text-violet-300" />
+                            <Plus className="mt-0.5 h-3 w-3 shrink-0 text-accent-ink" />
                             <span className="break-words">{option}</span>
                           </button>
                         ))}
@@ -2144,7 +2124,7 @@ const CommentRow: React.FC<CommentRowProps> = ({
                     </div>
                   ) : proposal.kind === "stay_choices" ? (
                     <div className="mt-1.5 space-y-1.5">
-                      <p className="text-[11px] leading-snug text-muted-foreground">
+                      <p className="text-xs leading-snug text-muted-foreground">
                         {proposal.expect !== undefined
                           ? `Pick one to replace “${proposal.expect}”.`
                           : "Pick one to add it to the day."}
@@ -2156,13 +2136,13 @@ const CommentRow: React.FC<CommentRowProps> = ({
                             type="button"
                             onClick={() => onApplyProposal?.(option)}
                             disabled={isBusy || !canApplyProposal || proposalApplied}
-                            className="flex w-full items-start gap-2 rounded-lg border border-violet-300/60 bg-background px-2.5 py-2 text-left text-xs font-semibold leading-snug transition-colors hover:bg-violet-500/10 disabled:cursor-default disabled:opacity-60 dark:border-violet-500/30"
+                            className="flex w-full items-start gap-2 rounded-lg border border-accent/60 bg-background px-2.5 py-2 text-left text-xs font-semibold leading-snug transition-colors hover:bg-accent/10 disabled:cursor-default disabled:opacity-60 dark:border-accent/30"
                           >
-                            <BedDouble className="mt-0.5 h-3 w-3 shrink-0 text-violet-600 dark:text-violet-300" />
+                            <BedDouble className="mt-0.5 h-3 w-3 shrink-0 text-accent-ink" />
                             <span className="min-w-0">
                               <span className="block break-words">{option.name}</span>
                               {(option.location || option.vibe) && (
-                                <span className="mt-0.5 block text-[10px] font-medium text-muted-foreground">
+                                <span className="mt-0.5 block text-xs font-medium text-muted-foreground">
                                   {[option.location, option.vibe].filter(Boolean).join(" · ")}
                                 </span>
                               )}
@@ -2181,7 +2161,7 @@ const CommentRow: React.FC<CommentRowProps> = ({
               ))}
             </div>
             {proposalApplied ? (
-              <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-violet-500/15 px-2 py-0.5 text-[10px] font-bold text-violet-700 dark:text-violet-300">
+              <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-accent/15 px-2 py-0.5 text-xs font-bold text-accent-ink">
                 <Sparkles className="h-2.5 w-2.5" /> Applied to the itinerary
               </span>
             ) : botCard.proposals.length === 1 &&
@@ -2199,7 +2179,7 @@ const CommentRow: React.FC<CommentRowProps> = ({
                   Not now
                 </Button>
               ) : (
-                <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
+                <p className="mt-2 text-xs leading-snug text-muted-foreground">
                   Members with edit access can apply this from the card.
                 </p>
               )
@@ -2229,7 +2209,7 @@ const CommentRow: React.FC<CommentRowProps> = ({
                 </Button>
               </div>
             ) : (
-              <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
+              <p className="mt-2 text-xs leading-snug text-muted-foreground">
                 Members with edit access can apply this from the card.
               </p>
             )}
@@ -2239,7 +2219,7 @@ const CommentRow: React.FC<CommentRowProps> = ({
         {/* Time lives INSIDE the bubble, tail-right — the chat-app signature. */}
         <div
           className={cn(
-            "flex items-center gap-1 justify-end text-[9px] leading-none opacity-70",
+            "flex items-center gap-1 justify-end text-xs leading-none opacity-70",
             !isMine && !editing && "mt-1"
           )}
         >

@@ -13,16 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmDestructive } from "@/components/ui/confirm-destructive";
 import {
   Bed,
   Utensils,
@@ -556,7 +547,7 @@ export const StayAndCuisine: React.FC<StayAndCuisineProps> = ({
               <span className="text-xs font-bold uppercase tracking-wider text-primary">
                 Where To Stay
               </span>
-              <Badge variant="outline" className="text-[10px]">
+              <Badge variant="outline" className="text-xs">
                 {groupedStays.length} {groupedStays.length === 1 ? "Stay" : "Stays"}
               </Badge>
             </div>
@@ -581,7 +572,7 @@ export const StayAndCuisine: React.FC<StayAndCuisineProps> = ({
         {groupedStays.length === 0 ? (
           <Card className="rounded-3xl border border-dashed border-border bg-card/60">
             <CardContent className="p-8 text-center space-y-2">
-              <div className="w-11 h-11 rounded-2xl bg-blue-500/10 text-blue-500 flex items-center justify-center mx-auto">
+              <div className="w-11 h-11 rounded-2xl bg-info/10 text-info-ink flex items-center justify-center mx-auto">
                 <Bed className="w-5 h-5" />
               </div>
               <p className="text-sm font-bold text-foreground">No beds picked out yet</p>
@@ -631,14 +622,14 @@ export const StayAndCuisine: React.FC<StayAndCuisineProps> = ({
                   <CardContent className="p-5 space-y-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-start gap-3">
-                        <div className="w-10 h-10 rounded-2xl bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0 shadow-2xs mt-0.5">
+                        <div className="w-10 h-10 rounded-2xl bg-info/10 text-info-ink flex items-center justify-center shrink-0 shadow-2xs mt-0.5">
                           <Bed className="w-5 h-5" />
                         </div>
                         <div className="space-y-1">
                           {stay.price && (
                             <Badge
                               variant="secondary"
-                              className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400"
+                              className="text-xs font-semibold text-success-ink"
                             >
                               {stay.price}
                             </Badge>
@@ -707,10 +698,10 @@ export const StayAndCuisine: React.FC<StayAndCuisineProps> = ({
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-orange-600 dark:text-orange-400">
+              <span className="text-xs font-bold uppercase tracking-wider text-warning-ink">
                 Culinary Hotspots
               </span>
-              <Badge variant="outline" className="text-[10px]">
+              <Badge variant="outline" className="text-xs">
                 {foodSpots.length} {foodSpots.length === 1 ? "Spot" : "Spots"}
               </Badge>
             </div>
@@ -735,7 +726,7 @@ export const StayAndCuisine: React.FC<StayAndCuisineProps> = ({
         {foodSpots.length === 0 ? (
           <Card className="rounded-3xl border border-dashed border-border bg-card/60">
             <CardContent className="p-8 text-center space-y-2">
-              <div className="w-11 h-11 rounded-2xl bg-orange-500/10 text-orange-600 dark:text-orange-400 flex items-center justify-center mx-auto">
+              <div className="w-11 h-11 rounded-2xl bg-warning/10 text-warning-ink flex items-center justify-center mx-auto">
                 <Utensils className="w-5 h-5" />
               </div>
               <p className="text-sm font-bold text-foreground">No dining picks yet</p>
@@ -763,7 +754,7 @@ export const StayAndCuisine: React.FC<StayAndCuisineProps> = ({
             {foodSpots.map((spot) => (
               <Card
                 key={spot.id}
-                className="rounded-3xl border border-border/70 hover:border-orange-500/30 bg-card/80 backdrop-blur-sm shadow-card transition-all overflow-hidden"
+                className="rounded-3xl border border-border/70 hover:border-warning/30 bg-card/80 backdrop-blur-sm shadow-card transition-all overflow-hidden"
               >
                 <TripPhotoField
                   tripId={tripId}
@@ -775,20 +766,20 @@ export const StayAndCuisine: React.FC<StayAndCuisineProps> = ({
                 <CardContent className="p-5 space-y-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-2xl bg-orange-500/10 text-orange-600 dark:text-orange-400 flex items-center justify-center shrink-0 shadow-2xs">
+                      <div className="w-10 h-10 rounded-2xl bg-warning/10 text-warning-ink flex items-center justify-center shrink-0 shadow-2xs">
                         <Utensils className="w-5 h-5" />
                       </div>
                       <div className="space-y-1">
                         <div className="flex flex-wrap items-center gap-1.5">
                           {spot.cuisine && (
-                            <Badge className="bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20 text-[10px] font-bold">
+                            <Badge className="bg-warning/10 text-warning-ink border-warning/20 text-xs font-bold">
                               {spot.cuisine}
                             </Badge>
                           )}
                           {spot.price && (
                             <Badge
                               variant="secondary"
-                              className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400"
+                              className="text-xs font-semibold text-success-ink"
                             >
                               {spot.price}
                             </Badge>
@@ -839,7 +830,7 @@ export const StayAndCuisine: React.FC<StayAndCuisineProps> = ({
                       .map((day) => (
                         <span
                           key={day}
-                          className="inline-flex items-center rounded-lg bg-muted/60 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground"
+                          className="inline-flex items-center rounded-lg bg-muted/60 px-2 py-0.5 text-xs font-semibold text-muted-foreground"
                         >
                           Day {day}
                         </span>
@@ -861,7 +852,7 @@ export const StayAndCuisine: React.FC<StayAndCuisineProps> = ({
       >
         <DialogContent className="rounded-3xl max-w-md w-[92vw] sm:w-full p-5 sm:p-6">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold">
+            <DialogTitle className="text-xl font-bold">
               {editingKey ? "Edit stay" : "Add a stay"}
             </DialogTitle>
             <DialogDescription className="text-xs leading-relaxed">
@@ -951,7 +942,7 @@ export const StayAndCuisine: React.FC<StayAndCuisineProps> = ({
 
             {tripId && (
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Photo (optional)</Label>
+                <span className="block text-xs font-semibold">Photo (optional)</span>
                 <TripPhotoField
                   tripId={tripId}
                   value={draft?.image}
@@ -965,8 +956,8 @@ export const StayAndCuisine: React.FC<StayAndCuisineProps> = ({
               </div>
             )}
 
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Which nights?</Label>
+            <div className="space-y-1.5" role="group" aria-labelledby="stay-nights-label">
+              <span id="stay-nights-label" className="block text-xs font-semibold">Which nights?</span>
               <DayPicker
                 days={itinerary.map((dayData) => dayData.day)}
                 selected={draft?.days ?? []}
@@ -1001,35 +992,22 @@ export const StayAndCuisine: React.FC<StayAndCuisineProps> = ({
         </DialogContent>
       </Dialog>
 
-      <AlertDialog
+      <ConfirmDestructive
         open={removeTarget !== null}
         onOpenChange={(open) => {
           if (!open) setRemoveTarget(null);
         }}
-      >
-        <AlertDialogContent className="rounded-3xl max-w-md w-[92vw] sm:w-full p-5 sm:p-6">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-lg font-bold">
-              Remove {removeTarget?.name}?
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-xs leading-relaxed">
-              It comes off {removeTarget ? dayLabel(removeTarget.days) : "this trip"} for
-              this trip. You can add it back any time.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="gap-2 sm:gap-0">
-            <AlertDialogCancel className="rounded-xl text-xs font-semibold h-10">
-              Keep it
-            </AlertDialogCancel>
-            <AlertDialogAction
-              className="rounded-xl text-xs font-semibold h-10 bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => removeTarget && removeStay(removeTarget)}
-            >
-              Remove
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        icon={Trash2}
+        title={<>Remove {removeTarget?.name}?</>}
+        description={
+          removeTarget
+            ? `It comes off ${dayLabel(removeTarget.days)} for this trip. You can add it back any time.`
+            : "It comes off this trip. You can add it back any time."
+        }
+        confirmLabel="Remove stay"
+        cancelLabel="Keep it"
+        onConfirm={() => removeTarget && removeStay(removeTarget)}
+      />
 
       {/* Food spot editor */}
       <Dialog
@@ -1040,7 +1018,7 @@ export const StayAndCuisine: React.FC<StayAndCuisineProps> = ({
       >
         <DialogContent className="rounded-3xl max-w-md w-[92vw] sm:w-full p-5 sm:p-6">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold">
+            <DialogTitle className="text-xl font-bold">
               {editingFoodKey ? "Edit food spot" : "Add a food spot"}
             </DialogTitle>
             <DialogDescription className="text-xs leading-relaxed">
@@ -1130,7 +1108,7 @@ export const StayAndCuisine: React.FC<StayAndCuisineProps> = ({
 
             {tripId && (
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Photo (optional)</Label>
+                <span className="block text-xs font-semibold">Photo (optional)</span>
                 <TripPhotoField
                   tripId={tripId}
                   value={foodDraft?.image}
@@ -1146,8 +1124,8 @@ export const StayAndCuisine: React.FC<StayAndCuisineProps> = ({
               </div>
             )}
 
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Which days?</Label>
+            <div className="space-y-1.5" role="group" aria-labelledby="food-days-label">
+              <span id="food-days-label" className="block text-xs font-semibold">Which days?</span>
               <DayPicker
                 days={itinerary.map((dayData) => dayData.day)}
                 selected={foodDraft?.days ?? []}
@@ -1182,35 +1160,22 @@ export const StayAndCuisine: React.FC<StayAndCuisineProps> = ({
         </DialogContent>
       </Dialog>
 
-      <AlertDialog
+      <ConfirmDestructive
         open={removeFoodTarget !== null}
         onOpenChange={(open) => {
           if (!open) setRemoveFoodTarget(null);
         }}
-      >
-        <AlertDialogContent className="rounded-3xl max-w-md w-[92vw] sm:w-full p-5 sm:p-6">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-lg font-bold">
-              Remove {removeFoodTarget?.name}?
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-xs leading-relaxed">
-              It comes off {removeFoodTarget ? dayLabel(removeFoodTarget.days) : "this trip"}{" "}
-              for this trip. You can add it back any time.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="gap-2 sm:gap-0">
-            <AlertDialogCancel className="rounded-xl text-xs font-semibold h-10">
-              Keep it
-            </AlertDialogCancel>
-            <AlertDialogAction
-              className="rounded-xl text-xs font-semibold h-10 bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => removeFoodTarget && removeFoodSpot(removeFoodTarget)}
-            >
-              Remove
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        icon={Trash2}
+        title={<>Remove {removeFoodTarget?.name}?</>}
+        description={
+          removeFoodTarget
+            ? `It comes off ${dayLabel(removeFoodTarget.days)} for this trip. You can add it back any time.`
+            : "It comes off this trip. You can add it back any time."
+        }
+        confirmLabel="Remove place"
+        cancelLabel="Keep it"
+        onConfirm={() => removeFoodTarget && removeFoodSpot(removeFoodTarget)}
+      />
     </div>
   );
 };

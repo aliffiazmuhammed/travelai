@@ -5,13 +5,14 @@ import PhoneField from '@/components/PhoneField';
 import { AgencyLogoTile } from '@/components/directory/AgencyLogoTile';
 import { TravellerBreadcrumbs } from '@/components/traveller/TravellerBreadcrumbs';
 import { Button } from '@/components/ui/button';
+import { AppImage } from '@/components/ui/app-image';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { EVENT_KIND_LABELS, eventPriceLabel, spotsLabel } from '@/lib/events';
 import { applyPageMeta } from '@/lib/meta';
 import { DEFAULT_PHONE_COUNTRY, toE164, validatePhone } from '@/lib/phone';
-import { tripCoverUrl } from '@/lib/tripCover';
+import { tripCoverSrcSet, tripCoverUrl } from '@/lib/tripCover';
 import { api, ApiError } from '@/services/api';
 import { cn } from '@/lib/utils';
 import {
@@ -68,13 +69,13 @@ const DetailCell = ({
   divided?: boolean;
 }) => (
   <div className={cn('min-w-0', divided && 'sm:border-l sm:border-border/60 sm:pl-5')}>
-    <dt className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
+    <dt className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
       <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
       {label}
     </dt>
     <dd className="mt-1 break-words text-sm font-semibold text-foreground">{value}</dd>
     {sub && (
-      <dd className="mt-0.5 break-words text-[11px] leading-relaxed text-muted-foreground">
+      <dd className="mt-0.5 break-words text-xs leading-relaxed text-muted-foreground">
         {sub}
       </dd>
     )}
@@ -164,16 +165,20 @@ const EventDetail = () => {
     [event]
   );
 
+  const heroText = useMemo(() => {
+    if (!event) return '';
+    return [event.destination, event.venue].filter(Boolean).join(' ') || event.agency.name;
+  }, [event]);
+
   /**
    * The hero is destination photography rather than the event's upload, so the
    * page reads like the place being visited. Without a destination the agency
    * name picks a neutral frame — never an invented location.
    */
-  const heroSrc = useMemo(() => {
-    if (!event) return '';
-    const text = [event.destination, event.venue].filter(Boolean).join(' ') || event.agency.name;
-    return tripCoverUrl(text, 1600);
-  }, [event]);
+  const heroSrc = useMemo(
+    () => (heroText ? tripCoverUrl(heroText, 1600) : ''),
+    [heroText]
+  );
 
   useEffect(() => {
     setCoverFailed(false);
@@ -267,7 +272,7 @@ const EventDetail = () => {
     return (
       <div className="min-h-screen bg-gradient-hero flex flex-col">
         <Navbar />
-        <main className="flex-1 flex flex-col items-center justify-center min-h-[60vh] space-y-4">
+        <main id="main-content" tabIndex={-1} className="flex-1 flex flex-col items-center justify-center min-h-[60vh] space-y-4">
           <Loader2 className="w-10 h-10 text-primary animate-spin" />
           <div className="text-center space-y-1">
             <h3 className="text-base font-bold text-foreground">Opening this event…</h3>
@@ -282,7 +287,7 @@ const EventDetail = () => {
     return (
       <div className="min-h-screen bg-gradient-hero flex flex-col">
         <Navbar />
-        <main className="flex-1 container mx-auto px-4 pt-24 pb-20 max-w-xl">
+        <main id="main-content" tabIndex={-1} className="flex-1 container mx-auto px-4 pt-24 pb-20 max-w-xl">
           <div className="rounded-3xl border border-border/80 bg-card/80 p-8 text-center shadow-card backdrop-blur-md space-y-6 sm:p-12">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-destructive/10 text-destructive">
               <AlertCircle className="h-8 w-8" />
@@ -344,7 +349,7 @@ const EventDetail = () => {
     <div className="min-h-screen bg-gradient-hero flex flex-col">
       <Navbar />
 
-      <main className="flex-1 container mx-auto max-w-6xl space-y-6 px-4 pt-24 pb-20">
+      <main id="main-content" tabIndex={-1} className="flex-1 container mx-auto max-w-6xl space-y-6 px-4 pt-24 pb-20">
         <TravellerBreadcrumbs
           items={[{ label: 'Explore', to: '/explore' }, { label: event.title }]}
         />
@@ -356,34 +361,36 @@ const EventDetail = () => {
                 <KindIcon className="h-12 w-12" aria-hidden="true" />
               </div>
             ) : (
-              <img
+              <AppImage
                 src={heroSrc}
+                srcSet={tripCoverSrcSet(heroText)}
+                sizes="(min-width: 1024px) 64rem, 100vw"
                 alt={event.destination ? `${event.title} in ${event.destination}` : event.title}
-                decoding="async"
+                priority
                 onError={() => setCoverFailed(true)}
                 className="h-full w-full object-cover"
               />
             )}
 
             <div className="absolute left-4 top-4 flex max-w-[calc(100%_-_2rem)] flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/90 px-3 py-1.5 text-[11px] font-semibold text-foreground shadow-xs backdrop-blur">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/90 px-3 py-1.5 text-xs font-semibold text-foreground shadow-xs backdrop-blur">
                 <KindIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                 {kindLabel}
               </span>
               {spots && event.spotsLeft !== null && event.spotsLeft > 0 && (
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-accent/25 bg-background/90 px-3 py-1.5 text-[11px] font-semibold text-accent shadow-xs backdrop-blur">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-accent/25 bg-background/90 px-3 py-1.5 text-xs font-semibold text-accent-ink shadow-xs backdrop-blur">
                   <Users className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                   {spots}
                 </span>
               )}
               {event.spotsLeft === null && event.capacity !== null && (
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/90 px-3 py-1.5 text-[11px] font-semibold text-muted-foreground shadow-xs backdrop-blur">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/90 px-3 py-1.5 text-xs font-semibold text-muted-foreground shadow-xs backdrop-blur">
                   <Users className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                   Up to {event.capacity} people
                 </span>
               )}
               {closedReason && (
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-destructive/25 bg-destructive/10 px-3 py-1.5 text-[11px] font-bold text-destructive shadow-xs backdrop-blur">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-destructive/25 bg-destructive/10 px-3 py-1.5 text-xs font-bold text-destructive shadow-xs backdrop-blur">
                   {statusLabel}
                 </span>
               )}
@@ -399,7 +406,7 @@ const EventDetail = () => {
               <AgencyLogoTile
                 name={event.agency.name}
                 logoUrl={event.agency.logoUrl}
-                className="h-7 w-7 rounded-lg text-[11px]"
+                className="h-7 w-7 rounded-lg text-xs"
               />
               <span>Run by</span>
               <Link
@@ -489,7 +496,7 @@ const EventDetail = () => {
                   />
                 )}
               </dl>
-              <p className="flex items-start gap-1.5 border-t border-border/60 pt-4 text-[11px] leading-relaxed text-muted-foreground">
+              <p className="flex items-start gap-1.5 border-t border-border/60 pt-4 text-xs leading-relaxed text-muted-foreground">
                 <Info className="mt-0.5 h-3 w-3 shrink-0 text-primary" aria-hidden="true" />
                 Details and what's included are set by {event.agency.name}. Ask them when you
                 write — nothing is charged on waytowalk.
@@ -506,7 +513,7 @@ const EventDetail = () => {
                       ? "You're on the list"
                       : "You're already on the list"}
                   </h2>
-                  <p className="text-[11px] leading-relaxed text-muted-foreground">
+                  <p className="text-xs leading-relaxed text-muted-foreground">
                     {submitted.kind === 'sent'
                       ? `Your details have gone to ${event.agency.name}. They'll call or write to confirm your spot — nothing is booked until they do.`
                       : `${event.agency.name} already has your details for this event and will be in touch about your spot.`}
@@ -524,7 +531,7 @@ const EventDetail = () => {
                   <h2 className="font-display text-xl font-semibold tracking-tight text-foreground">
                     Not taking names here
                   </h2>
-                  <p className="text-[11px] leading-relaxed text-muted-foreground">
+                  <p className="text-xs leading-relaxed text-muted-foreground">
                     {closedReason} {event.agency.name} might have another date coming — you can
                     ask them directly.
                   </p>
@@ -545,14 +552,14 @@ const EventDetail = () => {
                     <h2 className="font-display text-xl font-semibold tracking-tight text-foreground">
                       Ask about a spot
                     </h2>
-                    <p className="text-[11px] leading-relaxed text-muted-foreground">
+                    <p className="text-xs leading-relaxed text-muted-foreground">
                       Leave your details and {event.agency.name} will get back to you to confirm.
                       No account needed.
                     </p>
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label htmlFor="event-interest-name" className="text-[11px] font-bold">
+                    <Label htmlFor="event-interest-name" className="text-xs font-bold">
                       Name
                     </Label>
                     <Input
@@ -567,7 +574,7 @@ const EventDetail = () => {
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label htmlFor="event-interest-email" className="text-[11px] font-bold">
+                    <Label htmlFor="event-interest-email" className="text-xs font-bold">
                       Email
                     </Label>
                     <Input
@@ -583,7 +590,7 @@ const EventDetail = () => {
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label htmlFor="event-interest-phone" className="text-[11px] font-bold">
+                    <Label htmlFor="event-interest-phone" className="text-xs font-bold">
                       Phone
                     </Label>
                     <PhoneField
@@ -600,7 +607,7 @@ const EventDetail = () => {
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label htmlFor="event-interest-party" className="text-[11px] font-bold">
+                    <Label htmlFor="event-interest-party" className="text-xs font-bold">
                       How many of you?
                     </Label>
                     <select
@@ -619,7 +626,7 @@ const EventDetail = () => {
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label htmlFor="event-interest-note" className="text-[11px] font-bold">
+                    <Label htmlFor="event-interest-note" className="text-xs font-bold">
                       Add a note (optional)
                     </Label>
                     <Textarea
@@ -650,7 +657,7 @@ const EventDetail = () => {
                   {formError && (
                     <p
                       role="alert"
-                      className="rounded-xl border border-destructive/25 bg-destructive/5 px-3 py-2 text-[11px] font-semibold text-destructive"
+                      className="rounded-xl border border-destructive/25 bg-destructive/5 px-3 py-2 text-xs font-semibold text-destructive"
                     >
                       {formError}
                     </p>
@@ -672,7 +679,7 @@ const EventDetail = () => {
                     )}
                   </Button>
 
-                  <p className="flex items-start gap-1.5 text-[10px] leading-relaxed text-muted-foreground">
+                  <p className="flex items-start gap-1.5 text-xs leading-relaxed text-muted-foreground">
                     <Info className="mt-0.5 h-3 w-3 shrink-0 text-primary" aria-hidden="true" />
                     The agency replies to you directly. Your contact details are never shown on
                     waytowalk.
@@ -702,14 +709,14 @@ const EventDetail = () => {
                         </>
                       )}
                     </p>
-                    <p className="truncate text-[11px] text-muted-foreground">
+                    <p className="truncate text-xs text-muted-foreground">
                       Travel agency on waytowalk
                     </p>
                   </div>
                 </Link>
                 <Link
                   to={`/agencies/${encodeURIComponent(event.agency.slug)}`}
-                  className="inline-flex shrink-0 items-center gap-1 pt-0.5 text-[11px] font-bold text-primary transition-all hover:gap-1.5"
+                  className="inline-flex shrink-0 items-center gap-1 pt-0.5 text-xs font-bold text-primary transition-all hover:gap-1.5"
                 >
                   View agency
                   <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />

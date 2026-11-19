@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { AppImage } from "@/components/ui/app-image";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   ArrowLeft,
@@ -20,7 +21,7 @@ import {
 import { toast } from "sonner";
 import { ShareExportModal } from "./ShareExportModal";
 import { avatarSrc } from "@/lib/avatar";
-import { tripCoverUrl } from "@/lib/tripCover";
+import { tripCoverSrcSet, tripCoverUrl } from "@/lib/tripCover";
 import { formatDateOnly } from "@/lib/date";
 import { endDateFromStart } from "@/lib/weather";
 import { cn } from "@/lib/utils";
@@ -70,7 +71,7 @@ type TripStatus = NonNullable<TripHeaderProps["status"]>;
 const STATUS_STYLES: Record<TripStatus, { label: string; pill: string; dot: string }> = {
   planned: {
     label: "Planned",
-    pill: "border-accent/25 bg-accent/10 text-accent",
+    pill: "border-accent/25 bg-accent/10 text-accent-ink",
     dot: "bg-accent",
   },
   ongoing: {
@@ -140,16 +141,13 @@ export const TripHeader: React.FC<TripHeaderProps> = ({
   );
   const liveIds = new Set(others.map((person) => String(person.userId)));
 
-  // Match cover image from the trip title and highlights; a named place wins
-  // over a region mentioned in the same text.
-  const getCoverImage = (): string => {
-    const textToMatch = [
-      data.trip_title || "",
-      ...(data.highlights || []),
-    ].join(" ");
+  const coverText = [data.trip_title || "", ...(data.highlights || [])].join(
+    " "
+  );
 
-    return tripCoverUrl(textToMatch, 1600);
-  };
+  // The header only renders a small thumbnail, so start at 320px and let the
+  // srcset offer larger files to high-density screens (C-21).
+  const coverUrl = tripCoverUrl(coverText, 320);
 
   const handleShare = () => {
     setIsShareModalOpen(true);
@@ -175,7 +173,6 @@ export const TripHeader: React.FC<TripHeaderProps> = ({
   };
 
   const dailyAvg = Math.round(data.budget_breakdown.total / Math.max(1, data.duration_days));
-  const coverUrl = getCoverImage();
   const statusTone = STATUS_STYLES[status] ?? STATUS_STYLES.planned;
 
   // Date range works from the planned start; without one, the length is still
@@ -219,7 +216,7 @@ export const TripHeader: React.FC<TripHeaderProps> = ({
             <button
               type="button"
               onClick={onBackToList}
-              className="inline-flex items-center gap-1.5 rounded-md text-[11px] font-semibold text-muted-foreground transition-colors hover:text-foreground"
+              className="inline-flex items-center gap-1.5 rounded-md text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
             >
               <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
               All trips
@@ -227,17 +224,20 @@ export const TripHeader: React.FC<TripHeaderProps> = ({
           )}
 
           <div className="flex items-start gap-3 sm:gap-4">
-            <img
+            <AppImage
               src={coverUrl}
+              srcSet={tripCoverSrcSet(coverText)}
+              sizes="64px"
               alt=""
               aria-hidden="true"
-              loading="lazy"
+              width={64}
+              height={64}
               className="hidden h-14 w-14 shrink-0 rounded-xl border border-border object-cover shadow-xs sm:block lg:h-16 lg:w-16"
             />
 
             <div className="min-w-0 space-y-2.5">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                <h1 className="min-w-0 font-display text-[1.75rem] font-semibold leading-[1.1] tracking-tight text-foreground sm:text-4xl lg:text-[2.6rem]">
+                <h1 className="min-w-0 font-display text-3xl font-semibold leading-[1.1] tracking-tight text-foreground sm:text-4xl lg:text-4xl">
                   {data.trip_title}
                 </h1>
 
@@ -245,7 +245,7 @@ export const TripHeader: React.FC<TripHeaderProps> = ({
                   <span className="relative inline-flex shrink-0 rounded-full focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background">
                     <span
                       className={cn(
-                        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold",
+                        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold",
                         statusTone.pill
                       )}
                     >
@@ -270,7 +270,7 @@ export const TripHeader: React.FC<TripHeaderProps> = ({
                 ) : (
                   <span
                     className={cn(
-                      "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold",
+                      "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold",
                       statusTone.pill
                     )}
                   >
@@ -306,7 +306,7 @@ export const TripHeader: React.FC<TripHeaderProps> = ({
                                 />
                               )}
                               <AvatarFallback
-                                className="bg-muted text-[10px] font-semibold text-muted-foreground"
+                                className="bg-muted text-xs font-semibold text-muted-foreground"
                                 title={person.label}
                               >
                                 {initialsFor(person.label)}
@@ -321,7 +321,7 @@ export const TripHeader: React.FC<TripHeaderProps> = ({
                           </span>
                         ))}
                         {stackOverflow > 0 && (
-                          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background text-[10px] font-semibold text-muted-foreground">
+                          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background text-xs font-semibold text-muted-foreground">
                             +{stackOverflow}
                           </span>
                         )}
@@ -331,7 +331,7 @@ export const TripHeader: React.FC<TripHeaderProps> = ({
                 )}
 
                 {others.length > 0 && (
-                  <span className="inline-flex items-center gap-1.5 text-accent">
+                  <span className="inline-flex items-center gap-1.5 text-accent-ink">
                     <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
                     {others.length === 1 ? "1 here now" : `${others.length} here now`}
                   </span>
@@ -365,7 +365,7 @@ export const TripHeader: React.FC<TripHeaderProps> = ({
                       </button>
                     ) : (
                       <span className="inline-flex items-center gap-1.5">
-                        <Check className="h-3.5 w-3.5 text-accent" aria-hidden />
+                        <Check className="h-3.5 w-3.5 text-accent-ink" aria-hidden />
                         Saved
                       </span>
                     )}
@@ -450,54 +450,54 @@ export const TripHeader: React.FC<TripHeaderProps> = ({
       {/* Quieter version of the old stat strip: hairline-tiled figures. */}
       <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-4">
         <div className="bg-card px-4 py-3">
-          <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+          <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
             <IndianRupee className="h-3 w-3" aria-hidden />
             Total for the group
           </div>
-          <div className="mt-1 text-lg font-semibold tabular-nums text-foreground">
+          <div className="mt-1 text-xl font-semibold tabular-nums text-foreground">
             ₹{data.budget_breakdown.total.toLocaleString("en-IN")}
           </div>
-          <p className="text-[11px] text-muted-foreground">Planned budget</p>
+          <p className="text-xs text-muted-foreground">Planned budget</p>
         </div>
 
         <div className="bg-card px-4 py-3">
-          <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+          <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
             <Users className="h-3 w-3" aria-hidden />
             Per person
           </div>
-          <div className="mt-1 text-lg font-semibold tabular-nums text-foreground">
+          <div className="mt-1 text-xl font-semibold tabular-nums text-foreground">
             ₹{data.budget_per_person.toLocaleString("en-IN")}
           </div>
-          <p className="truncate text-[11px] text-muted-foreground">
+          <p className="truncate text-xs text-muted-foreground">
             Based on {data.group_type}
           </p>
         </div>
 
         <div className="bg-card px-4 py-3">
-          <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+          <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
             <TrendingUp className="h-3 w-3" aria-hidden />
             Daily average
           </div>
-          <div className="mt-1 text-lg font-semibold tabular-nums text-foreground">
+          <div className="mt-1 text-xl font-semibold tabular-nums text-foreground">
             ₹{dailyAvg.toLocaleString("en-IN")}
           </div>
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Across {data.duration_days} {data.duration_days === 1 ? "day" : "days"}
           </p>
         </div>
 
         <div className="bg-card px-4 py-3">
-          <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+          <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
             <Calendar className="h-3 w-3" aria-hidden />
             Duration
           </div>
-          <div className="mt-1 text-lg font-semibold text-foreground">
+          <div className="mt-1 text-xl font-semibold text-foreground">
             {data.duration_days} {data.duration_days === 1 ? "Day" : "Days"} /{" "}
             {Math.max(1, data.duration_days - 1)}{" "}
             {Math.max(1, data.duration_days - 1) === 1 ? "Night" : "Nights"}
           </div>
           {data.season ? (
-            <p className="text-[11px] text-muted-foreground">{data.season} season</p>
+            <p className="text-xs text-muted-foreground">{data.season} season</p>
           ) : null}
         </div>
       </div>

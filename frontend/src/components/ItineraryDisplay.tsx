@@ -11,10 +11,20 @@ import {
   History,
   UserPlus,
   Maximize2,
+  ChevronDown,
+  MoreHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent } from "@/components/ui/card";
 import { api } from "@/services/api";
@@ -134,6 +144,12 @@ interface ItineraryDisplayProps {
   chatRealm?: ChatRealm;
   /** Tenant scope for agency chat identities (`agency:<agencyId>`). */
   chatIdentityScope?: string;
+  /**
+   * Public share view (`/shared/:shareId`). The page owns the heading and the
+   * share contract keeps budgets private (C-02), so the workspace header and
+   * the Expenses tab are not rendered at all.
+   */
+  publicView?: boolean;
 }
 
 /** Debounce window (ms) for automatic background saving of local edits. */
@@ -155,7 +171,7 @@ const TAB_TRIGGER_CLASS = cn(
 
 /** Role pills for the Going card — the roster's own role, never a guess. */
 const ROLE_PILL_CLASS: Record<TripRole, string> = {
-  owner: "bg-accent/10 text-accent",
+  owner: "bg-accent/10 text-accent-ink",
   editor: "bg-primary/10 text-primary",
   commenter: "bg-muted text-muted-foreground",
   viewer: "border border-border text-muted-foreground",
@@ -257,6 +273,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
   agencyStaff = false,
   chatRealm = "personal",
   chatIdentityScope,
+  publicView = false,
 }) => {
   // Legacy AI payloads miss whole sections of the prompt contract (Milestone 2
   // shape evolved); normalize once here so no downstream read can crash.
@@ -843,39 +860,57 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
     );
   };
 
+  /**
+   * Secondary views live behind one "More" menu so all seven stay discoverable
+   * at 768px instead of scrolling out of sight. The trigger names the active
+   * secondary view so the current tab is never hidden.
+   */
+  const secondaryTabs = [
+    ...(!publicView
+      ? [{ value: "expenses", label: "Expenses", icon: Receipt }]
+      : []),
+    ...(isRealTrip ? [{ value: "history", label: "History", icon: History }] : []),
+    ...(showPeopleTab ? [{ value: "people", label: "People", icon: Users }] : []),
+  ];
+  const activeSecondary = secondaryTabs.find((tab) => tab.value === activeTab);
+  const ActiveSecondaryIcon = activeSecondary?.icon ?? MoreHorizontal;
+
   return (
     <div className="space-y-8 animate-fade-in max-w-6xl mx-auto pb-16">
-      {/* 1. Enhanced Hero Header with Quick Stats & Share Actions */}
-      <TripHeader
-        data={safeData}
-        tripId={tripId}
-        status={status}
-        version={version}
-        hasEdited={hasEdited}
-        shareId={shareId}
-        onShareIdChange={onShareIdChange}
-        presence={livePresence}
-        currentUserId={currentUserId}
-        onStatusChange={onStatusChange}
-        onSave={onSave ? handleSaveTrigger : undefined}
-        isSaving={isSaving || isPersisting}
-        hasUnsavedChanges={hasUnsavedChanges}
-        onBackToList={onBackToList}
-        onNewPlan={onNewPlan}
-        hideShare={agencyTrip}
-        publication={publication}
-        onPublicationChange={onPublicationChange}
-        members={sortedRoster}
-        memberCount={members?.length}
-        startDate={startDate}
-        onEditPlan={onSave ? focusEditor : undefined}
-      />
+      {/* 1. Enhanced Hero Header with Quick Stats & Share Actions. The public
+          share view owns its own heading and keeps budgets private (C-02). */}
+      {!publicView && (
+        <TripHeader
+          data={safeData}
+          tripId={tripId}
+          status={status}
+          version={version}
+          hasEdited={hasEdited}
+          shareId={shareId}
+          onShareIdChange={onShareIdChange}
+          presence={livePresence}
+          currentUserId={currentUserId}
+          onStatusChange={onStatusChange}
+          onSave={onSave ? handleSaveTrigger : undefined}
+          isSaving={isSaving || isPersisting}
+          hasUnsavedChanges={hasUnsavedChanges}
+          onBackToList={onBackToList}
+          onNewPlan={onNewPlan}
+          hideShare={agencyTrip}
+          publication={publication}
+          onPublicationChange={onPublicationChange}
+          members={sortedRoster}
+          memberCount={members?.length}
+          startDate={startDate}
+          onEditPlan={onSave ? focusEditor : undefined}
+        />
+      )}
 
       {/* Highlights — one quiet line of chips, not a second hero. */}
       {safeData.highlights && safeData.highlights.length > 0 && (
         <Card className="overflow-hidden rounded-xl border border-border bg-card shadow-none">
           <CardContent className="flex flex-wrap items-center gap-2 px-4 py-3">
-            <span className="inline-flex shrink-0 items-center gap-1.5 pr-1 text-[11px] font-semibold text-muted-foreground">
+            <span className="inline-flex shrink-0 items-center gap-1.5 pr-1 text-xs font-semibold text-muted-foreground">
               <Sparkles className="h-3.5 w-3.5 text-primary" aria-hidden />
               Highlights
             </span>
@@ -884,7 +919,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
               <Badge
                 key={i}
                 variant="outline"
-                className="rounded-full border-border bg-background px-2.5 py-0.5 text-[11px] font-medium text-foreground/80"
+                className="rounded-full border-border bg-background px-2.5 py-0.5 text-xs font-medium text-foreground/80"
               >
                 {h}
               </Badge>
@@ -910,49 +945,81 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
         onValueChange={setActiveTab}
         className="w-full space-y-4"
       >
-        {/* One white strip. Labels stay readable and the row scrolls inside
-            the strip on narrow screens instead of wrapping. */}
-        <div className="sticky top-16 z-30 bg-background py-2">
-          <TabsList className="flex h-auto w-full max-w-full items-center gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1.5 shadow-xs scrollbar-none">
-            <TabsTrigger value="timeline" title="Day Timeline" className={TAB_TRIGGER_CLASS}>
-              <Calendar className="h-3.5 w-3.5" aria-hidden />
-              <span>Day Timeline</span>
-            </TabsTrigger>
-
-            <TabsTrigger value="map" title="Interactive Map" className={TAB_TRIGGER_CLASS}>
-              <MapPin className="h-3.5 w-3.5" aria-hidden />
-              <span>Interactive Map</span>
-            </TabsTrigger>
-
-            <TabsTrigger value="stays" title="Stays & Dining" className={TAB_TRIGGER_CLASS}>
-              <Bed className="h-3.5 w-3.5" aria-hidden />
-              <span>Stays & Dining</span>
-            </TabsTrigger>
-
-            <TabsTrigger value="guide" title="Guide & Safety" className={TAB_TRIGGER_CLASS}>
-              <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
-              <span>Guide & Safety</span>
-            </TabsTrigger>
-
-            <TabsTrigger value="expenses" title="Expenses" className={TAB_TRIGGER_CLASS}>
-              <Receipt className="h-3.5 w-3.5" aria-hidden />
-              <span>Expenses</span>
-            </TabsTrigger>
-
-            {isRealTrip && (
-              <TabsTrigger value="history" title="Version History" className={TAB_TRIGGER_CLASS}>
-                <History className="h-3.5 w-3.5" aria-hidden />
-                <span>History</span>
+        {/* One white strip. The four primary views stay visible; the rest live
+            under More so every tab is reachable at 768px. */}
+        <div className="sticky top-16 z-30 flex items-start gap-2 bg-background py-2">
+          <div className="relative min-w-0 flex-1">
+            <TabsList
+              aria-label="Trip views"
+              className="flex h-auto w-full max-w-full items-center gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1.5 shadow-xs scrollbar-none"
+            >
+              <TabsTrigger value="timeline" title="Day Timeline" className={TAB_TRIGGER_CLASS}>
+                <Calendar className="h-3.5 w-3.5" aria-hidden />
+                <span>Day Timeline</span>
               </TabsTrigger>
-            )}
 
-            {showPeopleTab && (
-              <TabsTrigger value="people" title="People" className={TAB_TRIGGER_CLASS}>
-                <Users className="h-3.5 w-3.5" aria-hidden />
-                <span>People</span>
+              <TabsTrigger value="map" title="Interactive Map" className={TAB_TRIGGER_CLASS}>
+                <MapPin className="h-3.5 w-3.5" aria-hidden />
+                <span>Interactive Map</span>
               </TabsTrigger>
-            )}
-          </TabsList>
+
+              <TabsTrigger value="stays" title="Stays & Dining" className={TAB_TRIGGER_CLASS}>
+                <Bed className="h-3.5 w-3.5" aria-hidden />
+                <span>Stays &amp; Dining</span>
+              </TabsTrigger>
+
+              <TabsTrigger value="guide" title="Guide & Safety" className={TAB_TRIGGER_CLASS}>
+                <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
+                <span>Guide &amp; Safety</span>
+              </TabsTrigger>
+            </TabsList>
+            {/* Scroll cue: the strip fades out where more tabs sit. */}
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-y-1.5 right-1.5 w-6 rounded-r-lg bg-gradient-to-l from-card to-transparent lg:hidden"
+            />
+          </div>
+
+          {secondaryTabs.length > 0 ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className={cn(
+                    "h-[42px] shrink-0 gap-1.5 rounded-xl px-3 text-xs font-semibold",
+                    activeSecondary &&
+                      "border-primary/40 bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary"
+                  )}
+                >
+                  <ActiveSecondaryIcon className="h-3.5 w-3.5" aria-hidden />
+                  <span className="hidden sm:inline">
+                    {activeSecondary ? activeSecondary.label : "More"}
+                  </span>
+                  <ChevronDown className="h-3.5 w-3.5" aria-hidden />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48 rounded-xl">
+                <DropdownMenuLabel className="text-xs text-muted-foreground">
+                  More views
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {secondaryTabs.map((tab) => (
+                  <DropdownMenuItem
+                    key={tab.value}
+                    onSelect={() => setActiveTab(tab.value)}
+                    className={cn(
+                      "gap-2 text-xs font-semibold",
+                      activeTab === tab.value && "bg-primary/10 text-primary"
+                    )}
+                  >
+                    <tab.icon className="h-3.5 w-3.5" aria-hidden />
+                    {tab.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
         </div>
 
         {/* TAB 1: Day Timeline View */}
@@ -983,7 +1050,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
                     <h2 className="font-display text-base font-semibold leading-tight text-foreground">
                       Route map
                     </h2>
-                    <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
                       {mapMeta}
                     </p>
                   </div>
@@ -1029,7 +1096,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
                         variant="ghost"
                         size="sm"
                         onClick={() => setInviteOpen(true)}
-                        className="h-8 gap-1.5 rounded-lg px-2 text-[11px] font-semibold text-primary hover:bg-primary/10 hover:text-primary"
+                        className="h-8 gap-1.5 rounded-lg px-2 text-xs font-semibold text-primary hover:bg-primary/10 hover:text-primary"
                       >
                         <UserPlus className="h-3.5 w-3.5" aria-hidden />
                         Invite
@@ -1047,7 +1114,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
                       ))}
                     </div>
                   ) : sortedRoster.length === 0 ? (
-                    <p className="border-t border-border px-4 py-3 text-[11px] leading-relaxed text-muted-foreground">
+                    <p className="border-t border-border px-4 py-3 text-xs leading-relaxed text-muted-foreground">
                       {rosterFailed
                         ? "The roster did not load here — open People for the full list."
                         : "No one has joined this trip yet."}
@@ -1066,7 +1133,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
                                 alt={member.label || "Member"}
                               />
                             )}
-                            <AvatarFallback className="bg-muted text-[10px] font-semibold text-muted-foreground">
+                            <AvatarFallback className="bg-muted text-xs font-semibold text-muted-foreground">
                               {memberInitials(member)}
                             </AvatarFallback>
                           </Avatar>
@@ -1076,14 +1143,14 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
                               {member.isYou ? " (you)" : ""}
                             </p>
                             {member.email && (
-                              <p className="truncate text-[11px] text-muted-foreground">
+                              <p className="truncate text-xs text-muted-foreground">
                                 {member.email}
                               </p>
                             )}
                           </div>
                           <span
                             className={cn(
-                              "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                              "shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold",
                               ROLE_PILL_CLASS[member.role]
                             )}
                           >
@@ -1151,21 +1218,24 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
           />
         </TabsContent>
 
-        {/* TAB 5: Expense Tracker View */}
-        <TabsContent value="expenses" className="outline-hidden animate-fade-in">
-          <ExpenseTracker
-            tripId={tripId}
-            expenses={expenses || []}
-            participants={participants || []}
-            baseCurrency={finance?.baseCurrency || "INR"}
-            exchangeRates={finance?.exchangeRates}
-            ratesUpdatedAt={finance?.ratesUpdatedAt}
-            plannedBudget={safeData.budget_breakdown}
-            daysCount={safeData.duration_days}
-            canEdit={isRealTrip && Boolean(onSave)}
-            onUpdated={onTripUpdated}
-          />
-        </TabsContent>
+        {/* TAB 5: Expense Tracker View — the private budget never reaches a
+            share link, so the tab does not exist in the public view. */}
+        {!publicView && (
+          <TabsContent value="expenses" className="outline-hidden animate-fade-in">
+            <ExpenseTracker
+              tripId={tripId}
+              expenses={expenses || []}
+              participants={participants || []}
+              baseCurrency={finance?.baseCurrency || "INR"}
+              exchangeRates={finance?.exchangeRates}
+              ratesUpdatedAt={finance?.ratesUpdatedAt}
+              plannedBudget={safeData.budget_breakdown}
+              daysCount={safeData.duration_days}
+              canEdit={isRealTrip && Boolean(onSave)}
+              onUpdated={onTripUpdated}
+            />
+          </TabsContent>
+        )}
 
         {/* Version history (M7.2) — viewable by every member; restoring is an
             editor action, mirrored by `canRestore`. */}

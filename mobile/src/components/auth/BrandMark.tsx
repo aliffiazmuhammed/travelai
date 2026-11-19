@@ -1,48 +1,44 @@
-import { StyleSheet, View } from 'react-native';
+import { Image } from 'expo-image';
 
-import { useTheme } from '@/theme/useTheme';
-import { AppText } from '@/ui';
+const WORDMARK = require('../../../assets/brand/waytowalk-logo-reverse.png');
 
-const CREAM = '#f7f3ea';
-const CORAL = '#e87656';
+/**
+ * The supplied asset is 2560x520 with transparent clear space baked in: the
+ * visible ink spans 1935 px, or 75.6% of the canvas. Sizing the *box* to the
+ * brand minimum would therefore render the lockup about a quarter smaller than
+ * intended, so derive the box from the ink ratio instead.
+ */
+const ASSET_WIDTH = 2560;
+const ASSET_HEIGHT = 520;
+const INK_WIDTH_RATIO = 1935 / ASSET_WIDTH;
+/** Brand guide: the wordmark lockup is never smaller than 140 px wide. */
+const MIN_INK_WIDTH = 140;
 
 interface BrandMarkProps {
-  /** Cream lockup for use over photography, independent of the theme. */
-  onPhoto?: boolean;
-  size?: 'title' | 'heading';
+  /** Visible ink width in points. Defaults to the brand minimum. */
+  inkWidth?: number;
 }
 
-/** The wordmark with the coral dot, set as type so it stays crisp at any size. */
-export function BrandMark({ onPhoto = false, size = 'title' }: BrandMarkProps) {
-  const { palette } = useTheme();
+/**
+ * The supplied reversed wordmark (Phase 1A).
+ *
+ * The brand guide requires the artwork, not a typeset replacement, and this
+ * lockup is only for forest, dark, or dark photographic backgrounds — which is
+ * exactly where the auth hero places it. The transparent padding in the asset
+ * also supplies the clear space the guide asks for.
+ */
+export function BrandMark({ inkWidth = MIN_INK_WIDTH }: BrandMarkProps) {
+  const width = Math.round(inkWidth / INK_WIDTH_RATIO);
+  const height = Math.round((width * ASSET_HEIGHT) / ASSET_WIDTH);
 
   return (
-    <View style={styles.row}>
-      <AppText
-        variant={size}
-        style={[
-          styles.word,
-          size === 'heading' ? styles.wordSmall : null,
-          { color: onPhoto ? CREAM : palette.primary },
-        ]}
-      >
-        waytowalk
-      </AppText>
-      <View
-        style={[
-          styles.dot,
-          size === 'heading' ? styles.dotSmall : null,
-          { backgroundColor: CORAL },
-        ]}
-      />
-    </View>
+    <Image
+      source={WORDMARK}
+      style={{ width, height }}
+      contentFit="contain"
+      accessible
+      accessibilityRole="image"
+      accessibilityLabel="waytowalk"
+    />
   );
 }
-
-const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'flex-end' },
-  word: { letterSpacing: -0.4 },
-  wordSmall: { letterSpacing: -0.3 },
-  dot: { width: 7, height: 7, borderRadius: 4, marginLeft: 3, marginBottom: 7 },
-  dotSmall: { width: 6, height: 6, borderRadius: 3, marginLeft: 2, marginBottom: 5 },
-});

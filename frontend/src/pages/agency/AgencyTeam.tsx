@@ -4,6 +4,7 @@ import {
   Check,
   Clock3,
   Copy,
+  Crown,
   Link2,
   Loader2,
   Mail,
@@ -15,6 +16,7 @@ import {
   Users,
 } from 'lucide-react';
 import { AgencyPageHeader } from '@/components/agency/AgencyPageHeader';
+import { AsyncErrorPanel } from '@/components/states/AsyncState';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -43,16 +45,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { ConfirmDestructive } from '@/components/ui/confirm-destructive';
 import { api } from '@/services/api';
 import { useAgency } from '@/context/AgencyContext';
 import { avatarSrc, initialsFor } from '@/lib/avatar';
@@ -78,9 +71,13 @@ const AgencyTeam: React.FC = () => {
   const [members, setMembers] = useState<AgencyMember[]>([]);
   const [invites, setInvites] = useState<AgencyInvite[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<unknown | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<AgencyMember | null>(null);
+  /** Ownership is never granted from the inline role select. */
+  const [promoteTarget, setPromoteTarget] = useState<AgencyMember | null>(null);
+  const [revokeTarget, setRevokeTarget] = useState<AgencyInvite | null>(null);
 
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteRole, setInviteRole] = useState<AgencyInvitableRole>('planner');
@@ -102,10 +99,11 @@ const AgencyTeam: React.FC = () => {
       ]);
       setMembers(results[0].members ?? []);
       setInvites(results[1].invites ?? []);
+      setLoadError(null);
     } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : 'We could not load the agency team.'
-      );
+      // Shown in the content area; with a list already on screen the last
+      // known roster stays and only the next refresh can change it.
+      setLoadError(err);
     } finally {
       setLoading(false);
     }
@@ -131,6 +129,7 @@ const AgencyTeam: React.FC = () => {
 
   const changeRole = async (member: AgencyMember, role: AgencyRole) => {
     if (!activeAgencyId || role === member.role) return;
+    const previousRole = member.role;
     setBusyUserId(member.userId);
     try {
       const result = await api.changeAgencyMemberRole(
@@ -142,12 +141,36 @@ const AgencyTeam: React.FC = () => {
       if (member.isYou && activeAgency) {
         replaceAgency({ ...activeAgency, role });
       }
-      toast.success(`${member.label} is now ${agencyRoleLabel(role).toLowerCase()}.`);
+      // A role change is reversible; a promotion to owner is confirmed first.
+      toast.success(`${member.label} is now ${agencyRoleLabel(role).toLowerCase()}.`, {
+        action: member.isYou
+          ? undefined
+          : {
+              label: 'Undo',
+              onClick: () => {
+                void api
+                  .changeAgencyMemberRole(activeAgencyId, member.userId, previousRole)
+                  .then((reverted) => {
+                    setMembers(reverted.members ?? []);
+                    toast.success(`${member.label} is back to ${agencyRoleLabel(previousRole).toLowerCase()}.`);
+                  })
+                  .catch(() => toast.error('Could not undo that role change.'));
+              },
+            },
+      });
+      return true;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Role change failed.');
+      return false;
     } finally {
       setBusyUserId(null);
     }
+  };
+
+  const promoteToOwner = async () => {
+    if (!promoteTarget) return;
+    const promoted = await changeRole(promoteTarget, 'owner');
+    if (promoted) setPromoteTarget(null);
   };
 
   const removeMember = async () => {
@@ -207,11 +230,12 @@ const AgencyTeam: React.FC = () => {
     }
   };
 
-  const revokeInvite = async (invite: AgencyInvite) => {
-    if (!activeAgencyId) return;
+  const revokeInvite = async () => {
+    if (!activeAgencyId || !revokeTarget) return;
     try {
-      await api.revokeAgencyInvite(activeAgencyId, invite._id);
-      setInvites((current) => current.filter((item) => item._id !== invite._id));
+      await api.revokeAgencyInvite(activeAgencyId, revokeTarget._id);
+      setInvites((current) => current.filter((item) => item._id !== revokeTarget._id));
+      setRevokeTarget(null);
       toast.success('Invitation revoked.');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not revoke the invitation.');
@@ -233,7 +257,7 @@ const AgencyTeam: React.FC = () => {
       <AgencyPageHeader
         title="Team"
         meta={
-          <Badge variant="outline" className="text-[10px]">
+          <Badge variant="outline" className="text-xs">
             {members.length} {members.length === 1 ? 'member' : 'members'}
           </Badge>
         }
@@ -274,6 +298,14 @@ const AgencyTeam: React.FC = () => {
         </div>
       ) : null}
 
+      {loadError && members.length === 0 ? (
+        <AsyncErrorPanel
+          error={loadError}
+          subject="the agency team"
+          onRetry={() => void load()}
+        />
+      ) : (
+      <>
       <Card className="rounded-2xl border-agency-line bg-agency-panel shadow-none">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-sm font-semibold text-agency-ink">
@@ -291,11 +323,11 @@ const AgencyTeam: React.FC = () => {
             <Table>
               <TableHeader className="bg-agency-panel">
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="h-10 text-[11px] font-semibold uppercase tracking-[0.06em] text-agency-muted">Member</TableHead>
-                  <TableHead className="h-10 text-[11px] font-semibold uppercase tracking-[0.06em] text-agency-muted">Contact</TableHead>
-                  <TableHead className="h-10 text-[11px] font-semibold uppercase tracking-[0.06em] text-agency-muted">Role</TableHead>
-                  <TableHead className="h-10 text-[11px] font-semibold uppercase tracking-[0.06em] text-agency-muted">Joined</TableHead>
-                  <TableHead className="h-10 text-right text-[11px] font-semibold uppercase tracking-[0.06em] text-agency-muted">Actions</TableHead>
+                  <TableHead className="h-10 text-overline font-semibold text-agency-muted">Member</TableHead>
+                  <TableHead className="h-10 text-overline font-semibold text-agency-muted">Contact</TableHead>
+                  <TableHead className="h-10 text-overline font-semibold text-agency-muted">Role</TableHead>
+                  <TableHead className="h-10 text-overline font-semibold text-agency-muted">Joined</TableHead>
+                  <TableHead className="h-10 text-right text-overline font-semibold text-agency-muted">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -306,6 +338,9 @@ const AgencyTeam: React.FC = () => {
                     canManage && !soleOwner && (!ownerTarget || isOwner);
                   const canRemove =
                     canManage && !soleOwner && (!ownerTarget || isOwner);
+                  /** Ownership appears as its own guarded action, never inline. */
+                  const canPromote =
+                    isOwner && canManage && !ownerTarget && !member.isYou;
                   const busy = busyUserId === member.userId;
 
                   return (
@@ -317,23 +352,23 @@ const AgencyTeam: React.FC = () => {
                         <div className="flex items-center gap-3">
                           <Avatar className="h-9 w-9">
                             <AvatarImage src={avatarSrc(member.avatarUrl)} alt="" />
-                            <AvatarFallback className="bg-agency-accent-soft text-xs font-semibold text-agency-accent">
+                            <AvatarFallback className="bg-agency-accent-soft text-xs font-semibold text-agency-accent-ink">
                               {initialsFor(member.label)}
                             </AvatarFallback>
                           </Avatar>
                           <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                            <span className="truncate text-[13px] font-medium text-agency-ink">
+                            <span className="truncate text-sm font-medium text-agency-ink">
                               {member.label}
                             </span>
                             {member.isYou ? (
-                              <Badge variant="outline" className="text-[9px]">
+                              <Badge variant="outline" className="text-xs">
                                 You
                               </Badge>
                             ) : null}
                             {soleOwner ? (
                               <Badge
                                 variant="outline"
-                                className="border-amber-200 bg-amber-50 text-[9px] text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300"
+                                className="border-warning/30 bg-warning/10 text-xs text-warning-ink dark:border-warning/40 dark:bg-warning/20"
                               >
                                 Last owner
                               </Badge>
@@ -353,11 +388,10 @@ const AgencyTeam: React.FC = () => {
                             }
                             disabled={busy}
                           >
-                            <SelectTrigger className="h-8 w-32 border-agency-line">
+                            <SelectTrigger className="h-8 w-32 border-agency-line" aria-label={`Role for ${member.label}`}>
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              {isOwner ? <SelectItem value="owner">Owner</SelectItem> : null}
                               <SelectItem value="admin">Admin</SelectItem>
                               <SelectItem value="planner">Planner</SelectItem>
                               <SelectItem value="viewer">Viewer</SelectItem>
@@ -366,7 +400,7 @@ const AgencyTeam: React.FC = () => {
                         ) : (
                           <Badge
                             variant="outline"
-                            className={cn('text-[10px]', agencyRoleBadgeClass(member.role))}
+                            className={cn('text-xs', agencyRoleBadgeClass(member.role))}
                           >
                             {agencyRoleLabel(member.role)}
                           </Badge>
@@ -376,15 +410,29 @@ const AgencyTeam: React.FC = () => {
                         {formatAgencyDate(member.joinedAt)}
                       </TableCell>
                       <TableCell className="py-3">
-                        {canRemove && member.userId !== myId ? (
-                          <div className="flex justify-end">
+                        <div className="flex justify-end gap-1">
+                          {canPromote ? (
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 text-agency-muted hover:text-rose-600"
+                              className="h-8 w-8 text-agency-muted hover:text-warning-ink"
+                              onClick={() => setPromoteTarget(member)}
+                              disabled={busy}
+                              title={`Make ${member.label} an owner`}
+                              aria-label={`Make ${member.label} an owner`}
+                            >
+                              <Crown className="h-4 w-4" />
+                            </Button>
+                          ) : null}
+                          {canRemove && member.userId !== myId ? (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-agency-muted hover:text-destructive-ink"
                               onClick={() => setRemoveTarget(member)}
                               disabled={busy}
                               title={`Remove ${member.label}`}
+                              aria-label={`Remove ${member.label}`}
                             >
                               {busy ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -392,8 +440,8 @@ const AgencyTeam: React.FC = () => {
                                 <UserMinus className="h-4 w-4" />
                               )}
                             </Button>
-                          </div>
-                        ) : null}
+                          ) : null}
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -410,6 +458,8 @@ const AgencyTeam: React.FC = () => {
               canManage && !soleOwner && (!ownerTarget || isOwner);
             const canRemove =
               canManage && !soleOwner && (!ownerTarget || isOwner);
+            const canPromote =
+              isOwner && canManage && !ownerTarget && !member.isYou;
             const busy = busyUserId === member.userId;
 
             return (
@@ -419,7 +469,7 @@ const AgencyTeam: React.FC = () => {
               >
                 <Avatar className="h-10 w-10">
                   <AvatarImage src={avatarSrc(member.avatarUrl)} alt="" />
-                  <AvatarFallback className="bg-agency-accent-soft text-xs font-semibold text-agency-accent">
+                  <AvatarFallback className="bg-agency-accent-soft text-xs font-semibold text-agency-accent-ink">
                     {initialsFor(member.label)}
                   </AvatarFallback>
                 </Avatar>
@@ -427,14 +477,14 @@ const AgencyTeam: React.FC = () => {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="truncate text-sm font-medium text-agency-ink">{member.label}</span>
                     {member.isYou ? (
-                      <Badge variant="outline" className="text-[9px]">
+                      <Badge variant="outline" className="text-xs">
                         You
                       </Badge>
                     ) : null}
                     {soleOwner ? (
                       <Badge
                         variant="outline"
-                        className="border-amber-200 bg-amber-50 text-[9px] text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300"
+                        className="border-warning/30 bg-warning/10 text-xs text-warning-ink dark:border-warning/40 dark:bg-warning/20"
                       >
                         Last owner
                       </Badge>
@@ -458,11 +508,10 @@ const AgencyTeam: React.FC = () => {
                       onValueChange={(value) => void changeRole(member, value as AgencyRole)}
                       disabled={busy}
                     >
-                      <SelectTrigger className="h-8 w-32 border-agency-line">
+                      <SelectTrigger className="h-8 w-32 border-agency-line" aria-label={`Role for ${member.label}`}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {isOwner ? <SelectItem value="owner">Owner</SelectItem> : null}
                         <SelectItem value="admin">Admin</SelectItem>
                         <SelectItem value="planner">Planner</SelectItem>
                         <SelectItem value="viewer">Viewer</SelectItem>
@@ -471,20 +520,35 @@ const AgencyTeam: React.FC = () => {
                   ) : (
                     <Badge
                       variant="outline"
-                      className={cn('text-[10px]', agencyRoleBadgeClass(member.role))}
+                      className={cn('text-xs', agencyRoleBadgeClass(member.role))}
                     >
                       {agencyRoleLabel(member.role)}
                     </Badge>
                   )}
 
+                  {canPromote ? (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-agency-muted hover:text-warning-ink"
+                      onClick={() => setPromoteTarget(member)}
+                      disabled={busy}
+                      title={`Make ${member.label} an owner`}
+                      aria-label={`Make ${member.label} an owner`}
+                    >
+                      <Crown className="h-4 w-4" />
+                    </Button>
+                  ) : null}
+
                   {canRemove && member.userId !== myId ? (
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 text-agency-muted hover:text-rose-600"
+                      className="h-8 w-8 text-agency-muted hover:text-destructive-ink"
                       onClick={() => setRemoveTarget(member)}
                       disabled={busy}
                       title={`Remove ${member.label}`}
+                      aria-label={`Remove ${member.label}`}
                     >
                       {busy ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -528,7 +592,7 @@ const AgencyTeam: React.FC = () => {
                       <div className="flex flex-wrap items-center gap-2">
                         <Badge
                           variant="outline"
-                          className={cn('text-[10px]', agencyRoleBadgeClass(invite.role))}
+                          className={cn('text-xs', agencyRoleBadgeClass(invite.role))}
                         >
                           {agencyRoleLabel(invite.role)}
                         </Badge>
@@ -538,7 +602,7 @@ const AgencyTeam: React.FC = () => {
                             : `Link · ${invite.usedCount}/${invite.maxUses} used`}
                         </span>
                       </div>
-                      <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-agency-muted/80">
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-agency-muted/80">
                         <span className="font-mono">…{invite.tokenHint}</span>
                         <span className="inline-flex items-center gap-1">
                           <Clock3 className="h-3 w-3" />
@@ -549,8 +613,8 @@ const AgencyTeam: React.FC = () => {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="self-start text-agency-muted hover:text-rose-600"
-                      onClick={() => void revokeInvite(invite)}
+                      className="self-start text-agency-muted hover:text-destructive-ink"
+                      onClick={() => setRevokeTarget(invite)}
                     >
                       <Trash2 className="mr-1.5 h-3.5 w-3.5" />
                       Revoke
@@ -562,6 +626,8 @@ const AgencyTeam: React.FC = () => {
           </CardContent>
         </Card>
       ) : null}
+      </>
+      )}
 
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
         <DialogContent className="rounded-2xl sm:rounded-2xl sm:max-w-lg">
@@ -578,9 +644,9 @@ const AgencyTeam: React.FC = () => {
                 Invitation ready. Copy this link and send it directly.
               </div>
               <div className="space-y-2">
-                <Label>Invitation link</Label>
+                <Label htmlFor="team-invite-link">Invitation link</Label>
                 <div className="flex gap-2">
-                  <Input value={generatedLink} readOnly className="font-mono text-xs" />
+                  <Input id="team-invite-link" name="inviteLink" value={generatedLink} readOnly className="font-mono text-xs" />
                   <Button
                     type="button"
                     variant="outline"
@@ -607,12 +673,12 @@ const AgencyTeam: React.FC = () => {
             <div className="space-y-4">
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label>Role</Label>
+                  <Label htmlFor="team-invite-role">Role</Label>
                   <Select
                     value={inviteRole}
                     onValueChange={(value) => setInviteRole(value as AgencyInvitableRole)}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="team-invite-role">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -625,12 +691,12 @@ const AgencyTeam: React.FC = () => {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Type</Label>
+                  <Label htmlFor="team-invite-kind">Type</Label>
                   <Select
                     value={inviteKind}
                     onValueChange={(value) => setInviteKind(value as 'link' | 'email')}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="team-invite-kind">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -646,6 +712,7 @@ const AgencyTeam: React.FC = () => {
                   <Label htmlFor="team-invite-email">Teammate email</Label>
                   <Input
                     id="team-invite-email"
+                    name="email"
                     type="email"
                     value={inviteEmail}
                     onChange={(event) => setInviteEmail(event.target.value)}
@@ -655,8 +722,10 @@ const AgencyTeam: React.FC = () => {
               ) : (
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <Label>Maximum uses</Label>
+                    <Label htmlFor="team-invite-max-uses">Maximum uses</Label>
                     <Input
+                      id="team-invite-max-uses"
+                      name="maxUses"
                       type="number"
                       min={1}
                       max={25}
@@ -665,9 +734,9 @@ const AgencyTeam: React.FC = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Expires in</Label>
+                    <Label htmlFor="team-invite-ttl">Expires in</Label>
                     <Select value={inviteTtl} onValueChange={setInviteTtl}>
-                      <SelectTrigger>
+                      <SelectTrigger id="team-invite-ttl">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -700,37 +769,84 @@ const AgencyTeam: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog
+      <ConfirmDestructive
         open={Boolean(removeTarget)}
         onOpenChange={(open) => {
           if (!open) setRemoveTarget(null);
         }}
-      >
-        <AlertDialogContent className="rounded-2xl sm:rounded-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remove {removeTarget?.label}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              They lose agency staff access immediately. Their personal trips and
-              account are not affected.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-rose-600 hover:bg-rose-700"
-              onClick={() => void removeMember()}
-            >
-              Remove from agency
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        title={`Remove ${removeTarget?.label ?? "this teammate"}?`}
+        description="They lose agency staff access immediately. Their personal trips and account are not affected, and an owner can invite them again later."
+        confirmLabel="Remove from agency"
+        onConfirm={removeMember}
+        busy={Boolean(removeTarget && busyUserId === removeTarget.userId)}
+        detail={
+          removeTarget ? (
+            <>
+              <span className="font-semibold">{removeTarget.email || removeTarget.label}</span>{" "}
+              · {agencyRoleLabel(removeTarget.role).toLowerCase()}
+            </>
+          ) : null
+        }
+      />
+
+      <ConfirmDestructive
+        open={Boolean(promoteTarget)}
+        onOpenChange={(open) => {
+          if (!open) setPromoteTarget(null);
+        }}
+        tone="warning"
+        icon={Crown}
+        title={`Make ${promoteTarget?.label ?? "this teammate"} an owner?`}
+        description="Owners can change every role, remove teammates and manage the workspace. The last owner can never be demoted or removed."
+        confirmLabel="Make owner"
+        onConfirm={promoteToOwner}
+        busy={Boolean(promoteTarget && busyUserId === promoteTarget.userId)}
+        detail={
+          promoteTarget ? (
+            <>
+              <span className="font-semibold">
+                {promoteTarget.email || promoteTarget.label}
+              </span>{" "}
+              becomes an owner alongside you.
+            </>
+          ) : null
+        }
+        typedConfirmation={{
+          phrase: promoteTarget?.email || promoteTarget?.label || "",
+          label: "Type their email to confirm",
+          placeholder: promoteTarget?.email || promoteTarget?.label || "",
+        }}
+      />
+
+      <ConfirmDestructive
+        open={Boolean(revokeTarget)}
+        onOpenChange={(open) => {
+          if (!open) setRevokeTarget(null);
+        }}
+        title="Revoke this invitation?"
+        description="The link stops working immediately. Anyone already in the agency is unaffected; you can create a new invitation at any time."
+        confirmLabel="Revoke invitation"
+        onConfirm={revokeInvite}
+        detail={
+          revokeTarget ? (
+            <>
+              {revokeTarget.kind === "email"
+                ? revokeTarget.email || "Email invitation"
+                : `Link · ${revokeTarget.usedCount}/${revokeTarget.maxUses} used`}{" "}
+              for the {agencyRoleLabel(revokeTarget.role).toLowerCase()} role.
+            </>
+          ) : null
+        }
+      />
     </div>
   );
 };
 
 const LoadingRow: React.FC<{ label: string }> = ({ label }) => (
-  <div className="flex items-center gap-2 py-16 text-sm text-agency-muted">
+  <div
+    role="status"
+    className="flex items-center gap-2 py-16 text-sm text-agency-muted"
+  >
     <Loader2 className="h-4 w-4 animate-spin" />
     {label}
   </div>

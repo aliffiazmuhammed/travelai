@@ -127,7 +127,7 @@ interface StepStyleProps {
 /** Shared pill for dietary and language choices. */
 const pillClass = (isActive: boolean) =>
   cn(
-    "inline-flex min-h-[36px] items-center gap-1.5 rounded-full border px-3.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+    "inline-flex min-h-[36px] items-center gap-1.5 rounded-full border px-3.5 text-xs font-semibold transition-colors coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
     isActive
       ? "border-primary/50 bg-primary/10 text-primary"
       : "border-border/80 bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground"
@@ -225,7 +225,7 @@ export const StepStyle: React.FC<StepStyleProps> = ({
               <p className="mt-2.5 text-xs leading-relaxed text-muted-foreground">
                 {style.description}
               </p>
-              <p className="mt-1.5 text-[11px] text-muted-foreground/80">
+              <p className="mt-1.5 text-xs text-muted-foreground/80">
                 {style.tags.join(" · ")}
               </p>
             </button>
@@ -236,7 +236,7 @@ export const StepStyle: React.FC<StepStyleProps> = ({
       {/* Travel Pace */}
       <div className="space-y-3 border-t border-border/60 pt-6">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
-          <h3 className="flex items-center gap-2 font-display text-lg font-semibold tracking-tight text-foreground sm:text-xl">
+          <h3 className="flex items-center gap-2 font-display text-xl font-semibold tracking-tight text-foreground">
             <Gauge className="h-4 w-4 text-primary" aria-hidden="true" />
             Travel pace
           </h3>
@@ -288,7 +288,7 @@ export const StepStyle: React.FC<StepStyleProps> = ({
       {/* Dietary Preferences */}
       <div className="space-y-3">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
-          <h3 className="flex items-center gap-2 font-display text-lg font-semibold tracking-tight text-foreground sm:text-xl">
+          <h3 className="flex items-center gap-2 font-display text-xl font-semibold tracking-tight text-foreground">
             <UtensilsCrossed className="h-4 w-4 text-primary" aria-hidden="true" />
             Dietary preferences
           </h3>
@@ -315,7 +315,7 @@ export const StepStyle: React.FC<StepStyleProps> = ({
       {/* Output Language */}
       <div className="space-y-3">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
-          <h3 className="flex items-center gap-2 font-display text-lg font-semibold tracking-tight text-foreground sm:text-xl">
+          <h3 className="flex items-center gap-2 font-display text-xl font-semibold tracking-tight text-foreground">
             <Languages className="h-4 w-4 text-primary" aria-hidden="true" />
             Itinerary language
           </h3>
@@ -336,7 +336,7 @@ export const StepStyle: React.FC<StepStyleProps> = ({
               >
                 <span>{option.native}</span>
                 {option.native !== option.label && (
-                  <span className="text-[10px] font-normal opacity-70">
+                  <span className="text-xs font-normal opacity-70">
                     {option.label}
                   </span>
                 )}

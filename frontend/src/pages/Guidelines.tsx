@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import { applyPageMeta } from "@/lib/meta";
 import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
@@ -148,7 +149,7 @@ const Guidelines = () => {
     <div className="flex min-h-screen flex-col bg-gradient-hero">
       <Navbar />
 
-      <main className="relative flex-1 pb-20 pt-24">
+      <main id="main-content" tabIndex={-1} className="relative flex-1 pb-20 pt-24">
         {/* Quiet air at the top of the page; clipped so it never widens the viewport. */}
         <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-80 overflow-hidden">
           <div className="absolute -top-32 right-4 h-64 w-64 rounded-full bg-primary/10 blur-3xl" />
@@ -156,21 +157,17 @@ const Guidelines = () => {
         </div>
 
         <div className="container relative mx-auto max-w-6xl px-4">
-          <header className="max-w-3xl">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
-              Community
-            </p>
-            <h1 className="mt-3 font-display text-4xl font-semibold leading-[1.05] tracking-tight text-foreground sm:text-5xl lg:text-6xl">
-              Travel well, together.
-            </h1>
-            <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-              A few things that keep shared trips safe and worth joining.
-            </p>
-          </header>
+          <PageHeader
+            realm="public"
+            size="xl"
+            eyebrow="Community"
+            title="Travel well, together."
+            description="A few things that keep shared trips safe and worth joining."
+          />
 
           {/* Small screens get a swipeable version of the same anchor list. */}
           <nav aria-label="On this page" className="mt-8 lg:hidden">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            <p className="text-overline font-semibold text-muted-foreground">
               On this page
             </p>
             <div className="no-scrollbar -mx-4 mt-2 overflow-x-auto px-4 pb-1">
@@ -181,7 +178,7 @@ const Guidelines = () => {
                       href={`#${section.id}`}
                       aria-current={activeId === section.id ? "location" : undefined}
                       className={cn(
-                        "inline-flex min-h-[32px] items-center whitespace-nowrap rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                        "inline-flex min-h-[32px] items-center whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                         activeId === section.id
                           ? "border-primary/40 bg-primary/10 text-primary"
                           : "border-border/80 bg-card text-muted-foreground hover:text-foreground"
@@ -198,7 +195,7 @@ const Guidelines = () => {
           <div className="mt-6 grid gap-8 lg:mt-12 lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-12">
             <aside className="hidden lg:block">
               <nav aria-label="On this page" className="sticky top-24">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                <p className="text-overline font-semibold text-muted-foreground">
                   On this page
                 </p>
                 <ul className="mt-3 space-y-0.5 border-l border-border/70">
@@ -256,7 +253,7 @@ const Guidelines = () => {
                   platform is a red flag, however convincing the profile looks.
                 </p>
                 <div className="flex items-start gap-3 rounded-2xl border border-accent/25 bg-accent/5 p-4">
-                  <Lock className="mt-0.5 h-4 w-4 shrink-0 text-accent" aria-hidden="true" />
+                  <Lock className="mt-0.5 h-4 w-4 shrink-0 text-accent-ink" aria-hidden="true" />
                   <div className="min-w-0 space-y-0.5">
                     <p className="text-xs font-semibold leading-relaxed text-foreground">
                       waytowalk has no in-app payments between travellers.
@@ -333,7 +330,7 @@ const Guidelines = () => {
               >
                 <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-start gap-4">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent/15 text-accent">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent/15 text-accent-ink">
                       <Flag className="h-5 w-5" aria-hidden="true" />
                     </div>
                     <div className="min-w-0 space-y-1">
@@ -364,7 +361,7 @@ const Guidelines = () => {
                 </div>
               </section>
 
-              <footer className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-1 text-[11px] text-muted-foreground">
+              <footer className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-1 text-xs text-muted-foreground">
                 <span>Last updated November 2026</span>
                 <span aria-hidden="true">·</span>
                 <span>

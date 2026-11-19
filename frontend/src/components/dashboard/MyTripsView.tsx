@@ -2,20 +2,12 @@ import React, { useEffect, useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { AdminPagination } from "@/components/admin/AdminPagination";
-import { tripCoverUrl } from "@/lib/tripCover";
+import { AppImage } from "@/components/ui/app-image";
+import { tripCoverSrcSet, tripCoverUrl } from "@/lib/tripCover";
 import { Button } from "@/components/ui/button";
+import { ConfirmDestructive } from "@/components/ui/confirm-destructive";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -53,6 +45,8 @@ import { cn } from "@/lib/utils";
 import { formatDate, formatDateShort } from "@/lib/date";
 import { TravellerBreadcrumbs } from "@/components/traveller/TravellerBreadcrumbs";
 import { TravellerSegmented } from "@/components/traveller/TravellerSegmented";
+import { AgencySegmented } from "@/components/agency/AgencySegmented";
+import { PageHeader } from "@/components/ui/page-header";
 import type { Trip, TripMemberSummary } from "@/types/trip";
 import type { AgencyMember } from "@/types";
 import {
@@ -109,17 +103,17 @@ interface MyTripsViewProps {
 const STATUS_CONFIG = {
   planned: {
     label: "Planned",
-    badgeClass: "bg-blue-500/10 text-blue-600 border-blue-200 dark:border-blue-800",
+    badgeClass: "bg-info/10 text-info-ink border-info/30 dark:border-info/40",
     icon: <Calendar className="w-3 h-3" />,
   },
   ongoing: {
     label: "Ongoing",
-    badgeClass: "bg-emerald-500/10 text-emerald-600 border-emerald-200 dark:border-emerald-800",
+    badgeClass: "bg-success/10 text-success-ink border-success/30 dark:border-success/40",
     icon: <Compass className="w-3 h-3" />,
   },
   completed: {
     label: "Completed",
-    badgeClass: "bg-purple-500/10 text-purple-600 border-purple-200 dark:border-purple-800",
+    badgeClass: "bg-accent/10 text-accent-ink border-accent/30 dark:border-accent/40",
     icon: <CheckCircle2 className="w-3 h-3" />,
   },
   draft: {
@@ -151,11 +145,11 @@ const PACKAGE_STATE_BADGE = {
   },
   draft: {
     label: "Draft",
-    badgeClass: "bg-amber-500/10 text-amber-700 border-amber-200 dark:border-amber-800",
+    badgeClass: "bg-warning/10 text-warning-ink border-warning/30 dark:border-warning/40",
   },
   published: {
     label: "Published",
-    badgeClass: "bg-teal-500/10 text-teal-700 border-teal-200 dark:border-teal-800",
+    badgeClass: "bg-agency-accent/10 text-agency-accent-ink border-agency-accent/30",
   },
 } as const;
 
@@ -169,9 +163,9 @@ const QUOTE_STATE_LABEL: Record<string, string> = {
 
 const QUOTE_STATE_BADGE: Record<string, string> = {
   draft: "bg-muted text-muted-foreground border-border",
-  sent: "bg-sky-500/10 text-sky-700 border-sky-200 dark:border-sky-800",
-  accepted: "bg-emerald-500/10 text-emerald-700 border-emerald-200 dark:border-emerald-800",
-  expired: "bg-amber-500/10 text-amber-700 border-amber-200 dark:border-amber-800",
+  sent: "bg-info/10 text-info-ink border-info/30 dark:border-info/40",
+  accepted: "bg-success/10 text-success-ink border-success/30 dark:border-success/40",
+  expired: "bg-warning/10 text-warning-ink border-warning/30 dark:border-warning/40",
   cancelled: "bg-muted text-muted-foreground border-border",
 };
 
@@ -182,15 +176,15 @@ const PROPOSAL_STATE = {
   },
   active: {
     label: "Awaiting reply",
-    badgeClass: "bg-sky-500/10 text-sky-700 border-sky-200 dark:border-sky-800",
+    badgeClass: "bg-info/10 text-info-ink border-info/30 dark:border-info/40",
   },
   accepted: {
     label: "Accepted",
-    badgeClass: "bg-emerald-500/10 text-emerald-700 border-emerald-200 dark:border-emerald-800",
+    badgeClass: "bg-success/10 text-success-ink border-success/30 dark:border-success/40",
   },
   declined: {
     label: "Declined",
-    badgeClass: "bg-rose-500/10 text-rose-700 border-rose-200 dark:border-rose-800",
+    badgeClass: "bg-destructive/10 text-destructive-ink border-destructive/30 dark:border-destructive/40",
   },
   expired: {
     label: "Closed",
@@ -198,11 +192,12 @@ const PROPOSAL_STATE = {
   },
 } as const;
 
-/** Personal library tabs. They group the four real statuses plus the trash. */
-type PersonalTab = "upcoming" | "drafts" | "past" | "trash";
+/** Personal library tabs. Trash is a separate shelf, not a status. */
+type PersonalTab = "all" | "upcoming" | "drafts" | "past";
 
 const matchesPersonalTab = (trip: Trip, tab: PersonalTab): boolean => {
   const status = trip.status || "planned";
+  if (tab === "all") return true;
   if (tab === "drafts") return status === "draft";
   if (tab === "past") return status === "completed";
   if (tab === "upcoming") return status === "planned" || status === "ongoing";
@@ -281,7 +276,7 @@ const MemberStack: React.FC<{ members?: TripMemberSummary[] }> = ({ members }) =
           </span>
         ))}
         {extra > 0 ? (
-          <span className="-ml-2 inline-flex h-7 w-7 items-center justify-center rounded-full border-2 border-card bg-muted text-[10px] font-bold text-muted-foreground">
+          <span className="-ml-2 inline-flex h-7 w-7 items-center justify-center rounded-full border-2 border-card bg-muted text-xs font-bold text-muted-foreground">
             +{extra}
           </span>
         ) : null}
@@ -312,7 +307,7 @@ const TripActionsMenu: React.FC<{
           type="button"
           aria-label={`More actions for ${label}`}
           onClick={(event) => event.stopPropagation()}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="relative z-10 inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
         </button>
@@ -354,7 +349,8 @@ const TripCard: React.FC<{
   const schedule = tripScheduleLabel(trip);
   const days = trip.tripDetails?.duration_days;
   const chip = statusChipFor(trip, joined);
-  const cover = tripCoverUrl(`${destination} ${title}`, 800);
+  const coverText = `${destination} ${title}`;
+  const cover = tripCoverUrl(coverText, 800);
   const scheduleText =
     schedule ??
     (days
@@ -364,29 +360,35 @@ const TripCard: React.FC<{
       : "");
 
   return (
-    <article
-      onClick={onOpen}
-      className="group flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-border/70 bg-card shadow-xs transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-card"
-    >
+    <article className="group relative flex flex-col overflow-hidden rounded-2xl border border-border/70 bg-card shadow-xs transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-card">
       <div className="relative aspect-video w-full overflow-hidden bg-muted">
-        <img
+        <AppImage
           src={cover}
+          srcSet={tripCoverSrcSet(coverText)}
+          sizes="(min-width: 1280px) 30vw, (min-width: 768px) 45vw, 100vw"
           alt={destination ? `${title} in ${destination}` : title}
-          loading="lazy"
-          decoding="async"
+          width={800}
+          height={450}
           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
         />
-        <span className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-background/90 px-2.5 py-1 text-[10px] font-bold text-foreground shadow-xs backdrop-blur">
+        <span className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-background/90 px-2.5 py-1 text-xs font-bold text-foreground shadow-xs backdrop-blur">
           <span className={cn("h-1.5 w-1.5 rounded-full", chip.dotClass)} aria-hidden="true" />
           {chip.label}
         </span>
       </div>
 
       <div className="flex flex-1 flex-col gap-2.5 p-4">
-        <h3 className="line-clamp-2 font-display text-lg font-semibold leading-snug tracking-tight text-foreground transition-colors group-hover:text-primary">
-          {title}
+        <h3 className="line-clamp-2 font-display text-xl font-semibold leading-snug tracking-tight text-foreground transition-colors group-hover:text-primary">
+          {/* One real target for the whole card; the menu stays above it. */}
+          <button
+            type="button"
+            onClick={onOpen}
+            className="text-left outline-none after:absolute after:inset-0 after:rounded-2xl focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-offset-2"
+          >
+            {title}
+          </button>
         </h3>
-        <div className="space-y-1 text-[11px] text-muted-foreground">
+        <div className="space-y-1 text-xs text-muted-foreground">
           {destination ? (
             <p className="flex min-w-0 items-center gap-1.5">
               <MapPin className="h-3 w-3 shrink-0" aria-hidden="true" />
@@ -402,7 +404,7 @@ const TripCard: React.FC<{
           <MemberStack members={trip.members} />
           {note ? (
             <span
-              className="min-w-0 truncate text-[10px] text-muted-foreground"
+              className="min-w-0 truncate text-xs text-muted-foreground"
               title={note}
             >
               {note}
@@ -412,17 +414,10 @@ const TripCard: React.FC<{
       </div>
 
       <div className="flex items-center justify-between gap-2 border-t border-border/60 px-4 py-2.5">
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onOpen();
-          }}
-          className="inline-flex items-center gap-1 text-xs font-semibold text-primary transition-colors hover:text-primary/80"
-        >
+        <span className="inline-flex items-center gap-1 text-xs font-semibold text-primary">
           Open trip
           <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-        </button>
+        </span>
         {menuItems ? (
           <TripActionsMenu label={title} acting={acting}>
             {menuItems}
@@ -498,6 +493,8 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
   const setStatusFilter = (value: string) =>
     onStatusChange ? onStatusChange(value) : setInternalStatusFilter(value);
   const [personalTab, setPersonalTab] = useState<PersonalTab>("upcoming");
+  /** Trash is a shelf toggle beside the tabs, so it never masquerades as a status. */
+  const [viewingTrash, setViewingTrash] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">(
     variant === "agency" ? "list" : "grid"
   );
@@ -513,15 +510,19 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
     return trips.filter((trip) => searchHaystack(trip).includes(query));
   }, [trips, search]);
 
+  // Search spans every status tab: typing a destination should find the trip
+  // even when it lives in Drafts or Past. Without a query the tab still scopes.
+  const effectiveTab: PersonalTab = search.trim() ? "all" : personalTab;
+
   const filteredTrips = useMemo(() => {
     if (!isAgency) {
-      return searchedTrips.filter((trip) => matchesPersonalTab(trip, personalTab));
+      return searchedTrips.filter((trip) => matchesPersonalTab(trip, effectiveTab));
     }
     return searchedTrips.filter((trip) => {
       const tripStatus = trip.status || "planned";
       return statusFilter === "all" || tripStatus === statusFilter;
     });
-  }, [searchedTrips, isAgency, personalTab, statusFilter]);
+  }, [searchedTrips, isAgency, effectiveTab, statusFilter]);
 
   // Milestone 6 (F9): trips the user owns vs trips shared with them. The role
   // annotation comes with every trip row; a missing role reads as owned
@@ -553,7 +554,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
   // rows off the last page steps back instead of leaving an empty table.
   useEffect(() => {
     setTripPage(1);
-  }, [search, statusFilter, personalTab, assigneeValue, archivedValue, viewMode, pageSize]);
+  }, [search, statusFilter, effectiveTab, viewingTrash, assigneeValue, archivedValue, viewMode, pageSize]);
 
   useEffect(() => {
     if (tripPage > tripTotalPages) setTripPage(tripTotalPages);
@@ -655,7 +656,8 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
     const days = trip.tripDetails?.duration_days;
     const schedule = tripScheduleLabel(trip);
     const destination = tripDestinationOf(trip);
-    const cover = tripCoverUrl(`${destination} ${title}`, 320);
+    const coverText = `${destination} ${title}`;
+    const cover = tripCoverUrl(coverText, 320);
     const isActing = actionLoadingId === trip._id;
     const detail = schedule ?? (days ? `${days} ${days === 1 ? "day" : "days"}` : null);
 
@@ -665,17 +667,20 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
         className="flex flex-col gap-3 rounded-xl border border-border/60 bg-card p-3 sm:flex-row sm:items-center sm:justify-between"
       >
         <div className="flex min-w-0 items-center gap-3">
-          <img
+          <AppImage
             src={cover}
+            srcSet={tripCoverSrcSet(coverText)}
+            sizes="64px"
             alt={title}
-            loading="lazy"
+            width={64}
+            height={48}
             className="h-12 w-16 shrink-0 rounded-lg object-cover opacity-80"
           />
           <div className="min-w-0">
             <h4 className="truncate font-display text-sm font-semibold tracking-tight text-foreground">
               {title}
             </h4>
-            <p className="truncate text-[11px] text-muted-foreground">
+            <p className="truncate text-xs text-muted-foreground">
               {[detail, `Deleted ${deletedDate(trip)}`].filter(Boolean).join(" · ")}
             </p>
           </div>
@@ -726,17 +731,17 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
               <h2 className="font-display text-base font-semibold tracking-tight text-foreground">
                 Recently deleted
               </h2>
-              <Badge variant="outline" className="text-[10px]">
+              <Badge variant="outline" className="text-xs">
                 {deletedTrips.length}
               </Badge>
             </div>
-            <p className="mt-0.5 max-w-xl text-[11px] leading-relaxed text-muted-foreground">
+            <p className="mt-0.5 max-w-xl text-xs leading-relaxed text-muted-foreground">
               {deletedHelpText ??
                 "Trips you removed. Restore one to bring back the itinerary and chat; old share links and invites stay revoked."}
             </p>
           </div>
         </div>
-        {personalTab === "trash" ? null : (
+        {viewingTrash ? null : (
           <button
             type="button"
             onClick={() => setShowDeleted((open) => !open)}
@@ -854,6 +859,14 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
           "Plan a client trip with AI, then refine it with your team and invite the client from the People tab.",
       };
     }
+    if (personalTab === "all") {
+      return {
+        title: emptyTitle ?? "No trips yet",
+        body:
+          emptyBody ??
+          "Every trip you own or join lives here. Plan one and it will show up across the tabs.",
+      };
+    }
     if (personalTab === "drafts") {
       return {
         title: emptyTitle ?? "No drafts",
@@ -898,7 +911,8 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
     const schedule = tripScheduleLabel(trip);
     const days = trip.tripDetails?.duration_days;
     const chip = statusChipFor(trip, Boolean(trip.role && trip.role !== "owner"));
-    const cover = tripCoverUrl(`${destination} ${title}`, 320);
+    const coverText = `${destination} ${title}`;
+    const cover = tripCoverUrl(coverText, 320);
     const isActing = actionLoadingId === trip._id;
     const scheduleText =
       schedule ??
@@ -911,29 +925,37 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
     return (
       <article
         key={trip._id}
-        onClick={() => onSelectTrip(trip)}
-        className="group flex cursor-pointer flex-col gap-3 rounded-2xl border border-border/70 bg-card p-3 shadow-xs transition-colors hover:border-primary/30 sm:flex-row sm:items-center sm:justify-between"
+        className="group relative flex flex-col gap-3 rounded-2xl border border-border/70 bg-card p-3 shadow-xs transition-colors hover:border-primary/30 sm:flex-row sm:items-center sm:justify-between"
       >
         <div className="flex min-w-0 items-center gap-3">
-          <img
+          <AppImage
             src={cover}
+            srcSet={tripCoverSrcSet(coverText)}
+            sizes="96px"
             alt={title}
-            loading="lazy"
+            width={96}
+            height={64}
             className="h-16 w-24 shrink-0 rounded-xl object-cover"
           />
           <div className="min-w-0 space-y-1">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold text-foreground">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 text-xs font-bold text-foreground">
                 <span className={cn("h-1.5 w-1.5 rounded-full", chip.dotClass)} aria-hidden="true" />
                 {chip.label}
               </span>
-              <span className="text-[11px] text-muted-foreground">{scheduleText}</span>
+              <span className="text-xs text-muted-foreground">{scheduleText}</span>
             </div>
             <h3 className="truncate font-display text-base font-semibold tracking-tight text-foreground transition-colors group-hover:text-primary">
-              {title}
+              <button
+                type="button"
+                onClick={() => onSelectTrip(trip)}
+                className="max-w-full text-left outline-none after:absolute after:inset-0 after:rounded-2xl focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-offset-2"
+              >
+                {title}
+              </button>
             </h3>
             {destination ? (
-              <p className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+              <p className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
                 <MapPin className="h-3 w-3 shrink-0" aria-hidden="true" />
                 <span className="truncate">{destination}</span>
               </p>
@@ -941,22 +963,15 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
           </div>
         </div>
         <div className="flex items-center gap-1.5 self-end sm:self-center">
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="h-9 gap-1.5 rounded-xl px-3 text-xs font-semibold"
-            onClick={(event) => {
-              event.stopPropagation();
-              onSelectTrip(trip);
-            }}
-          >
+          <span className="relative z-10 inline-flex h-9 items-center gap-1.5 rounded-xl border border-border/80 px-3 text-xs font-semibold text-foreground">
             <span>Open trip</span>
             <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-          </Button>
-          <TripActionsMenu label={title} acting={isActing}>
-            {trip.role && trip.role !== "owner" ? sharedMenu(trip) : ownedMenu(trip)}
-          </TripActionsMenu>
+          </span>
+          <span className="relative z-10">
+            <TripActionsMenu label={title} acting={isActing}>
+              {trip.role && trip.role !== "owner" ? sharedMenu(trip) : ownedMenu(trip)}
+            </TripActionsMenu>
+          </span>
         </div>
       </article>
     );
@@ -972,7 +987,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
               <span className="text-xs font-semibold text-primary">
                 {eyebrow ?? "Agency Trip Library"}
               </span>
-              <Badge variant="outline" className="text-[10px]">
+              <Badge variant="outline" className="text-xs">
                 {trips.length} Agency Trips
               </Badge>
             </div>
@@ -1006,18 +1021,14 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
           </div>
         </div>
       ) : (
-        <header className="space-y-4">
-          <TravellerBreadcrumbs items={[{ label: "Dashboard" }]} />
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-            <div className="min-w-0 space-y-1.5">
-              <h1 className="font-display text-4xl font-semibold leading-[1.05] tracking-tight text-foreground sm:text-5xl">
-                {heading ?? "My trips"}
-              </h1>
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                Your plans, drafts and the trips you joined.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
+        <PageHeader
+          realm="traveller"
+          size="lg"
+          title={heading ?? "My trips"}
+          description="Your plans, drafts and the trips you joined."
+          breadcrumbs={<TravellerBreadcrumbs items={[{ label: "Dashboard" }]} />}
+          actions={
+            <>
               {travelPageHandle ? (
                 <Button
                   asChild
@@ -1039,9 +1050,9 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
                 <PlusCircle className="h-4 w-4" aria-hidden="true" />
                 <span>{planLabel}</span>
               </Button>
-            </div>
-          </div>
-        </header>
+            </>
+          }
+        />
       )}
 
       {/* Filter & Search Bar */}
@@ -1050,7 +1061,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
           <div className="flex flex-wrap items-center gap-2">
             {onAssigneeChange && assigneeOptions ? (
               <Select value={assigneeValue || "all"} onValueChange={onAssigneeChange}>
-                <SelectTrigger className="h-9 w-[150px] rounded-xl text-xs">
+                <SelectTrigger className="h-9 w-[150px] rounded-xl text-xs" aria-label="Filter by assignee">
                   <SelectValue placeholder="Assignee" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1070,57 +1081,41 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
             ) : null}
 
             {onArchivedChange ? (
-              <div className="inline-flex rounded-full border border-border/70 bg-card p-1">
-                {(["active", "archived"] as const).map((view) => (
-                  <button
-                    key={view}
-                    type="button"
-                    aria-pressed={showingArchived === (view === "archived")}
-                    onClick={() => onArchivedChange(view)}
-                    className={cn(
-                      "inline-flex min-h-[30px] items-center rounded-full px-3 py-1 text-xs font-semibold capitalize transition-colors",
-                      showingArchived === (view === "archived")
-                        ? "bg-primary text-primary-foreground shadow-sm"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                    )}
-                  >
-                    {view}
-                  </button>
-                ))}
-              </div>
+              <AgencySegmented<"active" | "archived">
+                ariaLabel="Show active or archived trips"
+                value={showingArchived ? "archived" : "active"}
+                onChange={(view) => onArchivedChange(view)}
+                options={[
+                  { value: "active", label: "Active" },
+                  { value: "archived", label: "Archived" },
+                ]}
+              />
             ) : null}
 
-            <div className="inline-flex flex-wrap rounded-full border border-border/70 bg-card p-1">
-              {["all", "planned", "ongoing", "completed", "draft"].map((status) => (
-                <button
-                  key={status}
-                  type="button"
-                  aria-pressed={statusFilter === status}
-                  onClick={() => setStatusFilter(status)}
-                  className={cn(
-                    "inline-flex min-h-[30px] items-center rounded-full px-3 py-1 text-xs font-semibold capitalize transition-colors",
-                    statusFilter === status
-                      ? "bg-primary text-primary-foreground shadow-sm"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                  )}
-                >
-                  {status}
-                </button>
-              ))}
-            </div>
+            <AgencySegmented
+              ariaLabel="Filter trips by status"
+              value={statusFilter}
+              onChange={setStatusFilter}
+              options={["all", "planned", "ongoing", "completed", "draft"].map(
+                (status) => ({ value: status, label: status })
+              )}
+            />
           </div>
         ) : (
           <TravellerSegmented<PersonalTab>
             ariaLabel="Filter trips"
             value={personalTab}
-            onChange={(value) => setPersonalTab(value)}
+            onChange={(value) => {
+              setPersonalTab(value);
+              setViewingTrash(false);
+            }}
             options={[
+              { value: "all", label: "All" },
               { value: "upcoming", label: "Upcoming" },
               { value: "drafts", label: "Drafts" },
               { value: "past", label: "Past" },
-              { value: "trash", label: "Trash" },
             ]}
-            className="border-border/70 bg-muted/50 [&>button]:min-h-[34px] [&>button]:px-4"
+            className="bg-muted/50"
           />
         )}
 
@@ -1135,10 +1130,31 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
               }
               aria-label="Search trips"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                // A query searches every tab, so leave Trash to show the matches.
+                if (e.target.value.trim()) {
+                  setViewingTrash(false);
+                  if (!isAgency) setPersonalTab("all");
+                }
+              }}
               className="h-11 rounded-xl border-border/70 bg-card pl-10 text-xs shadow-xs"
             />
           </div>
+          {!isAgency && deletedTrips.length > 0 ? (
+            <Button
+              type="button"
+              size="sm"
+              variant={viewingTrash ? "default" : "outline"}
+              aria-pressed={viewingTrash}
+              aria-label={`Recently deleted trips (${deletedTrips.length})`}
+              onClick={() => setViewingTrash((open) => !open)}
+              className="h-11 shrink-0 gap-1.5 rounded-xl px-3 text-xs"
+            >
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
+              <span className="tabular-nums">{deletedTrips.length}</span>
+            </Button>
+          ) : null}
           <div className="inline-flex shrink-0 rounded-xl border border-border/70 bg-card p-0.5">
             <Button
               type="button"
@@ -1167,7 +1183,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
       </div>
 
       {/* Trips Content */}
-      {!isAgency && personalTab === "trash" ? (
+      {!isAgency && viewingTrash ? (
         deletedTrips.length > 0 ? (
           deletedShelf(true)
         ) : (
@@ -1198,7 +1214,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
            state line up instead of hiding in separate tabs. */
         <div className="overflow-x-auto rounded-2xl border border-border/70 bg-card shadow-xs">
           <table className="w-full min-w-[880px] text-left text-xs">
-            <thead className="border-b border-border/70 bg-muted/40 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            <thead className="border-b border-border/70 bg-muted/40 text-overline font-bold text-muted-foreground">
               <tr>
                 <th className="px-4 py-3">Trip</th>
                 <th className="px-3 py-3">Client</th>
@@ -1240,10 +1256,10 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
                       >
                         {title}
                       </button>
-                      <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                         <Badge
                           className={cn(
-                            "px-2 py-0.5 text-[10px] font-bold gap-1",
+                            "px-2 py-0.5 text-xs font-bold gap-1",
                             statusInfo.badgeClass
                           )}
                         >
@@ -1286,7 +1302,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
                       <Badge
                         variant="outline"
                         className={cn(
-                          "text-[10px] font-bold",
+                          "text-xs font-bold",
                           packageBadge.badgeClass
                         )}
                       >
@@ -1299,7 +1315,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
                           <Badge
                             variant="outline"
                             className={cn(
-                              "text-[10px] font-bold",
+                              "text-xs font-bold",
                               QUOTE_STATE_BADGE[quoteStatus] ??
                                 QUOTE_STATE_BADGE.draft
                             )}
@@ -1307,7 +1323,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
                             {QUOTE_STATE_LABEL[quoteStatus] ?? quoteStatus}
                           </Badge>
                           {summary?.quoteNumber ? (
-                            <p className="text-[10px] text-muted-foreground">
+                            <p className="text-xs text-muted-foreground">
                               {summary.quoteNumber}
                             </p>
                           ) : null}
@@ -1320,7 +1336,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
                       <Badge
                         variant="outline"
                         className={cn(
-                          "text-[10px] font-bold",
+                          "text-xs font-bold",
                           proposalBadge.badgeClass
                         )}
                       >
@@ -1336,7 +1352,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
                           type="button"
                           size="sm"
                           variant="outline"
-                          className="h-8 rounded-lg px-2.5 text-[11px] font-bold gap-1"
+                          className="h-8 rounded-lg px-2.5 text-xs font-bold gap-1"
                           onClick={() => onSelectTrip(trip)}
                         >
                           Open
@@ -1366,7 +1382,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
                               title="Archive trip"
                               disabled={isActing}
                               onClick={() => void handleArchive(trip)}
-                              className="h-8 w-8 rounded-lg text-muted-foreground hover:text-amber-600"
+                              className="h-8 w-8 rounded-lg text-muted-foreground hover:text-warning-ink"
                             >
                               <Archive className="h-3.5 w-3.5" />
                             </Button>
@@ -1381,7 +1397,7 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
                               title="Restore to the active list"
                               disabled={isActing}
                               onClick={() => void handleUnarchive(trip)}
-                              className="h-8 w-8 rounded-lg text-muted-foreground hover:text-emerald-600"
+                              className="h-8 w-8 rounded-lg text-muted-foreground hover:text-success-ink"
                             >
                               <ArchiveRestore className="h-3.5 w-3.5" />
                             </Button>
@@ -1416,10 +1432,10 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
         <section className="space-y-3 pt-2">
           <div className="flex items-center gap-2">
             <Users className="h-4 w-4 text-primary" aria-hidden="true" />
-            <h2 className="font-display text-lg font-semibold tracking-tight text-foreground">
+            <h2 className="font-display text-xl font-semibold tracking-tight text-foreground">
               Shared with me
             </h2>
-            <Badge variant="outline" className="text-[10px]">
+            <Badge variant="outline" className="text-xs">
               {sharedTrips.length}
             </Badge>
           </div>
@@ -1441,80 +1457,57 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({
       {/* M7.7: Recently deleted. Only current owners ever receive these rows;
           members without the owner role have no restore action. The agency
           library is archive-only and never renders this shelf. */}
-      {!isAgency && personalTab !== "trash" && deletedTrips.length > 0
+      {!isAgency && !viewingTrash && deletedTrips.length > 0
         ? deletedShelf(showDeleted)
         : null}
 
-      {/* Delete Confirmation Alert Dialog */}
-      <AlertDialog
+      {/* C-07: one destructive recipe for soft delete and permanent purge. */}
+      <ConfirmDestructive
         open={!!tripToDelete}
         onOpenChange={(open) => {
           if (!open) setTripToDelete(null);
         }}
-      >
-        <AlertDialogContent className="rounded-2xl max-w-md w-[92vw] sm:w-full p-5 sm:p-6">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="font-display text-lg font-semibold">
-              Move to Recently deleted?
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-xs leading-relaxed">
-              This removes{" "}
-              <strong className="text-foreground">
-                "{tripToDelete?.title || tripToDelete?.tripDetails?.trip_title}"
-              </strong>{" "}
-              from your library and revokes its share link and pending invites.
-              Only the owner can see it in Recently deleted; you can restore it
-              later.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="gap-2 sm:gap-0">
-            <AlertDialogCancel className="rounded-xl text-xs font-semibold h-10">
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmDelete}
-              className="rounded-xl text-xs font-bold h-10 bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Move to trash
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        title="Move to Recently deleted?"
+        description="This removes the trip from your library and revokes its share link and pending invites. Only the owner can see it in Recently deleted, and you can restore it later."
+        confirmLabel="Move to trash"
+        onConfirm={confirmDelete}
+        busy={Boolean(tripToDelete && actionLoadingId === tripToDelete._id)}
+        detail={
+          tripToDelete ? (
+            <span className="font-semibold">
+              “{tripToDelete.title || tripToDelete.tripDetails?.trip_title || "Untitled trip"}”
+            </span>
+          ) : null
+        }
+      />
 
-      {/* Permanent-delete confirmation. Sharper copy than the soft delete. */}
-      <AlertDialog
+      <ConfirmDestructive
         open={!!tripToPurge}
         onOpenChange={(open) => {
           if (!open) setTripToPurge(null);
         }}
-      >
-        <AlertDialogContent className="rounded-2xl max-w-md w-[92vw] sm:w-full p-5 sm:p-6">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="font-display text-lg font-semibold">
-              Delete this trip forever?
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-xs leading-relaxed">
-              <strong className="text-foreground">
-                "{tripToPurge?.title || tripToPurge?.tripDetails?.trip_title}"
-              </strong>{" "}
-              will be permanently deleted, including its itinerary and history,
-              chat, polls, decisions, expenses and receipt files. This cannot be
-              undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="gap-2 sm:gap-0">
-            <AlertDialogCancel className="rounded-xl text-xs font-semibold h-10">
-              Keep it
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmPurge}
-              className="rounded-xl text-xs font-bold h-10 bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete forever
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        title="Delete this trip forever?"
+        description="The trip is permanently deleted, including its itinerary and history, chat, polls, decisions, expenses and receipt files. This cannot be undone."
+        confirmLabel="Delete forever"
+        cancelLabel="Keep it"
+        onConfirm={confirmPurge}
+        busy={Boolean(tripToPurge && actionLoadingId === tripToPurge._id)}
+        detail={
+          tripToPurge ? (
+            <span className="font-semibold">
+              “{tripToPurge.title || tripToPurge.tripDetails?.trip_title || "Untitled trip"}”
+            </span>
+          ) : null
+        }
+        typedConfirmation={
+          tripToPurge
+            ? {
+                phrase: tripToPurge.title || tripToPurge.tripDetails?.trip_title || "",
+                label: "Type the trip title to confirm",
+              }
+            : undefined
+        }
+      />
     </div>
   );
 };

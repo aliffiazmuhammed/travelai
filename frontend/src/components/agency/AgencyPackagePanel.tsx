@@ -13,17 +13,8 @@ import {
   Undo2,
   X,
 } from 'lucide-react';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
+import { ConfirmDestructive } from '@/components/ui/confirm-destructive';
+import { UnsavedChangesDialog } from '@/components/ui/unsaved-changes-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -38,6 +29,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import AgencyPackageCard from '@/components/directory/AgencyPackageCard';
 import { useAgencyAssetUrl } from '@/hooks/useAgencyAssetUrl';
+import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import { formatDate } from '@/lib/date';
 import { api } from '@/services/api';
 import type { AgencyAsset, AgencyPackage, AgencyPackageInput } from '@/types';
@@ -201,7 +193,7 @@ const PackageListEditor: React.FC<{
           />
         )}
       </div>
-      <p className="text-[11px] text-agency-muted">{hint}</p>
+      <p className="text-xs text-agency-muted">{hint}</p>
     </div>
   );
 };
@@ -236,6 +228,7 @@ const AgencyPackagePanel: React.FC<AgencyPackagePanelProps> = ({
   const [busy, setBusy] = useState<
     'create' | 'save' | 'publish' | 'unpublish' | 'delete' | 'cover' | null
   >(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   // `undefined` means "leave the saved cover alone"; null removes it.
   const [coverChoice, setCoverChoice] = useState<string | null | undefined>(
@@ -384,6 +377,11 @@ const AgencyPackagePanel: React.FC<AgencyPackagePanelProps> = ({
     }
   };
 
+  const guard = useUnsavedChangesGuard(dirty || coverDirty, async () => {
+    const saved = await persist();
+    return Boolean(saved);
+  });
+
   const handlePublish = async () => {
     if (!agencyId || !pkg || busy) return;
     setBusy('publish');
@@ -422,8 +420,8 @@ const AgencyPackagePanel: React.FC<AgencyPackagePanelProps> = ({
     }
   };
 
-  const handleDelete = async () => {
-    if (!agencyId || !pkg || busy) return;
+  const handleDelete = async (): Promise<boolean> => {
+    if (!agencyId || !pkg || busy) return false;
     setBusy('delete');
     try {
       await api.deleteAgencyPackage(agencyId, pkg.id);
@@ -433,8 +431,10 @@ const AgencyPackagePanel: React.FC<AgencyPackagePanelProps> = ({
       setCoverChoice(undefined);
       setUploadedCover(null);
       toast.success('Package deleted. The trip itself is untouched.');
+      return true;
     } catch (error) {
       toast.error(messageOf(error));
+      return false;
     } finally {
       setBusy(null);
     }
@@ -501,7 +501,7 @@ const AgencyPackagePanel: React.FC<AgencyPackagePanelProps> = ({
     return (
       <Card className="rounded-2xl border-dashed border-agency-line bg-agency-panel/60 shadow-none">
         <CardContent className="space-y-4 p-8 text-center">
-          <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-agency-accent-soft text-agency-accent">
+          <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-agency-accent-soft text-agency-accent-ink">
             <Sparkles className="h-6 w-6" />
           </div>
           <div className="space-y-1">
@@ -553,7 +553,7 @@ const AgencyPackagePanel: React.FC<AgencyPackagePanelProps> = ({
             <CardTitle className="text-base font-semibold">Public package</CardTitle>
             <Badge
               className={cn(
-                'text-[10px]',
+                'text-xs',
                 published
                   ? 'bg-primary text-primary-foreground hover:bg-primary'
                   : 'bg-agency-soft text-agency-muted hover:bg-agency-soft'
@@ -562,7 +562,7 @@ const AgencyPackagePanel: React.FC<AgencyPackagePanelProps> = ({
               {published ? 'Published' : 'Draft'}
             </Badge>
             {busy ? (
-              <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                 <Loader2 className="h-3 w-3 animate-spin" />
                 Working...
               </span>
@@ -602,7 +602,7 @@ const AgencyPackagePanel: React.FC<AgencyPackagePanelProps> = ({
               disabled={!editable}
               placeholder="Five nights of waterfalls, forts and slow roads, with small groups and local guides."
             />
-            <p className="text-[11px] text-agency-muted">
+            <p className="text-xs text-agency-muted">
               One or two lines. This is the first thing a traveller reads, and
               publishing needs it.
             </p>
@@ -621,7 +621,7 @@ const AgencyPackagePanel: React.FC<AgencyPackagePanelProps> = ({
                 onChange={(event) => update({ nights: event.target.value })}
                 disabled={!editable}
               />
-              <p className="text-[11px] text-agency-muted">
+              <p className="text-xs text-agency-muted">
                 A day trip is 0 nights.
               </p>
             </div>
@@ -637,7 +637,7 @@ const AgencyPackagePanel: React.FC<AgencyPackagePanelProps> = ({
                 disabled={!editable}
                 placeholder="Leave blank for price on request"
               />
-              <p className="text-[11px] text-agency-muted">
+              <p className="text-xs text-agency-muted">
                 Whole rupees. Blank shows “price on request”.
               </p>
             </div>
@@ -666,7 +666,7 @@ const AgencyPackagePanel: React.FC<AgencyPackagePanelProps> = ({
           />
 
           <div className="space-y-2">
-            <Label htmlFor="package-cover">Cover image</Label>
+            <Label htmlFor="package-cover-file">Cover image</Label>
             {coverUrl ? (
               <div className="overflow-hidden rounded-xl border border-agency-line">
                 <img
@@ -721,14 +721,14 @@ const AgencyPackagePanel: React.FC<AgencyPackagePanelProps> = ({
                 }}
               />
             </div>
-            <p className="text-[11px] text-agency-muted">
+            <p className="text-xs text-agency-muted">
               JPEG, PNG or WebP up to 2 MB. Images come from your agency asset
               library, so you can reuse them elsewhere.
             </p>
           </div>
 
           {missing.length > 0 ? (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+            <div className="rounded-xl border border-warning/30 bg-warning/10 p-3 text-xs text-warning-ink dark:border-warning/20 dark:bg-warning/30">
               <p className="font-bold">Before you can publish</p>
               <ul className="mt-1 list-disc space-y-0.5 pl-4">
                 {missing.map((entry) => (
@@ -815,47 +815,23 @@ const AgencyPackagePanel: React.FC<AgencyPackagePanelProps> = ({
               ) : null}
 
               {canManage && published && pkg.publishedAt ? (
-                <span className="text-[11px] text-agency-muted">
+                <span className="text-xs text-agency-muted">
                   Published {formatDate(pkg.publishedAt)}
                 </span>
               ) : null}
 
               {canManage ? (
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="ml-auto rounded-xl text-xs font-bold text-muted-foreground hover:text-destructive"
-                      disabled={busy !== null}
-                    >
-                      <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                      Delete package
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent className="rounded-2xl sm:rounded-2xl">
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Delete this package?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        The public card disappears immediately. The trip itself
-                        is untouched, and you can create a new package from it
-                        later.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel className="rounded-xl text-xs font-bold">
-                        Keep it
-                      </AlertDialogCancel>
-                      <AlertDialogAction
-                        className="rounded-xl bg-destructive text-xs font-bold text-destructive-foreground hover:bg-destructive/90"
-                        onClick={() => void handleDelete()}
-                      >
-                        Delete package
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="ml-auto rounded-xl text-xs font-bold text-muted-foreground hover:text-destructive"
+                  disabled={busy !== null}
+                  onClick={() => setDeleteOpen(true)}
+                >
+                  <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                  Delete package
+                </Button>
               ) : null}
             </div>
           ) : (
@@ -867,14 +843,14 @@ const AgencyPackagePanel: React.FC<AgencyPackagePanelProps> = ({
       </Card>
 
       <div className="space-y-3 lg:sticky lg:top-32 lg:self-start">
-        <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-agency-muted">
+        <p className="inline-flex items-center gap-1.5 text-overline font-semibold text-agency-muted">
           <Eye className="h-3.5 w-3.5" />
           What travellers see
         </p>
         {preview ? <AgencyPackageCard package={preview} /> : null}
 
         <div className="rounded-2xl border border-agency-line bg-agency-panel p-4">
-          <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-agency-muted">
+          <p className="flex items-center gap-1.5 text-overline font-semibold text-agency-muted">
             <CalendarDays className="h-3.5 w-3.5" />
             Day by day
           </p>
@@ -893,7 +869,7 @@ const AgencyPackagePanel: React.FC<AgencyPackagePanelProps> = ({
                 ))}
               </ol>
               {planDays.length > 6 ? (
-                <p className="mt-2 pl-4 text-[11px] text-agency-muted">
+                <p className="mt-2 pl-4 text-xs text-agency-muted">
                   +{planDays.length - 6} more days
                 </p>
               ) : null}
@@ -904,12 +880,30 @@ const AgencyPackagePanel: React.FC<AgencyPackagePanelProps> = ({
               it into the package.
             </p>
           )}
-          <p className="mt-3 border-t border-agency-line pt-3 text-[11px] leading-5 text-agency-muted">
+          <p className="mt-3 border-t border-agency-line pt-3 text-xs leading-5 text-agency-muted">
             Publishing copies this plan into the package snapshot — until then,
             visitors keep seeing the last published days.
           </p>
         </div>
       </div>
+
+      <ConfirmDestructive
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        icon={Trash2}
+        title="Delete this package?"
+        description="The public card disappears immediately. The trip itself is untouched, and you can create a new package from it later."
+        confirmLabel="Delete package"
+        cancelLabel="Keep it"
+        detail={pkg ? <>{pkg.title}</> : null}
+        onConfirm={async () => {
+          const deleted = await handleDelete();
+          if (deleted) setDeleteOpen(false);
+        }}
+        busy={busy === 'delete'}
+      />
+
+      <UnsavedChangesDialog guard={guard} />
     </div>
   );
 };

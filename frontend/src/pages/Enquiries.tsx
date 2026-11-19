@@ -10,12 +10,14 @@ import {
   Search,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
-import { TravellerBreadcrumbs } from '@/components/traveller/TravellerBreadcrumbs';
+import { TravellerPageHeader } from '@/components/traveller/TravellerPageHeader';
+import { TravellerSegmented } from '@/components/traveller/TravellerSegmented';
 import EnquiryThreadPane from '@/components/traveller/EnquiryThreadPane';
 import { AgencyLogoTile } from '@/components/directory/AgencyLogoTile';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/services/api';
+import { AsyncErrorPanel, AsyncLiveStatus } from '@/components/states/AsyncState';
 import {
   travellerEnquiryStatusLabel,
   travellerEnquiryStatusBadgeClass,
@@ -23,7 +25,7 @@ import {
 import { formatRelative } from '@/lib/date';
 import { cn } from '@/lib/utils';
 import { useEnquiryLiveRefresh } from '@/hooks/useEnquiryEvents';
-import type { AgencyEnquiry } from '@/types/agency';
+import type { AgencyEnquiry, AgencyEnquiryPage } from '@/types/agency';
 
 const PAGE_SIZE = 20;
 
@@ -79,10 +81,14 @@ const Enquiries: React.FC = () => {
 
   const [enquiries, setEnquiries] = useState<AgencyEnquiry[]>([]);
   const [total, setTotal] = useState(0);
+  /** Pills come from the server so they stay right past the first page. */
+  const [serverCounts, setServerCounts] = useState<AgencyEnquiryPage['counts'] | null>(
+    null
+  );
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [query, setQuery] = useState('');
   // Newer reads win: a quiet refresh can start while the first page is still in
@@ -104,15 +110,12 @@ const Enquiries: React.FC = () => {
       if (seq !== requestSeq.current) return;
       setEnquiries(page.enquiries || []);
       setTotal(page.total ?? 0);
+      setServerCounts(page.counts ?? null);
       setNextCursor(page.hasMore ? page.nextCursor : null);
       setError(null);
     } catch (err) {
       if (seq !== requestSeq.current || quiet) return;
-      setError(
-        err instanceof Error && err.message
-          ? err.message
-          : 'Your enquiries could not be loaded right now.'
-      );
+      setError(err);
     } finally {
       if (!quiet) setLoading(false);
     }
@@ -136,9 +139,13 @@ const Enquiries: React.FC = () => {
       if (seq !== requestSeq.current) return;
       setEnquiries((previous) => [...previous, ...(page.enquiries || [])]);
       setNextCursor(page.hasMore ? page.nextCursor : null);
-    } catch {
+    } catch (err) {
       if (seq === requestSeq.current) {
-        setError('Older enquiries could not be loaded. Try again.');
+        setError(
+          err instanceof Error
+            ? err
+            : new Error('Older enquiries could not be loaded. Try again.')
+        );
       }
     } finally {
       setLoadingMore(false);
@@ -169,9 +176,10 @@ const Enquiries: React.FC = () => {
     setSearchParams(next, { replace: true });
   };
 
-  // Counts read the rows on screen; `All` keeps the server's total so paging
-  // does not look like enquiries disappearing.
+  // Prefer the server tally (every row, every page). The local count is only a
+  // first-paint fallback for an older API response.
   const counts = useMemo(() => {
+    if (serverCounts) return serverCounts;
     const tally = (predicate: (enquiry: AgencyEnquiry) => boolean) =>
       enquiries.filter(predicate).length;
     return {
@@ -180,7 +188,7 @@ const Enquiries: React.FC = () => {
       quote: tally((enquiry) => matchesFilter(enquiry, 'quote')),
       open: tally((enquiry) => matchesFilter(enquiry, 'open')),
     } satisfies Record<EnquiryFilter, number>;
-  }, [enquiries, total]);
+  }, [enquiries, total, serverCounts]);
 
   const visibleEnquiries = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -209,26 +217,22 @@ const Enquiries: React.FC = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
       <main
+        id="main-content"
+        tabIndex={-1}
         className={cn(
           'container mx-auto max-w-6xl px-4 pb-16 pt-24',
           openId && 'lg:flex lg:h-[100dvh] lg:flex-col lg:pb-6'
         )}
       >
-        <header className="space-y-3">
-          <TravellerBreadcrumbs items={[{ label: 'Enquiries' }]} />
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
-              <h1 className="font-display text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-                Your enquiries
-              </h1>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Replies from agencies land here.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
+        <TravellerPageHeader
+          title="Your enquiries"
+          description="Replies from agencies land here."
+          crumbs={[{ label: 'Enquiries' }]}
+          actions={
+            <>
               {liveMode === 'live' ? (
                 <span
-                  className="inline-flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 px-2.5 py-1 text-[10px] font-semibold text-accent"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 px-2.5 py-1 text-xs font-semibold text-accent-ink"
                   title="Replies appear here as they arrive"
                 >
                   <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
@@ -239,7 +243,7 @@ const Enquiries: React.FC = () => {
                 asChild
                 variant="outline"
                 size="sm"
-                className="h-8 rounded-full text-[11px] font-semibold"
+                className="h-8 rounded-full text-xs font-semibold"
               >
                 <Link to="/proposals">
                   <FileText className="mr-1.5 h-3.5 w-3.5" />
@@ -250,7 +254,7 @@ const Enquiries: React.FC = () => {
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-8 rounded-full text-[11px] font-semibold"
+                className="h-8 rounded-full text-xs font-semibold"
                 onClick={() => setReloadKey((key) => key + 1)}
                 disabled={loading}
               >
@@ -261,24 +265,20 @@ const Enquiries: React.FC = () => {
                 )}
                 Refresh
               </Button>
-            </div>
-          </div>
-        </header>
+            </>
+          }
+        />
+
 
         {error ? (
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-destructive/30 bg-destructive/5 px-4 py-3">
-            <p className="text-xs font-semibold text-destructive">{error}</p>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-8 rounded-full text-[11px] font-semibold"
-              onClick={() => setReloadKey((key) => key + 1)}
-            >
-              Try again
-            </Button>
-          </div>
+          <AsyncErrorPanel
+            className="mt-4"
+            error={error}
+            subject="your enquiries"
+            onRetry={() => setReloadKey((key) => key + 1)}
+          />
         ) : null}
+        <AsyncLiveStatus message={loading ? "Loading your enquiries…" : null} />
 
         <div
           className={cn(
@@ -316,34 +316,16 @@ const Enquiries: React.FC = () => {
                 </div>
 
                 {!loading && enquiries.length > 0 ? (
-                  <div
-                    role="group"
-                    aria-label="Filter enquiries"
-                    className="flex flex-wrap items-center gap-1"
-                  >
-                    {FILTERS.map((value) => {
-                      const active = value === filter;
-                      return (
-                        <button
-                          key={value}
-                          type="button"
-                          aria-pressed={active}
-                          onClick={() => setFilter(value)}
-                          className={cn(
-                            'inline-flex min-h-[28px] items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-                            active
-                              ? 'bg-primary/10 text-primary ring-1 ring-inset ring-primary/25'
-                              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                          )}
-                        >
-                          {FILTER_LABELS[value]}
-                          <span className="text-[10px] tabular-nums opacity-80">
-                            {counts[value]}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <TravellerSegmented<EnquiryFilter>
+                    ariaLabel="Filter enquiries"
+                    value={filter}
+                    onChange={setFilter}
+                    options={FILTERS.map((value) => ({
+                      value,
+                      label: FILTER_LABELS[value],
+                      count: counts[value],
+                    }))}
+                  />
                 ) : null}
               </div>
 
@@ -362,6 +344,10 @@ const Enquiries: React.FC = () => {
                       />
                     ))}
                   </div>
+                ) : error && enquiries.length === 0 ? (
+                  <p className="p-8 text-center text-xs leading-5 text-muted-foreground">
+                    The list could not be loaded. Use Try again above.
+                  </p>
                 ) : enquiries.length === 0 ? (
                   <div className="p-8 text-center">
                     <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
@@ -377,7 +363,7 @@ const Enquiries: React.FC = () => {
                     <Button
                       asChild
                       size="sm"
-                      className="mt-4 h-8 rounded-full text-[11px] font-semibold"
+                      className="mt-4 h-8 rounded-full text-xs font-semibold"
                     >
                       <Link to="/agencies">
                         Browse agencies
@@ -398,7 +384,7 @@ const Enquiries: React.FC = () => {
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="mt-4 h-8 rounded-full text-[11px] font-semibold"
+                      className="mt-4 h-8 rounded-full text-xs font-semibold"
                       onClick={clearViews}
                     >
                       Show all enquiries
@@ -452,27 +438,27 @@ const Enquiries: React.FC = () => {
                                     An agency
                                   </span>
                                 )}
-                                <span className="shrink-0 text-[10px] text-muted-foreground">
+                                <span className="shrink-0 text-xs text-muted-foreground">
                                   {stamp ? formatRelative(stamp) : ''}
                                 </span>
                               </div>
-                              <p className="truncate text-[11px] font-medium text-foreground/75">
+                              <p className="truncate text-xs font-medium text-foreground/75">
                                 {enquiry.package ? enquiry.package.title : 'General enquiry'}
                               </p>
-                              <p className="line-clamp-1 text-[11px] text-muted-foreground">
+                              <p className="line-clamp-1 text-xs text-muted-foreground">
                                 {enquiry.message}
                               </p>
                               <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2">
                                 <span className="flex min-w-0 items-center gap-1.5">
                                   {unread > 0 ? (
-                                    <span className="inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground">
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-xs font-semibold text-primary-foreground">
                                       <MessageSquare className="h-2.5 w-2.5" aria-hidden />
                                       {unread} new
                                     </span>
                                   ) : null}
                                   {proposals > 0 ? (
                                     <span
-                                      className="inline-flex items-center gap-1 rounded-full border border-border/70 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground"
+                                      className="inline-flex items-center gap-1 rounded-full border border-border/70 px-1.5 py-0.5 text-xs font-semibold text-muted-foreground"
                                       title={`${proposals} ${proposals === 1 ? 'proposal' : 'proposals'}`}
                                     >
                                       <FileText className="h-2.5 w-2.5" aria-hidden />
@@ -482,7 +468,7 @@ const Enquiries: React.FC = () => {
                                 </span>
                                 <span
                                   className={cn(
-                                    'shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold',
+                                    'shrink-0 rounded-full border px-2 py-0.5 text-xs font-semibold',
                                     travellerEnquiryStatusBadgeClass(
                                       enquiry.status,
                                       proposals > 0
@@ -507,7 +493,7 @@ const Enquiries: React.FC = () => {
                           type="button"
                           variant="outline"
                           size="sm"
-                          className="h-8 rounded-full text-[11px] font-semibold"
+                          className="h-8 rounded-full text-xs font-semibold"
                           onClick={() => void loadMore()}
                           disabled={loadingMore}
                         >

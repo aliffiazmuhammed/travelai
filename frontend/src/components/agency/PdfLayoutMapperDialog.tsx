@@ -508,13 +508,13 @@ const PdfLayoutMapperDialog: React.FC<PdfLayoutMapperDialogProps> = ({
     >
       <DialogContent className="max-h-[94vh] overflow-hidden p-0 sm:max-w-6xl">
         <div className="flex max-h-[94vh] flex-col">
-          <DialogHeader className="border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+          <DialogHeader className="border-b border-border px-5 py-4">
             <DialogTitle className="flex flex-wrap items-center gap-2">
               {title}
-              <Badge variant="outline" className="text-[10px]">
+              <Badge variant="outline" className="text-xs">
                 {audience === 'internal' ? 'Internal' : 'Client'}
               </Badge>
-              <Badge variant="outline" className="text-[10px]">
+              <Badge variant="outline" className="text-xs">
                 PDF design
               </Badge>
             </DialogTitle>
@@ -522,20 +522,20 @@ const PdfLayoutMapperDialog: React.FC<PdfLayoutMapperDialogProps> = ({
           </DialogHeader>
 
           {loading ? (
-            <div className="flex flex-1 flex-col items-center justify-center gap-2 py-24 text-sm text-slate-500 dark:text-slate-400">
-              <Loader2 className="h-5 w-5 animate-spin text-teal-600" />
+            <div className="flex flex-1 flex-col items-center justify-center gap-2 py-24 text-sm text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin text-agency-accent-ink" />
               Reading the PDF design...
             </div>
           ) : loadError ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-24 text-center">
-              <AlertTriangle className="h-6 w-6 text-rose-500" />
-              <p className="max-w-sm text-sm text-rose-700 dark:text-rose-300">
+              <AlertTriangle className="h-6 w-6 text-destructive-ink" />
+              <p className="max-w-sm text-sm text-destructive-ink">
                 {loadError}
               </p>
             </div>
           ) : (
             <div className="grid flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[minmax(0,1fr)_320px]">
-              <div className="flex min-h-0 flex-col overflow-hidden border-b border-slate-200 lg:border-b-0 lg:border-r dark:border-slate-800">
+              <div className="flex min-h-0 flex-col overflow-hidden border-b border-border lg:border-b-0 lg:border-r">
                 <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
                   <div className="flex items-center gap-1.5">
                     <Button
@@ -572,7 +572,7 @@ const PdfLayoutMapperDialog: React.FC<PdfLayoutMapperDialogProps> = ({
                     {isRepeatPage ? (
                       <Badge
                         variant="outline"
-                        className="border-amber-300 bg-amber-50 text-[10px] text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
+                        className="border-warning/30 bg-warning/10 text-xs text-warning-ink dark:border-warning/40 dark:bg-warning/20"
                       >
                         <Repeat className="mr-1 h-2.5 w-2.5" />
                         Repeats per day
@@ -603,7 +603,7 @@ const PdfLayoutMapperDialog: React.FC<PdfLayoutMapperDialogProps> = ({
                   </div>
                 </div>
 
-                <div className="min-h-0 flex-1 overflow-auto bg-slate-100/70 px-4 pb-6 dark:bg-slate-950/40">
+                <div className="min-h-0 flex-1 overflow-auto bg-muted/70 px-4 pb-6 dark:bg-background/40">
                   <div
                     ref={wrapRef}
                     className="relative mx-auto w-full max-w-[760px] select-none bg-white shadow-sm"
@@ -627,10 +627,10 @@ const PdfLayoutMapperDialog: React.FC<PdfLayoutMapperDialogProps> = ({
                                 }
                               }}
                               className={cn(
-                                'absolute cursor-move touch-none rounded-[3px] border-2 text-[9px] font-medium leading-none',
+                                'absolute cursor-move touch-none rounded-[3px] border-2 text-xs font-medium leading-none',
                                 selected
-                                  ? 'border-teal-500 bg-teal-400/25 text-teal-900 shadow-[0_0_0_1px_rgba(13,148,136,0.35)]'
-                                  : 'border-sky-500/70 bg-sky-400/15 text-sky-900'
+                                  ? 'border-agency-accent/30 bg-agency-accent/25 text-agency-accent-ink shadow-[0_0_0_1px_rgba(13,148,136,0.35)]'
+                                  : 'border-info/70 bg-info/15 text-info-ink'
                               )}
                               style={{
                                 left: `${(slot.x / pageSize.width) * 100}%`,
@@ -639,7 +639,7 @@ const PdfLayoutMapperDialog: React.FC<PdfLayoutMapperDialogProps> = ({
                                 height: `${(slot.h / pageSize.height) * 100}%`,
                               }}
                             >
-                              <span className="pointer-events-none absolute inset-0 flex items-center gap-1 overflow-hidden px-1 text-[9px] font-semibold">
+                              <span className="pointer-events-none absolute inset-0 flex items-center gap-1 overflow-hidden px-1 text-xs font-semibold">
                                 {slot.kind === 'image' ? (
                                   <ImageIcon className="h-2.5 w-2.5 shrink-0" />
                                 ) : (
@@ -657,7 +657,7 @@ const PdfLayoutMapperDialog: React.FC<PdfLayoutMapperDialogProps> = ({
                                   onPointerDown={(event) =>
                                     beginDrag(event, slot, 'resize')
                                   }
-                                  className="absolute -bottom-1.5 -right-1.5 h-3 w-3 cursor-nwse-resize rounded-sm border border-white bg-teal-600"
+                                  className="absolute -bottom-1.5 -right-1.5 h-3 w-3 cursor-nwse-resize rounded-sm border border-white bg-agency-accent"
                                 />
                               ) : null}
                             </div>
@@ -666,11 +666,11 @@ const PdfLayoutMapperDialog: React.FC<PdfLayoutMapperDialogProps> = ({
                       : null}
                     {rendering ? (
                       <div className="pointer-events-none absolute inset-0 grid place-items-center bg-white/40">
-                        <Loader2 className="h-5 w-5 animate-spin text-teal-600" />
+                        <Loader2 className="h-5 w-5 animate-spin text-agency-accent-ink" />
                       </div>
                     ) : null}
                   </div>
-                  <p className="mx-auto mt-2 max-w-[760px] text-center text-[10px] text-slate-500 dark:text-slate-400">
+                  <p className="mx-auto mt-2 max-w-[760px] text-center text-xs text-muted-foreground">
                     Drag a box to move it; drag its corner to resize. Page{' '}
                     {currentPage} ·{' '}
                     {pageSize
@@ -684,10 +684,10 @@ const PdfLayoutMapperDialog: React.FC<PdfLayoutMapperDialogProps> = ({
 
               <aside className="min-h-0 overflow-y-auto p-4">
                 <div className="space-y-4">
-                  <div className="flex items-start justify-between gap-2 rounded-xl border border-slate-200 p-2.5 dark:border-slate-800">
+                  <div className="flex items-start justify-between gap-2 rounded-xl border border-border p-2.5">
                     <div className="min-w-0">
                       <p className="text-xs font-semibold">Repeat per day</p>
-                      <p className="text-[10px] leading-relaxed text-slate-500 dark:text-slate-400">
+                      <p className="text-xs leading-relaxed text-muted-foreground">
                         Repeat this page once for every itinerary day. Only one
                         page can repeat, and day fields live there.
                       </p>
@@ -712,7 +712,7 @@ const PdfLayoutMapperDialog: React.FC<PdfLayoutMapperDialogProps> = ({
                           type="button"
                           variant="ghost"
                           size="sm"
-                          className="h-7 text-rose-600 hover:text-rose-700 dark:text-rose-400"
+                          className="h-7 text-destructive-ink hover:text-destructive-ink"
                           onClick={() => removeSlot(selectedSlot.id)}
                           disabled={saving}
                         >
@@ -722,7 +722,7 @@ const PdfLayoutMapperDialog: React.FC<PdfLayoutMapperDialogProps> = ({
                       </div>
 
                       <div className="space-y-1.5">
-                        <span className="text-[11px] font-medium text-slate-700 dark:text-slate-300">
+                        <span className="text-xs font-medium text-muted-foreground">
                           Field
                         </span>
                         <Select
@@ -732,7 +732,7 @@ const PdfLayoutMapperDialog: React.FC<PdfLayoutMapperDialogProps> = ({
                           }
                           disabled={saving}
                         >
-                          <SelectTrigger className="h-9 text-xs">
+                          <SelectTrigger className="h-9 text-xs" aria-label="Field">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -806,7 +806,7 @@ const PdfLayoutMapperDialog: React.FC<PdfLayoutMapperDialogProps> = ({
 
                           <div className="grid grid-cols-2 gap-2">
                             <div className="space-y-1.5">
-                              <span className="text-[11px] font-medium text-slate-700 dark:text-slate-300">
+                              <span className="text-xs font-medium text-muted-foreground">
                                 Font
                               </span>
                               <Select
@@ -818,7 +818,7 @@ const PdfLayoutMapperDialog: React.FC<PdfLayoutMapperDialogProps> = ({
                                 }
                                 disabled={saving}
                               >
-                                <SelectTrigger className="h-9 text-xs">
+                                <SelectTrigger className="h-9 text-xs" aria-label="Font">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -830,7 +830,7 @@ const PdfLayoutMapperDialog: React.FC<PdfLayoutMapperDialogProps> = ({
                               </Select>
                             </div>
                             <div className="space-y-1.5">
-                              <span className="text-[11px] font-medium text-slate-700 dark:text-slate-300">
+                              <span className="text-xs font-medium text-muted-foreground">
                                 Align
                               </span>
                               <Select
@@ -842,7 +842,7 @@ const PdfLayoutMapperDialog: React.FC<PdfLayoutMapperDialogProps> = ({
                                 }
                                 disabled={saving}
                               >
-                                <SelectTrigger className="h-9 text-xs">
+                                <SelectTrigger className="h-9 text-xs" aria-label="Align">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -855,7 +855,7 @@ const PdfLayoutMapperDialog: React.FC<PdfLayoutMapperDialogProps> = ({
                           </div>
 
                           <div className="space-y-1.5">
-                            <span className="text-[11px] font-medium text-slate-700 dark:text-slate-300">
+                            <span className="text-xs font-medium text-muted-foreground">
                               Colour
                             </span>
                             <div className="flex items-center gap-2">
@@ -868,10 +868,10 @@ const PdfLayoutMapperDialog: React.FC<PdfLayoutMapperDialogProps> = ({
                                   })
                                 }
                                 disabled={saving}
-                                className="h-8 w-10 cursor-pointer rounded border border-slate-300 bg-transparent p-0.5 dark:border-slate-700"
+                                className="h-8 w-10 cursor-pointer rounded border border-border bg-transparent p-0.5"
                                 aria-label="Text colour"
                               />
-                              <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                              <span className="text-xs text-muted-foreground">
                                 {selectedSlot.color ?? '#0F172A'}
                               </span>
                             </div>
@@ -879,7 +879,7 @@ const PdfLayoutMapperDialog: React.FC<PdfLayoutMapperDialogProps> = ({
                         </>
                       ) : (
                         <div className="space-y-1.5">
-                          <span className="text-[11px] font-medium text-slate-700 dark:text-slate-300">
+                          <span className="text-xs font-medium text-muted-foreground">
                             Image fit
                           </span>
                           <Select
@@ -891,7 +891,7 @@ const PdfLayoutMapperDialog: React.FC<PdfLayoutMapperDialogProps> = ({
                             }
                             disabled={saving}
                           >
-                            <SelectTrigger className="h-9 text-xs">
+                            <SelectTrigger className="h-9 text-xs" aria-label="Image fit">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -907,7 +907,7 @@ const PdfLayoutMapperDialog: React.FC<PdfLayoutMapperDialogProps> = ({
                       )}
 
                       <div>
-                        <span className="text-[11px] font-medium text-slate-700 dark:text-slate-300">
+                        <span className="text-xs font-medium text-muted-foreground">
                           Position (points)
                         </span>
                         <div className="mt-1.5 grid grid-cols-2 gap-2">
@@ -957,23 +957,23 @@ const PdfLayoutMapperDialog: React.FC<PdfLayoutMapperDialogProps> = ({
                       </div>
                     </div>
                   ) : (
-                    <div className="rounded-xl border border-dashed border-slate-200 px-3 py-6 text-center dark:border-slate-800">
-                      <p className="text-[11px] font-medium">
+                    <div className="rounded-xl border border-dashed border-border px-3 py-6 text-center">
+                      <p className="text-xs font-medium">
                         {currentSlots.length === 0
                           ? 'No slots on this page yet'
                           : `${currentSlots.length} slot${
                               currentSlots.length === 1 ? '' : 's'
                             } on this page`}
                       </p>
-                      <p className="mt-1 text-[10px] leading-relaxed text-slate-500 dark:text-slate-400">
+                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                         Add a text or image slot, then click it to bind a field
                         and fine-tune its position.
                       </p>
                     </div>
                   )}
 
-                  <div className="rounded-xl bg-slate-50 p-2.5 text-[10px] leading-relaxed text-slate-500 dark:bg-slate-900/50 dark:text-slate-400">
-                    <p className="font-medium text-slate-600 dark:text-slate-300">
+                  <div className="rounded-xl bg-muted p-2.5 text-xs leading-relaxed text-muted-foreground dark:bg-background/50">
+                    <p className="font-medium text-muted-foreground">
                       {allSlots.length} slot{allSlots.length === 1 ? '' : 's'} on{' '}
                       {pages.filter((page) => page.slots.length > 0).length}{' '}
                       page
@@ -991,7 +991,7 @@ const PdfLayoutMapperDialog: React.FC<PdfLayoutMapperDialogProps> = ({
             </div>
           )}
 
-          <DialogFooter className="border-t border-slate-200 px-5 py-3 dark:border-slate-800">
+          <DialogFooter className="border-t border-border px-5 py-3">
             <Button
               variant="outline"
               onClick={() => onOpenChange(false)}
@@ -1000,7 +1000,7 @@ const PdfLayoutMapperDialog: React.FC<PdfLayoutMapperDialogProps> = ({
               Cancel
             </Button>
             <Button
-              className="bg-teal-600 hover:bg-teal-700"
+              className="bg-agency-accent hover:bg-agency-accent/90"
               onClick={() => void handleSave()}
               disabled={saving || loading || !doc}
             >
@@ -1038,7 +1038,7 @@ const NumberField: React.FC<NumberFieldProps> = ({
   onChange,
 }) => (
   <label className="space-y-1">
-    <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400">
+    <span className="text-xs font-medium text-muted-foreground">
       {label}
     </span>
     <Input

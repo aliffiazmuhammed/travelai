@@ -4,6 +4,7 @@ import Navbar from "@/components/Navbar";
 import PhoneField from "@/components/PhoneField";
 import { TravellerBreadcrumbs } from "@/components/traveller/TravellerBreadcrumbs";
 import { Button } from "@/components/ui/button";
+import { AppImage } from "@/components/ui/app-image";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -47,13 +48,13 @@ const BENEFITS = [
   },
   {
     icon: Map,
-    tile: "bg-accent/10 text-accent",
+    tile: "bg-accent/10 text-accent-ink",
     title: "Packages that show what you do",
     body: "List your trips, itineraries and special experiences with rich photos and details.",
   },
   {
     icon: MessageCircle,
-    tile: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+    tile: "bg-success/10 text-success-ink",
     title: "Enquiries with a real thread",
     body: "Get genuine traveller enquiries and manage conversations in one place.",
   },
@@ -139,14 +140,14 @@ const AgencyApply = () => {
     <div className="flex min-h-screen flex-col bg-gradient-hero">
       <Navbar />
 
-      <main className="container mx-auto max-w-6xl flex-1 px-4 pb-20 pt-24">
+      <main id="main-content" tabIndex={-1} className="container mx-auto max-w-6xl flex-1 px-4 pb-20 pt-24">
         <TravellerBreadcrumbs
           items={[{ label: "Agencies", to: "/agencies" }, { label: "Apply to join" }]}
         />
 
         <div className="mt-6 grid items-start gap-10 lg:grid-cols-[minmax(0,1fr)_440px] lg:gap-x-12 lg:gap-y-8">
           <div className="order-1 min-w-0 space-y-4 lg:col-start-1 lg:row-start-1">
-            <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-primary">
+            <p className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-primary">
               <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
               For agencies
             </p>
@@ -194,17 +195,19 @@ const AgencyApply = () => {
             </div>
 
             <div className="relative aspect-[16/7] w-full overflow-hidden rounded-3xl border border-border/70 shadow-sm">
-              <img
+              <AppImage
                 src={tripCoverUrl("munnar", 1200)}
+                srcSet={tripCoverSrcSet("munnar")}
+                sizes="(min-width: 1024px) 48rem, 100vw"
                 alt=""
                 aria-hidden="true"
-                loading="lazy"
-                decoding="async"
+                width={1200}
+                height={525}
                 className="h-full w-full object-cover"
               />
               <div
                 aria-hidden="true"
-                className="absolute inset-0 bg-gradient-to-t from-slate-900/25 via-transparent to-transparent"
+                className="absolute inset-0 bg-gradient-to-t from-muted/25 via-transparent to-transparent"
               />
             </div>
           </div>
@@ -212,7 +215,7 @@ const AgencyApply = () => {
           <section className="order-2 rounded-3xl border border-border/70 bg-card p-6 shadow-sm sm:p-8 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:sticky lg:top-24 lg:self-start">
             {submitted ? (
               <div className="space-y-4">
-                <span className="grid h-11 w-11 place-items-center rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                <span className="grid h-11 w-11 place-items-center rounded-2xl bg-success/10 text-success-ink">
                   <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
                 </span>
                 <div className="space-y-1">
@@ -280,7 +283,7 @@ const AgencyApply = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="apply-name" className="text-[11px] font-bold">
+                  <Label htmlFor="apply-name" className="text-xs font-bold">
                     Agency name
                   </Label>
                   <Input
@@ -296,7 +299,7 @@ const AgencyApply = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="apply-phone" className="text-[11px] font-bold">
+                  <Label htmlFor="apply-phone" className="text-xs font-bold">
                     Phone
                   </Label>
                   <PhoneField
@@ -315,7 +318,7 @@ const AgencyApply = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="apply-email" className="text-[11px] font-bold">
+                  <Label htmlFor="apply-email" className="text-xs font-bold">
                     Work email
                   </Label>
                   <Input
@@ -332,7 +335,7 @@ const AgencyApply = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="apply-note" className="text-[11px] font-bold">
+                  <Label htmlFor="apply-note" className="text-xs font-bold">
                     What are you known for? (optional)
                   </Label>
                   <Textarea
@@ -344,7 +347,7 @@ const AgencyApply = () => {
                     disabled={submitting}
                     className="min-h-[104px] resize-none rounded-xl text-xs"
                   />
-                  <p className="text-right text-[10px] text-muted-foreground">
+                  <p className="text-right text-xs text-muted-foreground">
                     {form.note.length}/600
                   </p>
                 </div>
@@ -371,7 +374,7 @@ const AgencyApply = () => {
                   />
                   <Label
                     htmlFor="apply-consent"
-                    className="text-[11px] font-medium leading-5 text-muted-foreground"
+                    className="text-xs font-medium leading-5 text-muted-foreground"
                   >
                     I agree to the{" "}
                     <Link
@@ -388,7 +391,7 @@ const AgencyApply = () => {
                 {formError && (
                   <p
                     role="alert"
-                    className="rounded-xl border border-destructive/25 bg-destructive/5 px-3 py-2 text-[11px] font-semibold text-destructive"
+                    className="rounded-xl border border-destructive/25 bg-destructive/5 px-3 py-2 text-xs font-semibold text-destructive"
                   >
                     {formError}
                   </p>
@@ -408,12 +411,12 @@ const AgencyApply = () => {
                   {submitting ? "Sending…" : "Submit application"}
                 </Button>
 
-                <p className="text-[10px] leading-4 text-muted-foreground">
+                <p className="text-xs leading-4 text-muted-foreground">
                   We only use these details to review your application and set up
                   your workspace. No account is created until a person approves it.
                 </p>
 
-                <div className="border-t border-border/60 pt-4 text-center text-[11px] text-muted-foreground">
+                <div className="border-t border-border/60 pt-4 text-center text-xs text-muted-foreground">
                   Already listed?{" "}
                   <Link
                     to="/agency/login"

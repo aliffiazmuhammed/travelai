@@ -26,13 +26,13 @@ export function agencyRoleLabel(role: AgencyRole | AgencyInvitableRole | string)
 export function agencyRoleBadgeClass(role: AgencyRole | AgencyInvitableRole | string): string {
   switch (role) {
     case 'owner':
-      return 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-300';
+      return 'border-warning/30 bg-warning/10 text-warning-ink dark:border-warning/40 dark:bg-warning/20';
     case 'admin':
-      return 'border-teal-300 bg-teal-50 text-teal-800 dark:border-teal-700 dark:bg-teal-950/40 dark:text-teal-300';
+      return 'border-agency-accent/30 bg-agency-accent-soft text-agency-accent-ink';
     case 'planner':
-      return 'border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-700 dark:bg-sky-950/40 dark:text-sky-300';
+      return 'border-info/30 bg-info/10 text-info-ink dark:border-info/40 dark:bg-info/20';
     default:
-      return 'border-slate-300 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-300';
+      return 'border-border bg-muted text-muted-foreground dark:bg-background/50';
   }
 }
 
@@ -63,15 +63,15 @@ export const AGENCY_ENQUIRY_STATUSES: AgencyEnquiryStatus[] = [
 export function agencyEnquiryStatusBadgeClass(status: AgencyEnquiryStatus): string {
   switch (status) {
     case 'new':
-      return 'border-teal-300 bg-teal-50 text-teal-800 dark:border-teal-700 dark:bg-teal-950/40 dark:text-teal-300';
+      return 'border-agency-accent/30 bg-agency-accent-soft text-agency-accent-ink';
     case 'replied':
-      return 'border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-700 dark:bg-sky-950/40 dark:text-sky-300';
+      return 'border-info/30 bg-info/10 text-info-ink dark:border-info/40 dark:bg-info/20';
     case 'quoted':
-      return 'border-indigo-300 bg-indigo-50 text-indigo-800 dark:border-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300';
+      return 'border-admin-accent/30 bg-admin-accent/10 text-admin-accent-ink dark:border-admin-accent/40 dark:bg-admin-accent/40';
     case 'won':
-      return 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300';
+      return 'border-success/30 bg-success/10 text-success-ink dark:border-success/40 dark:bg-success/20';
     default:
-      return 'border-slate-300 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-300';
+      return 'border-border bg-muted text-muted-foreground dark:bg-background/50';
   }
 }
 
@@ -122,11 +122,11 @@ export function travellerEnquiryStatusBadgeClass(
   }
   switch (status) {
     case 'replied':
-      return 'border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-700 dark:bg-sky-950/40 dark:text-sky-300';
+      return 'border-info/30 bg-info/10 text-info-ink dark:border-info/40 dark:bg-info/20';
     case 'quoted':
-      return 'border-indigo-300 bg-indigo-50 text-indigo-800 dark:border-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300';
+      return 'border-admin-accent/30 bg-admin-accent/10 text-admin-accent-ink dark:border-admin-accent/40 dark:bg-admin-accent/40';
     case 'won':
-      return 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300';
+      return 'border-success/30 bg-success/10 text-success-ink dark:border-success/40 dark:bg-success/20';
     default:
       return 'border-border bg-muted text-foreground/75';
   }

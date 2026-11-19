@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { passwordBackupUpdateSchema } from './keyBackup.schema.js';
+import { newPasswordField } from '../services/auth/passwordPolicy.js';
 
 /**
  * Profile-editing walls (Milestone 7, F14; Milestone 8 G1 adds the traveler
@@ -80,9 +81,9 @@ export const agencyProfileSchema = z.object({
 export const changePasswordSchema = z
   .object({
     currentPassword: z.string().min(1, 'Enter your current password.'),
-    // Same rule as signup (6+), so a member never gets a stricter policy on the
-    // change screen than they were held to when they joined.
-    newPassword: z.string().min(6, 'Your new password must be at least 6 characters.'),
+    // One shared policy for every realm. Sign-in stays at "required" so an
+    // existing account with an older, shorter password is not locked out.
+    newPassword: newPasswordField,
   })
   .refine((value) => value.newPassword !== value.currentPassword, {
     message: 'Your new password must be different from the current one.',

@@ -69,7 +69,7 @@ export const JoinRequestDialog: React.FC<JoinRequestDialogProps> = ({
     <Dialog open={open} onOpenChange={(next) => !next && !sending && onClose()}>
       <DialogContent className="rounded-3xl max-w-md w-[92vw] sm:w-full p-5 sm:p-6 space-y-4">
         <DialogHeader className="space-y-1.5">
-          <DialogTitle className="text-lg font-black flex items-center gap-2">
+          <DialogTitle className="text-xl font-black flex items-center gap-2">
             <UserPlus className="w-4 h-4 text-primary" />
             Ask to join this trip
           </DialogTitle>
@@ -96,7 +96,7 @@ export const JoinRequestDialog: React.FC<JoinRequestDialogProps> = ({
             <p className="truncate text-xs font-bold text-foreground">
               {trip.title}
             </p>
-            <p className="truncate text-[11px] text-muted-foreground">
+            <p className="truncate text-xs text-muted-foreground">
               @{trip.publisher.handle}
             </p>
           </div>
@@ -105,7 +105,7 @@ export const JoinRequestDialog: React.FC<JoinRequestDialogProps> = ({
         <div className="space-y-1.5">
           <label
             htmlFor="join-request-message"
-            className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground"
+            className="text-overline font-bold text-muted-foreground"
           >
             A short note (optional)
           </label>
@@ -118,14 +118,14 @@ export const JoinRequestDialog: React.FC<JoinRequestDialogProps> = ({
             className="min-h-[90px] resize-none rounded-2xl text-xs"
             disabled={sending}
           />
-          <p className="text-right text-[10px] text-muted-foreground">
+          <p className="text-right text-xs text-muted-foreground">
             {message.length}/{MESSAGE_MAX}
           </p>
         </div>
 
         <div className="flex items-start gap-2 rounded-2xl border border-primary/15 bg-primary/5 p-3">
           <ShieldCheck className="w-4 h-4 shrink-0 text-primary mt-0.5" />
-          <p className="text-[11px] leading-relaxed text-muted-foreground">
+          <p className="text-xs leading-relaxed text-muted-foreground">
             The owner sees your public name, photo and this note — never your
             email. Approval gives you a commenter seat, not edit access. Never
             share payment details or your home address. See the{" "}

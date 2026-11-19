@@ -289,7 +289,7 @@ export default function CreateScreen() {
           <Ionicons name="chevron-back" size={18} color={palette.foreground} />
         </Pressable>
       )}
-      <AppText variant="title" tone="primary" style={styles.wordmark}>
+      <AppText variant="wordmarkLarge" tone="primary">
         waytowalk
       </AppText>
     </View>

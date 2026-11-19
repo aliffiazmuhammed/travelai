@@ -247,8 +247,13 @@ export async function previewInvite(rawToken: string, viewerEmail?: string): Pro
 
   let invitedBy: string | undefined;
   try {
-    const creator = await User.findOne({ _id: invite.createdBy }).select('email');
-    invitedBy = creator?.email?.split('@')[0];
+    const creator = await User.findOne({ _id: invite.createdBy }).select('name email');
+    // Prefer the display name the inviter chose; the email local-part is only a
+    // last resort for legacy accounts that never set one.
+    invitedBy =
+      String(creator?.name ?? '').trim() ||
+      String(creator?.email ?? '').split('@')[0] ||
+      undefined;
   } catch {
     /* name hint is best-effort */
   }

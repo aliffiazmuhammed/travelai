@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { AlertCircle, Download, Loader2 } from 'lucide-react';
 import PdfDocumentViewer from '@/components/agency/PdfDocumentViewer';
 import LiveProposalDocument from '@/components/directory/LiveProposalDocument';
+import { ProposalDocumentFallback } from '@/components/directory/ProposalDocumentFallback';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -109,15 +110,15 @@ export const ProposalPreviewDialog: React.FC<ProposalPreviewDialogProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92vh] max-w-5xl gap-5 overflow-y-auto rounded-2xl border-border/70 bg-background p-5 sm:p-6">
         <DialogHeader className="space-y-1.5 pr-8">
-          <DialogTitle className="flex flex-wrap items-center gap-2 font-display text-lg font-semibold tracking-tight sm:text-xl">
+          <DialogTitle className="flex flex-wrap items-center gap-2 font-display text-xl font-semibold tracking-tight">
             {proposal?.trip.title ?? 'Proposal document'}
             {quote ? (
-              <span className="rounded-full border border-border/70 bg-card px-2 py-0.5 text-[10px] font-medium tracking-normal text-muted-foreground">
+              <span className="rounded-full border border-border/70 bg-card px-2 py-0.5 text-xs font-medium tracking-normal text-muted-foreground">
                 {quote.number} · v{quote.version}
               </span>
             ) : null}
           </DialogTitle>
-          <DialogDescription className="text-[11px] text-muted-foreground">
+          <DialogDescription className="text-xs text-muted-foreground">
             {proposal?.agency.name ?? 'Your agency'}
             {quote ? ` · ${formatMoney(quote.total, quote.currency)} total` : ''}
             {proposal && proposal.documentMode !== 'live' && proposal.expiresAt
@@ -154,7 +155,7 @@ export const ProposalPreviewDialog: React.FC<ProposalPreviewDialogProps> = ({
             ) : null}
 
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 {proposal.documentMode === 'live'
                   ? 'The itinerary as it stood when the quote was sent.'
                   : `${proposal.pageCount} page${proposal.pageCount === 1 ? '' : 's'} · ${proposal.templateName}`}
@@ -200,12 +201,18 @@ export const ProposalPreviewDialog: React.FC<ProposalPreviewDialogProps> = ({
                 />
               )
             ) : (
-              <iframe
-                title={`${proposal.trip.title} proposal`}
-                srcDoc={proposal.html}
-                sandbox=""
-                className="h-[70vh] w-full rounded-xl border border-border/70 bg-card"
-              />
+              <div>
+                <iframe
+                  title={`${proposal.trip.title} proposal`}
+                  srcDoc={proposal.html}
+                  sandbox=""
+                  className="h-[70vh] w-full rounded-xl border border-border/70 bg-card"
+                />
+                <ProposalDocumentFallback
+                  html={proposal.html ?? ''}
+                  title={proposal.trip.title}
+                />
+              </div>
             )}
           </div>
         )}
@@ -216,7 +223,7 @@ export const ProposalPreviewDialog: React.FC<ProposalPreviewDialogProps> = ({
 
 const Summary: React.FC<{ label: string; value: string }> = ({ label, value }) => (
   <div className="px-3.5 py-2.5">
-    <dt className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+    <dt className="text-overline font-semibold text-muted-foreground">
       {label}
     </dt>
     <dd className="mt-0.5 truncate text-xs font-semibold capitalize text-foreground">

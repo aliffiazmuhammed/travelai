@@ -66,7 +66,7 @@ export function AgencySectionTabs<T extends string>({
               tabIndex={active ? 0 : -1}
               onClick={() => onChange(option.value)}
               className={cn(
-                'relative inline-flex items-center gap-1.5 px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-agency-accent focus-visible:ring-offset-2 focus-visible:ring-offset-agency-canvas',
+                'relative inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-agency-accent focus-visible:ring-offset-2 focus-visible:ring-offset-agency-canvas',
                 active
                   ? 'text-agency-ink after:absolute after:inset-x-2 after:-bottom-2 after:h-[2px] after:rounded-full after:bg-agency-accent'
                   : 'text-agency-muted hover:text-agency-ink'

@@ -16,6 +16,7 @@ export function InlineError({ message }: InlineErrorProps) {
   return (
     <View
       accessibilityRole="alert"
+      accessibilityLiveRegion="polite"
       style={[styles.banner, { backgroundColor: `${palette.destructive}14` }]}
     >
       <Ionicons name="alert-circle-outline" size={18} color={palette.destructive} />

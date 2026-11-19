@@ -2,16 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmDestructive } from "@/components/ui/confirm-destructive";
 import {
   History,
   RotateCcw,
@@ -128,12 +119,12 @@ export const TripVersions: React.FC<TripVersionsProps> = ({
             <span className="text-xs font-bold uppercase tracking-wider text-primary">
               Version Control
             </span>
-            <Badge variant="outline" className="text-[10px]">
+            <Badge variant="outline" className="text-xs">
               <GitBranch className="w-3 h-3 mr-1" />
               v{current}
             </Badge>
             {hasEdited && (
-              <Badge className="bg-amber-500/10 text-amber-600 border-amber-300 dark:border-amber-700 text-[10px] font-semibold">
+              <Badge className="bg-warning/10 text-warning-ink border-warning/30 dark:border-warning/40 text-xs font-semibold">
                 Edited
               </Badge>
             )}
@@ -207,11 +198,11 @@ export const TripVersions: React.FC<TripVersionsProps> = ({
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-black text-foreground">Version {current}</span>
-                    <Badge className="bg-primary/15 text-primary border-primary/20 text-[10px] font-bold">
+                    <Badge className="bg-primary/15 text-primary border-primary/20 text-xs font-bold">
                       Current
                     </Badge>
                   </div>
-                  <p className="text-[11px] text-muted-foreground">Live itinerary you see now</p>
+                  <p className="text-xs text-muted-foreground">Live itinerary you see now</p>
                 </div>
               </div>
             </CardContent>
@@ -230,22 +221,22 @@ export const TripVersions: React.FC<TripVersionsProps> = ({
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-black text-foreground">Version {v.version}</span>
-                      <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground font-medium">
+                      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground font-medium">
                         <Clock className="w-3 h-3" />
                         {formatRelative(v.savedAt)}
                       </span>
                     </div>
-                    <p className="text-[11px] text-muted-foreground line-clamp-1 max-w-md">
+                    <p className="text-xs text-muted-foreground line-clamp-1 max-w-md">
                       {v.note || "Itinerary snapshot"}
                     </p>
-                    <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
                       <span className="inline-flex items-center gap-1">
                         <CalendarDays className="w-3 h-3 text-primary" />
                         {v.days} days
                       </span>
                       {v.budget != null && (
                         <span className="inline-flex items-center gap-1">
-                          <IndianRupee className="w-3 h-3 text-emerald-500" />
+                          <IndianRupee className="w-3 h-3 text-success-ink" />
                           {Number(v.budget).toLocaleString("en-IN")}
                         </span>
                       )}
@@ -265,7 +256,7 @@ export const TripVersions: React.FC<TripVersionsProps> = ({
                     <span>Restore</span>
                   </Button>
                 ) : (
-                  <Badge variant="outline" className="text-[10px] self-start sm:self-auto shrink-0">
+                  <Badge variant="outline" className="text-xs self-start sm:self-auto shrink-0">
                     read-only
                   </Badge>
                 )}
@@ -276,42 +267,19 @@ export const TripVersions: React.FC<TripVersionsProps> = ({
       )}
 
       {/* Restore Confirmation */}
-      <AlertDialog
+      <ConfirmDestructive
         open={!!targetVersion}
         onOpenChange={(open) => {
           if (!open) setTargetVersion(null);
         }}
-      >
-        <AlertDialogContent className="rounded-3xl max-w-md w-[92vw] sm:w-full p-5 sm:p-6">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-lg font-bold">
-              Restore Version {targetVersion?.version}?
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-xs leading-relaxed">
-              This replaces your current itinerary with the{" "}
-              <strong className="text-foreground">Version {targetVersion?.version}</strong> snapshot.
-              Your current state is backed up automatically, so you can restore forward again if needed.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="gap-2 sm:gap-0">
-            <AlertDialogCancel className="rounded-xl text-xs font-semibold h-10" disabled={restoring}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmRestore}
-              disabled={restoring}
-              className="rounded-xl text-xs font-bold h-10 gap-1.5"
-            >
-              {restoring ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <RotateCcw className="w-3.5 h-3.5" />
-              )}
-              <span>{restoring ? "Restoring..." : "Restore Version"}</span>
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        tone="warning"
+        icon={RotateCcw}
+        title={<>Restore Version {targetVersion?.version}?</>}
+        description="This replaces your current itinerary with that snapshot. Your current state is backed up automatically, so you can restore forward again if needed."
+        confirmLabel="Restore version"
+        onConfirm={confirmRestore}
+        busy={restoring}
+      />
     </div>
   );
 };

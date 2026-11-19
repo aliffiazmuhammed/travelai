@@ -15,9 +15,22 @@ import {
 } from '@/api/account';
 import { useSession } from '@/auth/SessionProvider';
 import { ChatRecoverySettings } from '@/components/ChatRecovery';
+import {
+  DEFAULT_PASSWORD_POLICY,
+  passwordProblem,
+} from '@/lib/passwordPolicy';
 import { radius, space } from '@/theme/tokens';
 import { useTheme } from '@/theme/useTheme';
-import { AppText, Avatar, Button, Card, InlineError, Screen, TextField } from '@/ui';
+import {
+  AppText,
+  Avatar,
+  Button,
+  Card,
+  InlineError,
+  PasswordStrength,
+  Screen,
+  TextField,
+} from '@/ui';
 
 const NAME_MAX = 40;
 const BIO_MAX = 280;
@@ -48,7 +61,7 @@ function BackRow() {
       >
         <Ionicons name="chevron-back" size={18} color={palette.foreground} />
       </Pressable>
-      <AppText variant="heading" tone="primary" style={styles.wordmark}>
+      <AppText variant="wordmark" tone="primary">
         waytowalk
       </AppText>
     </View>
@@ -243,10 +256,7 @@ export default function AccountScreen() {
   }
 
   async function submitPassword() {
-    if (passwordBusy) return;
-    if (newPassword.length < 6 || newPassword === currentPassword || confirmPassword !== newPassword) {
-      return;
-    }
+    if (passwordBusy || !passwordReady) return;
     setPasswordBusy(true);
     setPasswordError(null);
     setPasswordNote(null);
@@ -266,17 +276,18 @@ export default function AccountScreen() {
   }
 
   const displayName = nextName || user?.label || user?.email || 'Traveller';
-  const passwordErrorField =
-    newPassword && newPassword.length < 6
-      ? 'Use at least 6 characters.'
-      : newPassword && newPassword === currentPassword
-        ? 'Pick something different from your current password.'
-        : undefined;
+  const passwordIssue = newPassword
+    ? passwordProblem(newPassword, DEFAULT_PASSWORD_POLICY, {
+        email: user?.email,
+        name: user?.name,
+      })
+    : null;
+  const passwordErrorField = passwordIssue ?? undefined;
   const confirmError =
     confirmPassword && confirmPassword !== newPassword ? 'Those two don’t match yet.' : undefined;
   const passwordReady =
     currentPassword.length > 0 &&
-    newPassword.length >= 6 &&
+    !passwordIssue &&
     newPassword !== currentPassword &&
     confirmPassword === newPassword;
 
@@ -391,15 +402,13 @@ export default function AccountScreen() {
           </AppText>
         </Card>
 
-        <ChatRecoverySettings key={user?._id} />
-
         <Card style={styles.passwordCard}>
           <View style={styles.cardHead}>
             <View style={[styles.headIcon, { backgroundColor: palette.muted }]}>
               <Ionicons name="lock-closed-outline" size={17} color={palette.primary} />
             </View>
             <View style={styles.headText}>
-              <AppText variant="heading">Password</AppText>
+              <AppText variant="heading">Sign-in &amp; password</AppText>
               <AppText variant="caption" tone="muted">
                 Change the key to your account.
               </AppText>
@@ -423,9 +432,10 @@ export default function AccountScreen() {
             autoCapitalize="none"
             autoComplete="new-password"
             textContentType="newPassword"
-            hint="At least 6 characters."
+            maxLength={DEFAULT_PASSWORD_POLICY.maxLength}
             error={passwordErrorField}
           />
+          <PasswordStrength value={newPassword} email={user?.email} name={user?.name} />
           <TextField
             label="Confirm new password"
             value={confirmPassword}
@@ -434,6 +444,7 @@ export default function AccountScreen() {
             autoCapitalize="none"
             autoComplete="new-password"
             textContentType="newPassword"
+            maxLength={DEFAULT_PASSWORD_POLICY.maxLength}
             error={confirmError}
           />
 
@@ -458,6 +469,8 @@ export default function AccountScreen() {
             Changing your password signs out your other devices.
           </AppText>
         </Card>
+
+        <ChatRecoverySettings key={user?._id} />
       </View>
     </Screen>
   );

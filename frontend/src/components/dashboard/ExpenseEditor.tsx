@@ -319,7 +319,7 @@ export const ExpenseEditor: React.FC<ExpenseEditorProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="rounded-2xl max-w-lg w-[94vw] sm:w-full p-5 sm:p-6 max-h-[92vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-lg font-black flex items-center gap-2">
+          <DialogTitle className="text-xl font-black flex items-center gap-2">
             <Receipt className="w-4 h-4 text-primary" />
             {expense ? "Edit Expense" : "Log an Expense"}
           </DialogTitle>
@@ -362,9 +362,9 @@ export const ExpenseEditor: React.FC<ExpenseEditorProps> = ({
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold">Currency</Label>
+              <Label htmlFor="expense-currency" className="text-xs font-bold">Currency</Label>
               <Select value={form.currency} onValueChange={handleCurrencyChange}>
-                <SelectTrigger className="h-10 text-sm rounded-xl">
+                <SelectTrigger id="expense-currency" className="h-10 text-sm rounded-xl">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -398,7 +398,7 @@ export const ExpenseEditor: React.FC<ExpenseEditorProps> = ({
                   <span className="text-xs font-bold text-muted-foreground">{base}</span>
                 </div>
               </div>
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 {previewBase == null
                   ? "Enter a rate to convert this expense."
                   : `≈ ${formatMoney(previewBase, base)} will be recorded.`}
@@ -406,7 +406,7 @@ export const ExpenseEditor: React.FC<ExpenseEditorProps> = ({
             </div>
           ) : (
             previewBase != null && (
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Recorded as {formatMoney(previewBase, base)}.
               </p>
             )
@@ -414,14 +414,14 @@ export const ExpenseEditor: React.FC<ExpenseEditorProps> = ({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold flex items-center gap-1">
+              <Label htmlFor="expense-category" className="text-xs font-bold flex items-center gap-1">
                 <Tag className="w-3 h-3 text-primary" /> Category
               </Label>
               <Select
                 value={form.category}
                 onValueChange={(value) => update("category", value as ExpenseCategory)}
               >
-                <SelectTrigger className="h-10 text-sm rounded-xl">
+                <SelectTrigger id="expense-category" className="h-10 text-sm rounded-xl">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -449,9 +449,9 @@ export const ExpenseEditor: React.FC<ExpenseEditorProps> = ({
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs font-bold">Trip Day</Label>
+            <Label htmlFor="expense-day" className="text-xs font-bold">Trip Day</Label>
             <Select value={form.day} onValueChange={(value) => update("day", value)}>
-              <SelectTrigger className="h-10 text-sm rounded-xl">
+              <SelectTrigger id="expense-day" className="h-10 text-sm rounded-xl">
                 <SelectValue placeholder="Not linked to a day" />
               </SelectTrigger>
               <SelectContent>
@@ -469,11 +469,11 @@ export const ExpenseEditor: React.FC<ExpenseEditorProps> = ({
             <div className="space-y-3 rounded-2xl border border-border/70 p-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-bold flex items-center gap-1">
+                  <Label htmlFor="expense-paid-by" className="text-xs font-bold flex items-center gap-1">
                     <User className="w-3 h-3 text-primary" /> Paid By
                   </Label>
                   <Select value={form.paidBy} onValueChange={(value) => update("paidBy", value)}>
-                    <SelectTrigger className="h-10 text-sm rounded-xl">
+                    <SelectTrigger id="expense-paid-by" className="h-10 text-sm rounded-xl">
                       <SelectValue placeholder="Who paid?" />
                     </SelectTrigger>
                     <SelectContent>
@@ -488,14 +488,14 @@ export const ExpenseEditor: React.FC<ExpenseEditorProps> = ({
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-bold flex items-center gap-1">
+                  <Label htmlFor="expense-split" className="text-xs font-bold flex items-center gap-1">
                     <Users className="w-3 h-3 text-primary" /> Split
                   </Label>
                   <Select
                     value={form.splitMode}
                     onValueChange={(value) => update("splitMode", value as ExpenseSplitMode)}
                   >
-                    <SelectTrigger className="h-10 text-sm rounded-xl">
+                    <SelectTrigger id="expense-split" className="h-10 text-sm rounded-xl">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -509,7 +509,7 @@ export const ExpenseEditor: React.FC<ExpenseEditorProps> = ({
 
               {form.splitMode === "custom" && (
                 <div className="space-y-2">
-                  <p className="text-[11px] text-muted-foreground">
+                  <p className="text-xs text-muted-foreground">
                     Enter each person's share in {base}. Leave someone at 0 to exclude them.
                   </p>
                   {participants.map((participant) => (
@@ -529,16 +529,17 @@ export const ExpenseEditor: React.FC<ExpenseEditorProps> = ({
                           }))
                         }
                         placeholder="0"
+                        aria-label={`Custom share for ${participant.name}`}
                         className="h-9 w-28 text-sm rounded-xl"
                       />
                     </div>
                   ))}
-                  <div className="flex items-center justify-between pt-1 text-[11px] font-bold">
+                  <div className="flex items-center justify-between pt-1 text-xs font-bold">
                     <span className="text-muted-foreground">Total allocated</span>
                     <span
                       className={
                         previewBase != null && Math.abs(customTotal - previewBase) <= 0.01
-                          ? "text-emerald-600 dark:text-emerald-400"
+                          ? "text-success-ink"
                           : "text-destructive"
                       }
                     >
@@ -566,14 +567,15 @@ export const ExpenseEditor: React.FC<ExpenseEditorProps> = ({
 
           {/* Receipt attachment (Milestone 5.5) */}
           <div className="space-y-2 rounded-2xl border border-border/70 p-3">
-            <Label className="text-xs font-bold flex items-center gap-1">
+            <span id="expense-receipt-label" className="block text-xs font-bold flex items-center gap-1">
               <Receipt className="w-3 h-3 text-primary" /> Receipt (optional)
-            </Label>
+            </span>
 
             <input
               ref={fileInputRef}
               type="file"
               accept={RECEIPT_ACCEPT_ATTR}
+              aria-labelledby="expense-receipt-label"
               className="hidden"
               onChange={handleReceiptPick}
             />
@@ -593,7 +595,7 @@ export const ExpenseEditor: React.FC<ExpenseEditorProps> = ({
                 )}
                 <div className="min-w-0">
                   <p className="text-xs font-bold text-foreground truncate">{receiptLabel}</p>
-                  <p className="text-[11px] text-muted-foreground">
+                  <p className="text-xs text-muted-foreground">
                     {receiptFile
                       ? `${formatFileSize(receiptFile.size)} · uploads when you save`
                       : "Stored with this expense"}
@@ -616,7 +618,7 @@ export const ExpenseEditor: React.FC<ExpenseEditorProps> = ({
                     type="button"
                     size="sm"
                     variant="outline"
-                    className="rounded-xl text-[11px] font-bold h-8"
+                    className="rounded-xl text-xs font-bold h-8"
                     onClick={() => fileInputRef.current?.click()}
                   >
                     {receiptFile ? "Replace" : "Change"}
@@ -645,14 +647,14 @@ export const ExpenseEditor: React.FC<ExpenseEditorProps> = ({
                   <Upload className="w-3.5 h-3.5" />
                   <span>Attach receipt</span>
                 </Button>
-                <span className="text-[11px] text-muted-foreground">
+                <span className="text-xs text-muted-foreground">
                   {RECEIPT_HINT} · up to {maxUploadMb()} MB
                 </span>
               </div>
             )}
 
             {removeReceipt && !receiptFile && existingReceipt && (
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 The stored receipt will be deleted when you save.{" "}
                 <button
                   type="button"
@@ -665,7 +667,7 @@ export const ExpenseEditor: React.FC<ExpenseEditorProps> = ({
             )}
 
             {receiptError && (
-              <p className="text-[11px] font-semibold text-destructive">{receiptError}</p>
+              <p className="text-xs font-semibold text-destructive">{receiptError}</p>
             )}
           </div>
 

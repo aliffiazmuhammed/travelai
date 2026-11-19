@@ -6,11 +6,11 @@ import { cn } from '@/lib/utils';
 type Tone = 'indigo' | 'emerald' | 'amber' | 'sky' | 'rose' | 'slate';
 
 const toneClasses: Record<Tone, string> = {
-  indigo: 'bg-indigo-500/15 text-indigo-300',
-  emerald: 'bg-emerald-500/15 text-emerald-300',
-  amber: 'bg-amber-500/15 text-amber-300',
-  sky: 'bg-sky-500/15 text-sky-300',
-  rose: 'bg-rose-500/15 text-rose-300',
+  indigo: 'bg-admin-accent/15 text-admin-accent-ink',
+  emerald: 'bg-success/15 text-success-ink',
+  amber: 'bg-warning/15 text-warning-ink',
+  sky: 'bg-info/15 text-info-ink',
+  rose: 'bg-destructive/15 text-destructive-ink',
   slate: 'bg-muted text-muted-foreground',
 };
 
@@ -60,12 +60,12 @@ export const AdminStatTile: React.FC<{
     <Card
       className={cn(
         shell,
-        'transition hover:-translate-y-0.5 hover:border-indigo-500/40 hover:shadow-md'
+        'transition hover:-translate-y-0.5 hover:border-admin-accent/40 hover:shadow-md'
       )}
     >
       <Link
         to={to}
-        className="block rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        className="block rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-admin-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
         {body}
       </Link>

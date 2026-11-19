@@ -64,6 +64,8 @@ export function TextField({
           ref={ref}
           {...rest}
           accessibilityLabel={rest.accessibilityLabel ?? label}
+          // iOS has no live region: read the error when the field is focused.
+          accessibilityHint={rest.accessibilityHint ?? error ?? undefined}
           style={[styles.input, { color: palette.foreground }, style]}
           placeholderTextColor={palette.mutedForeground}
           selectionColor={palette.primary}
@@ -94,7 +96,12 @@ export function TextField({
         ) : null}
       </View>
       {error ? (
-        <AppText variant="caption" tone="danger" style={styles.note}>
+        <AppText
+          variant="caption"
+          tone="danger"
+          accessibilityLiveRegion="polite"
+          style={styles.note}
+        >
           {error}
         </AppText>
       ) : hint ? (

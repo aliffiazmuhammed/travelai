@@ -160,9 +160,9 @@ const TemplateSourceEditorDialog: React.FC<TemplateSourceEditorDialogProps> = ({
       <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-5xl">
         <DialogHeader>
           <DialogTitle className="flex flex-wrap items-center gap-2">
-            <Code2 className="h-4 w-4 text-teal-600" />
+            <Code2 className="h-4 w-4 text-agency-accent-ink" />
             Edit HTML source
-            <Badge variant="outline" className="text-[10px]">
+            <Badge variant="outline" className="text-xs">
               v{version.version}
             </Badge>
           </DialogTitle>
@@ -178,9 +178,9 @@ const TemplateSourceEditorDialog: React.FC<TemplateSourceEditorDialogProps> = ({
             Loading source...
           </div>
         ) : loadError ? (
-          <div className="space-y-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-8 text-center dark:border-rose-900/60 dark:bg-rose-950/30">
-            <AlertTriangle className="mx-auto h-6 w-6 text-rose-500" />
-            <p className="text-sm text-rose-700 dark:text-rose-300">
+          <div className="space-y-3 rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-8 text-center dark:border-destructive/20 dark:bg-destructive/30">
+            <AlertTriangle className="mx-auto h-6 w-6 text-destructive-ink" />
+            <p className="text-sm text-destructive-ink">
               {loadError}
             </p>
             <Button
@@ -194,12 +194,12 @@ const TemplateSourceEditorDialog: React.FC<TemplateSourceEditorDialogProps> = ({
           </div>
         ) : (
           <>
-            <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
               <span>
                 {lineCount} {lineCount === 1 ? 'line' : 'lines'} ·{' '}
                 <span
                   className={
-                    overLimit ? 'font-medium text-rose-600 dark:text-rose-400' : undefined
+                    overLimit ? 'font-medium text-destructive-ink' : undefined
                   }
                 >
                   {formatBytes(sourceBytes)}
@@ -223,13 +223,13 @@ const TemplateSourceEditorDialog: React.FC<TemplateSourceEditorDialogProps> = ({
             />
 
             {error ? (
-              <div className="flex items-start gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-300">
+              <div className="flex items-start gap-2 rounded-2xl border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-xs text-destructive-ink dark:border-destructive/20 dark:bg-destructive/30">
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <span>{error}</span>
               </div>
             ) : null}
 
-            <details className="rounded-2xl border border-slate-200 px-3 py-2 text-[11px] text-slate-600 dark:border-slate-800 dark:text-slate-300">
+            <details className="rounded-2xl border border-border px-3 py-2 text-xs text-muted-foreground">
               <summary className="cursor-pointer font-medium">
                 Template rules
               </summary>
@@ -287,7 +287,7 @@ const TemplateSourceEditorDialog: React.FC<TemplateSourceEditorDialogProps> = ({
             </Button>
             <Button
               size="sm"
-              className="bg-teal-600 hover:bg-teal-700"
+              className="bg-agency-accent hover:bg-agency-accent/90"
               onClick={() => void save()}
               disabled={loading || Boolean(loadError) || saving || !dirty || overLimit}
             >

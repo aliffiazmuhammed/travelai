@@ -116,7 +116,7 @@ export const ReportDialog: React.FC<ReportDialogProps> = ({
     <Dialog open={open} onOpenChange={(next) => !next && !sending && onClose()}>
       <DialogContent className="rounded-3xl max-w-lg w-[92vw] sm:w-full p-5 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto">
         <DialogHeader className="space-y-1.5">
-          <DialogTitle className="text-lg font-black flex items-center gap-2">
+          <DialogTitle className="text-xl font-black flex items-center gap-2">
             <Flag className="w-4 h-4 text-destructive" />
             Report this{" "}
             {targetType === "trip"
@@ -132,7 +132,7 @@ export const ReportDialog: React.FC<ReportDialogProps> = ({
         </DialogHeader>
 
         <fieldset className="space-y-2" disabled={sending}>
-          <legend className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+          <legend className="text-overline font-bold text-muted-foreground">
             What is wrong?
           </legend>
           {REASONS.map((entry) => (
@@ -156,7 +156,7 @@ export const ReportDialog: React.FC<ReportDialogProps> = ({
                 <span className="block text-xs font-bold text-foreground">
                   {entry.label}
                 </span>
-                <span className="block text-[11px] leading-relaxed text-muted-foreground">
+                <span className="block text-xs leading-relaxed text-muted-foreground">
                   {entry.hint}
                 </span>
               </span>
@@ -167,7 +167,7 @@ export const ReportDialog: React.FC<ReportDialogProps> = ({
         <div className="space-y-1.5">
           <label
             htmlFor="report-note"
-            className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground"
+            className="text-overline font-bold text-muted-foreground"
           >
             Anything else? (optional)
           </label>
@@ -180,14 +180,14 @@ export const ReportDialog: React.FC<ReportDialogProps> = ({
             className="min-h-[80px] resize-none rounded-2xl text-xs"
             disabled={sending}
           />
-          <p className="text-right text-[10px] text-muted-foreground">
+          <p className="text-right text-xs text-muted-foreground">
             {note.length}/{NOTE_MAX}
           </p>
         </div>
 
-        <div className="flex items-start gap-2 rounded-2xl border border-amber-500/25 bg-amber-500/5 p-3">
-          <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
-          <p className="text-[11px] leading-relaxed text-muted-foreground">
+        <div className="flex items-start gap-2 rounded-2xl border border-warning/25 bg-warning/5 p-3">
+          <AlertTriangle className="w-4 h-4 shrink-0 text-warning-ink mt-0.5" />
+          <p className="text-xs leading-relaxed text-muted-foreground">
             Reports are for genuine safety and quality problems.{" "}
             {targetType === "trip"
               ? "Three distinct reports hide a trip from the gallery pending review."

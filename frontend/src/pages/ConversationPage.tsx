@@ -35,6 +35,7 @@ import {
 } from '@/lib/agency';
 import { cn } from '@/lib/utils';
 import { notifyEnquiryBadgeChanged } from '@/lib/enquiryBadge';
+import { proposalIsLive } from '@/lib/proposalAnswer';
 import { useEnquiryLiveRefresh } from '@/hooks/useEnquiryEvents';
 import { api } from '@/services/api';
 import type { AgencyConversation, AgencyProposalSummary } from '@/types/agency';
@@ -173,13 +174,7 @@ const ConversationPage: React.FC = () => {
   // still answer. A declined or already-settled version is history, not an
   // invitation, and counting it left the badge lying after a decline.
   const hasLiveProposal = useMemo(
-    () =>
-      proposals.some(
-        (proposal) =>
-          !proposal.acceptedAt &&
-          !proposal.declinedAt &&
-          !proposal.settledByAcceptedTrip
-      ),
+    () => proposals.some((proposal) => proposalIsLive(proposal)),
     [proposals]
   );
 
@@ -225,7 +220,16 @@ const ConversationPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <main className="container mx-auto max-w-6xl px-4 pb-16 pt-24">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className={cn(
+          'container mx-auto max-w-6xl px-4 pt-24',
+          conversation && !loading && !error
+            ? 'pb-16 lg:flex lg:h-[100dvh] lg:flex-col lg:pb-6'
+            : 'pb-16'
+        )}
+      >
         {loading ? (
           <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
             <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -256,7 +260,7 @@ const ConversationPage: React.FC = () => {
             </Link>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-4 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <TravellerBreadcrumbs
                 items={
@@ -268,7 +272,7 @@ const ConversationPage: React.FC = () => {
                       ]
                 }
               />
-              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
                 <Lock className="h-3.5 w-3.5" aria-hidden />
                 Secure conversation
               </span>
@@ -277,17 +281,17 @@ const ConversationPage: React.FC = () => {
             {!guest ? (
               <Link
                 to="/enquiries"
-                className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground transition-colors hover:text-primary"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:text-primary"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
                 All enquiries
               </Link>
             ) : null}
 
-            <div className="grid gap-5 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] lg:items-start">
+            <div className="grid gap-5 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] lg:items-start">
               <aside
                 aria-label="Trip summary"
-                className="min-w-0 overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm lg:sticky lg:top-24"
+                className="min-w-0 overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm lg:sticky lg:top-24 lg:max-h-full lg:overflow-y-auto"
               >
                 <TripCover
                   title={conversation.enquiry.packageTitle ?? 'Your trip enquiry'}
@@ -354,13 +358,13 @@ const ConversationPage: React.FC = () => {
                   </div>
 
                   <div className="border-t border-border/70 pt-3">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    <p className="text-overline font-semibold text-muted-foreground">
                       Enquiry status
                     </p>
                     <Badge
                       variant="outline"
                       className={cn(
-                        'mt-2 h-7 gap-1.5 px-3 text-[11px]',
+                        'mt-2 h-7 gap-1.5 px-3 text-xs',
                         travellerEnquiryStatusBadgeClass(
                           conversation.status,
                           hasLiveProposal
@@ -393,7 +397,7 @@ const ConversationPage: React.FC = () => {
                     </Button>
                   </div>
 
-                  <p className="pt-1 text-center text-[10px] text-muted-foreground">
+                  <p className="pt-1 text-center text-xs text-muted-foreground">
                     One thread, from first idea to final plan.
                   </p>
                 </div>
@@ -401,7 +405,7 @@ const ConversationPage: React.FC = () => {
 
               <section
                 aria-label="Conversation"
-                className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm lg:h-[calc(100dvh-13rem)] lg:max-h-[46rem]"
+                className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm lg:min-h-0"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border/70 px-4 py-3.5 sm:px-5">
                   <div className="flex min-w-0 items-start gap-3">
@@ -411,7 +415,7 @@ const ConversationPage: React.FC = () => {
                       className="h-10 w-10 rounded-xl text-sm"
                     />
                     <div className="min-w-0 space-y-0.5">
-                      <h2 className="flex flex-wrap items-center gap-2 font-display text-lg font-semibold leading-tight tracking-tight text-foreground">
+                      <h2 className="flex flex-wrap items-center gap-2 font-display text-xl font-semibold leading-tight tracking-tight text-foreground">
                         {conversation.agency.slug ? (
                           <Link
                             to={`/agencies/${encodeURIComponent(conversation.agency.slug)}`}
@@ -426,7 +430,7 @@ const ConversationPage: React.FC = () => {
                         )}
                         {!guest && liveMode === 'live' ? (
                           <span
-                            className="inline-flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-[10px] font-semibold text-accent"
+                            className="inline-flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-xs font-semibold text-accent-ink"
                             title="Replies appear here as they arrive"
                           >
                             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
@@ -435,9 +439,9 @@ const ConversationPage: React.FC = () => {
                         ) : null}
                       </h2>
                       {replyTime ? (
-                        <p className="text-[11px] text-muted-foreground">{replyTime}</p>
+                        <p className="text-xs text-muted-foreground">{replyTime}</p>
                       ) : null}
-                      <p className="text-[11px] text-muted-foreground">
+                      <p className="text-xs text-muted-foreground">
                         Enquiry sent{' '}
                         {conversation.enquiry.createdAt
                           ? formatAgencyDate(conversation.enquiry.createdAt)
@@ -448,7 +452,7 @@ const ConversationPage: React.FC = () => {
                       </p>
                     </div>
                   </div>
-                  <span className="inline-flex shrink-0 items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
+                  <span className="inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold text-muted-foreground">
                     <MessageSquare className="h-3.5 w-3.5" aria-hidden />
                     {conversation.messages.length}{' '}
                     {conversation.messages.length === 1 ? 'message' : 'messages'}
@@ -479,7 +483,7 @@ const ConversationPage: React.FC = () => {
                   onDeclineProposal={guest ? undefined : declineProposal}
                   emptyHint="No replies yet. Your enquiry is with the agency."
                   footer={
-                    <p className="flex flex-wrap items-center justify-center gap-1.5 px-4 pb-3 text-center text-[10px] text-muted-foreground">
+                    <p className="flex flex-wrap items-center justify-center gap-1.5 px-4 pb-3 text-center text-xs text-muted-foreground">
                       <Lock className="h-3 w-3 shrink-0" aria-hidden />
                       Replies are private between you and the agency.
                       {guest && conversation.expiresAt

@@ -211,14 +211,8 @@ const AgencyLayout: React.FC = () => {
     });
   }, [refreshBadge, refreshEventBadge]);
 
-  // The workspace runs its own skin: teal primary, warm paper, hairline rules.
-  // The class sits on <html> so dialogs and sheets portalled to <body> inherit
-  // it, and it comes off when the user leaves the workspace.
-  useEffect(() => {
-    const root = document.documentElement;
-    root.classList.add('agency-theme');
-    return () => root.classList.remove('agency-theme');
-  }, []);
+  // The workspace skin lives on <html data-theme="agency"> via ThemeProvider,
+  // so dialogs and sheets portalled to <body> inherit it without a local class.
 
   useEffect(() => {
     refreshBadges();
@@ -266,7 +260,7 @@ const AgencyLayout: React.FC = () => {
     <SidebarProvider>
       <a
         href="#agency-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-50 focus:rounded-md focus:bg-white focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-slate-900 focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-teal-600 dark:focus:bg-slate-900 dark:focus:text-slate-50"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-50 focus:rounded-md focus:bg-white focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-agency-accent dark:focus:bg-background dark:focus:text-muted-foreground"
       >
         Skip to content
       </a>
@@ -278,14 +272,14 @@ const AgencyLayout: React.FC = () => {
             to="/agency"
             className="flex items-center gap-2.5 rounded-lg p-2 outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:justify-center"
           >
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-teal-600 text-white shadow-sm">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-agency-accent text-white shadow-sm">
               <Building2 className="h-5 w-5" aria-hidden />
             </span>
             <span className="min-w-0 leading-tight group-data-[collapsible=icon]:hidden">
               <span className="block truncate text-sm font-semibold text-sidebar-foreground">
                 {tenantName}
               </span>
-              <span className="block truncate text-[11px] text-sidebar-foreground/60">
+              <span className="block truncate text-xs text-sidebar-foreground/60">
                 {loading && !activeAgency
                   ? 'Opening your workspace…'
                   : tenantSlug
@@ -298,7 +292,7 @@ const AgencyLayout: React.FC = () => {
             <Badge
               variant="outline"
               className={cn(
-                'w-fit text-[10px] group-data-[collapsible=icon]:hidden',
+                'w-fit text-xs group-data-[collapsible=icon]:hidden',
                 agencyRoleBadgeClass(role)
               )}
             >
@@ -338,7 +332,7 @@ const AgencyLayout: React.FC = () => {
                               {count > 0 ? (
                                 <SidebarMenuBadge
                                   title={hint ?? undefined}
-                                  className="rounded-full bg-teal-600 px-1.5 text-[10px] font-bold text-white"
+                                  className="rounded-full bg-agency-accent px-1.5 text-xs font-bold text-white"
                                 >
                                   {count > 99 ? '99+' : count}
                                 </SidebarMenuBadge>
@@ -365,7 +359,7 @@ const AgencyLayout: React.FC = () => {
               >
                 <Avatar className="h-8 w-8 shrink-0">
                   <AvatarImage src={avatarSrc(user?.avatarUrl)} alt="" />
-                  <AvatarFallback className="bg-teal-100 text-xs font-semibold text-teal-800 dark:bg-teal-950 dark:text-teal-300">
+                  <AvatarFallback className="bg-agency-accent-soft text-xs font-semibold text-agency-accent-ink">
                     {initialsFor(displayName)}
                   </AvatarFallback>
                 </Avatar>
@@ -373,7 +367,7 @@ const AgencyLayout: React.FC = () => {
                   <span className="block truncate text-sm font-medium text-sidebar-foreground">
                     {displayName}
                   </span>
-                  <span className="block truncate text-[11px] text-sidebar-foreground/60">
+                  <span className="block truncate text-xs text-sidebar-foreground/60">
                     {user?.email}
                   </span>
                 </span>
@@ -386,9 +380,9 @@ const AgencyLayout: React.FC = () => {
             <DropdownMenuContent side="top" align="start" className="w-60">
               <DropdownMenuLabel className="font-normal">
                 <span className="block truncate text-sm font-semibold">{displayName}</span>
-                <span className="block truncate text-xs text-slate-500">{user?.email}</span>
+                <span className="block truncate text-xs text-muted-foreground">{user?.email}</span>
                 {tenantSlug ? (
-                  <span className="mt-1 block truncate text-[11px] text-teal-600 dark:text-teal-400">
+                  <span className="mt-1 block truncate text-xs text-agency-accent-ink">
                     Agency account · {tenantSlug}
                   </span>
                 ) : null}
@@ -417,7 +411,7 @@ const AgencyLayout: React.FC = () => {
         <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-agency-line bg-agency-panel/90 px-4 backdrop-blur md:px-6">
           <SidebarTrigger className="h-9 w-9" />
           <Breadcrumb className="min-w-0">
-            <BreadcrumbList className="flex-nowrap gap-1.5 text-[13px] sm:gap-2">
+            <BreadcrumbList className="flex-nowrap gap-1.5 text-sm sm:gap-2">
               {trail.map((crumb, index) => {
                 const last = index === trail.length - 1;
                 return (
@@ -452,11 +446,11 @@ const AgencyLayout: React.FC = () => {
               size="sm"
               onClick={() => setCommandOpen(true)}
               aria-label="Search the workspace (Control or Command K)"
-              className="h-9 gap-2 rounded-full border-slate-200 bg-white/70 px-2.5 text-xs font-medium text-slate-500 hover:text-slate-900 sm:px-3 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-400 dark:hover:text-slate-100"
+              className="h-9 gap-2 rounded-full border-border bg-white/70 px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground sm:px-3 dark:bg-background/70 dark:hover:text-muted-foreground"
             >
               <Search className="h-3.5 w-3.5" aria-hidden />
               <span className="hidden sm:inline">Search</span>
-              <kbd className="hidden rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-sans text-[10px] font-medium text-slate-500 sm:inline dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
+              <kbd className="hidden rounded border border-border bg-muted px-1.5 py-0.5 font-sans text-xs font-medium text-muted-foreground sm:inline">
                 ⌘K
               </kbd>
             </Button>
@@ -464,7 +458,7 @@ const AgencyLayout: React.FC = () => {
               asChild
               variant="ghost"
               size="sm"
-              className="hidden text-slate-600 dark:text-slate-300 md:inline-flex"
+              className="hidden text-muted-foreground md:inline-flex"
             >
               <Link to="/">
                 <Home className="mr-1.5 h-4 w-4" aria-hidden />
@@ -482,7 +476,7 @@ const AgencyLayout: React.FC = () => {
           {error ? (
             <div
               role="alert"
-              className="mb-5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200"
+              className="mb-5 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive-ink dark:border-destructive/40 dark:bg-destructive/20"
             >
               {error}
             </div>

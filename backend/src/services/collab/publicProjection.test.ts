@@ -98,6 +98,47 @@ test('public image references carry share-scoped URLs', () => {
   assert.equal('url' in details.day_by_day_itinerary[0].image, false);
 });
 
+test('the public projection strips every budget field from tripDetails (C-02)', () => {
+  const projection = projectPublicTrip({
+    _id: 'tripid',
+    title: 'Wayanad Wander',
+    status: 'planned',
+    tripDetails: {
+      trip_title: 'Wayanad Wander',
+      duration_days: 3,
+      budget_per_person: 18000,
+      budget_breakdown: {
+        accommodation: 6000,
+        food_and_drinks: 4000,
+        activities_and_entry: 3000,
+        local_transport: 2000,
+        miscellaneous_buffer: 3000,
+        total: 18000,
+      },
+      day_by_day_itinerary: [{ day: 1, title: 'Arrive' }],
+    },
+    createdAt: new Date(),
+  }) as any;
+
+  assert.equal('budget_per_person' in projection.tripDetails, false);
+  assert.equal('budget_breakdown' in projection.tripDetails, false);
+  assert.equal(projection.tripDetails.trip_title, 'Wayanad Wander');
+  assert.equal(projection.tripDetails.duration_days, 3);
+  assert.equal(projection.tripDetails.day_by_day_itinerary[0].title, 'Arrive');
+});
+
+test('stripping budgets does not mutate the stored trip details', () => {
+  const details = {
+    trip_title: 'Wayanad Wander',
+    budget_per_person: 18000,
+    budget_breakdown: { total: 18000 },
+  };
+  projectPublicTrip({ _id: 'tripid', tripDetails: details, createdAt: new Date() });
+
+  assert.equal(details.budget_per_person, 18000);
+  assert.equal(details.budget_breakdown.total, 18000);
+});
+
 test('customRoutes defaults to an empty array (drafts drawn nothing yet)', () => {
   const projection = projectPublicTrip({
     _id: 'tripid',

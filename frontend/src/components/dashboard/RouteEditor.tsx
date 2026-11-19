@@ -99,7 +99,7 @@ export const RouteEditor: React.FC<RouteEditorProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="rounded-2xl max-w-md w-[94vw] sm:w-full p-5 sm:p-6">
         <DialogHeader>
-          <DialogTitle className="text-lg font-black flex items-center gap-2">
+          <DialogTitle className="text-xl font-black flex items-center gap-2">
             <Route className="w-4 h-4 text-primary" />
             {route ? "Edit Route" : "Save Drawn Route"}
           </DialogTitle>
@@ -126,9 +126,9 @@ export const RouteEditor: React.FC<RouteEditorProps> = ({
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold">Travel Mode</Label>
+              <Label htmlFor="route-mode" className="text-xs font-bold">Travel Mode</Label>
               <Select value={mode} onValueChange={(value) => setMode(value as RouteTravelMode)}>
-                <SelectTrigger className="h-10 text-sm rounded-xl">
+                <SelectTrigger id="route-mode" className="h-10 text-sm rounded-xl">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -142,11 +142,11 @@ export const RouteEditor: React.FC<RouteEditorProps> = ({
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold flex items-center gap-1">
+              <Label htmlFor="route-day" className="text-xs font-bold flex items-center gap-1">
                 <CalendarDays className="w-3 h-3 text-primary" /> Trip Day
               </Label>
               <Select value={day} onValueChange={setDay}>
-                <SelectTrigger className="h-10 text-sm rounded-xl">
+                <SelectTrigger id="route-day" className="h-10 text-sm rounded-xl">
                   <SelectValue placeholder="Any day" />
                 </SelectTrigger>
                 <SelectContent>
@@ -161,8 +161,8 @@ export const RouteEditor: React.FC<RouteEditorProps> = ({
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-xs font-bold">Colour</Label>
+          <div className="space-y-2" role="group" aria-labelledby="route-colour-label">
+            <span id="route-colour-label" className="block text-xs font-bold">Colour</span>
             <div className="flex flex-wrap items-center gap-2">
               {ROUTE_COLORS.map((option) => (
                 <button

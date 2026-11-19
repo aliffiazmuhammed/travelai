@@ -49,6 +49,11 @@ import { AgencyPageHeader } from '@/components/agency/AgencyPageHeader';
 import AgencyQuotePanel from '@/components/agency/AgencyQuotePanel';
 import { AgencySectionTabs } from '@/components/agency/AgencySectionTabs';
 import { MyTripsView } from '@/components/dashboard/MyTripsView';
+import {
+  ItinerarySkeleton,
+  TripsGridSkeleton,
+} from '@/components/dashboard/TripSkeletons';
+import { AsyncErrorPanel } from '@/components/states/AsyncState';
 import { useAgency } from '@/context/AgencyContext';
 import { useAgencyAuth } from '@/context/AgencyAuthContext';
 import { useTripAccess } from '@/hooks/useTripAccess';
@@ -162,6 +167,7 @@ const AgencyTrips: React.FC = () => {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
   const [loading, setLoading] = useState(true);
+  const [listError, setListError] = useState<unknown | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [assignees, setAssignees] = useState<AgencyMember[]>([]);
@@ -204,11 +210,12 @@ const AgencyTrips: React.FC = () => {
         });
         if (requestId === listRequestRef.current) {
           setTrips(result.trips || []);
+          setListError(null);
         }
       } catch (err) {
         console.error('Failed to load agency trips:', err);
         if (showSpinner && requestId === listRequestRef.current) {
-          toast.error(errorMessage(err, 'Could not load the agency trip library.'));
+          setListError(err);
         }
       } finally {
         if (showSpinner && requestId === listRequestRef.current) {
@@ -491,10 +498,7 @@ const AgencyTrips: React.FC = () => {
     <div className="space-y-6">
       {tripId ? (
         detailLoading || !selectedTrip ? (
-          <div className="flex items-center justify-center py-24 text-muted-foreground">
-            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-            Loading trip...
-          </div>
+          <ItinerarySkeleton />
         ) : (
         <div className="space-y-4">
           <AgencyTripBanner
@@ -509,7 +513,7 @@ const AgencyTrips: React.FC = () => {
           />
 
           {selectedTrip.archivedAt ? (
-            <div className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-3 rounded-2xl border border-warning/30 bg-warning/10 p-4 text-sm text-warning-ink dark:border-warning/20 dark:bg-warning/30 sm:flex-row sm:items-center sm:justify-between">
               <p className="flex items-start gap-2">
                 <Archive className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>
@@ -638,18 +642,13 @@ const AgencyTrips: React.FC = () => {
           </div>
         </div>
         )
-      ) : loading ? (
-        <div className="flex items-center justify-center py-24 text-muted-foreground">
-          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-          Loading agency trips...
-        </div>
       ) : (
         <>
           <AgencyPageHeader
             title="Trips"
             meta={
               <Badge
-                className={cn('text-[10px]', agencyRoleBadgeClass(role || 'viewer'))}
+                className={cn('text-xs', agencyRoleBadgeClass(role || 'viewer'))}
               >
                 {agencyRoleLabel(role || 'viewer')}
               </Badge>
@@ -665,6 +664,15 @@ const AgencyTrips: React.FC = () => {
             }
           />
 
+          {loading ? (
+            <TripsGridSkeleton />
+          ) : listError && trips.length === 0 ? (
+            <AsyncErrorPanel
+              error={listError}
+              subject="the agency trip library"
+              onRetry={() => void loadTrips(true)}
+            />
+          ) : (
           <MyTripsView
             hideHeader
             variant="agency"
@@ -692,6 +700,7 @@ const AgencyTrips: React.FC = () => {
             canArchiveTrip={() => canManage}
             pageSize={8}
           />
+          )}
         </>
       )}
 
@@ -719,9 +728,9 @@ const AgencyTrips: React.FC = () => {
                     setNewTripOpen(false);
                     navigate('/agency/trips/new');
                   }}
-                  className="flex w-full items-center gap-3 rounded-2xl border border-teal-200 bg-teal-50/70 p-4 text-left transition hover:border-teal-400 hover:bg-teal-50 dark:border-teal-900/60 dark:bg-teal-950/30 dark:hover:border-teal-700 dark:hover:bg-teal-950/50"
+                  className="flex w-full items-center gap-3 rounded-2xl border border-agency-accent/30 bg-agency-accent-soft p-4 text-left transition hover:border-agency-accent/30 hover:bg-agency-accent-soft dark:border-agency-accent/60"
                 >
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-teal-600 text-white">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-agency-accent text-white">
                     <Sparkles className="h-5 w-5" />
                   </span>
                   <span>
@@ -739,7 +748,7 @@ const AgencyTrips: React.FC = () => {
                   onClick={() => setNewTripMode('blank')}
                   className="flex w-full items-center gap-3 rounded-2xl border border-border bg-card p-4 text-left transition hover:border-primary/50 hover:bg-accent/50"
                 >
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-agency-accent-soft text-agency-accent">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-agency-accent-soft text-agency-accent-ink">
                     <CalendarPlus className="h-5 w-5" />
                   </span>
                   <span>
@@ -859,15 +868,15 @@ const AgencyTripBanner: React.FC<AgencyTripBannerProps> = ({
   <Card className="rounded-2xl border-agency-line bg-agency-panel shadow-none">
     <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-start gap-3">
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-agency-accent-soft text-agency-accent">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-agency-accent-soft text-agency-accent-ink">
           <Building2 className="h-5 w-5" />
         </span>
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="outline" className="text-[10px]">
+            <Badge variant="outline" className="text-xs">
               Agency trip
             </Badge>
-            <Badge className={cn('text-[10px]', agencyRoleBadgeClass(role || 'viewer'))}>
+            <Badge className={cn('text-xs', agencyRoleBadgeClass(role || 'viewer'))}>
               {agencyRoleLabel(role || 'viewer')}
             </Badge>
           </div>
@@ -887,7 +896,7 @@ const AgencyTripBanner: React.FC<AgencyTripBannerProps> = ({
           onValueChange={onAssignmentChange}
           disabled={assigning}
         >
-          <SelectTrigger className="h-9 w-full rounded-xl text-xs sm:w-[210px]">
+          <SelectTrigger className="h-9 w-full rounded-xl text-xs sm:w-[210px]" aria-label="Assign a planner">
             <SelectValue placeholder="Assign a planner" />
           </SelectTrigger>
           <SelectContent>
