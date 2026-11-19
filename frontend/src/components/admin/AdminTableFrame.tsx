@@ -3,22 +3,18 @@ import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
 /**
- * The console's list shell: an optional heading, a horizontally scrollable table
- * and a footer slot for paging. Pages own the columns; this owns the frame so
- * every directory has the same border, radius and scroll behaviour.
+ * The console list shell: an optional heading and a footer slot for paging.
+ * Rows come from `DataTable`, which owns the scroll region, its cue and the
+ * phone cards, so every directory shares one table behaviour.
  */
 export const AdminTableFrame: React.FC<{
   title?: React.ReactNode;
   description?: React.ReactNode;
   actions?: React.ReactNode;
-  /** Minimum table width so columns never squash on a phone. */
-  minWidth?: string;
-  /** Accessible name for the scroll region; falls back to the title. */
-  scrollLabel?: string;
   footer?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
-}> = ({ title, description, actions, minWidth = '900px', scrollLabel, footer, children, className }) => (
+}> = ({ title, description, actions, footer, children, className }) => (
   <Card className={cn('overflow-hidden rounded-2xl border-border bg-card shadow-sm', className)}>
     {title || description || actions ? (
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-4 py-3.5">
@@ -33,19 +29,8 @@ export const AdminTableFrame: React.FC<{
         {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
       </div>
     ) : null}
-    <CardContent className="p-0">
-      <div
-        role="region"
-        aria-label={scrollLabel ?? (typeof title === 'string' ? `${title} table` : 'Table')}
-        tabIndex={0}
-        className="overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-      >
-        <table className="w-full text-left text-sm" style={{ minWidth }}>
-          {children}
-        </table>
-      </div>
-      {footer}
-    </CardContent>
+    <CardContent className="p-0">{children}</CardContent>
+    {footer}
   </Card>
 );
 

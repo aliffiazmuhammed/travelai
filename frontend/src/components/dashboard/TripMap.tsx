@@ -1,4 +1,8 @@
 import React, { useState, useMemo, useEffect } from "react";
+// The map chunk owns its stylesheet (C-22): routes that never draw a map do not
+// download Leaflet's CSS, and the shared-trip page keeps its initial request
+// free of map bytes.
+import "leaflet/dist/leaflet.css";
 import {
   MapContainer,
   TileLayer,

@@ -45,14 +45,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { Textarea } from '@/components/ui/textarea';
 import { Field } from '@/components/ui/field';
 import { AdminPagination } from '@/components/admin/AdminPagination';
@@ -951,6 +944,229 @@ const AgencyEnquiries: React.FC = () => {
     },
   ];
 
+  const columns: DataTableColumn<AgencyEnquiry>[] = [
+    {
+      id: 'traveller',
+      header: 'Traveller',
+      mobile: 'primary',
+      headClassName: 'h-10 w-[25%] px-3 text-overline font-semibold text-agency-muted',
+      cellClassName: 'px-3 py-3',
+      cell: (enquiry) => {
+        const unread = enquiry.unread.agency;
+        return (
+          <div className="flex items-center gap-2.5">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-agency-accent-soft text-xs font-bold text-agency-accent-ink">
+              {enquiry.contact.name.trim().slice(0, 1).toUpperCase() || 'L'}
+            </span>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span
+                  className={cn(
+                    'truncate text-sm text-agency-ink',
+                    unread > 0 ? 'font-semibold' : 'font-medium'
+                  )}
+                >
+                  {enquiry.contact.name}
+                </span>
+                {unread > 0 ? (
+                  <span className="inline-flex h-4 min-w-[1rem] shrink-0 items-center justify-center rounded-full bg-agency-accent px-1 text-xs font-semibold text-agency-accent-foreground">
+                    {unread}
+                  </span>
+                ) : null}
+              </div>
+              <p className="truncate text-xs text-agency-muted">
+                {enquiry.contact.email}
+              </p>
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      id: 'trip',
+      header: 'Trip or package',
+      mobileSpan: 2,
+      headClassName: 'h-10 w-[27%] px-3 text-overline font-semibold text-agency-muted',
+      cellClassName: 'px-3 py-3',
+      cell: (enquiry) => (
+        <>
+          <p className="truncate text-sm font-medium text-agency-ink">
+            {enquiry.package?.title ?? 'Profile enquiry'}
+          </p>
+          <p className="truncate text-xs text-agency-muted">
+            {datesLabel(enquiry)} · {partyLabel(enquiry)}
+            {enquiry.budgetBand
+              ? ` · ${AGENCY_ENQUIRY_BUDGET_LABELS[enquiry.budgetBand]}`
+              : ''}
+          </p>
+          {enquiry.client ? (
+            <p className="mt-0.5 flex items-center gap-1 truncate text-xs font-medium text-agency-accent-ink">
+              <BriefcaseBusiness className="h-3 w-3 shrink-0" />
+              {enquiry.client.name}
+            </p>
+          ) : null}
+        </>
+      ),
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      interactive: true,
+      headClassName:
+        'h-10 w-[128px] px-3 text-overline font-semibold text-agency-muted',
+      cellClassName: 'px-3 py-3',
+      cell: (enquiry) =>
+        canPlan ? (
+          <Select
+            value={enquiry.status}
+            onValueChange={(value) =>
+              requestStatusChange(enquiry, value as AgencyEnquiryStatus)
+            }
+            disabled={busy !== null}
+          >
+            <SelectTrigger
+              className={cn(
+                'h-8 w-[116px] text-xs font-medium',
+                agencyEnquiryStatusBadgeClass(enquiry.status)
+              )}
+              aria-label={`Status for ${enquiry.contact.name}`}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {AGENCY_ENQUIRY_STATUSES.map((status) => (
+                <SelectItem key={status} value={status}>
+                  {AGENCY_ENQUIRY_STATUS_LABELS[status]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <Badge
+            variant="outline"
+            className={cn('text-xs', agencyEnquiryStatusBadgeClass(enquiry.status))}
+          >
+            {AGENCY_ENQUIRY_STATUS_LABELS[enquiry.status]}
+          </Badge>
+        ),
+    },
+    {
+      id: 'owner',
+      header: 'Owner',
+      interactive: true,
+      headClassName:
+        'h-10 w-[148px] px-3 text-overline font-semibold text-agency-muted',
+      cellClassName: 'px-3 py-3',
+      cell: (enquiry) =>
+        canAssign ? (
+          <Select
+            value={enquiry.assignedTo ?? 'unassigned'}
+            onValueChange={(value) => assignEnquiry(enquiry, value)}
+            disabled={busy !== null}
+          >
+            <SelectTrigger
+              className="h-8 w-[136px] text-xs"
+              aria-label={`Owner for ${enquiry.contact.name}`}
+            >
+              <SelectValue placeholder="Unassigned" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="unassigned">Unassigned</SelectItem>
+              {members.map((member) => (
+                <SelectItem key={member.userId} value={member.userId}>
+                  {member.userId === myId ? 'You' : member.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <span className="text-xs text-agency-muted">
+            {enquiry.assignee
+              ? enquiry.assignee.id === myId
+                ? 'You'
+                : enquiry.assignee.name
+              : 'Unclaimed'}
+          </span>
+        ),
+    },
+    {
+      id: 'proposal',
+      header: 'Proposal',
+      headClassName:
+        'h-10 w-[104px] px-3 text-overline font-semibold text-agency-muted',
+      cellClassName: 'whitespace-nowrap px-3 py-3',
+      cell: (enquiry) =>
+        enquiry.proposals?.lastDeclinedAt ? (
+          <Badge
+            variant="outline"
+            className="gap-1 border-destructive/30 bg-destructive/10 text-xs text-destructive-ink dark:border-destructive/40 dark:bg-destructive/20"
+            title={`Traveller declined the proposal on ${formatAgencyDate(
+              enquiry.proposals.lastDeclinedAt
+            )}`}
+          >
+            <XCircle className="h-2.5 w-2.5" />
+            Declined
+          </Badge>
+        ) : enquiry.proposals && enquiry.proposals.count > 0 ? (
+          <>
+            <Badge variant="outline" className="text-xs">
+              {enquiry.proposals.count} sent
+            </Badge>
+            {enquiry.proposals.lastAt ? (
+              <p className="mt-0.5 text-xs text-agency-muted">
+                {formatAgencyDate(enquiry.proposals.lastAt)}
+              </p>
+            ) : null}
+          </>
+        ) : (
+          <span className="text-xs text-agency-muted/70">—</span>
+        ),
+    },
+    {
+      id: 'activity',
+      header: 'Last activity',
+      headClassName:
+        'h-10 w-[120px] px-3 text-overline font-semibold text-agency-muted',
+      cellClassName: 'whitespace-nowrap px-3 py-3',
+      cell: (enquiry) => {
+        const stamp = enquiry.lastMessageAt || enquiry.createdAt;
+        return (
+          <>
+            <p className="text-xs font-medium text-agency-ink">
+              {stamp ? formatAgencyDate(stamp) : '—'}
+            </p>
+            <p className="text-xs text-agency-muted">
+              {enquiry.lastMessageAt
+                ? enquiry.lastMessageBy === 'agency'
+                  ? 'You replied'
+                  : 'Traveller replied'
+                : 'New lead'}
+            </p>
+          </>
+        );
+      },
+    },
+    {
+      id: 'open',
+      header: <span className="sr-only">Open</span>,
+      mobile: 'action',
+      headClassName: 'h-10 w-11 px-2 text-right',
+      cellClassName: 'px-2 py-3 text-right',
+      cell: (enquiry) => (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-agency-muted hover:text-agency-ink"
+          onClick={() => openEnquiry(enquiry)}
+          aria-label={`Open the conversation with ${enquiry.contact.name}`}
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-5">
       <AgencyPageHeader
@@ -1068,234 +1284,29 @@ const AgencyEnquiries: React.FC = () => {
         />
       ) : (
         <>
-          <Table
-            className="min-w-[1024px] table-fixed"
-            containerClassName="max-h-[min(34rem,calc(100dvh-24rem))] min-h-[16rem] overflow-y-auto"
+          <DataTable
+            rows={enquiries}
+            columns={columns}
+            getRowKey={(enquiry) => enquiry.id}
             scrollLabel="Enquiries table"
-          >
-            <TableHeader className="sticky top-0 z-10 bg-agency-panel">
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="h-10 w-[25%] px-3 text-overline font-semibold text-agency-muted">Traveller</TableHead>
-                <TableHead className="h-10 w-[27%] px-3 text-overline font-semibold text-agency-muted">Trip or package</TableHead>
-                <TableHead className="h-10 w-[128px] px-3 text-overline font-semibold text-agency-muted">Status</TableHead>
-                <TableHead className="h-10 w-[148px] px-3 text-overline font-semibold text-agency-muted">Owner</TableHead>
-                <TableHead className="h-10 w-[104px] px-3 text-overline font-semibold text-agency-muted">Proposal</TableHead>
-                <TableHead className="h-10 w-[120px] px-3 text-overline font-semibold text-agency-muted">Last activity</TableHead>
-                <TableHead className="h-10 w-11 px-2 text-right">
-                  <span className="sr-only">Open</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {enquiries.map((enquiry) => {
-                const active = selected?.id === enquiry.id && sheetOpen;
-                const unread = enquiry.unread.agency;
-                const stamp = enquiry.lastMessageAt || enquiry.createdAt;
-                const stopRow = (event: React.SyntheticEvent) =>
-                  event.stopPropagation();
-                return (
-                  <TableRow
-                    key={enquiry.id}
-                    tabIndex={0}
-                    aria-current={active ? 'true' : undefined}
-                    onClick={() => openEnquiry(enquiry)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        openEnquiry(enquiry);
-                      }
-                    }}
-                    className={cn(
-                      'cursor-pointer transition-colors hover:bg-agency-soft/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-agency-accent',
-                      active &&
-                        'bg-agency-accent-soft/70 shadow-[inset_3px_0_0_0_hsl(var(--agency-accent))] hover:bg-agency-accent-soft'
-                    )}
-                  >
-                    <TableCell className="px-3 py-3">
-                      <div className="flex items-center gap-2.5">
-                        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-agency-accent-soft text-xs font-bold text-agency-accent-ink">
-                          {enquiry.contact.name.trim().slice(0, 1).toUpperCase() || 'L'}
-                        </span>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span
-                              className={cn(
-                                'truncate text-sm text-agency-ink',
-                                unread > 0 ? 'font-semibold' : 'font-medium'
-                              )}
-                            >
-                              {enquiry.contact.name}
-                            </span>
-                            {unread > 0 ? (
-                              <span className="inline-flex h-4 min-w-[1rem] shrink-0 items-center justify-center rounded-full bg-agency-accent px-1 text-xs font-semibold text-agency-accent-foreground">
-                                {unread}
-                              </span>
-                            ) : null}
-                          </div>
-                          <p className="truncate text-xs text-agency-muted">
-                            {enquiry.contact.email}
-                          </p>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="px-3 py-3">
-                      <p className="truncate text-sm font-medium text-agency-ink">
-                        {enquiry.package?.title ?? 'Profile enquiry'}
-                      </p>
-                      <p className="truncate text-xs text-agency-muted">
-                        {datesLabel(enquiry)} · {partyLabel(enquiry)}
-                        {enquiry.budgetBand
-                          ? ` · ${AGENCY_ENQUIRY_BUDGET_LABELS[enquiry.budgetBand]}`
-                          : ''}
-                      </p>
-                      {enquiry.client ? (
-                        <p className="mt-0.5 flex items-center gap-1 truncate text-xs font-medium text-agency-accent-ink">
-                          <BriefcaseBusiness className="h-3 w-3 shrink-0" />
-                          {enquiry.client.name}
-                        </p>
-                      ) : null}
-                    </TableCell>
-                    <TableCell
-                      className="px-3 py-3"
-                      onClick={stopRow}
-                      onKeyDown={stopRow}
-                    >
-                      {canPlan ? (
-                        <Select
-                          value={enquiry.status}
-                          onValueChange={(value) =>
-                            requestStatusChange(
-                              enquiry,
-                              value as AgencyEnquiryStatus
-                            )
-                          }
-                          disabled={busy !== null}
-                        >
-                          <SelectTrigger
-                            className={cn(
-                              'h-8 w-[116px] text-xs font-medium',
-                              agencyEnquiryStatusBadgeClass(enquiry.status)
-                            )}
-                            aria-label={`Status for ${enquiry.contact.name}`}
-                          >
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {AGENCY_ENQUIRY_STATUSES.map((status) => (
-                              <SelectItem key={status} value={status}>
-                                {AGENCY_ENQUIRY_STATUS_LABELS[status]}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            'text-xs',
-                            agencyEnquiryStatusBadgeClass(enquiry.status)
-                          )}
-                        >
-                          {AGENCY_ENQUIRY_STATUS_LABELS[enquiry.status]}
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell
-                      className="px-3 py-3"
-                      onClick={stopRow}
-                      onKeyDown={stopRow}
-                    >
-                      {canAssign ? (
-                        <Select
-                          value={enquiry.assignedTo ?? 'unassigned'}
-                          onValueChange={(value) => assignEnquiry(enquiry, value)}
-                          disabled={busy !== null}
-                        >
-                          <SelectTrigger
-                            className="h-8 w-[136px] text-xs"
-                            aria-label={`Owner for ${enquiry.contact.name}`}
-                          >
-                            <SelectValue placeholder="Unassigned" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="unassigned">Unassigned</SelectItem>
-                            {members.map((member) => (
-                              <SelectItem key={member.userId} value={member.userId}>
-                                {member.userId === myId ? 'You' : member.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <span className="text-xs text-agency-muted">
-                          {enquiry.assignee
-                            ? enquiry.assignee.id === myId
-                              ? 'You'
-                              : enquiry.assignee.name
-                            : 'Unclaimed'}
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap px-3 py-3">
-                      {enquiry.proposals?.lastDeclinedAt ? (
-                        <Badge
-                          variant="outline"
-                          className="gap-1 border-destructive/30 bg-destructive/10 text-xs text-destructive-ink dark:border-destructive/40 dark:bg-destructive/20"
-                          title={`Traveller declined the proposal on ${formatAgencyDate(
-                            enquiry.proposals.lastDeclinedAt
-                          )}`}
-                        >
-                          <XCircle className="h-2.5 w-2.5" />
-                          Declined
-                        </Badge>
-                      ) : enquiry.proposals && enquiry.proposals.count > 0 ? (
-                        <>
-                          <Badge variant="outline" className="text-xs">
-                            {enquiry.proposals.count} sent
-                          </Badge>
-                          {enquiry.proposals.lastAt ? (
-                            <p className="mt-0.5 text-xs text-agency-muted">
-                              {formatAgencyDate(enquiry.proposals.lastAt)}
-                            </p>
-                          ) : null}
-                        </>
-                      ) : (
-                        <span className="text-xs text-agency-muted/70">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap px-3 py-3">
-                      <p className="text-xs font-medium text-agency-ink">
-                        {stamp ? formatAgencyDate(stamp) : '—'}
-                      </p>
-                      <p className="text-xs text-agency-muted">
-                        {enquiry.lastMessageAt
-                          ? enquiry.lastMessageBy === 'agency'
-                            ? 'You replied'
-                            : 'Traveller replied'
-                          : 'New lead'}
-                      </p>
-                    </TableCell>
-                    <TableCell
-                      className="px-2 py-3 text-right"
-                      onClick={stopRow}
-                      onKeyDown={stopRow}
-                    >
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-agency-muted hover:text-agency-ink"
-                        onClick={() => openEnquiry(enquiry)}
-                        aria-label={`Open the conversation with ${enquiry.contact.name}`}
-                      >
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+            mobileLabel="Enquiries"
+            minWidth="1024px"
+            tableClassName="table-fixed"
+            stickySurfaceClassName="bg-agency-panel"
+            headClassName="sticky top-0 z-10 bg-agency-panel"
+            headRowClassName="hover:bg-transparent"
+            containerClassName="max-h-[min(34rem,calc(100dvh-24rem))] min-h-[16rem] overflow-y-auto"
+            rowClassName={(enquiry) =>
+              cn(
+                'cursor-pointer transition-colors hover:bg-agency-soft/60',
+                selected?.id === enquiry.id &&
+                  sheetOpen &&
+                  'bg-agency-accent-soft/70 shadow-[inset_3px_0_0_0_hsl(var(--agency-accent))] hover:bg-agency-accent-soft'
+              )
+            }
+            isRowCurrent={(enquiry) => selected?.id === enquiry.id && sheetOpen}
+            onRowClick={(enquiry) => openEnquiry(enquiry)}
+          />
 
           <AdminPagination
             page={pageIndex + 1}

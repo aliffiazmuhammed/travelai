@@ -636,12 +636,21 @@ export function useTripChatCrypto(
     // Fast when locked (waiting for a share), slow when ready (slot healing).
     const delay = status === 'keyless' ? 6000 : status === 'ready' ? 15000 : 0;
     if (!delay) return;
-    const tick = () => { void refreshKey().catch(() => undefined); };
+    const tick = () => {
+      // An idle background tab must not keep polling the key slot (C-29).
+      if (document.visibilityState === 'hidden') return;
+      void refreshKey().catch(() => undefined);
+    };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') tick();
+    };
     const timer = window.setInterval(tick, delay);
     window.addEventListener('focus', tick);
+    document.addEventListener('visibilitychange', onVisible);
     return () => {
       window.clearInterval(timer);
       window.removeEventListener('focus', tick);
+      document.removeEventListener('visibilitychange', onVisible);
     };
   }, [enabled, tripId, status, refreshKey]);
 

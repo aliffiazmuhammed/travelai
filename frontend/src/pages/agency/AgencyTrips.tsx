@@ -278,9 +278,12 @@ const AgencyTrips: React.FC = () => {
   }, [activeAgencyId, tripId, navigate]);
 
   // A quiet refresh keeps the library fresh without flashing the skeleton.
+  // Hidden tabs skip the recurring read entirely (C-29); focus/visibility
+  // brings it back as soon as the workspace is on screen again.
   useEffect(() => {
     if (!activeAgencyId) return;
     const refresh = () => {
+      if (document.visibilityState === 'hidden') return;
       void loadTrips(false);
     };
     const onVisibility = () => {

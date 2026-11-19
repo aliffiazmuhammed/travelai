@@ -16,6 +16,7 @@ import { AgencySectionTabs } from '@/components/agency/AgencySectionTabs';
 import { AgencySegmented } from '@/components/agency/AgencySegmented';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import {
   Card,
   CardContent,
@@ -236,6 +237,49 @@ const AgencyOperations: React.FC = () => {
   const storageUsed = usage?.used.storageBytes ?? 0;
   const storageCapMb = usage?.plan.storageMb ?? 0;
 
+  const auditColumns: DataTableColumn<AgencyAuditEntry>[] = [
+    {
+      id: 'time',
+      header: 'Time',
+      headClassName:
+        'py-2.5 pl-3 pr-3 text-overline font-semibold text-agency-muted',
+      cellClassName: 'whitespace-nowrap py-2.5 pl-3 pr-3 text-agency-muted',
+      cell: (entry) => (
+        <span className="flex items-center gap-1">
+          <Clock3 className="h-3 w-3 shrink-0" />
+          {formatDateTime(entry.createdAt)}
+        </span>
+      ),
+    },
+    {
+      id: 'actor',
+      header: 'Actor',
+      headClassName: 'py-2.5 pr-3 text-overline font-semibold text-agency-muted',
+      cellClassName: 'py-2.5 pr-3 font-semibold text-agency-ink',
+      cell: (entry) => actorLabel(entry),
+    },
+    {
+      id: 'action',
+      header: 'Action',
+      mobile: 'primary',
+      headClassName: 'py-2.5 pr-3 text-overline font-semibold text-agency-muted',
+      cellClassName: 'py-2.5 pr-3',
+      cell: (entry) => (
+        <Badge variant="outline" className="text-xs">
+          {actionLabel(entry.action)}
+        </Badge>
+      ),
+    },
+    {
+      id: 'details',
+      header: 'Details',
+      mobileSpan: 2,
+      headClassName: 'py-2.5 pr-3 text-overline font-semibold text-agency-muted',
+      cellClassName: 'max-w-[280px] break-words py-2.5 pr-3 text-agency-muted',
+      cell: (entry) => detailSnippet(entry) || '—',
+    },
+  ];
+
   return (
     <div className="space-y-5">
       <AgencyPageHeader
@@ -368,44 +412,20 @@ const AgencyOperations: React.FC = () => {
               activity will appear here.
             </p>
           ) : (
-            <div className="max-h-[min(32rem,calc(100dvh-24rem))] overflow-auto rounded-lg border border-agency-line">
-              <table className="w-full min-w-[640px] text-left text-xs">
-                <thead className="sticky top-0 z-10 bg-agency-panel">
-                  <tr className="border-b border-agency-line text-overline font-semibold text-agency-muted">
-                    <th className="py-2.5 pl-3 pr-3 font-semibold">Time</th>
-                    <th className="py-2.5 pr-3 font-semibold">Actor</th>
-                    <th className="py-2.5 pr-3 font-semibold">Action</th>
-                    <th className="py-2.5 pr-3 font-semibold">Details</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {entries.map((entry) => (
-                    <tr
-                      key={entry._id}
-                      className="border-b border-agency-line align-top transition-colors last:border-0 hover:bg-agency-soft/60"
-                    >
-                      <td className="whitespace-nowrap py-2.5 pl-3 pr-3 text-agency-muted">
-                        <span className="flex items-center gap-1">
-                          <Clock3 className="h-3 w-3 shrink-0" />
-                          {formatDateTime(entry.createdAt)}
-                        </span>
-                      </td>
-                      <td className="py-2.5 pr-3 font-semibold text-agency-ink">
-                        {actorLabel(entry)}
-                      </td>
-                      <td className="py-2.5 pr-3">
-                        <Badge variant="outline" className="text-xs">
-                          {actionLabel(entry.action)}
-                        </Badge>
-                      </td>
-                      <td className="max-w-[280px] break-words py-2.5 text-agency-muted">
-                        {detailSnippet(entry) || '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              rows={entries}
+              columns={auditColumns}
+              getRowKey={(entry) => entry._id}
+              scrollLabel="Agency audit log"
+              mobileLabel="Agency audit log"
+              minWidth="640px"
+              tableClassName="text-xs"
+              stickySurfaceClassName="bg-agency-panel"
+              headClassName="sticky top-0 z-10 bg-agency-panel"
+              headRowClassName="border-b border-agency-line"
+              rowClassName="border-b border-agency-line align-top transition-colors last:border-0 hover:bg-agency-soft/60"
+              containerClassName="max-h-[min(32rem,calc(100dvh-24rem))] overflow-y-auto rounded-lg border border-agency-line"
+            />
           )}
           {!auditLoading && entries.length > 0 ? (
             <AdminPagination

@@ -26,6 +26,9 @@ export default defineConfig(() => ({
     },
   },
   build: {
+    // The bundle-budget check reads this manifest instead of guessing chunk
+    // names (C-29).
+    manifest: true,
     rollupOptions: {
       output: {
         manualChunks: {

@@ -20,6 +20,7 @@
     "ui:scan-type": "node scripts/ui-baseline/scan-type.mjs",
     "ui:scan-palette": "node scripts/ui-baseline/scan-palette.mjs",
     "ui:check": "node scripts/ui-baseline/scan-palette.mjs --check && node scripts/ui-baseline/scan-type.mjs --check",
+    "ui:budget": "node scripts/ui-baseline/bundle-budget.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

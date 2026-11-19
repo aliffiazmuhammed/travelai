@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import React, { Suspense, useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Calendar,
@@ -33,11 +33,9 @@ import { withItineraryDefaults } from "@/lib/itineraryDefaults";
 import { cn } from "@/lib/utils";
 import { TripHeader } from "./dashboard/TripHeader";
 import { DayTimeline } from "./dashboard/DayTimeline";
-import { TripMap } from "./dashboard/TripMap";
 import { StayAndCuisine } from "./dashboard/StayAndCuisine";
 import { TravelGuideSafety } from "./dashboard/TravelGuideSafety";
 import { TripFeedback } from "./dashboard/TripFeedback";
-import { ExpenseTracker } from "./dashboard/ExpenseTracker";
 import { NearbyExplorer } from "./dashboard/NearbyExplorer";
 import { WeatherRoutingCard } from "./dashboard/WeatherRoutingCard";
 import { DayAlternativeDialog } from "./dashboard/DayAlternativeDialog";
@@ -85,6 +83,24 @@ import type {
   TripPublicationState,
 } from "@/types/gallery";
 export type { ItineraryData } from "@/types/trip";
+
+/**
+ * Map and expenses are the two heavy tabs (C-22): Leaflet and Recharts only
+ * download when the tab or the desktop rail actually needs them.
+ */
+const TripMap = React.lazy(() =>
+  import("./dashboard/TripMap").then((module) => ({ default: module.TripMap }))
+);
+
+const ExpenseTracker = React.lazy(() =>
+  import("./dashboard/ExpenseTracker").then((module) => ({
+    default: module.ExpenseTracker,
+  }))
+);
+
+const MAP_FALLBACK = (
+  <div className="h-[280px] w-full skeleton-shimmer" aria-hidden="true" />
+);
 
 interface ItineraryDisplayProps {
   data: ItineraryData;
@@ -1068,15 +1084,17 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
                 </div>
                 <div className={cn("border-t border-border", MAP_PREVIEW_CLASS)}>
                   {railMapVisible && (
-                    <TripMap
-                      destination={safeData.trip_title}
-                      itinerary={itinerary}
-                      tripId={tripId}
-                      customRoutes={customRoutes}
-                      canEdit={false}
-                      nearbyPlaces={nearbyPlaces}
-                      weatherByDay={weatherByDay}
-                    />
+                    <Suspense fallback={MAP_FALLBACK}>
+                      <TripMap
+                        destination={safeData.trip_title}
+                        itinerary={itinerary}
+                        tripId={tripId}
+                        customRoutes={customRoutes}
+                        canEdit={false}
+                        nearbyPlaces={nearbyPlaces}
+                        weatherByDay={weatherByDay}
+                      />
+                    </Suspense>
                   )}
                 </div>
               </section>
@@ -1186,16 +1204,25 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
               onAddToDay={onSave ? handleAddNearbyToDay : undefined}
             />
           )}
-          <TripMap
-            destination={safeData.trip_title}
-            itinerary={itinerary}
-            tripId={tripId}
-            customRoutes={customRoutes}
-            canEdit={isRealTrip && Boolean(onSave)}
-            onUpdated={onTripUpdated}
-            nearbyPlaces={nearbyPlaces}
-            weatherByDay={weatherByDay}
-          />
+          <Suspense
+            fallback={
+              <div
+                className="h-[420px] w-full rounded-xl border border-border skeleton-shimmer"
+                aria-hidden="true"
+              />
+            }
+          >
+            <TripMap
+              destination={safeData.trip_title}
+              itinerary={itinerary}
+              tripId={tripId}
+              customRoutes={customRoutes}
+              canEdit={isRealTrip && Boolean(onSave)}
+              onUpdated={onTripUpdated}
+              nearbyPlaces={nearbyPlaces}
+              weatherByDay={weatherByDay}
+            />
+          </Suspense>
         </TabsContent>
 
         {/* TAB 3: Stays & Culinary Hotspots View */}
@@ -1222,18 +1249,27 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({
             share link, so the tab does not exist in the public view. */}
         {!publicView && (
           <TabsContent value="expenses" className="outline-hidden animate-fade-in">
-            <ExpenseTracker
-              tripId={tripId}
-              expenses={expenses || []}
-              participants={participants || []}
-              baseCurrency={finance?.baseCurrency || "INR"}
-              exchangeRates={finance?.exchangeRates}
-              ratesUpdatedAt={finance?.ratesUpdatedAt}
-              plannedBudget={safeData.budget_breakdown}
-              daysCount={safeData.duration_days}
-              canEdit={isRealTrip && Boolean(onSave)}
-              onUpdated={onTripUpdated}
-            />
+            <Suspense
+              fallback={
+                <div
+                  className="h-[420px] w-full rounded-xl border border-border skeleton-shimmer"
+                  aria-hidden="true"
+                />
+              }
+            >
+              <ExpenseTracker
+                tripId={tripId}
+                expenses={expenses || []}
+                participants={participants || []}
+                baseCurrency={finance?.baseCurrency || "INR"}
+                exchangeRates={finance?.exchangeRates}
+                ratesUpdatedAt={finance?.ratesUpdatedAt}
+                plannedBudget={safeData.budget_breakdown}
+                daysCount={safeData.duration_days}
+                canEdit={isRealTrip && Boolean(onSave)}
+                onUpdated={onTripUpdated}
+              />
+            </Suspense>
           </TabsContent>
         )}
 

@@ -1,9 +1,36 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, FileText, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { loadPdfDocument, pdfPageSize } from '@/lib/pdfjs';
 
 const RENDER_WIDTH = 1100;
+/** Pages rendered per batch so a long proposal never rasterises up front. */
+const PAGE_BATCH = 3;
+
+type PdfDocumentHandle = Awaited<ReturnType<typeof loadPdfDocument>>;
+type PdfPageHandle = Awaited<ReturnType<PdfDocumentHandle['getPage']>>;
+
+interface RenderedPage {
+  number: number;
+  url: string;
+}
+
+async function renderPage(page: PdfPageHandle): Promise<string> {
+  const size = pdfPageSize(page);
+  const scale = RENDER_WIDTH / size.width;
+  const viewport = page.getViewport({ scale });
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.floor(viewport.width));
+  canvas.height = Math.max(1, Math.floor(viewport.height));
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('This browser cannot render PDF pages.');
+  await page.render({ canvasContext: context, viewport }).promise;
+  const blob = await new Promise<Blob | null>((resolve) => {
+    canvas.toBlob(resolve, 'image/jpeg', 0.85);
+  });
+  if (!blob) throw new Error('This browser cannot render PDF pages.');
+  return URL.createObjectURL(blob);
+}
 
 interface PdfDocumentViewerProps {
   source: Blob | Uint8Array | null;
@@ -15,63 +42,159 @@ interface PdfDocumentViewerProps {
  * In-app preview for generated PDFs. Drawing to images keeps the document
  * inside the app shell: the files are private, and the CSP does not need to
  * allow blob frames or external viewers.
+ *
+ * Pages render in small batches when the reader asks for them (C-22). A
+ * 40-page proposal therefore holds three page bitmaps, not forty, and every
+ * object URL is revoked when the source changes or the viewer unmounts.
  */
 const PdfDocumentViewer: React.FC<PdfDocumentViewerProps> = ({
   source,
   title = 'PDF preview',
   className,
 }) => {
-  const [images, setImages] = useState<string[]>([]);
+  const [doc, setDoc] = useState<PdfDocumentHandle | null>(null);
+  const [pages, setPages] = useState<RenderedPage[]>([]);
+  const [nextPage, setNextPage] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [renderingMore, setRenderingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const runId = useRef(0);
+  const pagesRef = useRef<RenderedPage[]>([]);
 
+  const message = useCallback((value: unknown) => {
+    return value instanceof Error && value.message
+      ? value.message
+      : 'We could not display this PDF.';
+  }, []);
+
+  const releasePages = useCallback(() => {
+    pagesRef.current.forEach((page) => URL.revokeObjectURL(page.url));
+    pagesRef.current = [];
+    setPages([]);
+  }, []);
+
+  // Load the document, not its pages: nothing rasterises until the first
+  // batch effect below runs.
   useEffect(() => {
+    runId.current += 1;
+    const id = runId.current;
+    releasePages();
+    setDoc(null);
+    setError(null);
+    setNextPage(1);
+
     if (!source) {
-      setImages([]);
-      setError(null);
+      setLoading(false);
       return;
     }
-    let cancelled = false;
+
+    let loaded: PdfDocumentHandle | null = null;
+    setLoading(true);
     (async () => {
-      setLoading(true);
-      setError(null);
-      setImages([]);
-      let doc: Awaited<ReturnType<typeof loadPdfDocument>> | null = null;
       try {
-        doc = await loadPdfDocument(source);
-        const rendered: string[] = [];
-        for (let number = 1; number <= doc.numPages; number += 1) {
-          const page = await doc.getPage(number);
-          if (cancelled) return;
-          const size = pdfPageSize(page);
-          const scale = RENDER_WIDTH / size.width;
-          const viewport = page.getViewport({ scale });
-          const canvas = document.createElement('canvas');
-          canvas.width = Math.max(1, Math.floor(viewport.width));
-          canvas.height = Math.max(1, Math.floor(viewport.height));
-          const context = canvas.getContext('2d');
-          if (!context) throw new Error('This browser cannot render PDF pages.');
-          await page.render({ canvasContext: context, viewport }).promise;
-          rendered.push(canvas.toDataURL('image/jpeg', 0.85));
+        loaded = await loadPdfDocument(source);
+        if (runId.current !== id) {
+          void loaded.destroy();
+          return;
         }
-        if (!cancelled) setImages(rendered);
+        setDoc(loaded);
+        setLoading(false);
       } catch (renderError) {
-        if (!cancelled) {
-          setError(
-            renderError instanceof Error && renderError.message
-              ? renderError.message
-              : 'We could not display this PDF.'
-          );
+        if (runId.current === id) {
+          setError(message(renderError));
+          setLoading(false);
         }
-      } finally {
-        if (doc) void doc.destroy();
-        if (!cancelled) setLoading(false);
       }
     })();
+
+    return () => {
+      // A late load must not keep its worker/page tree alive.
+      if (runId.current === id) runId.current += 1;
+    };
+  }, [source, message, releasePages]);
+
+  // Destroy the parsed document whenever it is replaced or the viewer closes.
+  useEffect(() => {
+    return () => {
+      if (doc) void doc.destroy();
+    };
+  }, [doc]);
+
+  // First batch, as soon as the document is ready.
+  useEffect(() => {
+    if (!doc) return;
+    const id = runId.current;
+    let cancelled = false;
+    const batch: RenderedPage[] = [];
+
+    (async () => {
+      try {
+        const last = Math.min(PAGE_BATCH, doc.numPages);
+        for (let number = 1; number <= last; number += 1) {
+          const page = await doc.getPage(number);
+          if (cancelled) return;
+          const url = await renderPage(page);
+          if (cancelled) {
+            URL.revokeObjectURL(url);
+            return;
+          }
+          batch.push({ number, url });
+        }
+        if (cancelled) return;
+        pagesRef.current = batch;
+        setPages(batch);
+        setNextPage(last + 1);
+      } catch (renderError) {
+        if (cancelled) return;
+        batch.forEach((page) => URL.revokeObjectURL(page.url));
+        setError(message(renderError));
+      }
+    })();
+
     return () => {
       cancelled = true;
     };
-  }, [source]);
+  }, [doc, message]);
+
+  const pageCount = doc?.numPages ?? 0;
+  const hasMore = nextPage <= pageCount;
+
+  const showMore = async () => {
+    if (!doc || renderingMore || !hasMore) return;
+    const id = runId.current;
+    setRenderingMore(true);
+    setError(null);
+    const batch: RenderedPage[] = [];
+    const last = Math.min(pageCount, nextPage + PAGE_BATCH - 1);
+    try {
+      for (let number = nextPage; number <= last; number += 1) {
+        const page = await doc.getPage(number);
+        if (runId.current !== id) {
+          batch.forEach((rendered) => URL.revokeObjectURL(rendered.url));
+          return;
+        }
+        const url = await renderPage(page);
+        if (runId.current !== id) {
+          batch.forEach((rendered) => URL.revokeObjectURL(rendered.url));
+          URL.revokeObjectURL(url);
+          return;
+        }
+        batch.push({ number, url });
+      }
+      if (runId.current !== id) {
+        batch.forEach((rendered) => URL.revokeObjectURL(rendered.url));
+        return;
+      }
+      pagesRef.current = [...pagesRef.current, ...batch];
+      setPages(pagesRef.current);
+      setNextPage(last + 1);
+    } catch (renderError) {
+      batch.forEach((rendered) => URL.revokeObjectURL(rendered.url));
+      if (runId.current === id) setError(message(renderError));
+    } finally {
+      if (runId.current === id) setRenderingMore(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -87,7 +210,7 @@ const PdfDocumentViewer: React.FC<PdfDocumentViewerProps> = ({
     );
   }
 
-  if (error) {
+  if (error && pages.length === 0) {
     return (
       <div
         className={cn(
@@ -101,7 +224,7 @@ const PdfDocumentViewer: React.FC<PdfDocumentViewerProps> = ({
     );
   }
 
-  if (images.length === 0) {
+  if (pages.length === 0) {
     return (
       <div
         className={cn(
@@ -122,14 +245,45 @@ const PdfDocumentViewer: React.FC<PdfDocumentViewerProps> = ({
         className
       )}
     >
-      {images.map((src, index) => (
+      {pages.map((page) => (
         <img
-          key={index}
-          src={src}
-          alt={`${title} · page ${index + 1}`}
+          key={page.number}
+          src={page.url}
+          alt={`${title} · page ${page.number}`}
           className="mx-auto block w-full max-w-[820px] rounded-lg bg-white shadow-sm"
         />
       ))}
+
+      {error ? (
+        <p
+          role="status"
+          className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-center text-xs text-destructive-ink"
+        >
+          {error}
+        </p>
+      ) : null}
+
+      {hasMore ? (
+        <div className="flex justify-center">
+          <button
+            type="button"
+            onClick={() => void showMore()}
+            disabled={renderingMore}
+            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3.5 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted disabled:opacity-60"
+          >
+            {renderingMore ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+            ) : null}
+            {renderingMore
+              ? 'Rendering pages…'
+              : `Show pages ${nextPage}–${Math.min(pageCount, nextPage + PAGE_BATCH - 1)}`}
+          </button>
+        </div>
+      ) : pageCount > PAGE_BATCH ? (
+        <p className="pb-1 text-center text-xs text-muted-foreground">
+          End of document · {pageCount} pages
+        </p>
+      ) : null}
     </div>
   );
 };

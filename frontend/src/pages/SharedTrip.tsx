@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { api } from "@/services/api";
-import ItineraryDisplay from "@/components/ItineraryDisplay";
+import PublicItinerary from "@/components/itinerary/PublicItinerary";
 import { TripCover } from "@/components/gallery/TripCover";
 import { applyPageMeta } from "@/lib/meta";
 import {
@@ -290,13 +290,12 @@ const SharedTrip: React.FC = () => {
               className="min-w-0 scroll-mt-20"
             >
               {/* The public page owns the heading and the share contract keeps
-                  budgets private, so the workspace header and Expenses tab are
-                  suppressed by `publicView` rather than wrappers/CSS. */}
-              <ItineraryDisplay
+                  budgets private. `PublicItinerary` renders only the read-only
+                  views, which keeps Leaflet, Recharts and chat/crypto out of
+                  this route's initial chunk (C-22). */}
+              <PublicItinerary
                 data={details}
                 customRoutes={trip.customRoutes}
-                onNewPlan={() => navigate(PLAN_PATH)}
-                publicView
               />
 
               <div className="mt-4 rounded-2xl border border-dashed border-border bg-card/70 px-4 py-3.5 sm:px-5">

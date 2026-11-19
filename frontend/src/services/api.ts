@@ -359,7 +359,9 @@ class ApiClient {
     let response: Response;
     try {
       response = await fetch(url, config);
-    } catch {
+    } catch (error) {
+      // A superseded read is not a connection failure: let the caller drop it.
+      if (options.signal?.aborted) throw error;
       throw new Error(
         'Unable to connect to the server. Please check your internet connection or try again shortly.'
       );
@@ -2495,7 +2497,8 @@ class ApiClient {
    * joinable trips from the copy-only ones.
    */
   async getExplore(
-    filters: ExploreFilters = {}
+    filters: ExploreFilters = {},
+    options: { signal?: AbortSignal } = {}
   ): Promise<{ success: boolean } & ExplorePage> {
     const query = new URLSearchParams();
     if (filters.q?.trim()) query.append('q', filters.q.trim());
@@ -2506,7 +2509,7 @@ class ApiClient {
     if (filters.page) query.append('page', String(filters.page));
     if (filters.limit) query.append('limit', String(filters.limit));
     const suffix = query.toString() ? `?${query.toString()}` : '';
-    return this.request(`/api/explore${suffix}`);
+    return this.request(`/api/explore${suffix}`, { signal: options.signal });
   }
 
   /** One public trip page. 404 once unpublished, expired or deleted. */
@@ -2521,14 +2524,15 @@ class ApiClient {
    * to one agency page; an unpublished or unknown slug answers an empty page.
    */
   async getPublicEvents(
-    filters: PublicEventFilters = {}
+    filters: PublicEventFilters = {},
+    options: { signal?: AbortSignal } = {}
   ): Promise<{ success: boolean } & PublicEventsPage> {
     const query = new URLSearchParams();
     if (filters.agency?.trim()) query.append('agency', filters.agency.trim());
     if (filters.cursor) query.append('cursor', filters.cursor);
     if (filters.limit) query.append('limit', String(filters.limit));
     const suffix = query.toString() ? `?${query.toString()}` : '';
-    return this.request(`/api/events${suffix}`);
+    return this.request(`/api/events${suffix}`, { signal: options.signal });
   }
 
   /** M10 E1 — one public event page; closed and finished events stay readable. */

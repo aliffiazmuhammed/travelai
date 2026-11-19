@@ -1106,6 +1106,11 @@ Make dense operational data usable at 390px, remove heavy libraries from routes
 that do not need them, and measure performance against budgets instead of
 anecdote.
 
+**Status (2026-11-19):** implemented at source level; frontend typecheck,
+production build and the new bundle-budget check pass. Table checks at
+390/768px, the hidden-tab network log and the LCP/CLS mobile profile remain
+browser evidence, recorded in `docs/ui-review/baseline/phase-9-baseline.md`.
+
 ### Sequence within the phase
 
 1. **C-19 — shared responsive data table** (depends on C-13, C-14, C-18, C-12,
@@ -1422,9 +1427,9 @@ Ship only when:
 | C-06 Settings save guards | 8 | P1 | M | | Implemented — scoped saves + route/refresh guard; dirty-editor browser script pending |
 | C-25 Traveller IA | 8 | P1 | M | | Implemented — All scope, server counts, shared proposal answer, tab More menu |
 | C-21 Images | 8 | P1 | M | | Implemented — `AppImage`, same-origin cover proxy, local auth photo; waterfall check pending |
-| C-19 Responsive table | 9 | P1–P2 | L | | Not started |
-| C-22 Bundle boundaries | 9 | P1–P2 | M–L | | Not started |
-| C-29 Request/perf budgets | 9 | P2 | M | | Not started |
+| C-19 Responsive table | 9 | P1–P2 | L | | Implemented — one `DataTable`; agency inbox + 7 admin tables migrated; 390/768 checks pending |
+| C-22 Bundle boundaries | 9 | P1–P2 | M–L | | Implemented — `PublicItinerary`, lazy map/expenses, Leaflet CSS in map chunk, paged PDF |
+| C-29 Request/perf budgets | 9 | P2 | M | | Implemented — hidden-tab polling, abortable Explore, debounced filters, CI bundle budget; LCP/CLS baseline pending |
 | C-26 Agency queues | 10 | P2 | M | | Not started |
 | C-27 Admin console | 10 | P2 | M | | Not started |
 

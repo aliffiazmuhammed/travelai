@@ -34,6 +34,7 @@ import {
 } from '@/components/admin/AdminTableFrame';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Dialog,
@@ -456,6 +457,209 @@ const AdminAgencyRecord: React.FC = () => {
   if (!agency) return null;
 
   const directorySlug = agency.directory.slug;
+
+  const packageColumns: DataTableColumn<PlatformAgencyDirectoryPackage>[] = [
+    {
+      id: 'package',
+      header: 'Package',
+      mobile: 'primary',
+      headClassName: adminTableHeadClass,
+      cellClassName: 'px-4 py-3',
+      cell: (pkg) => (
+        <>
+          <p className="font-medium">{pkg.title || 'Untitled package'}</p>
+          {pkg.hiddenAt ? (
+            <p className="text-xs text-destructive-ink">
+              Hidden {formatAdminDate(pkg.hiddenAt)}
+              {pkg.hiddenReason ? ` — ${pkg.hiddenReason}` : ''}
+            </p>
+          ) : null}
+        </>
+      ),
+    },
+    {
+      id: 'state',
+      header: 'State',
+      headClassName: adminTableHeadClass,
+      cellClassName: 'px-4 py-3',
+      cell: (pkg) => (
+        <Badge
+          variant="outline"
+          className={
+            pkg.hiddenAt
+              ? 'border-destructive/40 bg-destructive/10 text-xs text-destructive-ink'
+              : pkg.state === 'published'
+                ? 'border-success/40 bg-success/10 text-xs text-success-ink'
+                : 'text-xs text-muted-foreground'
+          }
+        >
+          {pkg.hiddenAt ? 'hidden' : pkg.state}
+        </Badge>
+      ),
+    },
+    {
+      id: 'price',
+      header: 'Price',
+      headClassName: adminTableHeadClass,
+      cellClassName: 'whitespace-nowrap px-4 py-3 text-xs text-muted-foreground',
+      cell: (pkg) =>
+        pkg.pricePerPerson === null
+          ? 'On request'
+          : `${pkg.currency} ${pkg.pricePerPerson.toLocaleString('en-IN')}`,
+    },
+    {
+      id: 'actions',
+      header: <span className="sr-only">Actions</span>,
+      mobile: 'action',
+      sticky: 'right',
+      stickyHoverClassName: 'group-hover:bg-muted/40',
+      headClassName: `${adminTableHeadClass} text-right`,
+      cellClassName: 'px-4 py-3',
+      cell: (pkg) => (
+        <div className="flex items-center justify-end">
+          {pkg.hiddenAt ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-8 gap-1.5 rounded-full px-3 text-xs text-success-ink hover:bg-success/10 hover:text-success-ink"
+              onClick={() => void restorePackage(pkg)}
+              disabled={busy !== null}
+            >
+              <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+              Restore
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-8 gap-1.5 rounded-full px-3 text-xs text-destructive-ink hover:bg-destructive/10 hover:text-destructive-ink"
+              onClick={() => {
+                setDirectoryHideReason('');
+                setDirectoryHideTarget({
+                  kind: 'package',
+                  id: pkg.id,
+                  title: pkg.title,
+                });
+              }}
+              disabled={busy !== null}
+            >
+              <EyeOff className="h-3.5 w-3.5" aria-hidden />
+              Hide
+            </Button>
+          )}
+        </div>
+      ),
+    },
+  ];
+
+  const memberColumns: DataTableColumn<PlatformAgencyMember>[] = [
+    {
+      id: 'member',
+      header: 'Member',
+      mobile: 'primary',
+      headClassName: adminTableHeadClass,
+      cellClassName: 'px-4 py-3',
+      cell: (member) => (
+        <>
+          <p className="font-medium">
+            {member.name?.trim() || member.email.split('@')[0]}
+          </p>
+          <p className="break-all text-xs text-muted-foreground">{member.email}</p>
+        </>
+      ),
+    },
+    {
+      id: 'role',
+      header: 'Role',
+      headClassName: adminTableHeadClass,
+      cellClassName: 'px-4 py-3',
+      cell: (member) => (
+        <Select
+          value={member.role}
+          onValueChange={(value) =>
+            void changeRole(member, value as PlatformAgencyRole)
+          }
+          disabled={busy === `role-${member.userId}`}
+        >
+          <SelectTrigger
+            className="h-8 w-28 text-xs"
+            aria-label={`Role for ${member.email}`}
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {roleOptions.map((role) => (
+              <SelectItem key={role} value={role}>
+                {role}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ),
+    },
+    {
+      id: 'account',
+      header: 'Account',
+      headClassName: adminTableHeadClass,
+      cellClassName: 'px-4 py-3',
+      cell: (member) => (
+        <Badge
+          variant="outline"
+          className={
+            member.status === 'active'
+              ? 'border-success/40 bg-success/10 text-xs text-success-ink'
+              : 'border-destructive/40 bg-destructive/10 text-xs text-destructive-ink'
+          }
+        >
+          {member.status}
+        </Badge>
+      ),
+    },
+    {
+      id: 'joined',
+      header: 'Joined',
+      headClassName: adminTableHeadClass,
+      cellClassName: 'whitespace-nowrap px-4 py-3 text-xs text-muted-foreground',
+      cell: (member) => formatAdminDate(member.joinedAt),
+    },
+    {
+      id: 'actions',
+      header: <span className="sr-only">Actions</span>,
+      mobile: 'action',
+      sticky: 'right',
+      stickyHoverClassName: 'group-hover:bg-muted/40',
+      headClassName: `${adminTableHeadClass} text-right`,
+      cellClassName: 'px-4 py-3',
+      cell: (member) => (
+        <div className="flex items-center justify-end gap-1">
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+            onClick={() => setResetTarget(member)}
+            title="Reset workspace password"
+            aria-label={`Reset password for ${member.email}`}
+          >
+            <KeyRound className="h-4 w-4" aria-hidden />
+          </Button>
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8 text-destructive-ink hover:bg-destructive/10 hover:text-destructive-ink"
+            onClick={() => setRemoveTarget(member)}
+            title="Remove member"
+            aria-label={`Remove ${member.email}`}
+          >
+            <Trash2 className="h-4 w-4" aria-hidden />
+          </Button>
+        </div>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-5">
@@ -954,98 +1158,23 @@ const AdminAgencyRecord: React.FC = () => {
             <AdminTableFrame
               title="Packages"
               description="Public package snapshots, including anything you have hidden."
-              minWidth="620px"
             >
-              <thead>
-                <tr>
-                  <th className={adminTableHeadClass}>Package</th>
-                  <th className={adminTableHeadClass}>State</th>
-                  <th className={adminTableHeadClass}>Price</th>
-                  <th className={`${adminTableHeadClass} text-right`}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {agency.directory.packages.length === 0 ? (
-                  <tr>
-                    <td colSpan={4}>
-                      <AdminEmptyState
-                        icon={Globe2}
-                        title="No packages yet"
-                        description="Packages appear here once the agency builds one."
-                      />
-                    </td>
-                  </tr>
-                ) : (
-                  agency.directory.packages.map((pkg) => (
-                    <tr key={pkg.id} className={adminTableRowClass}>
-                      <td className="px-4 py-3">
-                        <p className="font-medium">{pkg.title || 'Untitled package'}</p>
-                        {pkg.hiddenAt ? (
-                          <p className="text-xs text-destructive-ink">
-                            Hidden {formatAdminDate(pkg.hiddenAt)}
-                            {pkg.hiddenReason ? ` — ${pkg.hiddenReason}` : ''}
-                          </p>
-                        ) : null}
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge
-                          variant="outline"
-                          className={
-                            pkg.hiddenAt
-                              ? 'border-destructive/40 bg-destructive/10 text-xs text-destructive-ink'
-                              : pkg.state === 'published'
-                                ? 'border-success/40 bg-success/10 text-xs text-success-ink'
-                                : 'text-xs text-muted-foreground'
-                          }
-                        >
-                          {pkg.hiddenAt ? 'hidden' : pkg.state}
-                        </Badge>
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
-                        {pkg.pricePerPerson === null
-                          ? 'On request'
-                          : `${pkg.currency} ${pkg.pricePerPerson.toLocaleString('en-IN')}`}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end">
-                          {pkg.hiddenAt ? (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="ghost"
-                              className="h-8 gap-1.5 rounded-full px-3 text-xs text-success-ink hover:bg-success/10 hover:text-success-ink"
-                              onClick={() => void restorePackage(pkg)}
-                              disabled={busy !== null}
-                            >
-                              <RotateCcw className="h-3.5 w-3.5" aria-hidden />
-                              Restore
-                            </Button>
-                          ) : (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="ghost"
-                              className="h-8 gap-1.5 rounded-full px-3 text-xs text-destructive-ink hover:bg-destructive/10 hover:text-destructive-ink"
-                              onClick={() => {
-                                setDirectoryHideReason('');
-                                setDirectoryHideTarget({
-                                  kind: 'package',
-                                  id: pkg.id,
-                                  title: pkg.title,
-                                });
-                              }}
-                              disabled={busy !== null}
-                            >
-                              <EyeOff className="h-3.5 w-3.5" aria-hidden />
-                              Hide
-                            </Button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
+              <DataTable
+                rows={agency.directory.packages}
+                columns={packageColumns}
+                getRowKey={(pkg) => pkg.id}
+                scrollLabel="Directory packages table"
+                mobileLabel="Directory packages"
+                minWidth="620px"
+                rowClassName={adminTableRowClass}
+                emptyContent={
+                  <AdminEmptyState
+                    icon={Globe2}
+                    title="No packages yet"
+                    description="Packages appear here once the agency builds one."
+                  />
+                }
+              />
             </AdminTableFrame>
           </div>
         ) : null}
@@ -1055,107 +1184,23 @@ const AdminAgencyRecord: React.FC = () => {
             <AdminTableFrame
               title="Members"
               description={`${agency.members.length} account${agency.members.length === 1 ? '' : 's'} · ${agency.owners.length} owner${agency.owners.length === 1 ? '' : 's'} · ${agency.plan.seats} seats`}
-              minWidth="720px"
             >
-              <thead>
-                <tr>
-                  <th className={adminTableHeadClass}>Member</th>
-                  <th className={adminTableHeadClass}>Role</th>
-                  <th className={adminTableHeadClass}>Account</th>
-                  <th className={adminTableHeadClass}>Joined</th>
-                  <th className={`${adminTableHeadClass} text-right`}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {agency.members.length === 0 ? (
-                  <tr>
-                    <td colSpan={5}>
-                      <AdminEmptyState
-                        icon={Users}
-                        title="No members yet"
-                        description="Invite the first teammate below."
-                      />
-                    </td>
-                  </tr>
-                ) : (
-                  agency.members.map((member) => (
-                    <tr key={member.userId} className={adminTableRowClass}>
-                      <td className="px-4 py-3">
-                        <p className="font-medium">
-                          {member.name?.trim() || member.email.split('@')[0]}
-                        </p>
-                        <p className="break-all text-xs text-muted-foreground">
-                          {member.email}
-                        </p>
-                      </td>
-                      <td className="px-4 py-3">
-                        <Select
-                          value={member.role}
-                          onValueChange={(value) =>
-                            void changeRole(member, value as PlatformAgencyRole)
-                          }
-                          disabled={busy === `role-${member.userId}`}
-                        >
-                          <SelectTrigger
-                            className="h-8 w-28 text-xs"
-                            aria-label={`Role for ${member.email}`}
-                          >
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {roleOptions.map((role) => (
-                              <SelectItem key={role} value={role}>
-                                {role}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge
-                          variant="outline"
-                          className={
-                            member.status === 'active'
-                              ? 'border-success/40 bg-success/10 text-xs text-success-ink'
-                              : 'border-destructive/40 bg-destructive/10 text-xs text-destructive-ink'
-                          }
-                        >
-                          {member.status}
-                        </Badge>
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
-                        {formatAdminDate(member.joinedAt)}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                            onClick={() => setResetTarget(member)}
-                            title="Reset workspace password"
-                            aria-label={`Reset password for ${member.email}`}
-                          >
-                            <KeyRound className="h-4 w-4" aria-hidden />
-                          </Button>
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 text-destructive-ink hover:bg-destructive/10 hover:text-destructive-ink"
-                            onClick={() => setRemoveTarget(member)}
-                            title="Remove member"
-                            aria-label={`Remove ${member.email}`}
-                          >
-                            <Trash2 className="h-4 w-4" aria-hidden />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
+              <DataTable
+                rows={agency.members}
+                columns={memberColumns}
+                getRowKey={(member) => member.userId}
+                scrollLabel="Agency members table"
+                mobileLabel="Agency members"
+                minWidth="720px"
+                rowClassName={adminTableRowClass}
+                emptyContent={
+                  <AdminEmptyState
+                    icon={Users}
+                    title="No members yet"
+                    description="Invite the first teammate below."
+                  />
+                }
+              />
             </AdminTableFrame>
 
             <Card className="rounded-2xl border-border bg-card shadow-sm">

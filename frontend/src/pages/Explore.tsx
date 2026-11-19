@@ -405,20 +405,26 @@ const Explore = () => {
 
   useEffect(() => {
     let cancelled = false;
+    // Changing a filter supersedes the read in flight, so the network request
+    // is aborted rather than merely ignored (C-29).
+    const controller = new AbortController();
 
     setLoading(true);
     setError(null);
 
     api
-      .getExplore({
-        q: q || undefined,
-        duration,
-        groupType: groupType || undefined,
-        tag: tag || undefined,
-        when: view,
-        page,
-        limit: PAGE_SIZE,
-      })
+      .getExplore(
+        {
+          q: q || undefined,
+          duration,
+          groupType: groupType || undefined,
+          tag: tag || undefined,
+          when: view,
+          page,
+          limit: PAGE_SIZE,
+        },
+        { signal: controller.signal }
+      )
       .then((pageResult) => {
         if (cancelled) return;
         setResult({
@@ -430,7 +436,7 @@ const Explore = () => {
         });
       })
       .catch((err) => {
-        if (cancelled) return;
+        if (cancelled || controller.signal.aborted) return;
         console.error("Failed to load the gallery:", err);
         setResult(null);
         setError(err);
@@ -441,6 +447,7 @@ const Explore = () => {
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [q, duration, groupType, tag, view, page, pageKey, reloadKey]);
 

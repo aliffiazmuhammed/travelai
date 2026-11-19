@@ -19,6 +19,7 @@ import {
 } from '@/components/admin/AdminTableFrame';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -29,7 +30,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { api } from '@/services/api';
-import type { PlatformAuditList } from '@/types';
+import type { PlatformAuditList, PlatformAuditRow } from '@/types';
 import { cn } from '@/lib/utils';
 import { formatAdminDate } from './accountMeta';
 
@@ -107,6 +108,82 @@ const AdminAudit: React.FC = () => {
   }, [debouncedSearch, action, targetType, targetId, actorId, from, to, page, reloadKey]);
 
   const entries = data?.entries ?? [];
+
+  const columns: DataTableColumn<PlatformAuditRow>[] = [
+    {
+      id: 'when',
+      header: 'When',
+      headClassName: adminTableHeadClass,
+      cellClassName: 'whitespace-nowrap px-4 py-3 text-xs text-muted-foreground',
+      cell: (entry) => formatAdminDate(entry.createdAt),
+    },
+    {
+      id: 'action',
+      header: 'Action',
+      mobile: 'primary',
+      headClassName: adminTableHeadClass,
+      cellClassName: 'px-4 py-3',
+      cell: (entry) => (
+        <code className="text-xs font-medium text-admin-accent-ink">{entry.action}</code>
+      ),
+    },
+    {
+      id: 'actor',
+      header: 'Actor',
+      headClassName: adminTableHeadClass,
+      cellClassName: 'px-4 py-3 text-xs',
+      cell: (entry) => entry.actorEmail ?? 'system',
+    },
+    {
+      id: 'target',
+      header: 'Target',
+      mobileSpan: 2,
+      headClassName: adminTableHeadClass,
+      cellClassName: 'px-4 py-3 text-xs',
+      cell: (entry) => {
+        const href = entry.targetId
+          ? targetHref(entry.targetType, entry.targetId)
+          : null;
+        return (
+          <>
+            <Badge variant="outline" className="text-overline text-muted-foreground">
+              {entry.targetType}
+            </Badge>
+            {entry.targetId ? (
+              <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
+                {href ? (
+                  <Link
+                    to={href}
+                    className="text-admin-accent-ink underline-offset-2 hover:text-admin-accent-ink hover:underline"
+                  >
+                    {entry.targetId}
+                  </Link>
+                ) : (
+                  entry.targetId
+                )}
+              </p>
+            ) : null}
+          </>
+        );
+      },
+    },
+    {
+      id: 'context',
+      header: 'Context',
+      mobileSpan: 2,
+      headClassName: adminTableHeadClass,
+      cellClassName: 'max-w-[320px] px-4 py-3 text-xs text-muted-foreground',
+      cell: (entry) => summarizeMetadata(entry.metadata) || '—',
+    },
+    {
+      id: 'ip',
+      header: 'IP',
+      headClassName: adminTableHeadClass,
+      cellClassName:
+        'whitespace-nowrap px-4 py-3 font-mono text-xs text-muted-foreground',
+      cell: (entry) => entry.ip ?? '—',
+    },
+  ];
   const actions = data?.facets.actions ?? [];
   const targetTypes = data?.facets.targetTypes ?? [];
 
@@ -364,7 +441,6 @@ const AdminAudit: React.FC = () => {
             ? `${data.total} event${data.total === 1 ? '' : 's'} match these filters.`
             : 'Newest first.'
         }
-        minWidth="920px"
         footer={
           <AdminPagination
             page={data?.page ?? page}
@@ -376,94 +452,43 @@ const AdminAudit: React.FC = () => {
           />
         }
       >
-        <thead>
-          <tr>
-            <th className={adminTableHeadClass}>When</th>
-            <th className={adminTableHeadClass}>Action</th>
-            <th className={adminTableHeadClass}>Actor</th>
-            <th className={adminTableHeadClass}>Target</th>
-            <th className={adminTableHeadClass}>Context</th>
-            <th className={adminTableHeadClass}>IP</th>
-          </tr>
-        </thead>
-        <tbody>
-          {loading && entries.length === 0 ? (
-            <tr>
-              <td colSpan={6}>
-                <AdminLoadingPanel label="Loading audit events…" />
-              </td>
-            </tr>
-          ) : entries.length === 0 ? (
-            <tr>
-              <td colSpan={6}>
-                {error ? (
-                  <p className="px-4 py-10 text-center text-xs text-muted-foreground">
-                    The trail could not be loaded. Use Try again above.
-                  </p>
-                ) : (
-                  <AdminEmptyState
-                    icon={ClipboardList}
-                    title="Nothing matches these filters"
-                    description="Widen the date range, clear an id, or search for part of an action name."
-                    action={
-                      anyFilter ? (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="h-8 rounded-full px-3 text-xs"
-                          onClick={resetFilters}
-                        >
-                          Clear filters
-                      </Button>
-                    ) : undefined
-                  }
-                  />
-                )}
-              </td>
-            </tr>
-          ) : (
-            entries.map((entry) => (
-              <tr key={entry._id} className={adminTableRowClass}>
-                <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
-                  {formatAdminDate(entry.createdAt)}
-                </td>
-                <td className="px-4 py-3">
-                  <code className="text-xs font-medium text-admin-accent-ink">{entry.action}</code>
-                </td>
-                <td className="px-4 py-3 text-xs">{entry.actorEmail ?? 'system'}</td>
-                <td className="px-4 py-3 text-xs">
-                  <Badge
-                    variant="outline"
-                    className="text-overline text-muted-foreground"
-                  >
-                    {entry.targetType}
-                  </Badge>
-                  {entry.targetId ? (
-                    <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
-                      {targetHref(entry.targetType, entry.targetId) ? (
-                        <Link
-                          to={targetHref(entry.targetType, entry.targetId)!}
-                          className="text-admin-accent-ink underline-offset-2 hover:text-admin-accent-ink hover:underline"
-                        >
-                          {entry.targetId}
-                        </Link>
-                      ) : (
-                        entry.targetId
-                      )}
-                    </p>
-                  ) : null}
-                </td>
-                <td className="max-w-[320px] px-4 py-3 text-xs text-muted-foreground">
-                  {summarizeMetadata(entry.metadata) || '—'}
-                </td>
-                <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-muted-foreground">
-                  {entry.ip ?? '—'}
-                </td>
-              </tr>
-            ))
-          )}
-        </tbody>
+        <DataTable
+          rows={entries}
+          columns={columns}
+          getRowKey={(entry) => entry._id}
+          scrollLabel="Platform events table"
+          mobileLabel="Platform events"
+          minWidth="920px"
+          rowClassName={adminTableRowClass}
+          loading={loading}
+          loadingContent={<AdminLoadingPanel label="Loading audit events…" />}
+          emptyContent={
+            error ? (
+              <p className="px-4 py-10 text-center text-xs text-muted-foreground">
+                The trail could not be loaded. Use Try again above.
+              </p>
+            ) : (
+              <AdminEmptyState
+                icon={ClipboardList}
+                title="Nothing matches these filters"
+                description="Widen the date range, clear an id, or search for part of an action name."
+                action={
+                  anyFilter ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 rounded-full px-3 text-xs"
+                      onClick={resetFilters}
+                    >
+                      Clear filters
+                    </Button>
+                  ) : undefined
+                }
+              />
+            )
+          }
+        />
       </AdminTableFrame>
     </div>
   );

@@ -19,9 +19,10 @@
     "start": "npm run start --workspace=backend",
     "test:backend": "npm test --workspace=backend",
     "test": "npm run test:backend",
-    "verify": "npm run test:backend && npm run build:backend && npm run ui:contrast && npm run typecheck --workspace=frontend && npm run test:key-backup --workspace=frontend && npm run test:auth-policy --workspace=frontend && npm run test:itinerary-truth --workspace=frontend && npm run build --workspace=frontend",
+    "verify": "npm run test:backend && npm run build:backend && npm run ui:contrast && npm run typecheck --workspace=frontend && npm run test:key-backup --workspace=frontend && npm run test:auth-policy --workspace=frontend && npm run test:itinerary-truth --workspace=frontend && npm run build --workspace=frontend && npm run ui:budget --workspace=frontend",
     "lint:frontend": "npm run lint --workspace=frontend",
     "ui:contrast": "npm run ui:contrast --workspace=frontend",
+    "ui:budget": "npm run ui:budget --workspace=frontend",
     "ui:scan-type": "npm run ui:scan-type --workspace=frontend",
     "ui:scan-palette": "npm run ui:scan-palette --workspace=frontend",
     "typecheck:mobile": "npm --prefix mobile run typecheck"

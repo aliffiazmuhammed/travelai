@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { api, ApiError } from "@/services/api";
 import { applyPageMeta } from "@/lib/meta";
 import { DEFAULT_PHONE_COUNTRY, toE164, validatePhone } from "@/lib/phone";
-import { tripCoverUrl } from "@/lib/tripCover";
+import { tripCoverSrcSet, tripCoverUrl } from "@/lib/tripCover";
 import { usePlatformEnabled } from "@/hooks/usePlatformEnabled";
 import {
   ArrowRight,

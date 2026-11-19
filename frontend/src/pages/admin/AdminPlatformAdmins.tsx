@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { ConfirmDestructive } from '@/components/ui/confirm-destructive';
 import {
   Dialog,
@@ -193,6 +194,122 @@ const AdminPlatformAdmins: React.FC = () => {
 
   const admins = data?.accounts ?? [];
   const activeTotal = data?.activeTotal ?? 0;
+
+  const columns: DataTableColumn<PlatformAccountRow>[] = [
+    {
+      id: 'administrator',
+      header: 'Administrator',
+      mobile: 'primary',
+      headClassName: adminTableHeadClass,
+      cellClassName: 'px-4 py-3',
+      cell: (account) => {
+        const isSelf = account._id === user?._id;
+        return (
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <p className="truncate font-medium text-foreground">
+                {accountDisplayName(account)}
+              </p>
+              {isSelf ? (
+                <Badge
+                  variant="outline"
+                  className="border-admin-accent/40 bg-admin-accent/10 text-xs text-admin-accent-ink"
+                >
+                  You
+                </Badge>
+              ) : null}
+            </div>
+            <p className="truncate text-xs text-muted-foreground">{account.email}</p>
+          </div>
+        );
+      },
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      headClassName: adminTableHeadClass,
+      cellClassName: 'px-4 py-3',
+      cell: (account) => <StatusBadge status={account.status} />,
+    },
+    {
+      id: 'firstLogin',
+      header: 'First login',
+      headClassName: adminTableHeadClass,
+      cellClassName: 'px-4 py-3 text-xs',
+      cell: (account) =>
+        account.mustChangePassword ? (
+          <span className="text-warning-ink">Password change required</span>
+        ) : (
+          <span className="text-muted-foreground">Completed</span>
+        ),
+    },
+    {
+      id: 'created',
+      header: 'Created',
+      headClassName: adminTableHeadClass,
+      cellClassName: 'whitespace-nowrap px-4 py-3 text-xs text-muted-foreground',
+      cell: (account) => formatAdminDate(account.createdAt),
+    },
+    {
+      id: 'lastSignIn',
+      header: 'Last sign-in',
+      headClassName: adminTableHeadClass,
+      cellClassName: 'whitespace-nowrap px-4 py-3 text-xs text-muted-foreground',
+      cell: (account) => formatAdminDate(account.lastLoginAt),
+    },
+    {
+      id: 'actions',
+      header: <span className="sr-only">Actions</span>,
+      mobile: 'action',
+      sticky: 'right',
+      stickyHoverClassName: 'group-hover:bg-muted/40',
+      headClassName: `${adminTableHeadClass} text-right`,
+      cellClassName: 'px-4 py-3',
+      cell: (account) => {
+        const isSelf = account._id === user?._id;
+        const disableBlocked =
+          account.status === 'active' && (isSelf || activeTotal <= 1);
+        const disableReason = !disableBlocked
+          ? undefined
+          : isSelf
+            ? 'You cannot disable your own account'
+            : 'The last active super-admin cannot be disabled';
+        return (
+          <div className="flex items-center justify-end gap-1">
+            {disableReason ? (
+              <span id={`disable-reason-${account._id}`} className="sr-only">
+                {disableReason}
+              </span>
+            ) : null}
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-8 rounded-full"
+              disabled={disableBlocked}
+              aria-describedby={
+                disableReason ? `disable-reason-${account._id}` : undefined
+              }
+              title={disableReason}
+              onClick={() =>
+                setStatusTarget({
+                  account,
+                  next: account.status === 'active' ? 'disabled' : 'active',
+                })
+              }
+            >
+              {account.status === 'active' ? (
+                <ShieldOff className="mr-1.5 h-4 w-4" />
+              ) : (
+                <ShieldCheck className="mr-1.5 h-4 w-4" />
+              )}
+              {account.status === 'active' ? 'Disable' : 'Enable'}
+            </Button>
+          </div>
+        );
+      },
+    },
+  ];
   const lastAdmin = activeTotal <= 1;
 
   return (
@@ -287,8 +404,6 @@ const AdminPlatformAdmins: React.FC = () => {
       ) : null}
 
       <AdminTableFrame
-        minWidth="860px"
-        scrollLabel="Platform administrators table"
         footer={
           <AdminPagination
             page={data?.page ?? page}
@@ -300,130 +415,37 @@ const AdminPlatformAdmins: React.FC = () => {
           />
         }
       >
-        <thead>
-          <tr>
-            <th className={adminTableHeadClass}>Administrator</th>
-            <th className={adminTableHeadClass}>Status</th>
-            <th className={adminTableHeadClass}>First login</th>
-            <th className={adminTableHeadClass}>Created</th>
-            <th className={adminTableHeadClass}>Last sign-in</th>
-            <th className={`${adminTableHeadClass} text-right`}>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {loading && admins.length === 0 ? (
-            <tr>
-              <td colSpan={6} className="px-4 py-14 text-center text-sm text-muted-foreground">
-                <span className="inline-flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading platform admins…
-                </span>
-              </td>
-            </tr>
-          ) : admins.length === 0 ? (
-            <tr>
-              <td colSpan={6}>
-                {error ? (
-                  <p className="px-4 py-10 text-center text-xs text-muted-foreground">
-                    The list could not be loaded. Use Try again above.
-                  </p>
-                ) : (
-                  <AdminEmptyState
-                    icon={UserRoundCog}
-                    title="No platform admins match this search."
-                    description="Add another super-admin to give a teammate console access."
-                  />
-                )}
-              </td>
-            </tr>
-          ) : (
-            admins.map((account) => {
-              const isSelf = account._id === user?._id;
-              const disableBlocked =
-                account.status === 'active' && (isSelf || activeTotal <= 1);
-              const disableReason = !disableBlocked
-                ? undefined
-                : isSelf
-                  ? 'You cannot disable your own account'
-                  : 'The last active super-admin cannot be disabled';
-
-              return (
-                <tr key={account._id} className={adminTableRowClass}>
-                  <td className="px-4 py-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="truncate font-medium text-foreground">
-                          {accountDisplayName(account)}
-                        </p>
-                        {isSelf ? (
-                          <Badge
-                            variant="outline"
-                            className="border-admin-accent/40 bg-admin-accent/10 text-xs text-admin-accent-ink"
-                          >
-                            You
-                          </Badge>
-                        ) : null}
-                      </div>
-                      <p className="truncate text-xs text-muted-foreground">{account.email}</p>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <StatusBadge status={account.status} />
-                  </td>
-                  <td className="px-4 py-3 text-xs">
-                    {account.mustChangePassword ? (
-                      <span className="text-warning-ink">Password change required</span>
-                    ) : (
-                      <span className="text-muted-foreground">Completed</span>
-                    )}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
-                    {formatAdminDate(account.createdAt)}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
-                    {formatAdminDate(account.lastLoginAt)}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-1">
-                      {disableReason ? (
-                        <span
-                          id={`disable-reason-${account._id}`}
-                          className="sr-only"
-                        >
-                          {disableReason}
-                        </span>
-                      ) : null}
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        className="h-8 rounded-full"
-                        disabled={disableBlocked}
-                        aria-describedby={
-                          disableReason ? `disable-reason-${account._id}` : undefined
-                        }
-                        title={disableReason}
-                        onClick={() =>
-                          setStatusTarget({
-                            account,
-                            next: account.status === 'active' ? 'disabled' : 'active',
-                          })
-                        }
-                      >
-                        {account.status === 'active' ? (
-                          <ShieldOff className="mr-1.5 h-4 w-4" />
-                        ) : (
-                          <ShieldCheck className="mr-1.5 h-4 w-4" />
-                        )}
-                        {account.status === 'active' ? 'Disable' : 'Enable'}
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })
-          )}
-        </tbody>
+        <DataTable
+          rows={admins}
+          columns={columns}
+          getRowKey={(account) => account._id}
+          scrollLabel="Platform administrators table"
+          mobileLabel="Platform administrators"
+          minWidth="860px"
+          rowClassName={adminTableRowClass}
+          loading={loading}
+          loadingContent={
+            <div className="py-14 text-center text-sm text-muted-foreground">
+              <span className="inline-flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading platform admins…
+              </span>
+            </div>
+          }
+          emptyContent={
+            error ? (
+              <p className="px-4 py-10 text-center text-xs text-muted-foreground">
+                The list could not be loaded. Use Try again above.
+              </p>
+            ) : (
+              <AdminEmptyState
+                icon={UserRoundCog}
+                title="No platform admins match this search."
+                description="Add another super-admin to give a teammate console access."
+              />
+            )
+          }
+        />
       </AdminTableFrame>
 
       <Dialog open={createOpen} onOpenChange={(open) => !createBusy && setCreateOpen(open)}>

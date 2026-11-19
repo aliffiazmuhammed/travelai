@@ -22,6 +22,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDestructive } from '@/components/ui/confirm-destructive';
+import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -257,6 +258,133 @@ const AdminAccounts: React.FC = () => {
   const counts = data?.counts ?? { all: 0, personal: 0, agency: 0, platform: 0 };
   const accounts = data?.accounts ?? [];
 
+  const columns: DataTableColumn<PlatformAccountRow>[] = [
+    {
+      id: 'account',
+      header: 'Account',
+      mobile: 'primary',
+      headClassName: adminTableHeadClass,
+      cellClassName: 'px-4 py-3',
+      cell: (account) => (
+        <button
+          type="button"
+          onClick={() => void openDetail(account._id)}
+          className="group inline-flex flex-wrap items-center gap-2 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-admin-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          aria-label={`Open the record for ${account.email}`}
+        >
+          <span className="min-w-0">
+            <span className="block truncate font-medium group-hover:text-admin-accent-ink group-hover:underline group-hover:underline-offset-2">
+              {accountDisplayName(account)}
+            </span>
+            <span className="block truncate text-xs text-muted-foreground">
+              {account.email}
+            </span>
+          </span>
+          {account.mustChangePassword ? (
+            <Badge
+              variant="outline"
+              className="border-warning/40 bg-warning/10 text-xs text-warning-ink"
+            >
+              Temp password
+            </Badge>
+          ) : null}
+        </button>
+      ),
+    },
+    {
+      id: 'realm',
+      header: 'Realm',
+      headClassName: adminTableHeadClass,
+      cellClassName: 'px-4 py-3',
+      cell: (account) => <RealmBadge realm={account.accountType} />,
+    },
+    {
+      id: 'tenant',
+      header: 'Tenant',
+      headClassName: adminTableHeadClass,
+      cellClassName: 'px-4 py-3',
+      cell: (account) =>
+        account.agency ? (
+          <div>
+            <p className="text-sm">{account.agency.name}</p>
+            <p className="text-xs text-muted-foreground">
+              {account.agency.slug} · {account.agency.status}
+            </p>
+          </div>
+        ) : (
+          <span className="text-xs text-muted-foreground">—</span>
+        ),
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      headClassName: adminTableHeadClass,
+      cellClassName: 'px-4 py-3',
+      cell: (account) => <StatusBadge status={account.status} />,
+    },
+    {
+      id: 'created',
+      header: 'Created',
+      headClassName: adminTableHeadClass,
+      cellClassName: 'whitespace-nowrap px-4 py-3 text-xs text-muted-foreground',
+      cell: (account) => formatAdminDate(account.createdAt),
+    },
+    {
+      id: 'lastSignIn',
+      header: 'Last sign-in',
+      headClassName: adminTableHeadClass,
+      cellClassName: 'whitespace-nowrap px-4 py-3 text-xs text-muted-foreground',
+      cell: (account) => formatAdminDate(account.lastLoginAt),
+    },
+    {
+      id: 'actions',
+      header: <span className="sr-only">Actions</span>,
+      mobile: 'action',
+      sticky: 'right',
+      stickyHoverClassName: 'group-hover:bg-muted/40',
+      headClassName: `${adminTableHeadClass} text-right`,
+      cellClassName: 'px-4 py-3',
+      cell: (account) => (
+        <div className="flex items-center justify-end gap-1">
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+            onClick={() =>
+              setStatusTarget({
+                account,
+                next: account.status === 'active' ? 'disabled' : 'active',
+              })
+            }
+            title={account.status === 'active' ? 'Disable account' : 'Enable account'}
+            aria-label={`${account.status === 'active' ? 'Disable' : 'Enable'} ${account.email}`}
+          >
+            {account.status === 'active' ? (
+              <ShieldOff className="h-4 w-4" aria-hidden />
+            ) : (
+              <ShieldCheck className="h-4 w-4" aria-hidden />
+            )}
+          </Button>
+
+          {account.accountType === 'agency' ? (
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+              onClick={() => setResetTarget(account)}
+              title="Reset workspace password"
+              aria-label={`Reset password for ${account.email}`}
+            >
+              <KeyRound className="h-4 w-4" aria-hidden />
+            </Button>
+          ) : null}
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-5">
       <AdminPageHeader
@@ -348,7 +476,6 @@ const AdminAccounts: React.FC = () => {
       <AdminTableFrame
         title="Directory"
         description="Click a name to open the full identity record."
-        minWidth="880px"
         footer={
           <AdminPagination
             page={data?.page ?? page}
@@ -360,136 +487,30 @@ const AdminAccounts: React.FC = () => {
           />
         }
       >
-        <thead>
-          <tr>
-            <th className={adminTableHeadClass}>Account</th>
-            <th className={adminTableHeadClass}>Realm</th>
-            <th className={adminTableHeadClass}>Tenant</th>
-            <th className={adminTableHeadClass}>Status</th>
-            <th className={adminTableHeadClass}>Created</th>
-            <th className={adminTableHeadClass}>Last sign-in</th>
-            <th className={`${adminTableHeadClass} text-right`}>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {loading && accounts.length === 0 ? (
-            <tr>
-              <td colSpan={7}>
-                <AdminLoadingPanel label="Loading accounts…" />
-              </td>
-            </tr>
-          ) : accounts.length === 0 ? (
-            <tr>
-              <td colSpan={7}>
-                {error ? (
-                  <p className="px-4 py-10 text-center text-xs text-muted-foreground">
-                    The list could not be loaded. Use Try again above.
-                  </p>
-                ) : (
-                  <AdminEmptyState
-                    icon={Users}
-                    title="No accounts match these filters"
-                    description="Try a different realm, status or search term."
-                  />
-                )}
-              </td>
-            </tr>
-          ) : (
-            accounts.map((account) => (
-              <tr key={account._id} className={adminTableRowClass}>
-                <td className="px-4 py-3">
-                  <button
-                    type="button"
-                    onClick={() => void openDetail(account._id)}
-                    className="group inline-flex flex-wrap items-center gap-2 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-admin-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                    aria-label={`Open the record for ${account.email}`}
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate font-medium group-hover:text-admin-accent-ink group-hover:underline group-hover:underline-offset-2">
-                        {accountDisplayName(account)}
-                      </span>
-                      <span className="block truncate text-xs text-muted-foreground">
-                        {account.email}
-                      </span>
-                    </span>
-                    {account.mustChangePassword ? (
-                      <Badge
-                        variant="outline"
-                        className="border-warning/40 bg-warning/10 text-xs text-warning-ink"
-                      >
-                        Temp password
-                      </Badge>
-                    ) : null}
-                  </button>
-                </td>
-                <td className="px-4 py-3">
-                  <RealmBadge realm={account.accountType} />
-                </td>
-                <td className="px-4 py-3">
-                  {account.agency ? (
-                    <div>
-                      <p className="text-sm">{account.agency.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {account.agency.slug} · {account.agency.status}
-                      </p>
-                    </div>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">—</span>
-                  )}
-                </td>
-                <td className="px-4 py-3">
-                  <StatusBadge status={account.status} />
-                </td>
-                <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
-                  {formatAdminDate(account.createdAt)}
-                </td>
-                <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
-                  {formatAdminDate(account.lastLoginAt)}
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center justify-end gap-1">
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                      onClick={() =>
-                        setStatusTarget({
-                          account,
-                          next: account.status === 'active' ? 'disabled' : 'active',
-                        })
-                      }
-                      title={
-                        account.status === 'active' ? 'Disable account' : 'Enable account'
-                      }
-                      aria-label={`${account.status === 'active' ? 'Disable' : 'Enable'} ${account.email}`}
-                    >
-                      {account.status === 'active' ? (
-                        <ShieldOff className="h-4 w-4" aria-hidden />
-                      ) : (
-                        <ShieldCheck className="h-4 w-4" aria-hidden />
-                      )}
-                    </Button>
-
-                    {account.accountType === 'agency' ? (
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                        onClick={() => setResetTarget(account)}
-                        title="Reset workspace password"
-                        aria-label={`Reset password for ${account.email}`}
-                      >
-                        <KeyRound className="h-4 w-4" aria-hidden />
-                      </Button>
-                    ) : null}
-                  </div>
-                </td>
-              </tr>
-            ))
-          )}
-        </tbody>
+        <DataTable
+          rows={accounts}
+          columns={columns}
+          getRowKey={(account) => account._id}
+          scrollLabel="Accounts directory table"
+          mobileLabel="Accounts"
+          minWidth="880px"
+          rowClassName={adminTableRowClass}
+          loading={loading}
+          loadingContent={<AdminLoadingPanel label="Loading accounts…" />}
+          emptyContent={
+            error ? (
+              <p className="px-4 py-10 text-center text-xs text-muted-foreground">
+                The list could not be loaded. Use Try again above.
+              </p>
+            ) : (
+              <AdminEmptyState
+                icon={Users}
+                title="No accounts match these filters"
+                description="Try a different realm, status or search term."
+              />
+            )
+          }
+        />
       </AdminTableFrame>
 
       <ConfirmDestructive

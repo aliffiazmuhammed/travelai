@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { ConfirmDestructive } from '@/components/ui/confirm-destructive';
 import { Button } from '@/components/ui/button';
+import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import {
   Dialog,
   DialogContent,
@@ -166,6 +167,127 @@ const AdminApplications: React.FC = () => {
   const counts = data?.counts ?? EMPTY_COUNTS;
   const rows = data?.applications ?? [];
 
+  const columns: DataTableColumn<PlatformAgencyApplicationRow>[] = [
+    {
+      id: 'agency',
+      header: 'Agency',
+      mobile: 'primary',
+      headClassName: adminTableHeadClass,
+      cellClassName: 'max-w-[280px] px-4 py-3',
+      cell: (row) => (
+        <>
+          <p className="truncate text-sm font-medium text-foreground">{row.name}</p>
+          {row.note ? (
+            <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
+              “{row.note}”
+            </p>
+          ) : (
+            <p className="mt-1 text-xs text-muted-foreground/70">
+              No note about their trips.
+            </p>
+          )}
+        </>
+      ),
+    },
+    {
+      id: 'contact',
+      header: 'Contact',
+      headClassName: adminTableHeadClass,
+      cellClassName: 'px-4 py-3',
+      cell: (row) => (
+        <>
+          <p className="text-sm text-foreground">{row.email}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">{row.phone}</p>
+        </>
+      ),
+    },
+    {
+      id: 'submitted',
+      header: 'Submitted',
+      headClassName: adminTableHeadClass,
+      cellClassName: 'whitespace-nowrap px-4 py-3 text-xs text-muted-foreground',
+      cell: (row) => formatAdminDate(row.submittedAt),
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      headClassName: adminTableHeadClass,
+      cellClassName: 'px-4 py-3',
+      cell: (row) => {
+        const chip = STATUS_CHIP[row.status];
+        return (
+          <>
+            <span
+              className={cn(
+                'inline-flex items-center rounded-full border px-2 py-0.5 text-overline font-semibold',
+                chip.className
+              )}
+            >
+              {chip.label}
+            </span>
+            {row.status !== 'pending' && row.decidedAt ? (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {formatAdminDate(row.decidedAt)}
+              </p>
+            ) : null}
+            {row.status === 'rejected' && row.decisionNote ? (
+              <p className="mt-1 max-w-[200px] text-xs leading-4 text-muted-foreground">
+                {row.decisionNote}
+              </p>
+            ) : null}
+          </>
+        );
+      },
+    },
+    {
+      id: 'decision',
+      header: <span className="sr-only">Decision</span>,
+      mobile: 'action',
+      sticky: 'right',
+      stickyHoverClassName: 'group-hover:bg-muted/40',
+      headClassName: `${adminTableHeadClass} text-right`,
+      cellClassName: 'px-4 py-3',
+      cell: (row) => (
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {row.status === 'pending' ? (
+            <>
+              <Button
+                type="button"
+                size="sm"
+                className="rounded-full bg-admin-accent text-admin-accent-foreground hover:bg-admin-accent/90"
+                onClick={() => openApprove(row)}
+              >
+                <UserCheck className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+                Approve
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="rounded-full"
+                onClick={() => openReject(row)}
+              >
+                <XCircle className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+                Reject
+              </Button>
+            </>
+          ) : row.status === 'approved' && row.agencyId ? (
+            <Button asChild size="sm" variant="outline" className="rounded-full">
+              <Link to={`/admin/agencies/${row.agencyId}`}>
+                <Building2 className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+                {row.agencySlug ? `Open ${row.agencySlug}` : 'Open workspace'}
+              </Link>
+            </Button>
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              {row.status === 'approved' ? 'Workspace removed' : 'No further action'}
+            </span>
+          )}
+        </div>
+      ),
+    },
+  ];
+
   const segmented = useMemo<Array<AdminSegmentedOption<PlatformAgencyApplicationFilter>>>(
     () =>
       TABS.map((tab) => ({
@@ -300,157 +422,58 @@ const AdminApplications: React.FC = () => {
         </AdminNotice>
       ) : null}
 
-      {loading && rows.length === 0 ? (
-        <div className="rounded-2xl border border-border bg-card">
-          <AdminLoadingPanel label="Loading applications…" />
-        </div>
-      ) : rows.length === 0 ? (
-        <div className="rounded-2xl border border-border bg-card">
-          {error ? (
-            <p className="px-4 py-10 text-center text-xs text-muted-foreground">
-              The queue could not be loaded. Use Try again above.
-            </p>
-          ) : (
-            <AdminEmptyState
-              icon={status === 'pending' ? CheckCircle2 : Inbox}
-              title={
-                status === 'pending'
-                  ? 'No applications are waiting.'
-                  : debouncedQuery
-                    ? 'Nothing matches that search.'
-                    : 'Nothing in this tab yet.'
-              }
-              description={
-                status === 'pending'
-                  ? 'Every new application from /agencies/apply lands here for a decision.'
-                  : 'Applications stay on file after a decision, so past ones stay searchable.'
-              }
-            />
-          )}
-        </div>
-      ) : (
-        <AdminTableFrame
-          title={
-            status === 'pending' ? 'Waiting for a decision' : 'Application history'
-          }
-          description={`${counts.pending} pending · ${counts.approved} approved · ${counts.rejected} rejected`}
+      <AdminTableFrame
+        title={
+          status === 'pending' ? 'Waiting for a decision' : 'Application history'
+        }
+        description={`${counts.pending} pending · ${counts.approved} approved · ${counts.rejected} rejected`}
+        footer={
+          <AdminPagination
+            page={data?.page ?? page}
+            totalPages={data?.totalPages ?? 1}
+            total={data?.total}
+            noun="application"
+            loading={loading}
+            onChange={setPage}
+            className="border-t-0"
+          />
+        }
+      >
+        <DataTable
+          rows={rows}
+          columns={columns}
+          getRowKey={(row) => row._id}
+          scrollLabel="Agency applications table"
+          mobileLabel="Agency applications"
           minWidth="960px"
-          footer={
-            <AdminPagination
-              page={data?.page ?? page}
-              totalPages={data?.totalPages ?? 1}
-              total={data?.total}
-              noun="application"
-              loading={loading}
-              onChange={setPage}
-              className="border-t-0"
-            />
+          rowClassName={adminTableRowClass}
+          loading={loading}
+          loadingContent={<AdminLoadingPanel label="Loading applications…" />}
+          emptyContent={
+            error ? (
+              <p className="px-4 py-10 text-center text-xs text-muted-foreground">
+                The queue could not be loaded. Use Try again above.
+              </p>
+            ) : (
+              <AdminEmptyState
+                icon={status === 'pending' ? CheckCircle2 : Inbox}
+                title={
+                  status === 'pending'
+                    ? 'No applications are waiting.'
+                    : debouncedQuery
+                      ? 'Nothing matches that search.'
+                      : 'Nothing in this tab yet.'
+                }
+                description={
+                  status === 'pending'
+                    ? 'Every new application from /agencies/apply lands here for a decision.'
+                    : 'Applications stay on file after a decision, so past ones stay searchable.'
+                }
+              />
+            )
           }
-        >
-          <thead>
-            <tr>
-              <th className={adminTableHeadClass}>Agency</th>
-              <th className={adminTableHeadClass}>Contact</th>
-              <th className={adminTableHeadClass}>Submitted</th>
-              <th className={adminTableHeadClass}>Status</th>
-              <th className={cn(adminTableHeadClass, 'text-right')}>Decision</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => {
-              const chip = STATUS_CHIP[row.status];
-              return (
-                <tr key={row._id} className={adminTableRowClass}>
-                  <td className="max-w-[280px] px-4 py-3">
-                    <p className="truncate text-sm font-medium text-foreground">{row.name}</p>
-                    {row.note ? (
-                      <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
-                        “{row.note}”
-                      </p>
-                    ) : (
-                      <p className="mt-1 text-xs text-muted-foreground/70">
-                        No note about their trips.
-                      </p>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <p className="text-sm text-foreground">{row.email}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">{row.phone}</p>
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
-                    {formatAdminDate(row.submittedAt)}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={cn(
-                        'inline-flex items-center rounded-full border px-2 py-0.5 text-overline font-semibold',
-                        chip.className
-                      )}
-                    >
-                      {chip.label}
-                    </span>
-                    {row.status !== 'pending' && row.decidedAt ? (
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {formatAdminDate(row.decidedAt)}
-                      </p>
-                    ) : null}
-                    {row.status === 'rejected' && row.decisionNote ? (
-                      <p className="mt-1 max-w-[200px] text-xs leading-4 text-muted-foreground">
-                        {row.decisionNote}
-                      </p>
-                    ) : null}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap items-center justify-end gap-2">
-                      {row.status === 'pending' ? (
-                        <>
-                          <Button
-                            type="button"
-                            size="sm"
-                            className="rounded-full bg-admin-accent text-admin-accent-foreground hover:bg-admin-accent/90"
-                            onClick={() => openApprove(row)}
-                          >
-                            <UserCheck className="mr-1.5 h-3.5 w-3.5" aria-hidden />
-                            Approve
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="rounded-full"
-                            onClick={() => openReject(row)}
-                          >
-                            <XCircle className="mr-1.5 h-3.5 w-3.5" aria-hidden />
-                            Reject
-                          </Button>
-                        </>
-                      ) : row.status === 'approved' && row.agencyId ? (
-                        <Button
-                          asChild
-                          size="sm"
-                          variant="outline"
-                          className="rounded-full"
-                        >
-                          <Link to={`/admin/agencies/${row.agencyId}`}>
-                            <Building2 className="mr-1.5 h-3.5 w-3.5" aria-hidden />
-                            {row.agencySlug ? `Open ${row.agencySlug}` : 'Open workspace'}
-                          </Link>
-                        </Button>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">
-                          {row.status === 'approved'
-                            ? 'Workspace removed'
-                            : 'No further action'}
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </AdminTableFrame>
-      )}
+        />
+      </AdminTableFrame>
 
       {/* Approval is the loud action: it creates a tenant and an owner account. */}
       <ConfirmDestructive

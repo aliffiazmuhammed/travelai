@@ -23,6 +23,7 @@ import {
   adminTableRowClass,
 } from '@/components/admin/AdminTableFrame';
 import { Button } from '@/components/ui/button';
+import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import {
   Dialog,
   DialogContent,
@@ -45,6 +46,7 @@ import type {
   PlatformAgencyInput,
   PlatformAgencyList,
   PlatformAgencyProfileFilter,
+  PlatformAgencyRow,
   PlatformAgencyStatusFilter,
   PlatformOwnerPreview,
   PlatformPlanTier,
@@ -406,6 +408,116 @@ const AdminAgencies: React.FC = () => {
 
   const counts = list?.counts;
 
+  const columns: DataTableColumn<PlatformAgencyRow>[] = [
+    {
+      id: 'agency',
+      header: 'Agency',
+      mobile: 'primary',
+      headClassName: adminTableHeadClass,
+      cellClassName: 'px-4 py-3',
+      cell: (agency) => (
+        <Link
+          to={`/admin/agencies/${agency._id}`}
+          className="group block rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-admin-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        >
+          <span className="block font-medium group-hover:text-admin-accent-ink group-hover:underline group-hover:underline-offset-2">
+            {agency.name}
+          </span>
+          <span className="block font-mono text-xs text-muted-foreground">
+            {agency.slug}
+          </span>
+        </Link>
+      ),
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      headClassName: adminTableHeadClass,
+      cellClassName: 'px-4 py-3',
+      cell: (agency) => <AgencyStatusBadge status={agency.status} />,
+    },
+    {
+      id: 'owner',
+      header: 'Owner',
+      headClassName: adminTableHeadClass,
+      cellClassName: 'px-4 py-3',
+      cell: (agency) => (
+        <>
+          <p className="break-all text-xs">{agency.owner?.email ?? 'No owner'}</p>
+          {agency.ownerCount > 1 ? (
+            <p className="text-xs text-muted-foreground">
+              +{agency.ownerCount - 1} more owner{agency.ownerCount - 1 === 1 ? '' : 's'}
+            </p>
+          ) : null}
+        </>
+      ),
+    },
+    {
+      id: 'plan',
+      header: 'Plan',
+      headClassName: adminTableHeadClass,
+      cellClassName: 'px-4 py-3',
+      cell: (agency) => (
+        <>
+          <TierBadge tier={agency.plan.tierId} />
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {agency.plan.seats} seats · {agency.plan.monthlyExports} exports
+          </p>
+        </>
+      ),
+    },
+    {
+      id: 'members',
+      header: 'Members',
+      headClassName: adminTableHeadClass,
+      cellClassName: 'px-4 py-3 text-xs tabular-nums',
+      cell: (agency) => `${agency.memberCount} / ${agency.plan.seats}`,
+    },
+    {
+      id: 'renewal',
+      header: 'Renewal',
+      headClassName: adminTableHeadClass,
+      cellClassName: 'whitespace-nowrap px-4 py-3 text-xs text-muted-foreground',
+      cell: (agency) => formatAdminDate(agency.billing?.renewalDate),
+    },
+    {
+      id: 'activity',
+      header: 'Last activity',
+      headClassName: adminTableHeadClass,
+      cellClassName: 'whitespace-nowrap px-4 py-3 text-xs text-muted-foreground',
+      cell: (agency) => (
+        <>
+          {formatAdminDate(agency.lastActivityAt)}
+          <p className="mt-0.5 text-xs">Created {formatAdminDate(agency.createdAt)}</p>
+        </>
+      ),
+    },
+    {
+      id: 'open',
+      header: <span className="sr-only">Open</span>,
+      mobile: 'action',
+      sticky: 'right',
+      stickyHoverClassName: 'group-hover:bg-muted/40',
+      headClassName: `${adminTableHeadClass} text-right`,
+      cellClassName: 'px-4 py-3',
+      cell: (agency) => (
+        <div className="flex justify-end">
+          <Button
+            asChild
+            size="sm"
+            variant="ghost"
+            className="h-8 gap-1.5 rounded-full px-3 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <Link to={`/admin/agencies/${agency._id}`}>
+              Manage
+              <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />
+            </Link>
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-5">
       <AdminPageHeader
@@ -597,7 +709,6 @@ const AdminAgencies: React.FC = () => {
       <AdminTableFrame
         title="All agencies"
         description="Open a tenant for plan, members, public-directory state and audit."
-        minWidth="940px"
         footer={
           <AdminPagination
             page={list?.page ?? page}
@@ -609,113 +720,38 @@ const AdminAgencies: React.FC = () => {
           />
         }
       >
-        <thead>
-          <tr>
-            <th className={adminTableHeadClass}>Agency</th>
-            <th className={adminTableHeadClass}>Status</th>
-            <th className={adminTableHeadClass}>Owner</th>
-            <th className={adminTableHeadClass}>Plan</th>
-            <th className={adminTableHeadClass}>Members</th>
-            <th className={adminTableHeadClass}>Renewal</th>
-            <th className={adminTableHeadClass}>Last activity</th>
-            <th className={`${adminTableHeadClass} text-right`}>Open</th>
-          </tr>
-        </thead>
-        <tbody>
-          {listLoading && (list?.agencies.length ?? 0) === 0 ? (
-            <tr>
-              <td colSpan={8}>
-                <AdminLoadingPanel label="Loading agencies…" />
-              </td>
-            </tr>
-          ) : (list?.agencies.length ?? 0) === 0 ? (
-            <tr>
-              <td colSpan={8}>
-                {listError ? (
-                  <p className="px-4 py-10 text-center text-xs text-muted-foreground">
-                    The list could not be loaded. Use Try again above.
-                  </p>
-                ) : (
-                  <AdminEmptyState
-                    icon={Building2}
-                    title={
-                      search || statusFilter !== 'all' || planFilter !== 'all'
-                        ? 'No agencies match these filters'
-                        : 'No agencies yet'
-                    }
-                    description={
-                      search || statusFilter !== 'all' || planFilter !== 'all'
-                        ? 'Try a different status, plan or search term.'
-                        : 'Provision the first tenant to get started.'
-                    }
-                  />
-                )}
-              </td>
-            </tr>
-          ) : (
-            list!.agencies.map((agency) => (
-              <tr key={agency._id} className={adminTableRowClass}>
-                <td className="px-4 py-3">
-                  <Link
-                    to={`/admin/agencies/${agency._id}`}
-                    className="group block rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-admin-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                  >
-                    <span className="block font-medium group-hover:text-admin-accent-ink group-hover:underline group-hover:underline-offset-2">
-                      {agency.name}
-                    </span>
-                    <span className="block font-mono text-xs text-muted-foreground">
-                      {agency.slug}
-                    </span>
-                  </Link>
-                </td>
-                <td className="px-4 py-3">
-                  <AgencyStatusBadge status={agency.status} />
-                </td>
-                <td className="px-4 py-3">
-                  <p className="break-all text-xs">{agency.owner?.email ?? 'No owner'}</p>
-                  {agency.ownerCount > 1 ? (
-                    <p className="text-xs text-muted-foreground">
-                      +{agency.ownerCount - 1} more owner{agency.ownerCount - 1 === 1 ? '' : 's'}
-                    </p>
-                  ) : null}
-                </td>
-                <td className="px-4 py-3">
-                  <TierBadge tier={agency.plan.tierId} />
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {agency.plan.seats} seats · {agency.plan.monthlyExports} exports
-                  </p>
-                </td>
-                <td className="px-4 py-3 text-xs tabular-nums">
-                  {agency.memberCount} / {agency.plan.seats}
-                </td>
-                <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
-                  {formatAdminDate(agency.billing?.renewalDate)}
-                </td>
-                <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
-                  {formatAdminDate(agency.lastActivityAt)}
-                  <p className="mt-0.5 text-xs">
-                    Created {formatAdminDate(agency.createdAt)}
-                  </p>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex justify-end">
-                    <Button
-                      asChild
-                      size="sm"
-                      variant="ghost"
-                      className="h-8 gap-1.5 rounded-full px-3 text-xs text-muted-foreground hover:text-foreground"
-                    >
-                      <Link to={`/admin/agencies/${agency._id}`}>
-                        Manage
-                        <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />
-                      </Link>
-                    </Button>
-                  </div>
-                </td>
-              </tr>
-            ))
-          )}
-        </tbody>
+        <DataTable
+          rows={list?.agencies ?? []}
+          columns={columns}
+          getRowKey={(agency) => agency._id}
+          scrollLabel="Agencies directory table"
+          mobileLabel="Agencies"
+          minWidth="940px"
+          rowClassName={adminTableRowClass}
+          loading={listLoading}
+          loadingContent={<AdminLoadingPanel label="Loading agencies…" />}
+          emptyContent={
+            listError ? (
+              <p className="px-4 py-10 text-center text-xs text-muted-foreground">
+                The list could not be loaded. Use Try again above.
+              </p>
+            ) : (
+              <AdminEmptyState
+                icon={Building2}
+                title={
+                  search || statusFilter !== 'all' || planFilter !== 'all'
+                    ? 'No agencies match these filters'
+                    : 'No agencies yet'
+                }
+                description={
+                  search || statusFilter !== 'all' || planFilter !== 'all'
+                    ? 'Try a different status, plan or search term.'
+                    : 'Provision the first tenant to get started.'
+                }
+              />
+            )
+          }
+        />
       </AdminTableFrame>
 
       <Dialog
