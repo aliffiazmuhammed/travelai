@@ -75,3 +75,6 @@ desktop ui/
 # brand assets from frontend/public/brand/
 frontend/design/
 frontend/src/assets/brand/
+
+# Visual baseline captures (local screenshots)
+docs/auth-baseline/
