@@ -28,7 +28,7 @@ export const AgencyStatTile: React.FC<{
   className?: string;
 }> = ({ icon: Icon, label, value, hint, tone = 'slate', to, className }) => {
   const body = (
-    <CardContent className="flex items-start gap-3.5 p-4">
+    <CardContent className="flex flex-1 items-start gap-3.5 p-4">
       <span
         aria-hidden
         className={cn(
@@ -38,7 +38,7 @@ export const AgencyStatTile: React.FC<{
       >
         <Icon className="h-5 w-5" />
       </span>
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <p className="text-3xl font-semibold leading-none tabular-nums text-agency-ink">
           {value === undefined || value === null ? '—' : value}
         </p>
@@ -51,7 +51,7 @@ export const AgencyStatTile: React.FC<{
   );
 
   const shell = cn(
-    'rounded-2xl border-agency-line bg-agency-panel shadow-none',
+    'rounded-2xl border-agency-line bg-agency-panel shadow-none h-full flex flex-col',
     className
   );
 
@@ -68,7 +68,7 @@ export const AgencyStatTile: React.FC<{
     >
       <Link
         to={to}
-        className="block rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-agency-accent focus-visible:ring-offset-2 focus-visible:ring-offset-agency-canvas"
+        className="flex h-full flex-col rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-agency-accent focus-visible:ring-offset-2 focus-visible:ring-offset-agency-canvas"
       >
         {body}
       </Link>

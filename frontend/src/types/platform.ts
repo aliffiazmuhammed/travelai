@@ -112,6 +112,9 @@ export interface PlatformOverview {
     active: number;
     suspended: number;
   };
+  applications: {
+    pending: number;
+  };
   recentAudit: PlatformAuditRow[];
 }
 
@@ -510,7 +513,13 @@ export interface PlatformModerationList {
   success: boolean;
   groups: PlatformModerationGroup[];
   status: PlatformModerationStatus;
+  page: number;
+  limit: number;
+  /** Targets, not reports: one row per reported trip/profile/agency page. */
+  totalTargets: number;
+  totalPages: number;
   totals: { open: number; hidden: number; dismissed: number };
+  targetTotals: { open: number; hidden: number; dismissed: number };
 }
 
 export interface PlatformModerationAction {

@@ -14,6 +14,7 @@ import AgencyQuote from '../../models/AgencyQuote.js';
 import Trip from '../../models/Trip.js';
 import User from '../../models/User.js';
 import { AppError } from '../../utils/AppError.js';
+import { escapeRegex } from '../../utils/escapeRegex.js';
 import { parsePhoneNumber, PHONE_FORMAT_MESSAGE } from '../../utils/phone.js';
 import { agencyCan, type AgencyRole } from '../agency/access.js';
 import { recordAgencyAudit } from '../agency/audit.js';
@@ -454,10 +455,14 @@ export async function submitAgencyEnquiry(input: {
 /*  Reads                                                                     */
 /* -------------------------------------------------------------------------- */
 
-export function encodeEnquiryCursor(row: any): string {
+export function encodeEnquiryCursor(
+  row: any,
+  field: 'createdAt' | 'updatedAt' = 'createdAt'
+): string {
+  const value = row?.[field] ?? row?.createdAt;
   return Buffer.from(
     JSON.stringify({
-      t: new Date(row.createdAt).toISOString(),
+      t: new Date(value).toISOString(),
       i: String(row._id),
     })
   ).toString('base64url');
@@ -661,29 +666,70 @@ export function viewAgencyEnquiry(
 export async function listAgencyEnquiries(input: {
   agencyId: string;
   status?: AgencyEnquiryStatus;
+  q?: string;
+  owner?: 'all' | 'me' | 'unassigned';
+  sort?: 'newest' | 'oldest' | 'activity';
+  actorId?: string;
   cursor?: string;
   limit?: number;
 }): Promise<AgencyEnquiryPage> {
   const limit = clampLimit(input.limit);
+  const sortField = input.sort === 'activity' ? 'updatedAt' : 'createdAt';
+  const direction = input.sort === 'oldest' ? 1 : -1;
 
   const clauses: FilterQuery<any>[] = [{ agencyId: input.agencyId }];
   if (input.status) clauses.push({ status: input.status });
+
+  if (input.owner === 'me') {
+    clauses.push({ assignedTo: input.actorId ?? null });
+  } else if (input.owner === 'unassigned') {
+    clauses.push({ $or: [{ assignedTo: null }, { assignedTo: { $exists: false } }] });
+  }
+
+  if (input.q?.trim()) {
+    const pattern = new RegExp(escapeRegex(input.q.trim().slice(0, 120)), 'i');
+    const searched: FilterQuery<any>[] = [
+      { 'contact.name': pattern },
+      { 'contact.email': pattern },
+    ];
+    // Package and client names live in their own tenant collections. Resolving
+    // matching ids first keeps the enquiry query indexed and tenant-scoped.
+    const [packages, clients] = await Promise.all([
+      AgencyPackage.find({ agencyId: input.agencyId, title: pattern })
+        .select('_id')
+        .limit(50)
+        .lean() as unknown as Promise<any[]>,
+      AgencyClient.find({
+        agencyId: input.agencyId,
+        $or: [{ name: pattern }, { email: pattern }, { company: pattern }],
+      })
+        .select('_id')
+        .limit(50)
+        .lean() as unknown as Promise<any[]>,
+    ]);
+    const packageIds = packages.map((row) => row._id);
+    const clientIds = clients.map((row) => row._id);
+    if (packageIds.length > 0) searched.push({ packageId: { $in: packageIds } });
+    if (clientIds.length > 0) searched.push({ clientId: { $in: clientIds } });
+    clauses.push({ $or: searched });
+  }
 
   const pageClauses = [...clauses];
   if (input.cursor) {
     const cursor = decodeEnquiryCursor(input.cursor);
     const id = new Types.ObjectId(cursor.id);
+    const comparison = direction === 1 ? '$gt' : '$lt';
     pageClauses.push({
       $or: [
-        { createdAt: { $lt: cursor.createdAt } },
-        { createdAt: cursor.createdAt, _id: { $lt: id } },
+        { [sortField]: { [comparison]: cursor.createdAt } },
+        { [sortField]: cursor.createdAt, _id: { [comparison]: id } },
       ],
     });
   }
 
   const [rows, total] = await Promise.all([
     AgencyEnquiry.find({ $and: pageClauses })
-      .sort({ createdAt: -1, _id: -1 })
+      .sort({ [sortField]: direction, _id: direction })
       .limit(limit + 1)
       .lean() as unknown as Promise<any[]>,
     AgencyEnquiry.countDocuments({ $and: clauses }),
@@ -707,7 +753,8 @@ export async function listAgencyEnquiries(input: {
         },
       })
     ),
-    nextCursor: rows.length > limit && last ? encodeEnquiryCursor(last) : null,
+    nextCursor:
+      rows.length > limit && last ? encodeEnquiryCursor(last, sortField) : null,
     hasMore: rows.length > limit,
     total,
   };
@@ -1305,6 +1352,74 @@ export async function updateAgencyEnquiry(
     }),
     claimed,
   };
+}
+
+export interface BulkAgencyEnquiryResult {
+  updated: number;
+  failed: Array<{ id: string; message: string }>;
+  /** State before the batch, so the client can offer a truthful undo. */
+  previous: Array<{ id: string; status: string; assignedTo: string | null }>;
+}
+
+/**
+ * Applies one triage action to up to 50 selected leads. Each row still goes
+ * through `updateAgencyEnquiry`, so permissions, legal transitions and audit
+ * entries are identical to a single-row change. A row that cannot move is
+ * reported back rather than rolling the whole batch back.
+ */
+export async function bulkUpdateAgencyEnquiries(input: {
+  agencyId: string;
+  actorId: string;
+  actorRole: AgencyRole;
+  ids: string[];
+  action: 'claim' | 'assign' | 'status';
+  assigneeId?: string | null;
+  status?: AgencyEnquiryStatus;
+  lostReason?: string;
+}): Promise<BulkAgencyEnquiryResult> {
+  const ids = [...new Set(input.ids)].slice(0, 50);
+  const rows = (await AgencyEnquiry.find({
+    agencyId: input.agencyId,
+    _id: { $in: ids },
+  })
+    .select('_id status assignedTo')
+    .lean()) as any[];
+
+  const previous = rows.map((row) => ({
+    id: String(row._id),
+    status: String(row.status ?? 'new'),
+    assignedTo: row.assignedTo ? String(row.assignedTo) : null,
+  }));
+
+  let updated = 0;
+  const failed: Array<{ id: string; message: string }> = [];
+
+  for (const id of ids) {
+    try {
+      await updateAgencyEnquiry({
+        agencyId: input.agencyId,
+        enquiryId: id,
+        actorId: input.actorId,
+        actorRole: input.actorRole,
+        status: input.action === 'status' ? input.status : undefined,
+        lostReason: input.action === 'status' ? input.lostReason : undefined,
+        assigneeId:
+          input.action === 'claim'
+            ? input.actorId
+            : input.action === 'assign'
+              ? input.assigneeId
+              : undefined,
+      });
+      updated += 1;
+    } catch (error) {
+      failed.push({
+        id,
+        message: error instanceof Error ? error.message : 'This lead did not change.',
+      });
+    }
+  }
+
+  return { updated, failed, previous };
 }
 
 export interface ConvertAgencyEnquiryResult {

@@ -262,7 +262,16 @@ const AgencyTrips: React.FC = () => {
     void (async () => {
       try {
         const full = await api.getAgencyTrip(activeAgencyId, tripId);
-        if (!cancelled) setSelectedTrip(full);
+        if (!cancelled) {
+          setSelectedTrip(full);
+          if (typeof window !== 'undefined' && full?.title) {
+            window.dispatchEvent(
+              new CustomEvent('waytowalk:agency-trip-title', {
+                detail: full.title,
+              })
+            );
+          }
+        }
       } catch (err) {
         if (!cancelled) {
           toast.error(errorMessage(err, 'Could not open this trip.'));

@@ -2,6 +2,7 @@
 
 import type { User } from './auth';
 import type { GalleryItinerary } from './gallery';
+import type { Trip } from './trip';
 
 export type AgencyRole = 'owner' | 'admin' | 'planner' | 'viewer';
 export type AgencyInvitableRole = Exclude<AgencyRole, 'owner'>;
@@ -387,8 +388,31 @@ export interface AgencyApplicationInput {
 
 export interface AgencyEnquiryFilters {
   status?: AgencyEnquiryStatus;
+  /** Free text over traveller, email, package and client names. */
+  q?: string;
+  /** Inbox ownership. `me` uses the signed-in member. */
+  owner?: 'all' | 'me' | 'unassigned';
+  /** `activity` orders by the last message or change, not creation. */
+  sort?: 'newest' | 'oldest' | 'activity';
   cursor?: string;
   limit?: number;
+}
+
+/** D6 bulk triage. Each row keeps its own permission and transition checks. */
+export interface AgencyEnquiryBulkInput {
+  ids: string[];
+  action: 'claim' | 'assign' | 'status';
+  assigneeId?: string | null;
+  status?: AgencyEnquiryStatus;
+  lostReason?: string;
+}
+
+export interface AgencyEnquiryBulkResult {
+  success: boolean;
+  updated: number;
+  failed: Array<{ id: string; message: string }>;
+  /** State before the batch, for a truthful undo. */
+  previous: Array<{ id: string; status: AgencyEnquiryStatus; assignedTo: string | null }>;
 }
 
 /** D6 inbox actions. `assigneeId: null` releases the lead. */
@@ -702,6 +726,35 @@ export interface AgencyEventInterestListResponse {
 export interface AgencyEventInterestResponse {
   success: boolean;
   interest: AgencyEventInterest;
+}
+
+/** One capacity-aware decision for a roster selection. */
+export interface AgencyEventInterestBulkResponse {
+  success: boolean;
+  decided: AgencyEventInterest[];
+  skipped: Array<{ id: string; reason: string }>;
+  /** Spots left after the batch, or null when the event has no cap. */
+  remaining: number | null;
+}
+
+/** The Overview's three small summaries, instead of whole libraries. */
+export interface AgencyTripOverview {
+  total: number;
+  upcomingCount: number;
+  next: Trip[];
+}
+
+export interface AgencyEventOverview {
+  total: number;
+  liveCount: number;
+  next: AgencyEvent[];
+}
+
+export interface AgencyOverviewSummary {
+  success: boolean;
+  enquiries: AgencyEnquirySummaryView;
+  trips: AgencyTripOverview;
+  events: AgencyEventOverview;
 }
 
 /* -------------------------------------------------------------------------- */

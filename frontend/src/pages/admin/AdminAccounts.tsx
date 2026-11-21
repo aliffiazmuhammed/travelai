@@ -49,6 +49,7 @@ import {
   RealmBadge,
   StatusBadge,
 } from './accountMeta';
+import { agencyStatusLabel } from './adminLabels';
 
 const realmOptions: Array<{ value: PlatformRealmFilter; label: string }> = [
   { value: 'all', label: 'All' },
@@ -308,7 +309,7 @@ const AdminAccounts: React.FC = () => {
           <div>
             <p className="text-sm">{account.agency.name}</p>
             <p className="text-xs text-muted-foreground">
-              {account.agency.slug} · {account.agency.status}
+              {account.agency.slug} · {agencyStatusLabel(account.agency.status)}
             </p>
           </div>
         ) : (

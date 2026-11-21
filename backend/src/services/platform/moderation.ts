@@ -109,7 +109,12 @@ export interface ModerationGroup {
 export interface ModerationList {
   groups: ModerationGroup[];
   status: ReportStatus;
+  page: number;
+  limit: number;
+  totalTargets: number;
+  totalPages: number;
   totals: { open: number; hidden: number; dismissed: number };
+  targetTotals: { open: number; hidden: number; dismissed: number };
 }
 
 export interface ClientContext {
@@ -175,10 +180,33 @@ async function listTotals(): Promise<ModerationList['totals']> {
   return totals;
 }
 
+/** One row per reported target, counted by its current report status. */
+async function listTargetTotals(): Promise<ModerationList['targetTotals']> {
+  const rows = await TripReport.aggregate<{ _id: ReportStatus; count: number }>([
+    {
+      $group: {
+        _id: {
+          status: '$status',
+          targetType: '$targetType',
+          targetId: '$targetId',
+        },
+      },
+    },
+    { $group: { _id: '$_id.status', count: { $sum: 1 } } },
+  ]);
+
+  const totals = { open: 0, hidden: 0, dismissed: 0 };
+  for (const row of rows) {
+    if (row._id in totals) totals[row._id] = row.count;
+  }
+  return totals;
+}
+
 /** Groups reports by target for the selected status, newest activity first. */
 async function aggregateGroups(
   status: ReportStatus,
-  limit: number
+  limit: number,
+  skip: number
 ): Promise<AggregatedGroup[]> {
   return TripReport.aggregate<AggregatedGroup>([
     { $match: { status } },
@@ -201,6 +229,7 @@ async function aggregateGroups(
       },
     },
     { $sort: { lastReportedAt: -1 } },
+    { $skip: skip },
     { $limit: limit },
   ]);
 }
@@ -209,10 +238,14 @@ export async function listReportedContent(
   query: ModerationQueryInput
 ): Promise<ModerationList> {
   const status = query.status;
-  const [groups, totals] = await Promise.all([
-    aggregateGroups(status, query.limit),
+  const page = Math.max(1, Math.floor(Number(query.page) || 1));
+  const limit = Math.min(Math.max(Math.floor(Number(query.limit) || 25), 1), 100);
+  const [groups, totals, targetTotals] = await Promise.all([
+    aggregateGroups(status, limit, (page - 1) * limit),
     listTotals(),
+    listTargetTotals(),
   ]);
+  const totalTargets = targetTotals[status];
 
   const tripIds = groups
     .filter((group) => group._id.targetType === 'trip')
@@ -277,7 +310,12 @@ export async function listReportedContent(
 
   return {
     status,
+    page,
+    limit,
+    totalTargets,
+    totalPages: Math.max(1, Math.ceil(totalTargets / limit)),
     totals,
+    targetTotals,
     groups: groups.map((group) => {
       const { targetType, targetId } = group._id;
       const id = String(targetId);

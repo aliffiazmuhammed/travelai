@@ -2,6 +2,7 @@ import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { formatDateTime } from '@/lib/date';
+import { agencyStatusLabel } from './adminLabels';
 import type {
   PlatformAccountStatus,
   PlatformAccountType,
@@ -61,7 +62,7 @@ export const AgencyStatusBadge: React.FC<{ status: PlatformAgencyStatus }> = ({
         : 'border-destructive/40 bg-destructive/10 text-destructive-ink'
     )}
   >
-    {status}
+    {agencyStatusLabel(status)}
   </Badge>
 );
 

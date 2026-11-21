@@ -82,11 +82,8 @@ const navGroups: Array<{ label: string; items: NavItem[] }> = [
       { to: '/agency/enquiries', label: 'Enquiries', icon: Inbox },
       { to: '/agency/events', label: 'Events', icon: CalendarRange },
       { to: '/agency/trips', label: 'Trips', icon: Map },
+      { to: '/agency/clients', label: 'Clients', icon: BriefcaseBusiness },
     ],
-  },
-  {
-    label: 'Relationships',
-    items: [{ to: '/agency/clients', label: 'Clients', icon: BriefcaseBusiness }],
   },
   {
     label: 'Studio',
@@ -125,7 +122,7 @@ type Crumb = { label: string; to?: string };
  * The trail in the workspace header. Pages that open a record add a leaf here;
  * the section itself stops being a link once you are standing on it.
  */
-function crumbTrail(pathname: string): Crumb[] {
+function crumbTrail(pathname: string, tripTitle?: string | null): Crumb[] {
   const section = allNavItems.find((item) => isItemActive(pathname, item));
   if (!section || pathname === '/agency' || pathname === '/agency/') {
     return [{ label: 'Overview' }];
@@ -141,7 +138,7 @@ function crumbTrail(pathname: string): Crumb[] {
 
   if (pathname.startsWith('/agency/trips/')) {
     trail.push({
-      label: pathname === '/agency/trips/new' ? 'New trip' : 'Trip',
+      label: pathname === '/agency/trips/new' ? 'New trip' : (tripTitle?.trim() || 'Trip'),
     });
   }
 
@@ -248,7 +245,26 @@ const AgencyLayout: React.FC = () => {
   const role = activeAgency?.role ?? sessionAgency?.role;
   const canPlan = role === 'owner' || role === 'admin' || role === 'planner';
 
-  const trail = crumbTrail(location.pathname);
+  const [activeTripTitle, setActiveTripTitle] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    const handleTripTitle = (event: Event) => {
+      const custom = event as CustomEvent<string>;
+      if (custom.detail) setActiveTripTitle(custom.detail);
+    };
+    window.addEventListener('waytowalk:agency-trip-title', handleTripTitle);
+    return () => {
+      window.removeEventListener('waytowalk:agency-trip-title', handleTripTitle);
+    };
+  }, []);
+
+  React.useEffect(() => {
+    if (!location.pathname.startsWith('/agency/trips/')) {
+      setActiveTripTitle(null);
+    }
+  }, [location.pathname]);
+
+  const trail = crumbTrail(location.pathname, activeTripTitle);
   const [commandOpen, setCommandOpen] = React.useState(false);
 
   const handleLogout = async () => {
@@ -440,20 +456,31 @@ const AgencyLayout: React.FC = () => {
             </BreadcrumbList>
           </Breadcrumb>
           <div className="ml-auto flex items-center gap-1.5">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setCommandOpen(true)}
-              aria-label="Search the workspace (Control or Command K)"
-              className="h-9 gap-2 rounded-full border-border bg-white/70 px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground sm:px-3 dark:bg-background/70 dark:hover:text-muted-foreground"
-            >
-              <Search className="h-3.5 w-3.5" aria-hidden />
-              <span className="hidden sm:inline">Search</span>
-              <kbd className="hidden rounded border border-border bg-muted px-1.5 py-0.5 font-sans text-xs font-medium text-muted-foreground sm:inline">
-                ⌘K
-              </kbd>
-            </Button>
+            {(() => {
+              const isMac =
+                typeof navigator !== 'undefined' &&
+                /Mac|iPod|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+              return (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCommandOpen(true)}
+                  aria-label={
+                    isMac
+                      ? 'Search the workspace (Command K)'
+                      : 'Search the workspace (Control K)'
+                  }
+                  className="h-9 gap-2 rounded-full border-border bg-white/70 px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground sm:px-3 dark:bg-background/70 dark:hover:text-muted-foreground"
+                >
+                  <Search className="h-3.5 w-3.5" aria-hidden />
+                  <span className="hidden sm:inline">Search</span>
+                  <kbd className="hidden rounded border border-border bg-muted px-1.5 py-0.5 font-sans text-xs font-medium text-muted-foreground sm:inline">
+                    {isMac ? '⌘K' : 'Ctrl K'}
+                  </kbd>
+                </Button>
+              );
+            })()}
             <Button
               asChild
               variant="ghost"

@@ -67,6 +67,18 @@ export interface AgencyTripListInput {
   assignedTo?: string;
   /** true = only archived trips; default excludes them (A8). */
   archived?: boolean;
+  /** Inclusive `YYYY-MM-DD` lower bound, used by the overview and pickers. */
+  startDateFrom?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface AgencyTripListResult {
+  trips: any[];
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
 }
 
 /**
@@ -208,7 +220,12 @@ function agencyRoleForTrip(role: AgencyRole) {
 }
 
 /** Lists live agency trips visible to every member of the tenant. */
-export async function listAgencyTrips(input: AgencyTripListInput) {
+export async function listAgencyTrips(
+  input: AgencyTripListInput
+): Promise<AgencyTripListResult> {
+  const page = Math.max(1, Math.floor(Number(input.page) || 1));
+  const limit = Math.min(Math.max(Math.floor(Number(input.limit) || 200), 1), 200);
+
   const query: Record<string, any> = {
     workspace: 'agency',
     agencyId: input.agencyId,
@@ -233,24 +250,85 @@ export async function listAgencyTrips(input: AgencyTripListInput) {
       throw new AppError('Choose a valid agency team member.', 400);
     }
   }
+  if (input.startDateFrom) {
+    query.startDate = { $gte: input.startDateFrom };
+  }
   if (input.search && input.search.trim()) {
     const searchRegex = new RegExp(escapeRegex(input.search.trim().slice(0, 80)), 'i');
     query.$or = [{ title: searchRegex }, { 'tripDetails.trip_title': searchRegex }];
   }
 
-  const trips = await Trip.find(query)
-    .sort({ updatedAt: -1, createdAt: -1 })
-    .limit(200)
-    .select(AGENCY_TRIP_SUMMARY_SELECT);
+  const [trips, total] = await Promise.all([
+    Trip.find(query)
+      .sort({ updatedAt: -1, createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .select(AGENCY_TRIP_SUMMARY_SELECT),
+    Trip.countDocuments(query),
+  ]);
 
   const role = agencyRoleForTrip(input.role);
   const summaries = await loadAgencyTripSummaries(input.agencyId, trips);
-  return trips.map((trip) => ({
-    ...sanitizeTripFor(trip, role),
-    role,
-    agencySummary:
-      summaries.get(String((trip as any)._id)) ?? EMPTY_TRIP_SUMMARY,
-  }));
+  return {
+    trips: trips.map((trip) => ({
+      ...sanitizeTripFor(trip, role),
+      role,
+      agencySummary:
+        summaries.get(String((trip as any)._id)) ?? EMPTY_TRIP_SUMMARY,
+    })),
+    page,
+    limit,
+    total,
+    totalPages: Math.max(1, Math.ceil(total / limit)),
+  };
+}
+
+export interface AgencyTripOverview {
+  total: number;
+  upcomingCount: number;
+  next: any[];
+}
+
+/**
+ * The Overview's three numbers and three rows. Counting before slicing is the
+ * point: the tile must not report "3 coming up" because the list was trimmed.
+ */
+export async function getAgencyTripOverview(
+  agencyId: string,
+  role: AgencyRole
+): Promise<AgencyTripOverview> {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const base = {
+    workspace: 'agency',
+    agencyId,
+    isDeleted: { $ne: true },
+    archivedAt: null,
+  };
+  const upcoming = { ...base, startDate: { $gte: today } };
+
+  const [total, upcomingCount, rows] = await Promise.all([
+    Trip.countDocuments(base),
+    Trip.countDocuments(upcoming),
+    Trip.find(upcoming)
+      .sort({ startDate: 1, _id: 1 })
+      .limit(3)
+      .select(AGENCY_TRIP_SUMMARY_SELECT),
+  ]);
+
+  const tripRole = agencyRoleForTrip(role);
+  const summaries = await loadAgencyTripSummaries(agencyId, rows);
+  return {
+    total,
+    upcomingCount,
+    next: rows.map((trip) => ({
+      ...sanitizeTripFor(trip, tripRole),
+      role: tripRole,
+      agencySummary:
+        summaries.get(String((trip as any)._id)) ?? EMPTY_TRIP_SUMMARY,
+    })),
+  };
 }
 
 /** Owner/admin-only agency trash, newest deletion first. */

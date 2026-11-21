@@ -9,10 +9,12 @@ import { catchAsync } from '../utils/catchAsync.js';
 import { parseQuery } from '../utils/parseQuery.js';
 import {
   agencyEnquiryQuerySchema,
+  bulkAgencyEnquirySchema,
   myEnquiryQuerySchema,
   updateAgencyEnquirySchema,
 } from '../schemas/agencyEnquiry.schema.js';
 import {
+  bulkUpdateAgencyEnquiries,
   getAgencyEnquiry,
   getAgencyEnquirySummary,
   getOwnEnquirySummary,
@@ -71,10 +73,35 @@ export const listAgencyEnquiriesHandler = catchAsync(
     const page = await listAgencyEnquiries({
       agencyId: String(agency._id),
       status: query.status,
+      q: query.q,
+      owner: query.owner,
+      sort: query.sort,
+      actorId: String(req.userId ?? ''),
       cursor: query.cursor,
       limit: query.limit,
     });
     res.json({ success: true, ...page });
+  }
+);
+
+/** `POST /api/agency/enquiries/bulk` — claim, assign or move 50 leads at once. */
+export const bulkUpdateAgencyEnquiriesHandler = catchAsync(
+  async (req: AgencyAccessRequest, res: Response) => {
+    const { agency, role } = agencyContext(req);
+    // The route validates, but parsing here also gives us the trimmed values
+    // and the discriminated `action` union.
+    const body = bulkAgencyEnquirySchema.parse(req.body ?? {});
+    const result = await bulkUpdateAgencyEnquiries({
+      agencyId: String(agency._id),
+      actorId: String(req.userId),
+      actorRole: role,
+      ids: body.ids,
+      action: body.action,
+      assigneeId: body.assigneeId,
+      status: body.status,
+      lostReason: body.lostReason,
+    });
+    res.json({ success: true, ...result });
   }
 );
 

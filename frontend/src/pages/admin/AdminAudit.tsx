@@ -1,13 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
+  Check,
   ChevronDown,
   ClipboardList,
+  Copy,
   RefreshCw,
   Search,
   SlidersHorizontal,
   X,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { AdminEmptyState, AdminLoadingPanel } from '@/components/admin/AdminEmptyState';
 import { AdminNotice } from '@/components/admin/AdminNotice';
 import { AdminPageHeader } from '@/components/admin/AdminPageHeader';
@@ -29,10 +32,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { api } from '@/services/api';
 import type { PlatformAuditList, PlatformAuditRow } from '@/types';
 import { cn } from '@/lib/utils';
 import { formatAdminDate } from './accountMeta';
+import { auditActionLabel, auditTargetLabel, humaniseLabel } from './adminLabels';
 
 /**
  * `/admin/audit` (PA4).
@@ -41,54 +52,121 @@ import { formatAdminDate } from './accountMeta';
  * and by PA4 tenant mutations; they never contain credentials, tokens, headers
  * or tenant content. Tenant-internal audit stays in the tenant's own viewer.
  *
- * The two filters used most often — free text and action type — stay visible;
- * id and date narrowing lives behind "More filters" so the page starts calm.
+ * Every filter lives in the URL, so an operator can send a colleague the exact
+ * view they are looking at. Free text and both id fields are debounced: typing a
+ * partial id produces one request, not one per keystroke.
  */
-const AdminAudit: React.FC = () => {
-  const [searchParams] = useSearchParams();
 
-  const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [action, setAction] = useState('');
-  const [targetType, setTargetType] = useState('');
+const PAGE_SIZE = 50;
+const OBJECT_ID = /^[a-f0-9]{24}$/i;
+
+const idError = (value: string): string | null => {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.length !== 24) return 'Use the full 24-character id.';
+  if (!OBJECT_ID.test(trimmed)) return 'Use hexadecimal characters only.';
+  return null;
+};
+
+const AdminAudit: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialPage = Math.max(1, Number(searchParams.get('page')) || 1);
+
+  const [search, setSearch] = useState(() => searchParams.get('q') ?? '');
+  const [debouncedSearch, setDebouncedSearch] = useState(() =>
+    (searchParams.get('q') ?? '').trim()
+  );
+  const [action, setAction] = useState(() => searchParams.get('action') ?? '');
+  const [targetType, setTargetType] = useState(
+    () => searchParams.get('targetType') ?? ''
+  );
   const [targetId, setTargetId] = useState(() => searchParams.get('targetId') ?? '');
-  const [actorId, setActorId] = useState('');
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
-  const [page, setPage] = useState(1);
+  const [actorId, setActorId] = useState(() => searchParams.get('actorId') ?? '');
+  const [from, setFrom] = useState(() => searchParams.get('from') ?? '');
+  const [to, setTo] = useState(() => searchParams.get('to') ?? '');
+  const [page, setPage] = useState(initialPage);
   const [reloadKey, setReloadKey] = useState(0);
-  const [moreOpen, setMoreOpen] = useState(() => Boolean(searchParams.get('targetId')));
+  const [moreOpen, setMoreOpen] = useState(() =>
+    Boolean(
+      searchParams.get('targetId') ||
+        searchParams.get('actorId') ||
+        searchParams.get('from') ||
+        searchParams.get('to')
+    )
+  );
 
   const [data, setData] = useState<PlatformAuditList | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [detail, setDetail] = useState<PlatformAuditRow | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // One debounce covers the free text and both id fields: a pasted id should
+  // not fire a request per character, nor turn into a 400 mid-paste.
+  const [debouncedIds, setDebouncedIds] = useState({
+    targetId: targetId.trim(),
+    actorId: actorId.trim(),
+  });
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       setDebouncedSearch(search.trim());
-      setPage(1);
+      setDebouncedIds({ targetId: targetId.trim(), actorId: actorId.trim() });
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [search]);
+  }, [search, targetId, actorId]);
+
+  // Keep the URL in step with the visible filters. `replace` keeps the history
+  // useful: Back should leave the page, not undo keystrokes.
+  useEffect(() => {
+    const next = new URLSearchParams();
+    if (search.trim()) next.set('q', search.trim());
+    if (action) next.set('action', action);
+    if (targetType) next.set('targetType', targetType);
+    if (targetId.trim()) next.set('targetId', targetId.trim());
+    if (actorId.trim()) next.set('actorId', actorId.trim());
+    if (from) next.set('from', from);
+    if (to) next.set('to', to);
+    if (page > 1) next.set('page', String(page));
+    if (next.toString() !== searchParams.toString()) {
+      setSearchParams(next, { replace: true });
+    }
+  }, [
+    search,
+    action,
+    targetType,
+    targetId,
+    actorId,
+    from,
+    to,
+    page,
+    searchParams,
+    setSearchParams,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
 
+    const targetIdValue = OBJECT_ID.test(debouncedIds.targetId)
+      ? debouncedIds.targetId
+      : undefined;
+    const actorIdValue = OBJECT_ID.test(debouncedIds.actorId)
+      ? debouncedIds.actorId
+      : undefined;
+
     api
       .listAdminAudit({
         q: debouncedSearch,
         action,
         targetType,
-        targetId: targetId.trim() || undefined,
-        // The API accepts an account ObjectId only; partial typing must not
-        // turn into a 400 while the operator is still pasting the id.
-        actorId: /^[a-f0-9]{24}$/i.test(actorId.trim()) ? actorId.trim() : undefined,
+        targetId: targetIdValue,
+        actorId: actorIdValue,
         from: from || undefined,
         to: to || undefined,
         page,
-        limit: 50,
+        limit: PAGE_SIZE,
       })
       .then((result) => {
         if (!cancelled) setData(result);
@@ -105,9 +183,35 @@ const AdminAudit: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [debouncedSearch, action, targetType, targetId, actorId, from, to, page, reloadKey]);
+  }, [debouncedSearch, debouncedIds, action, targetType, from, to, page, reloadKey]);
 
   const entries = data?.entries ?? [];
+  const targetIdMessage = idError(targetId);
+  const actorIdMessage = idError(actorId);
+
+  const copyDetail = async (entry: PlatformAuditRow) => {
+    const lines = [
+      `When: ${formatAdminDate(entry.createdAt)}`,
+      `Action: ${auditActionLabel(entry.action)} (${entry.action})`,
+      `Target: ${auditTargetLabel(entry.targetType)}${entry.targetId ? ` · ${entry.targetId}` : ''}`,
+      `Actor: ${entry.actorEmail ?? 'system'}${entry.actorId ? ` · ${entry.actorId}` : ''}`,
+      `IP: ${entry.ip ?? '—'}`,
+      ...Object.entries(entry.metadata ?? {}).map(
+        ([key, value]) => `${humaniseLabel(key)}: ${formatMetadataValue(value)}`
+      ),
+    ];
+    try {
+      await navigator.clipboard.writeText(lines.join('\n'));
+      setCopiedId(entry._id);
+      toast.success('Audit entry copied.');
+      window.setTimeout(
+        () => setCopiedId((current) => (current === entry._id ? null : current)),
+        2000
+      );
+    } catch {
+      toast.error('Copy failed. Select the text and copy it manually.');
+    }
+  };
 
   const columns: DataTableColumn<PlatformAuditRow>[] = [
     {
@@ -124,7 +228,9 @@ const AdminAudit: React.FC = () => {
       headClassName: adminTableHeadClass,
       cellClassName: 'px-4 py-3',
       cell: (entry) => (
-        <code className="text-xs font-medium text-admin-accent-ink">{entry.action}</code>
+        <span className="text-xs font-medium text-admin-accent-ink">
+          {auditActionLabel(entry.action)}
+        </span>
       ),
     },
     {
@@ -132,7 +238,7 @@ const AdminAudit: React.FC = () => {
       header: 'Actor',
       headClassName: adminTableHeadClass,
       cellClassName: 'px-4 py-3 text-xs',
-      cell: (entry) => entry.actorEmail ?? 'system',
+      cell: (entry) => entry.actorEmail ?? 'System',
     },
     {
       id: 'target',
@@ -147,7 +253,7 @@ const AdminAudit: React.FC = () => {
         return (
           <>
             <Badge variant="outline" className="text-overline text-muted-foreground">
-              {entry.targetType}
+              {auditTargetLabel(entry.targetType)}
             </Badge>
             {entry.targetId ? (
               <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
@@ -182,6 +288,25 @@ const AdminAudit: React.FC = () => {
       cellClassName:
         'whitespace-nowrap px-4 py-3 font-mono text-xs text-muted-foreground',
       cell: (entry) => entry.ip ?? '—',
+    },
+    {
+      id: 'details',
+      header: <span className="sr-only">Details</span>,
+      mobile: 'action',
+      headClassName: `w-12 px-2 ${adminTableHeadClass}`,
+      cellClassName: 'px-2 py-3 text-right',
+      cell: (entry) => (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-muted-foreground hover:text-foreground"
+          onClick={() => setDetail(entry)}
+          aria-label={`Open details for ${auditActionLabel(entry.action)}`}
+        >
+          <ChevronDown className="h-4 w-4 -rotate-90" aria-hidden />
+        </Button>
+      ),
     },
   ];
   const actions = data?.facets.actions ?? [];
@@ -249,7 +374,10 @@ const AdminAudit: React.FC = () => {
             />
             <Input
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setPage(1);
+              }}
               placeholder="Search action, target or id"
               aria-label="Search audit"
               className="h-9 rounded-full pl-9 text-sm"
@@ -270,7 +398,7 @@ const AdminAudit: React.FC = () => {
               <SelectItem value="all">All actions</SelectItem>
               {actions.map((value) => (
                 <SelectItem key={value} value={value}>
-                  {value}
+                  {auditActionLabel(value)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -290,7 +418,7 @@ const AdminAudit: React.FC = () => {
               <SelectItem value="all">All targets</SelectItem>
               {targetTypes.map((value) => (
                 <SelectItem key={value} value={value}>
-                  {value}
+                  {auditTargetLabel(value)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -322,7 +450,7 @@ const AdminAudit: React.FC = () => {
         {moreOpen ? (
           <div
             id="audit-more-filters"
-            className="grid gap-2 border-t border-border pt-3 sm:grid-cols-2 xl:grid-cols-4"
+            className="grid gap-3 border-t border-border pt-3 sm:grid-cols-2 xl:grid-cols-4"
           >
             <div className="space-y-1.5">
               <Label htmlFor="audit-actor" className="text-xs text-muted-foreground">
@@ -337,7 +465,12 @@ const AdminAudit: React.FC = () => {
                     setPage(1);
                   }}
                   placeholder="24-character id"
-                  className="h-9 pr-8 font-mono text-xs"
+                  aria-invalid={Boolean(actorIdMessage)}
+                  aria-describedby={actorIdMessage ? 'audit-actor-error' : undefined}
+                  className={cn(
+                    'h-9 pr-8 font-mono text-xs',
+                    actorIdMessage && 'border-destructive focus-visible:ring-destructive'
+                  )}
                 />
                 {actorId ? (
                   <button
@@ -350,6 +483,11 @@ const AdminAudit: React.FC = () => {
                   </button>
                 ) : null}
               </div>
+              {actorIdMessage ? (
+                <p id="audit-actor-error" className="text-xs text-destructive-ink">
+                  {actorIdMessage}
+                </p>
+              ) : null}
             </div>
 
             <div className="space-y-1.5">
@@ -365,7 +503,12 @@ const AdminAudit: React.FC = () => {
                     setPage(1);
                   }}
                   placeholder="24-character id"
-                  className="h-9 pr-8 font-mono text-xs"
+                  aria-invalid={Boolean(targetIdMessage)}
+                  aria-describedby={targetIdMessage ? 'audit-target-error' : undefined}
+                  className={cn(
+                    'h-9 pr-8 font-mono text-xs',
+                    targetIdMessage && 'border-destructive focus-visible:ring-destructive'
+                  )}
                 />
                 {targetId ? (
                   <button
@@ -378,6 +521,11 @@ const AdminAudit: React.FC = () => {
                   </button>
                 ) : null}
               </div>
+              {targetIdMessage ? (
+                <p id="audit-target-error" className="text-xs text-destructive-ink">
+                  {targetIdMessage}
+                </p>
+              ) : null}
             </div>
 
             <div className="space-y-1.5">
@@ -490,6 +638,90 @@ const AdminAudit: React.FC = () => {
           }
         />
       </AdminTableFrame>
+
+      <Sheet open={Boolean(detail)} onOpenChange={(open) => !open && setDetail(null)}>
+        <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg">
+          {detail ? (
+            <>
+              <SheetHeader className="space-y-1.5">
+                <SheetTitle>{auditActionLabel(detail.action)}</SheetTitle>
+                <SheetDescription>
+                  {formatAdminDate(detail.createdAt)} ·{' '}
+                  {auditTargetLabel(detail.targetType)}
+                </SheetDescription>
+              </SheetHeader>
+
+              <div className="mt-4 space-y-4">
+                <dl className="grid grid-cols-[7rem_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
+                  <dt className="text-muted-foreground">Machine action</dt>
+                  <dd className="break-all font-mono text-xs text-foreground">
+                    {detail.action}
+                  </dd>
+                  <dt className="text-muted-foreground">Target type</dt>
+                  <dd className="text-foreground">
+                    {auditTargetLabel(detail.targetType)}
+                  </dd>
+                  <dt className="text-muted-foreground">Target id</dt>
+                  <dd className="break-all font-mono text-xs text-foreground">
+                    {detail.targetId ?? '—'}
+                  </dd>
+                  <dt className="text-muted-foreground">Actor</dt>
+                  <dd className="break-all text-foreground">
+                    {detail.actorEmail ?? 'System'}
+                    {detail.actorId ? (
+                      <span className="block font-mono text-xs text-muted-foreground">
+                        {detail.actorId}
+                      </span>
+                    ) : null}
+                  </dd>
+                  <dt className="text-muted-foreground">IP</dt>
+                  <dd className="font-mono text-xs text-foreground">
+                    {detail.ip ?? '—'}
+                  </dd>
+                </dl>
+
+                <div className="space-y-1.5">
+                  <p className="text-xs font-semibold text-foreground">Metadata</p>
+                  {detail.metadata && Object.keys(detail.metadata).length > 0 ? (
+                    <dl className="space-y-1.5 rounded-xl border border-border bg-muted/30 p-3 text-xs">
+                      {Object.entries(detail.metadata).map(([key, value]) => (
+                        <div
+                          key={key}
+                          className="grid grid-cols-[8rem_minmax(0,1fr)] gap-2"
+                        >
+                          <dt className="text-muted-foreground">{humaniseLabel(key)}</dt>
+                          <dd className="break-words text-foreground">
+                            {formatMetadataValue(value)}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  ) : (
+                    <p className="rounded-xl border border-dashed border-border p-3 text-xs text-muted-foreground">
+                      No extra context was recorded for this event.
+                    </p>
+                  )}
+                </div>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => void copyDetail(detail)}
+                >
+                  {copiedId === detail._id ? (
+                    <Check className="h-3.5 w-3.5" aria-hidden />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5" aria-hidden />
+                  )}
+                  Copy entry
+                </Button>
+              </div>
+            </>
+          ) : null}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 };
@@ -524,14 +756,20 @@ const contextKeys = [
   'fields',
 ];
 
+function formatMetadataValue(value: unknown): string {
+  if (value === undefined || value === null) return '—';
+  if (Array.isArray(value)) return value.map(String).join(', ');
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
 function summarizeMetadata(metadata?: Record<string, unknown>): string {
   if (!metadata) return '';
   return contextKeys
     .filter((key) => metadata[key] !== undefined && metadata[key] !== null)
     .map((key) => {
-      const value = metadata[key];
-      const text = Array.isArray(value) ? value.join(', ') : String(value);
-      return `${key}: ${text.length > 60 ? `${text.slice(0, 60)}…` : text}`;
+      const text = formatMetadataValue(metadata[key]);
+      return `${humaniseLabel(key)}: ${text.length > 60 ? `${text.slice(0, 60)}…` : text}`;
     })
     .join(' · ');
 }

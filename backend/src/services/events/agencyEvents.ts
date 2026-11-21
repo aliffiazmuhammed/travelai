@@ -684,6 +684,44 @@ export async function listAgencyEvents(
   );
 }
 
+export interface AgencyEventOverview {
+  total: number;
+  liveCount: number;
+  next: OwnAgencyEventView[];
+}
+
+/**
+ * The Overview's live-event summary: the whole library count for setup checks,
+ * the public/upcoming count for the KPI, and the next three cards. The public
+ * definition matches `listAgencyEvents` consumers: published, not closed, not
+ * ops-hidden, and not already over.
+ */
+export async function getAgencyEventOverview(
+  agencyId: string
+): Promise<AgencyEventOverview> {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const live = {
+    agencyId,
+    state: 'published',
+    closedAt: null,
+    'moderation.hiddenAt': null,
+    endDate: { $gte: now },
+  };
+
+  const [total, liveCount, rows] = await Promise.all([
+    AgencyEvent.countDocuments({ agencyId }),
+    AgencyEvent.countDocuments(live),
+    AgencyEvent.find(live).sort({ startDate: 1, _id: 1 }).limit(3).lean() as unknown as Promise<any[]>,
+  ]);
+  const counts = await interestCounts(rows.map((row) => row._id));
+  return {
+    total,
+    liveCount,
+    next: rows.map((row) => viewOwnEvent(row, agencyId, counts.get(String(row._id)))),
+  };
+}
+
 export async function getOwnAgencyEvent(
   agencyId: string,
   eventId: string
@@ -691,6 +729,82 @@ export async function getOwnAgencyEvent(
   const event = await getAgencyEvent(agencyId, eventId);
   const counts = await interestCounts([event._id]);
   return viewOwnEvent(event, agencyId, counts.get(String(event._id)));
+}
+
+export interface BulkEventDecisionResult {
+  decided: EventInterestView[];
+  skipped: Array<{ id: string; reason: string }>;
+  /** Spots left after the batch, or null when the event has no capacity. */
+  remaining: number | null;
+}
+
+/**
+ * Confirm or decline a selection of roster rows. Confirmation is applied up to
+ * the event's remaining capacity in one pass; rows that do not fit stay
+ * waiting and come back in `skipped`, so the operator is never told a 50-person
+ * roster was confirmed when only 12 seats existed.
+ */
+export async function decideEventInterests(input: {
+  agencyId: string;
+  eventId: string;
+  interestIds: string[];
+  actorId?: string;
+  status: 'confirmed' | 'declined';
+}): Promise<BulkEventDecisionResult> {
+  const event = await getAgencyEvent(input.agencyId, input.eventId);
+  const ids = [...new Set(input.interestIds)].slice(0, 100);
+
+  const rows = (await AgencyEventInterest.find({
+    eventId: event._id,
+    agencyId: input.agencyId,
+    _id: { $in: ids },
+  })
+    .select('_id status')
+    .lean()) as any[];
+  const known = new Map(rows.map((row) => [String(row._id), row.status]));
+
+  const capacity = Number(event.capacity);
+  const limited = Number.isFinite(capacity) && capacity >= 1;
+  let remaining: number | null = null;
+
+  if (input.status === 'confirmed' && limited) {
+    const totalConfirmed = await AgencyEventInterest.countDocuments({
+      eventId: event._id,
+      status: 'confirmed',
+    });
+    remaining = Math.max(0, Math.floor(capacity) - totalConfirmed);
+  }
+
+  const decided: EventInterestView[] = [];
+  const skipped: Array<{ id: string; reason: string }> = [];
+
+  for (const id of ids) {
+    const current = known.get(id);
+    if (!current) {
+      skipped.push({ id, reason: 'This traveller is no longer on the roster.' });
+      continue;
+    }
+    if (input.status === 'confirmed' && current !== 'confirmed') {
+      if (remaining !== null && remaining <= 0) {
+        skipped.push({
+          id,
+          reason: 'Every remaining spot is already confirmed.',
+        });
+        continue;
+      }
+      if (remaining !== null) remaining -= 1;
+    }
+    const interest = await decideEventInterest({
+      agencyId: input.agencyId,
+      eventId: input.eventId,
+      interestId: id,
+      actorId: input.actorId,
+      status: input.status,
+    });
+    decided.push(interest);
+  }
+
+  return { decided, skipped, remaining };
 }
 
 function viewInterest(interest: any): EventInterestView {

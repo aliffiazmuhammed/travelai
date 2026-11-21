@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { AdminEmptyState, AdminLoadingPanel } from '@/components/admin/AdminEmptyState';
 import { AdminNotice } from '@/components/admin/AdminNotice';
 import { AdminPageHeader } from '@/components/admin/AdminPageHeader';
+import { AdminPagination } from '@/components/admin/AdminPagination';
 import {
   AdminSegmented,
   type AdminSegmentedOption,
@@ -24,7 +25,9 @@ import type {
   PlatformModerationList,
   PlatformModerationStatus,
 } from '@/types';
+import { toast } from 'sonner';
 import { formatAdminDate } from './accountMeta';
+import { auditTargetLabel, humaniseLabel } from './adminLabels';
 
 /**
  * `/admin/reports` (Milestone 8 G6).
@@ -57,6 +60,8 @@ const REASON_LABELS: Record<string, string> = {
 
 const reasonLabel = (reason: string): string => REASON_LABELS[reason] ?? reason;
 
+const PAGE_SIZE = 25;
+
 const targetTypeChip = (group: PlatformModerationGroup): string => {
   if (group.targetType === 'agency_profile') {
     return 'border-warning/40 bg-warning/10 text-warning-ink';
@@ -88,18 +93,22 @@ function targetSubheading(group: PlatformModerationGroup): string {
     const trip = group.trip;
     if (!trip) return 'The trip no longer exists. Reports are kept for the audit trail.';
     const publisher = trip.publisherHandle ? `@${trip.publisherHandle}` : trip.publisherName;
-    return [trip.destination, publisher, trip.visibility].filter(Boolean).join(' · ');
+    return [trip.destination, publisher, humaniseLabel(trip.visibility)]
+      .filter(Boolean)
+      .join(' · ');
   }
   if (group.targetType === 'agency_profile') {
     const agency = group.agency;
     if (!agency) return 'The agency no longer exists.';
-    return [agency.slug, agency.city, agency.status, `profile ${agency.profileState}`]
+    return [agency.slug, agency.city, humaniseLabel(agency.status), `${humaniseLabel(agency.profileState)} profile`]
       .filter(Boolean)
       .join(' · ');
   }
   const profile = group.profile;
   if (!profile) return 'The profile no longer exists.';
-  return [profile.name, profile.email, profile.status].filter(Boolean).join(' · ');
+  return [profile.name, profile.email, humaniseLabel(profile.status)]
+    .filter(Boolean)
+    .join(' · ');
 }
 
 /** Public destination for a queued target, when it still exists. */
@@ -118,6 +127,7 @@ function publicHref(group: PlatformModerationGroup): string | null {
 
 const AdminReports: React.FC = () => {
   const [status, setStatus] = useState<PlatformModerationStatus>('open');
+  const [page, setPage] = useState(1);
   const [data, setData] = useState<PlatformModerationList | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -138,7 +148,7 @@ const AdminReports: React.FC = () => {
     setError(null);
 
     api
-      .listModerationQueue(status, 50)
+      .listModerationQueue(status, page, PAGE_SIZE)
       .then((result) => {
         if (!cancelled) setData(result);
       })
@@ -154,10 +164,23 @@ const AdminReports: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [status, reloadKey]);
+  }, [status, page, reloadKey]);
 
   const groups = data?.groups ?? [];
-  const totals = data?.totals ?? { open: 0, hidden: 0, dismissed: 0 };
+  const totals = data?.targetTotals ?? data?.totals ?? { open: 0, hidden: 0, dismissed: 0 };
+  const totalTargets = data?.totalTargets ?? 0;
+  const totalPages = data?.totalPages ?? 1;
+
+  // A decision can empty the last page. Step back instead of showing an empty
+  // table under a full page count.
+  useEffect(() => {
+    if (!loading && page > totalPages) setPage(totalPages);
+  }, [loading, page, totalPages]);
+
+  const changeStatus = (next: PlatformModerationStatus) => {
+    setPage(1);
+    setStatus(next);
+  };
 
   const openAction = (
     group: PlatformModerationGroup,
@@ -170,6 +193,7 @@ const AdminReports: React.FC = () => {
   const runAction = async () => {
     if (!actionTarget) return;
     const { group, action } = actionTarget;
+    const label = targetHeading(group);
 
     try {
       setActionBusy(true);
@@ -182,6 +206,43 @@ const AdminReports: React.FC = () => {
         await api.dismissReportedContent(group.targetType, group.targetId);
       }
       setActionTarget(null);
+
+      if (action === 'hide') {
+        toast.success(`De-listed “${label}”.`, {
+          action: {
+            label: 'Undo',
+            onClick: () => {
+              void api
+                .dismissReportedContent(group.targetType, group.targetId)
+                .then(() => {
+                  toast.success(`“${label}” is listed again.`);
+                  reload();
+                })
+                .catch(() => toast.error('Could not restore that listing.'));
+            },
+          },
+        });
+      } else if (action === 'restore') {
+        toast.success(`Restored “${label}”.`, {
+          action: {
+            label: 'Undo',
+            onClick: () => {
+              void api
+                .hideReportedContent(group.targetType, group.targetId)
+                .then(() => {
+                  toast.success(`“${label}” is de-listed again.`);
+                  reload();
+                })
+                .catch(() => toast.error('Could not de-list that listing again.'));
+            },
+          },
+        });
+      } else {
+        toast.success(
+          `Dismissed ${group.reportCount} report${group.reportCount === 1 ? '' : 's'} for “${label}”.`
+        );
+      }
+
       reload();
     } catch (err) {
       setActionError(
@@ -231,12 +292,15 @@ const AdminReports: React.FC = () => {
           ariaLabel="Report status"
           value={status}
           options={segmented}
-          onChange={(value) => setStatus(value)}
+          onChange={changeStatus}
         />
-        <p className="text-xs text-muted-foreground">
-          {groups.length === 0
-            ? 'Nothing in this tab'
-            : `${groups.length} target${groups.length === 1 ? '' : 's'} in this tab`}
+        <p className="text-xs tabular-nums text-muted-foreground">
+          {totalTargets === 0
+            ? 'No targets in this tab'
+            : `Showing ${(page - 1) * PAGE_SIZE + 1}–${Math.min(
+                page * PAGE_SIZE,
+                totalTargets
+              )} of ${totalTargets} target${totalTargets === 1 ? '' : 's'}`}
         </p>
       </div>
 
@@ -428,6 +492,15 @@ const AdminReports: React.FC = () => {
               </article>
             );
           })}
+          <AdminPagination
+            page={data?.page ?? page}
+            totalPages={totalPages}
+            total={totalTargets}
+            noun="target"
+            loading={loading}
+            onChange={setPage}
+            className="mt-1 rounded-2xl border border-border bg-card"
+          />
         </div>
       )}
 

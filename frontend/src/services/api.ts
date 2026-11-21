@@ -75,6 +75,8 @@ import type {
   AgencyApplicationInput,
   AgencyConversation,
   AgencyProposalSummary,
+  AgencyEnquiryBulkInput,
+  AgencyEnquiryBulkResult,
   AgencyEnquiryConversion,
   AgencyEnquiryFilters,
   AgencyEnquiryInput,
@@ -83,7 +85,7 @@ import type {
   AgencyEnquiryUpdateInput,
   AgencyEnquiryUpdateResult,
   AgencyEventInput,
-  AgencyEventInterestListResponse,
+  AgencyEventInterestBulkResponse,  AgencyEventInterestListResponse,
   AgencyEventInterestResponse,
   AgencyEventInterestStatus,
   AgencyEventListResponse,
@@ -99,6 +101,7 @@ import type {
   AgencyInvitableRole,
   AgencyLoginContext,
   AgencyMember,
+  AgencyOverviewSummary,
   AgencyQuote,
   AgencyQuoteInput,
   AgencyRole,
@@ -1022,9 +1025,14 @@ class ApiClient {
   // G6 moderation console. Reported content only; every decision is audited.
   async listModerationQueue(
     status: PlatformModerationStatus = 'open',
-    limit = 50
+    page = 1,
+    limit = 25
   ): Promise<PlatformModerationList> {
-    const query = new URLSearchParams({ status, limit: String(limit) });
+    const query = new URLSearchParams({
+      status,
+      page: String(page),
+      limit: String(limit),
+    });
     return this.request(`/api/admin/reports?${query.toString()}`);
   }
 
@@ -1328,6 +1336,19 @@ class ApiClient {
     );
   }
 
+  /** C-26: one capacity-aware decision for a roster selection. */
+  async decideAgencyEventInterests(
+    id: string,
+    eventId: string,
+    ids: string[],
+    status: 'confirmed' | 'declined'
+  ): Promise<AgencyEventInterestBulkResponse> {
+    return this.request(
+      `/api/agency/${encodeURIComponent(id)}/events/${encodeURIComponent(eventId)}/interests/bulk`,
+      { method: 'POST', body: JSON.stringify({ ids, status }) }
+    );
+  }
+
   /**
    * M9 D5: the tenant enquiry inbox. Workspace-addressed (no tenant id in the
    * path) because the signed-in agency session already names the tenant.
@@ -1337,10 +1358,23 @@ class ApiClient {
   ): Promise<AgencyEnquiryPage> {
     const query = new URLSearchParams();
     if (filters.status) query.append('status', filters.status);
+    if (filters.q?.trim()) query.append('q', filters.q.trim());
+    if (filters.owner && filters.owner !== 'all') query.append('owner', filters.owner);
+    if (filters.sort && filters.sort !== 'newest') query.append('sort', filters.sort);
     if (filters.cursor) query.append('cursor', filters.cursor);
     if (filters.limit) query.append('limit', String(filters.limit));
     const suffix = query.toString() ? `?${query.toString()}` : '';
     return this.request(`/api/agency/enquiries${suffix}`);
+  }
+
+  /** C-26 bulk triage; the response reports per-row failures and prior state. */
+  async bulkUpdateAgencyEnquiries(
+    payload: AgencyEnquiryBulkInput
+  ): Promise<AgencyEnquiryBulkResult> {
+    return this.request('/api/agency/enquiries/bulk', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   }
 
   async getAgencyEnquiry(
@@ -1497,17 +1531,35 @@ class ApiClient {
       status?: string;
       assignedTo?: string;
       archived?: boolean;
+      startDateFrom?: string;
+      page?: number;
+      limit?: number;
     }
-  ): Promise<{ success: boolean; trips: Trip[] }> {
+  ): Promise<{
+    success: boolean;
+    trips: Trip[];
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  }> {
     const query = new URLSearchParams();
     if (params?.search) query.append('search', params.search);
     if (params?.status && params.status !== 'all') query.append('status', params.status);
     if (params?.assignedTo) query.append('assignedTo', params.assignedTo);
     if (params?.archived) query.append('archived', 'true');
+    if (params?.startDateFrom) query.append('startDateFrom', params.startDateFrom);
+    if (params?.page) query.append('page', String(params.page));
+    if (params?.limit) query.append('limit', String(params.limit));
     const suffix = query.toString() ? `?${query.toString()}` : '';
     return this.request(
       `/api/agency/${encodeURIComponent(id)}/trips${suffix}`
     );
+  }
+
+  /** C-26: the Overview's counts and next rows, without the whole libraries. */
+  async getAgencyOverview(): Promise<AgencyOverviewSummary> {
+    return this.request('/api/agency/overview');
   }
 
   async createAgencyTrip(

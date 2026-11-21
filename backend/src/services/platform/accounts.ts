@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import mongoose, { type FilterQuery, type UpdateQuery } from 'mongoose';
 import Agency, { type AgencyStatus } from '../../models/Agency.js';
+import AgencyApplication from '../../models/AgencyApplication.js';
 import AgencyMember from '../../models/AgencyMember.js';
 import PlatformAudit from '../../models/PlatformAudit.js';
 import User, {
@@ -93,6 +94,9 @@ export interface AdminOverview {
     total: number;
     active: number;
     suspended: number;
+  };
+  applications: {
+    pending: number;
   };
   recentAudit: AdminAuditRow[];
 }
@@ -726,23 +730,25 @@ export async function updatePlatformAccount(input: {
 
 /** Console overview: realm/agency counts plus the latest platform audit rows. */
 export async function getAdminOverview(): Promise<AdminOverview> {
-  const [accountCounts, agencyCounts, recentAudit] = await Promise.all([
-    User.aggregate<{
-      _id: { realm: AccountType; status: AccountStatus };
-      count: number;
-    }>([
-      {
-        $group: {
-          _id: { realm: '$accountType', status: '$status' },
-          count: { $sum: 1 },
+  const [accountCounts, agencyCounts, pendingApplications, recentAudit] =
+    await Promise.all([
+      User.aggregate<{
+        _id: { realm: AccountType; status: AccountStatus };
+        count: number;
+      }>([
+        {
+          $group: {
+            _id: { realm: '$accountType', status: '$status' },
+            count: { $sum: 1 },
+          },
         },
-      },
-    ]),
-    Agency.aggregate<{ _id: AgencyStatus; count: number }>([
-      { $group: { _id: '$status', count: { $sum: 1 } } },
-    ]),
-    listRecentPlatformAudit(8),
-  ]);
+      ]),
+      Agency.aggregate<{ _id: AgencyStatus; count: number }>([
+        { $group: { _id: '$status', count: { $sum: 1 } } },
+      ]),
+      AgencyApplication.countDocuments({ status: 'pending' }),
+      listRecentPlatformAudit(8),
+    ]);
 
   const accounts = {
     total: 0,
@@ -766,5 +772,10 @@ export async function getAdminOverview(): Promise<AdminOverview> {
     if (entry._id === 'suspended') agencies.suspended += entry.count;
   }
 
-  return { accounts, agencies, recentAudit };
+  return {
+    accounts,
+    agencies,
+    applications: { pending: pendingApplications },
+    recentAudit,
+  };
 }

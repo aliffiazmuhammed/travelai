@@ -39,6 +39,7 @@ import {
   unarchiveAgencyTrip,
   updateAgencyTrip,
 } from '../services/agency/trips.js';
+import { getAgencyOverview } from '../services/agency/overview.js';
 import {
   deleteAgencyAsset,
   extensionForAgencyAssetMime,
@@ -249,7 +250,9 @@ export const acceptAgencyInvite = catchAsync(
 export const listAgencyTripsHandler = catchAsync(
   async (req: AgencyAccessRequest, res: Response) => {
     const { agency, role } = agencyContext(req);
-    const trips = await listAgencyTrips({
+    const page = Number(req.query.page);
+    const limit = Number(req.query.limit);
+    const result = await listAgencyTrips({
       agencyId: String(agency._id),
       role,
       search: typeof req.query.search === 'string' ? req.query.search : undefined,
@@ -257,8 +260,26 @@ export const listAgencyTripsHandler = catchAsync(
       assignedTo:
         typeof req.query.assignedTo === 'string' ? req.query.assignedTo : undefined,
       archived: req.query.archived === 'true',
+      startDateFrom:
+        typeof req.query.startDateFrom === 'string'
+          ? req.query.startDateFrom
+          : undefined,
+      page: Number.isFinite(page) ? page : undefined,
+      limit: Number.isFinite(limit) ? limit : undefined,
     });
-    res.json({ success: true, trips });
+    res.json({ success: true, ...result });
+  }
+);
+
+/** `GET /api/agency/overview` — enquiry, trip and event counts for the landing page. */
+export const getAgencyOverviewHandler = catchAsync(
+  async (req: AgencyAccessRequest, res: Response) => {
+    const { agency, role } = agencyContext(req);
+    const result = await getAgencyOverview({
+      agencyId: String(agency._id),
+      role,
+    });
+    res.json({ success: true, ...result });
   }
 );
 

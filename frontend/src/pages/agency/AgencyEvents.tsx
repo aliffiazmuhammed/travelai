@@ -44,6 +44,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useAgency } from '@/context/AgencyContext';
 import { useAgencyAssetUrl } from '@/hooks/useAgencyAssetUrl';
 import { agencyRoleBadgeClass, agencyRoleLabel, formatAgencyDate } from '@/lib/agency';
@@ -405,6 +406,10 @@ const AgencyEvents: React.FC = () => {
     'all'
   );
   const [rosterBusyId, setRosterBusyId] = useState<string | null>(null);
+  const [rosterSelected, setRosterSelected] = useState<Set<string>>(() => new Set());
+  const [rosterBulkBusy, setRosterBulkBusy] = useState<'confirmed' | 'declined' | null>(
+    null
+  );
 
   const loadEvents = useCallback(async () => {
     if (!activeAgencyId) return;
@@ -670,6 +675,7 @@ const AgencyEvents: React.FC = () => {
     setRosterEvent(event);
     setRoster([]);
     setRosterFilter('all');
+    setRosterSelected(new Set());
     setRosterLoading(true);
     try {
       const result = await api.listAgencyEventInterests(activeAgencyId, event.id);
@@ -751,6 +757,88 @@ const AgencyEvents: React.FC = () => {
       toast.error(errorMessage(err, 'Could not update this person.'));
     } finally {
       setRosterBusyId(null);
+    }
+  };
+
+  const toggleRosterSelected = (id: string) => {
+    setRosterSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllWaiting = () => {
+    setRosterSelected(
+      new Set(
+        filteredRoster
+          .filter((entry) => entry.status === 'pending')
+          .map((entry) => entry.id)
+      )
+    );
+  };
+
+  const bulkDecide = async (status: 'confirmed' | 'declined') => {
+    if (!activeAgencyId || !rosterEvent) return;
+    const ids = roster.filter(
+      (entry) => rosterSelected.has(entry.id) && entry.status !== status
+    ).map((entry) => entry.id);
+    if (ids.length === 0) {
+      toast.error('Select at least one traveller who is still waiting.');
+      return;
+    }
+
+    setRosterBulkBusy(status);
+    try {
+      const result = await api.decideAgencyEventInterests(
+        activeAgencyId,
+        rosterEvent.id,
+        ids,
+        status
+      );
+      const decided = new Map(result.decided.map((entry) => [entry.id, entry]));
+      const nextRoster = sortRoster(
+        roster.map((entry) => decided.get(entry.id) ?? entry)
+      );
+      setRoster(nextRoster);
+      setRosterSelected(new Set());
+
+      const nextCounts = {
+        pending: nextRoster.filter((entry) => entry.status === 'pending').length,
+        confirmed: nextRoster.filter((entry) => entry.status === 'confirmed').length,
+        declined: nextRoster.filter((entry) => entry.status === 'declined').length,
+      };
+      setEvents((prev) =>
+        prev.map((event) =>
+          event.id === rosterEvent.id
+            ? { ...event, interests: nextCounts }
+            : event
+        )
+      );
+
+      const decidedCount = result.decided.length;
+      if (result.skipped.length > 0) {
+        toast.warning(
+          `${decidedCount} of ${decidedCount + result.skipped.length} ${
+            status === 'confirmed' ? 'confirmed' : 'declined'
+          }; the rest stayed waiting because the remaining spots were full.`,
+          { description: result.skipped[0]?.reason }
+        );
+      } else {
+        toast.success(
+          `${decidedCount} ${decidedCount === 1 ? 'traveller' : 'travellers'} ${
+            status === 'confirmed' ? 'confirmed' : 'declined'
+          }.`
+        );
+      }
+      void refreshEventBadge().catch(() => {
+        /* badge only */
+      });
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not update this selection.'));
+    } finally {
+      setRosterBulkBusy(null);
     }
   };
 
@@ -1346,18 +1434,85 @@ const AgencyEvents: React.FC = () => {
             </DialogDescription>
           </DialogHeader>
 
-          <AgencySegmented
-            ariaLabel="Filter the roster"
-            value={rosterFilter}
-            onChange={(value) => setRosterFilter(value)}
-            options={ROSTER_FILTERS.map((filter) => ({
-              ...filter,
-              count:
-                filter.value === 'all'
-                  ? roster.length
-                  : rosterCounts[filter.value],
-            }))}
-          />
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <AgencySegmented
+              ariaLabel="Filter the roster"
+              value={rosterFilter}
+              onChange={(value) => setRosterFilter(value)}
+              options={ROSTER_FILTERS.map((filter) => ({
+                ...filter,
+                count:
+                  filter.value === 'all'
+                    ? roster.length
+                    : rosterCounts[filter.value],
+              }))}
+            />
+            {canPlan && rosterCounts.pending > 0 ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 rounded-full px-3 text-xs"
+                onClick={selectAllWaiting}
+              >
+                Select all waiting ({rosterCounts.pending})
+              </Button>
+            ) : null}
+          </div>
+
+          {canPlan && rosterSelected.size > 0 ? (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-agency-accent/30 bg-agency-accent-soft/60 px-3 py-2">
+              <p className="text-xs font-medium text-agency-ink">
+                {rosterSelected.size} selected
+              </p>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-7 rounded-lg px-2.5 text-xs"
+                  disabled={!canConfirmMore || rosterBulkBusy !== null}
+                  title={
+                    canConfirmMore
+                      ? undefined
+                      : 'Every spot is confirmed. Raise the capacity or decline someone first.'
+                  }
+                  onClick={() => void bulkDecide('confirmed')}
+                >
+                  {rosterBulkBusy === 'confirmed' ? (
+                    <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                  ) : (
+                    <Check className="mr-1 h-3 w-3" />
+                  )}
+                  Confirm selected
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 rounded-lg px-2.5 text-xs"
+                  disabled={rosterBulkBusy !== null}
+                  onClick={() => void bulkDecide('declined')}
+                >
+                  {rosterBulkBusy === 'declined' ? (
+                    <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                  ) : (
+                    <X className="mr-1 h-3 w-3" />
+                  )}
+                  Decline selected
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 rounded-lg px-2 text-xs"
+                  disabled={rosterBulkBusy !== null}
+                  onClick={() => setRosterSelected(new Set())}
+                >
+                  Clear
+                </Button>
+              </div>
+            </div>
+          ) : null}
 
           {rosterLoading ? (
             <div className="flex items-center justify-center gap-2 py-12 text-sm text-agency-muted">
@@ -1383,6 +1538,14 @@ const AgencyEvents: React.FC = () => {
                 return (
                   <div key={interest.id} className="space-y-2 px-4 py-3">
                     <div className="flex flex-wrap items-center gap-2">
+                      {canPlan ? (
+                        <Checkbox
+                          checked={rosterSelected.has(interest.id)}
+                          disabled={rosterBulkBusy !== null}
+                          onCheckedChange={() => toggleRosterSelected(interest.id)}
+                          aria-label={`Select ${interest.name}`}
+                        />
+                      ) : null}
                       <span className="text-sm font-semibold text-agency-ink">
                         {interest.name}
                       </span>

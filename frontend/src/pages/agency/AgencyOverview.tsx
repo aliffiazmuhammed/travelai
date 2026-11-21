@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowRight,
@@ -31,9 +31,11 @@ import { formatDate } from '@/lib/date';
 import { cn } from '@/lib/utils';
 import { api } from '@/services/api';
 import type { Trip } from '@/types';
-import type { AgencyEnquirySummaryView, AgencyEvent } from '@/types/agency';
-
-const todayIso = () => new Date().toISOString().slice(0, 10);
+import type {
+  AgencyEnquirySummaryView,
+  AgencyEventOverview,
+  AgencyTripOverview,
+} from '@/types/agency';
 
 function greetingFor(date: Date): string {
   const hour = date.getHours();
@@ -83,59 +85,49 @@ const AgencyOverview: React.FC = () => {
   const { user } = useAgencyAuth();
 
   const [summary, setSummary] = useState<AgencyEnquirySummaryView | null>(null);
-  const [trips, setTrips] = useState<Trip[]>([]);
-  const [events, setEvents] = useState<AgencyEvent[]>([]);
+  const [tripStats, setTripStats] = useState<AgencyTripOverview | null>(null);
+  const [eventStats, setEventStats] = useState<AgencyEventOverview | null>(null);
   const [dataLoading, setDataLoading] = useState(true);
 
-  // One quiet read of the three lists the page summarises. A failed call leaves
-  // its panel empty rather than blocking the workspace: the full pages still
-  // work, and this is only a morning glance.
+  // One summary read replaces three whole-library fetches (C-26). The server
+  // counts before it slices, so the KPI is the real number, not "however many
+  // rows happened to fit in the page".
   useEffect(() => {
     if (!activeAgencyId) {
       setSummary(null);
-      setTrips([]);
-      setEvents([]);
+      setTripStats(null);
+      setEventStats(null);
       setDataLoading(false);
       return;
     }
     let cancelled = false;
     setDataLoading(true);
-    void Promise.allSettled([
-      api.getAgencyEnquirySummary(),
-      api.getAgencyTrips(activeAgencyId),
-      api.listAgencyEvents(activeAgencyId),
-    ]).then(([enquiryResult, tripResult, eventResult]) => {
-      if (cancelled) return;
-      if (enquiryResult.status === 'fulfilled') setSummary(enquiryResult.value.summary);
-      if (tripResult.status === 'fulfilled') setTrips(tripResult.value.trips ?? []);
-      if (eventResult.status === 'fulfilled') setEvents(eventResult.value.events ?? []);
-      setDataLoading(false);
-    });
+    void api
+      .getAgencyOverview()
+      .then((result) => {
+        if (cancelled) return;
+        setSummary(result.enquiries);
+        setTripStats(result.trips);
+        setEventStats(result.events);
+      })
+      .catch(() => {
+        // A morning glance failing must not block the workspace: the full pages
+        // still work.
+      })
+      .finally(() => {
+        if (!cancelled) setDataLoading(false);
+      });
     return () => {
       cancelled = true;
     };
   }, [activeAgencyId]);
 
-  const today = todayIso();
-
-  const upcomingTrips = useMemo(
-    () =>
-      trips
-        .filter((trip) => trip.startDate && trip.startDate.slice(0, 10) >= today)
-        .sort((a, b) => (a.startDate ?? '').localeCompare(b.startDate ?? ''))
-        .slice(0, 3),
-    [trips, today]
-  );
-
-  const liveEvents = useMemo(
-    () =>
-      events
-        .filter((event) => event.state === 'published' && !event.closedAt && !event.hidden)
-        .filter((event) => (event.endDate ?? event.startDate) >= today)
-        .sort((a, b) => a.startDate.localeCompare(b.startDate))
-        .slice(0, 3),
-    [events, today]
-  );
+  const upcomingTrips = tripStats?.next ?? [];
+  const upcomingTripCount = tripStats?.upcomingCount ?? 0;
+  const tripTotal = tripStats?.total ?? 0;
+  const liveEvents = eventStats?.next ?? [];
+  const liveEventCount = eventStats?.liveCount ?? 0;
+  const eventTotal = eventStats?.total ?? 0;
 
   if (loading && agencies.length === 0) {
     return (
@@ -173,7 +165,7 @@ const AgencyOverview: React.FC = () => {
     month: 'long',
   });
   const teamReady = activeAgency.memberCount > 1;
-  const setupIncomplete = !teamReady || trips.length === 0 || events.length === 0;
+  const setupIncomplete = !teamReady || tripTotal === 0 || eventTotal === 0;
   const primaryAction =
     leadsWaiting > 0
       ? {
@@ -250,8 +242,8 @@ const AgencyOverview: React.FC = () => {
             icon={Map}
             tone="violet"
             to="/agency/trips"
-            value={upcomingTrips.length}
-            label={upcomingTrips.length === 1 ? 'trip coming up' : 'trips coming up'}
+            value={upcomingTripCount}
+            label={upcomingTripCount === 1 ? 'trip coming up' : 'trips coming up'}
             hint={
               upcomingTrips[0]?.startDate
                 ? `Next: ${formatDate(upcomingTrips[0].startDate)}`
@@ -333,9 +325,21 @@ const AgencyOverview: React.FC = () => {
         </Card>
 
         <Card className="rounded-2xl border-agency-line shadow-none">
-          <CardHeader>
-            <CardTitle className="text-base">Live events</CardTitle>
-            <CardDescription>Public pages taking interest.</CardDescription>
+          <CardHeader className="flex-row items-center justify-between space-y-0">
+            <div className="space-y-1">
+              <CardTitle className="text-base">Live events</CardTitle>
+              <CardDescription>
+                {liveEventCount > liveEvents.length
+                  ? `${liveEventCount} public events are taking interest.`
+                  : 'Public pages taking interest.'}
+              </CardDescription>
+            </div>
+            <Button asChild variant="ghost" size="sm">
+              <Link to="/agency/events">
+                All events
+                <ArrowRight className="ml-1.5 h-3.5 w-3.5" aria-hidden />
+              </Link>
+            </Button>
           </CardHeader>
           <CardContent className="space-y-2">
             {dataLoading ? (
@@ -419,15 +423,15 @@ const AgencyOverview: React.FC = () => {
               }
             />
             <SetupRow
-              done={trips.length > 0}
+              done={tripTotal > 0}
               title="Plan your first agency trip"
               detail={
-                trips.length > 0
-                  ? `${countLabel(trips.length, 'trip', 'trips')} in the library.`
+                tripTotal > 0
+                  ? `${countLabel(tripTotal, 'trip', 'trips')} in the library.`
                   : 'Itinerary, map, expenses and versions work exactly like your personal trips.'
               }
               action={
-                trips.length === 0 ? (
+                tripTotal === 0 ? (
                   <Button asChild size="sm" variant="outline">
                     <Link to="/agency/trips">
                       <Map className="mr-1.5 h-3.5 w-3.5" aria-hidden />
@@ -438,15 +442,15 @@ const AgencyOverview: React.FC = () => {
               }
             />
             <SetupRow
-              done={events.length > 0}
+              done={eventTotal > 0}
               title="Publish an event"
               detail={
-                events.length > 0
-                  ? `${countLabel(events.length, 'event', 'events')} in the library.`
+                eventTotal > 0
+                  ? `${countLabel(eventTotal, 'event', 'events')} in the library.`
                   : 'A dated camp or group trip with its own public page and roster.'
               }
               action={
-                events.length === 0 ? (
+                eventTotal === 0 ? (
                   <Button asChild size="sm" variant="outline">
                     <Link to="/agency/events">
                       <Users className="mr-1.5 h-3.5 w-3.5" aria-hidden />

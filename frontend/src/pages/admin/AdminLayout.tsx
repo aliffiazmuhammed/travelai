@@ -113,7 +113,7 @@ function crumbTrail(pathname: string): Crumb[] {
     return [{ label: 'Overview' }];
   }
 
-  if (pathname.startsWith('/admin/account')) {
+  if (pathname === '/admin/account' || pathname.startsWith('/admin/account/')) {
     return [{ label: 'Console', to: '/admin' }, { label: 'Account' }];
   }
 

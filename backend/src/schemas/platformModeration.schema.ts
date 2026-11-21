@@ -12,7 +12,8 @@ export const MODERATION_STATUS_FILTERS = ['open', 'hidden', 'dismissed'] as cons
 export const moderationQuerySchema = z
   .object({
     status: z.enum(MODERATION_STATUS_FILTERS).optional().default('open'),
-    limit: z.coerce.number().int().min(1).max(100).optional().default(50),
+    page: z.coerce.number().int().min(1).optional().default(1),
+    limit: z.coerce.number().int().min(1).max(100).optional().default(25),
   })
   .strict();
 

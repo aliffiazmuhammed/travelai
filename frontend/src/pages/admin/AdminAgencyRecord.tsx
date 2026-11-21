@@ -65,6 +65,8 @@ import type {
 import { toast } from 'sonner';
 import AdminTemporaryPassword from './AdminTemporaryPassword';
 import { AgencyStatusBadge, formatAdminDate, TierBadge } from './accountMeta';
+import { agencyStatusLabel, memberStatusLabel } from './adminLabels';
+import { agencyRoleLabel } from '@/lib/agency';
 
 const roleOptions: PlatformAgencyRole[] = ['owner', 'admin', 'planner', 'viewer'];
 
@@ -592,7 +594,7 @@ const AdminAgencyRecord: React.FC = () => {
           <SelectContent>
             {roleOptions.map((role) => (
               <SelectItem key={role} value={role}>
-                {role}
+                {agencyRoleLabel(role)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -613,7 +615,7 @@ const AdminAgencyRecord: React.FC = () => {
               : 'border-destructive/40 bg-destructive/10 text-xs text-destructive-ink'
           }
         >
-          {member.status}
+          {memberStatusLabel(member.status)}
         </Badge>
       ),
     },
@@ -1450,7 +1452,7 @@ const AdminAgencyRecord: React.FC = () => {
                 <SelectContent>
                   {nonOwners.map((member) => (
                     <SelectItem key={member.userId} value={member.userId}>
-                      {member.email} ({member.role})
+                      {member.email} ({agencyRoleLabel(member.role)})
                     </SelectItem>
                   ))}
                 </SelectContent>

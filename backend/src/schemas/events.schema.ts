@@ -137,3 +137,18 @@ export const decideEventInterestSchema = z
     status: z.enum(['confirmed', 'declined']),
   })
   .strict();
+
+/**
+ * Roster bulk decision. Capacity is applied once for the whole batch, so a
+ * 50-person waiting list can be confirmed without overbooking; rows that do
+ * not fit stay waiting and are reported back to the operator.
+ */
+export const bulkEventInterestsSchema = z
+  .object({
+    ids: z
+      .array(z.string().trim().regex(OBJECT_ID, 'Choose roster entries from this event.'))
+      .min(1, 'Select at least one traveller.')
+      .max(100, 'Apply the decision to 100 travellers or fewer.'),
+    status: z.enum(['confirmed', 'declined']),
+  })
+  .strict();

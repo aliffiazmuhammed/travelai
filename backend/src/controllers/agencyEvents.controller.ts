@@ -7,6 +7,7 @@ import {
   closeAgencyEvent,
   createAgencyEvent,
   decideEventInterest,
+  decideEventInterests,
   deleteAgencyEvent,
   getAgencyEventInterestSummary,
   getOwnAgencyEvent,
@@ -19,6 +20,7 @@ import {
   viewOwnEvent,
 } from '../services/events/agencyEvents.js';
 import {
+  bulkEventInterestsSchema,
   eventInterestsQuerySchema,
   type AgencyEventFormInput,
 } from '../schemas/events.schema.js';
@@ -175,5 +177,21 @@ export const decideEventInterestHandler = catchAsync(
       status,
     });
     res.json({ success: true, interest });
+  }
+);
+
+export const decideEventInterestsHandler = catchAsync(
+  async (req: AgencyAccessRequest, res: Response) => {
+    const { agency } = agencyContext(req);
+    const status = req.body?.status as 'confirmed' | 'declined';
+    const ids = Array.isArray(req.body?.ids) ? (req.body.ids as string[]) : [];
+    const result = await decideEventInterests({
+      agencyId: String(agency._id),
+      eventId: String(req.params.eventId ?? ''),
+      interestIds: ids,
+      actorId: req.userId,
+      status,
+    });
+    res.json({ success: true, ...result });
   }
 );

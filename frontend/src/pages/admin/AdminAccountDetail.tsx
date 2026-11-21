@@ -24,6 +24,7 @@ import {
   RealmBadge,
   StatusBadge,
 } from './accountMeta';
+import { agencyStatusLabel } from './adminLabels';
 
 interface AdminAccountDetailProps {
   open: boolean;
@@ -114,7 +115,7 @@ const AdminAccountDetail: React.FC<AdminAccountDetailProps> = ({
                             : 'border-warning/40 bg-warning/10 text-overline text-warning-ink'
                         }
                       >
-                        {account.agency.status}
+                        {agencyStatusLabel(account.agency.status)}
                       </Badge>
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">

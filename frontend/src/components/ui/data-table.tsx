@@ -196,7 +196,7 @@ export function DataTable<T>({
                   <th
                     key={column.id}
                     scope="col"
-                    className={cn(column.headClassName, stickyClass(column))}
+                    className={cn("align-middle", column.headClassName, stickyClass(column))}
                   >
                     {column.header}
                   </th>
@@ -235,7 +235,7 @@ export function DataTable<T>({
                     {columns.map((column) => (
                       <td
                         key={column.id}
-                        className={cn(column.cellClassName, stickyClass(column))}
+                        className={cn("align-middle", column.cellClassName, stickyClass(column))}
                         onClick={column.interactive ? stopPropagation : undefined}
                         onKeyDown={column.interactive ? stopPropagation : undefined}
                       >

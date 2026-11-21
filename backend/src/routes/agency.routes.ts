@@ -22,6 +22,7 @@ import {
   getAgency,
   getAgencyAssetContentHandler,
   getAgencyInvitePreview,
+  getAgencyOverviewHandler,
   getAgencyProposalHandler,
   getAgencyProposalShareHandler,
   getAgencyPdfTokenCatalogHandler,
@@ -80,6 +81,7 @@ import {
   closeAgencyEventHandler,
   createAgencyEventHandler,
   decideEventInterestHandler,
+  decideEventInterestsHandler,
   deleteAgencyEventHandler,
   getAgencyEventHandler,
   getAgencyEventSummaryHandler,
@@ -91,6 +93,7 @@ import {
   updateAgencyEventHandler,
 } from '../controllers/agencyEvents.controller.js';
 import {
+  bulkUpdateAgencyEnquiriesHandler,
   convertAgencyEnquiryHandler,
   getAgencyEnquiryHandler,
   getAgencyEnquirySummaryHandler,
@@ -117,6 +120,7 @@ import {
 import { validate } from '../middleware/validate.middleware.js';
 import {
   conversationMessageSchema,
+  bulkAgencyEnquirySchema,
   updateAgencyEnquirySchema,
 } from '../schemas/agencyEnquiry.schema.js';
 import {
@@ -125,6 +129,7 @@ import {
   updateAgencyPackageSchema,
 } from '../schemas/directory.schema.js';
 import {
+  bulkEventInterestsSchema,
   createAgencyEventSchema,
   decideEventInterestSchema,
   updateAgencyEventSchema,
@@ -233,6 +238,15 @@ router.get(
   requireAgencyMember(),
   listAgencyEnquiriesHandler
 );
+// Bulk triage sits beside the single-row PATCH and reuses its rules per row.
+// Registered before `/:enquiryId` for the same reason as `summary`.
+router.post(
+  '/enquiries/bulk',
+  protectAgency,
+  requireAgencyRole('planner'),
+  validate(bulkAgencyEnquirySchema),
+  bulkUpdateAgencyEnquiriesHandler
+);
 // Must precede `/:enquiryId`, or "summary" would be read as an id.
 router.get(
   '/enquiries/summary',
@@ -295,6 +309,15 @@ router.post(
 
 // PA0: self-service agency creation is gone. Tenants are provisioned by the
 // platform admin (PA3); until then `GET /` and `POST /` stay removed.
+
+// The Overview's three summaries. Workspace-addressed like the inbox, so it
+// cannot be confused with a tenant id.
+router.get(
+  '/overview',
+  protectAgency,
+  requireAgencyMember(),
+  getAgencyOverviewHandler
+);
 
 // Tenant-scoped read/update.
 router.get('/:agencyId', protectAgency, requireAgencyMember(), getAgency);
@@ -454,6 +477,14 @@ router.patch(
   requireAgencyRole('planner'),
   validate(decideEventInterestSchema),
   decideEventInterestHandler
+);
+// One capacity-aware decision for a selection from the roster.
+router.post(
+  '/:agencyId/events/:eventId/interests/bulk',
+  protectAgency,
+  requireAgencyRole('planner'),
+  validate(bulkEventInterestsSchema),
+  decideEventInterestsHandler
 );
 
 // Brand assets (A3). Members can view the library; only admins can add or

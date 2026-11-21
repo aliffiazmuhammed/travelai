@@ -79,6 +79,7 @@ test('A1-A9 agency API exposes the expected route table', () => {
     '/proposals/:token/accept POST',
     '/proposals/:token/pdf GET',
     '/enquiries GET',
+    '/enquiries/bulk POST',
     '/enquiries/summary GET',
     '/enquiries/events GET',
     '/enquiries/:enquiryId GET',
@@ -87,6 +88,7 @@ test('A1-A9 agency API exposes the expected route table', () => {
     '/enquiries/:enquiryId/trip POST',
     '/enquiries/:enquiryId/messages POST',
     '/enquiries/:enquiryId/read POST',
+    '/overview GET',
     '/:agencyId GET',
     '/:agencyId PATCH',
     '/:agencyId/profile GET',
@@ -111,6 +113,7 @@ test('A1-A9 agency API exposes the expected route table', () => {
     '/:agencyId/events/:eventId/reopen POST',
     '/:agencyId/events/:eventId/interests GET',
     '/:agencyId/events/:eventId/interests/:interestId PATCH',
+    '/:agencyId/events/:eventId/interests/bulk POST',
     '/:agencyId/assets GET',
     '/:agencyId/assets POST',
     '/:agencyId/assets/:assetId DELETE',
@@ -343,6 +346,7 @@ test('trip writes, directory writes, quote actions and exports require planner r
     '/:agencyId/events POST',
     '/:agencyId/events/:eventId PATCH',
     '/:agencyId/events/:eventId/interests/:interestId PATCH',
+    '/:agencyId/events/:eventId/interests/bulk POST',
     '/:agencyId/trips POST',
     '/:agencyId/trips/:tripId PATCH',
     '/:agencyId/trips/:tripId/exports/preview POST',
@@ -359,6 +363,7 @@ test('trip writes, directory writes, quote actions and exports require planner r
     '/enquiries/:enquiryId/convert POST',
     '/enquiries/:enquiryId/trip POST',
     '/enquiries/:enquiryId/messages POST',
+    '/enquiries/bulk POST',
   ]);
   for (const layer of routeLayers()) {
     const key = `${pathOf(layer)} ${methodsOf(layer).join(',')}`;

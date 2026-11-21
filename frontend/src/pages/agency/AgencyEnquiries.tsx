@@ -4,6 +4,7 @@ import {
   ArrowUpRight,
   BriefcaseBusiness,
   CalendarDays,
+  Check,
   CheckCircle2,
   ChevronRight,
   Inbox,
@@ -14,15 +15,18 @@ import {
   Phone,
   RefreshCw,
   Receipt,
+  Search,
   Trophy,
   UserCheck,
   UserPlus,
   Users,
   Wallet,
+  X,
   XCircle,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Dialog,
   DialogContent,
@@ -47,6 +51,7 @@ import {
 } from '@/components/ui/sheet';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Field } from '@/components/ui/field';
 import { AdminPagination } from '@/components/admin/AdminPagination';
 import { AgencyEmptyState } from '@/components/agency/AgencyEmptyState';
@@ -482,6 +487,12 @@ const AgencyEnquiries: React.FC = () => {
 
   const [enquiries, setEnquiries] = useState<AgencyEnquiry[]>([]);
   const [filter, setFilter] = useState<Filter>('all');
+  const [query, setQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [owner, setOwner] = useState<'all' | 'me' | 'unassigned'>('all');
+  const [sort, setSort] = useState<'newest' | 'activity' | 'oldest'>('newest');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [pageIndex, setPageIndex] = useState(0);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -499,6 +510,8 @@ const AgencyEnquiries: React.FC = () => {
   const [members, setMembers] = useState<AgencyMember[]>([]);
   const [lostTarget, setLostTarget] = useState<AgencyEnquiry | null>(null);
   const [lostReason, setLostReason] = useState('');
+  const [bulkLostOpen, setBulkLostOpen] = useState(false);
+  const [bulkLostReason, setBulkLostReason] = useState('');
 
   // Newer reads win: a quiet live refresh can overlap the first page load, and
   // an older response must never overwrite a fresher list or thread.
@@ -539,6 +552,17 @@ const AgencyEnquiries: React.FC = () => {
     void loadSummary();
   }, [loadSummary, reloadKey]);
 
+  // C-26 triage search. Debounced so a pasted name does not fire per keystroke.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedQuery(query.trim());
+      cursorRef.current = [null];
+      setPageIndex(0);
+      setSelectedIds(new Set());
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
   /**
    * `quiet` keeps the rows already on screen: a live refresh that fails must not
    * replace a working inbox with an error card.
@@ -553,6 +577,9 @@ const AgencyEnquiries: React.FC = () => {
       try {
         const page = await api.getAgencyEnquiries({
           status: filter === 'all' ? undefined : filter,
+          q: debouncedQuery || undefined,
+          owner,
+          sort,
           cursor: cursorRef.current[pageIndex] ?? undefined,
           limit: PAGE_SIZE,
         });
@@ -574,7 +601,7 @@ const AgencyEnquiries: React.FC = () => {
         if (!quiet) setLoading(false);
       }
     },
-    [filter, pageIndex]
+    [filter, pageIndex, debouncedQuery, owner, sort]
   );
 
   useEffect(() => {
@@ -594,12 +621,30 @@ const AgencyEnquiries: React.FC = () => {
   const changeFilter = (value: Filter) => {
     cursorRef.current = [null];
     setPageIndex(0);
+    setSelectedIds(new Set());
     setFilter(value);
   };
 
   const changePage = (nextPage: number) => {
     const clamped = Math.max(0, Math.min(nextPage, totalPages - 1));
-    if (clamped !== pageIndex) setPageIndex(clamped);
+    if (clamped !== pageIndex) {
+      setSelectedIds(new Set());
+      setPageIndex(clamped);
+    }
+  };
+
+  const changeOwner = (value: 'all' | 'me' | 'unassigned') => {
+    cursorRef.current = [null];
+    setPageIndex(0);
+    setSelectedIds(new Set());
+    setOwner(value);
+  };
+
+  const changeSort = (value: 'newest' | 'activity' | 'oldest') => {
+    cursorRef.current = [null];
+    setPageIndex(0);
+    setSelectedIds(new Set());
+    setSort(value);
   };
 
   useEffect(() => {
@@ -863,6 +908,190 @@ const AgencyEnquiries: React.FC = () => {
     );
   };
 
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    setSelectedIds(new Set(enquiries.map((e) => e.id)));
+  };
+
+  const clearSelection = () => {
+    setSelectedIds(new Set());
+  };
+
+  const undoBulk = async (
+    previous: Array<{ id: string; status: AgencyEnquiryStatus; assignedTo: string | null }>
+  ) => {
+    try {
+      await Promise.all(
+        previous.map((item) =>
+          api.updateAgencyEnquiry(item.id, {
+            status: item.status,
+            assigneeId: item.assignedTo,
+          })
+        )
+      );
+      toast.success('Batch update undone.');
+      void loadPage(true);
+      void loadSummary(true);
+    } catch {
+      toast.error('Could not undo that batch update.');
+    }
+  };
+
+  const bulkClaim = async () => {
+    if (selectedIds.size === 0 || !myId) return;
+    setBulkBusy(true);
+    try {
+      const ids = Array.from(selectedIds);
+      const res = await api.bulkUpdateAgencyEnquiries({
+        action: 'claim',
+        ids,
+      });
+      toast.success(`Claimed ${res.updated} ${res.updated === 1 ? 'enquiry' : 'enquiries'}.`, {
+        action: res.previous?.length
+          ? {
+              label: 'Undo',
+              onClick: () => {
+                void undoBulk(res.previous);
+              },
+            }
+          : undefined,
+      });
+      setSelectedIds(new Set());
+      await Promise.all([loadPage(true), loadSummary(true)]);
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not claim selected enquiries.'));
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const bulkAssign = async (assigneeId: string | null) => {
+    if (selectedIds.size === 0) return;
+    setBulkBusy(true);
+    try {
+      const ids = Array.from(selectedIds);
+      const res = await api.bulkUpdateAgencyEnquiries({
+        action: 'assign',
+        ids,
+        assigneeId,
+      });
+      const assigneeName = assigneeId
+        ? members.find((m) => m.userId === assigneeId)?.label ?? 'teammate'
+        : 'unassigned';
+      toast.success(
+        `Assigned ${res.updated} ${res.updated === 1 ? 'enquiry' : 'enquiries'} to ${assigneeName}.`,
+        {
+          action: res.previous?.length
+            ? {
+                label: 'Undo',
+                onClick: () => {
+                  void undoBulk(res.previous);
+                },
+              }
+            : undefined,
+        }
+      );
+      setSelectedIds(new Set());
+      await Promise.all([loadPage(true), loadSummary(true)]);
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not assign selected enquiries.'));
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const bulkStatus = async (status: AgencyEnquiryStatus) => {
+    if (selectedIds.size === 0) return;
+    if (status === 'lost') {
+      setBulkLostReason('');
+      setBulkLostOpen(true);
+      return;
+    }
+    setBulkBusy(true);
+    try {
+      const ids = Array.from(selectedIds);
+      const res = await api.bulkUpdateAgencyEnquiries({
+        action: 'status',
+        ids,
+        status,
+      });
+      toast.success(
+        `Updated ${res.updated} ${res.updated === 1 ? 'enquiry' : 'enquiries'} to ${AGENCY_ENQUIRY_STATUS_LABELS[status]}.`,
+        {
+          action: res.previous?.length
+            ? {
+                label: 'Undo',
+                onClick: () => {
+                  void undoBulk(res.previous);
+                },
+              }
+            : undefined,
+        }
+      );
+      setSelectedIds(new Set());
+      await Promise.all([loadPage(true), loadSummary(true)]);
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not update status for selected enquiries.'));
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const confirmBulkLost = async () => {
+    const reason = bulkLostReason.trim();
+    if (!reason || selectedIds.size === 0) return;
+    setBulkBusy(true);
+    try {
+      const ids = Array.from(selectedIds);
+      const res = await api.bulkUpdateAgencyEnquiries({
+        action: 'status',
+        ids,
+        status: 'lost',
+        lostReason: reason,
+      });
+      setBulkLostOpen(false);
+      toast.success(
+        `Marked ${res.updated} ${res.updated === 1 ? 'enquiry' : 'enquiries'} as lost.`,
+        {
+          action: res.previous?.length
+            ? {
+                label: 'Undo',
+                onClick: () => {
+                  void undoBulk(res.previous);
+                },
+              }
+            : undefined,
+        }
+      );
+      setSelectedIds(new Set());
+      await Promise.all([loadPage(true), loadSummary(true)]);
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not mark selected enquiries as lost.'));
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const resetTriageFilters = () => {
+    setQuery('');
+    setDebouncedQuery('');
+    setOwner('all');
+    setSort('newest');
+    cursorRef.current = [null];
+    setPageIndex(0);
+    setSelectedIds(new Set());
+  };
+
+  const hasActiveFilters = Boolean(query || owner !== 'all' || sort !== 'newest');
+
   const sendReply = useCallback(
     async (body: string) => {
       if (!selected) return;
@@ -945,6 +1174,45 @@ const AgencyEnquiries: React.FC = () => {
   ];
 
   const columns: DataTableColumn<AgencyEnquiry>[] = [
+    ...(canPlan
+      ? [
+          {
+            id: 'select',
+            header: (
+              <div className="flex items-center justify-center">
+                <Checkbox
+                  checked={
+                    enquiries.length > 0 &&
+                    enquiries.every((e) => selectedIds.has(e.id))
+                  }
+                  onCheckedChange={(checked: boolean) => {
+                    if (checked) {
+                      setSelectedIds(new Set(enquiries.map((e) => e.id)));
+                    } else {
+                      setSelectedIds(new Set());
+                    }
+                  }}
+                  aria-label="Select all enquiries on this page"
+                />
+              </div>
+            ),
+            interactive: true,
+            mobile: 'hidden' as const,
+            headClassName: 'h-10 w-10 px-2 text-center',
+            cellClassName: 'w-10 px-2 py-3 text-center',
+            cell: (enquiry: AgencyEnquiry) => (
+              <div className="flex items-center justify-center">
+                <Checkbox
+                  checked={selectedIds.has(enquiry.id)}
+                  disabled={bulkBusy}
+                  onCheckedChange={() => toggleSelect(enquiry.id)}
+                  aria-label={`Select enquiry from ${enquiry.contact.name}`}
+                />
+              </div>
+            ),
+          },
+        ]
+      : []),
     {
       id: 'traveller',
       header: 'Traveller',
@@ -1241,6 +1509,130 @@ const AgencyEnquiries: React.FC = () => {
           </p>
         </div>
 
+        <div className="flex flex-col gap-2 border-b border-agency-line px-3 py-2.5 sm:flex-row sm:items-center">
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-agency-muted" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search by traveller, email, package or client…"
+              aria-label="Search enquiries"
+              className="h-8 rounded-lg border-agency-line pl-8 pr-7 text-xs"
+            />
+            {query ? (
+              <button
+                type="button"
+                onClick={() => setQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-agency-muted hover:text-agency-ink"
+                aria-label="Clear search"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            ) : null}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={owner} onValueChange={(val) => changeOwner(val as 'all' | 'me' | 'unassigned')}>
+              <SelectTrigger className="h-8 w-[130px] rounded-lg border-agency-line text-xs" aria-label="Filter by owner">
+                <SelectValue placeholder="All owners" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All owners</SelectItem>
+                <SelectItem value="me">Assigned to me</SelectItem>
+                <SelectItem value="unassigned">Unassigned</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={sort} onValueChange={(val) => changeSort(val as 'newest' | 'activity' | 'oldest')}>
+              <SelectTrigger className="h-8 w-[130px] rounded-lg border-agency-line text-xs" aria-label="Sort enquiries">
+                <SelectValue placeholder="Sort" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="newest">Newest first</SelectItem>
+                <SelectItem value="activity">Last activity</SelectItem>
+                <SelectItem value="oldest">Oldest first</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {hasActiveFilters ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={resetTriageFilters}
+                className="h-8 px-2 text-xs text-agency-muted hover:text-agency-ink"
+              >
+                Reset
+              </Button>
+            ) : null}
+          </div>
+        </div>
+
+        {canPlan && selectedIds.size > 0 ? (
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-agency-accent/30 bg-agency-accent-soft/70 px-3 py-2 text-xs">
+            <div className="flex items-center gap-2 font-medium text-agency-accent-ink">
+              <span>{selectedIds.size} selected</span>
+              <button
+                type="button"
+                onClick={selectAll}
+                className="underline underline-offset-2 hover:text-agency-ink"
+              >
+                Select all {enquiries.length} on page
+              </button>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 rounded-lg border-agency-line bg-agency-panel px-2.5 text-xs font-medium"
+                disabled={bulkBusy}
+                onClick={() => void bulkClaim()}
+              >
+                {bulkBusy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
+                Claim
+              </Button>
+              {canAssign ? (
+                <Select onValueChange={(val) => void bulkAssign(val === 'unassigned' ? null : val)}>
+                  <SelectTrigger className="h-7 w-[124px] rounded-lg border-agency-line bg-agency-panel text-xs" aria-label="Assign selected">
+                    <SelectValue placeholder="Assign to…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unassigned">Unassigned</SelectItem>
+                    {members.map((m) => (
+                      <SelectItem key={m.userId} value={m.userId}>
+                        {m.userId === myId ? 'You' : m.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : null}
+              <Select onValueChange={(val) => void bulkStatus(val as AgencyEnquiryStatus)}>
+                <SelectTrigger className="h-7 w-[116px] rounded-lg border-agency-line bg-agency-panel text-xs" aria-label="Change status for selected">
+                  <SelectValue placeholder="Status…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {AGENCY_ENQUIRY_STATUSES.map((st) => (
+                    <SelectItem key={st} value={st}>
+                      {AGENCY_ENQUIRY_STATUS_LABELS[st]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-xs text-agency-muted hover:text-agency-ink"
+                disabled={bulkBusy}
+                onClick={clearSelection}
+              >
+                Clear
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
       {error ? (
         <div role="alert" className="flex flex-wrap items-center justify-between gap-3 p-4">
           <p className="text-xs font-medium text-destructive-ink">{error}</p>
@@ -1383,11 +1775,12 @@ const AgencyEnquiries: React.FC = () => {
               {lostTarget.package ? <> · {lostTarget.package.title}</> : null}
             </div>
           ) : null}
-          <div className="flex flex-wrap gap-1.5">
+          <div role="group" aria-label="Common reasons" className="flex flex-wrap gap-1.5">
             {LOST_REASON_PRESETS.map((preset) => (
               <button
                 key={preset}
                 type="button"
+                aria-pressed={lostReason === preset}
                 onClick={() => setLostReason(preset)}
                 className={cn(
                   'rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors coarse:min-h-11 coarse:px-4',
@@ -1433,6 +1826,76 @@ const AgencyEnquiries: React.FC = () => {
               disabled={!lostReason.trim() || busy !== null}
             >
               {busy === 'status-lost' ? (
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              ) : null}
+              Mark lost
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bulkLostOpen} onOpenChange={setBulkLostOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              Mark {selectedIds.size} {selectedIds.size === 1 ? 'enquiry' : 'enquiries'} as lost
+            </DialogTitle>
+            <DialogDescription>
+              A short reason keeps the pipeline honest. It is recorded on each selected lead and can be changed later.
+            </DialogDescription>
+          </DialogHeader>
+          <div role="group" aria-label="Common reasons" className="flex flex-wrap gap-1.5">
+            {LOST_REASON_PRESETS.map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                aria-pressed={bulkLostReason === preset}
+                onClick={() => setBulkLostReason(preset)}
+                className={cn(
+                  'rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors coarse:min-h-11 coarse:px-4',
+                  bulkLostReason === preset
+                    ? 'border-destructive/40 bg-destructive/10 text-destructive'
+                    : 'border-border/70 text-muted-foreground hover:text-foreground'
+                )}
+              >
+                {preset}
+              </button>
+            ))}
+          </div>
+          <Field
+            id="bulk-enquiry-lost-reason"
+            label="Why are these enquiries lost?"
+            hint="Recorded on each selected lead. Up to 200 characters."
+            required
+          >
+            {(control) => (
+              <Textarea
+                {...control}
+                name="bulkLostReason"
+                value={bulkLostReason}
+                onChange={(event) => setBulkLostReason(event.target.value)}
+                placeholder="Budget, dates, chose another agency…"
+                maxLength={200}
+                rows={3}
+              />
+            )}
+          </Field>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={bulkBusy}
+              onClick={() => setBulkLostOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => void confirmBulkLost()}
+              disabled={!bulkLostReason.trim() || bulkBusy}
+            >
+              {bulkBusy ? (
                 <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
               ) : null}
               Mark lost

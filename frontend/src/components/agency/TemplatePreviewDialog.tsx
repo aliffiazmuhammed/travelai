@@ -78,7 +78,7 @@ const TemplatePreviewDialog: React.FC<TemplatePreviewDialogProps> = ({
     setTripsLoading(true);
     setTripsError(null);
     try {
-      const result = await api.getAgencyTrips(agencyId);
+      const result = await api.getAgencyTrips(agencyId, { limit: 25 });
       const list = result.trips ?? [];
       setTrips(list);
       setSelectedTripId((current) =>

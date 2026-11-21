@@ -105,12 +105,16 @@ export const createAgencyEnquirySchema = z
 export type CreateAgencyEnquiryInput = z.infer<typeof createAgencyEnquirySchema>;
 
 /**
- * Agency inbox query. `status` is optional (all statuses), and the cursor is the
- * opaque `(createdAt, _id)` pair from the service.
+ * Agency inbox query. `status` is optional (all statuses), the cursor is the
+ * opaque `(sort value, _id)` pair from the service, and the filter set mirrors
+ * what a triage shift actually asks for: search, ownership and ordering.
  */
 export const agencyEnquiryQuerySchema = z
   .object({
     status: z.enum(AGENCY_ENQUIRY_STATUSES).optional(),
+    q: z.string().trim().max(120, 'Keep the search under 120 characters.').optional(),
+    owner: z.enum(['all', 'me', 'unassigned']).optional(),
+    sort: z.enum(['newest', 'oldest', 'activity']).optional(),
     cursor: z.string().max(400, 'That page cursor is too long.').optional(),
     limit: z.coerce
       .number()
@@ -161,6 +165,62 @@ export const updateAgencyEnquirySchema = z
 export type UpdateAgencyEnquirySchemaInput = z.infer<
   typeof updateAgencyEnquirySchema
 >;
+
+/**
+ * Bulk triage. The same action is applied to every selected lead, and every
+ * row keeps its own permission and transition checks; the response reports
+ * partial success instead of pretending one failure cancels the batch.
+ */
+export const bulkAgencyEnquirySchema = z
+  .object({
+    ids: z
+      .array(z.string().trim().regex(OBJECT_ID, 'Choose enquiries from this inbox.'))
+      .min(1, 'Select at least one enquiry.')
+      .max(50, 'Apply the action to 50 enquiries or fewer.'),
+    action: z.enum(['claim', 'assign', 'status']),
+    /** Required for `assign`; `null` releases the claim. */
+    assigneeId: z
+      .union([
+        z.string().trim().regex(OBJECT_ID, 'Choose a team member from this agency.'),
+        z.null(),
+      ])
+      .optional(),
+    status: z.enum(AGENCY_ENQUIRY_STATUSES).optional(),
+    lostReason: z
+      .string()
+      .trim()
+      .max(
+        AGENCY_ENQUIRY_LIMITS.lostReason,
+        `Keep the lost reason under ${AGENCY_ENQUIRY_LIMITS.lostReason} characters.`
+      )
+      .optional(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.action === 'assign' && value.assigneeId === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['assigneeId'],
+        message: 'Choose a team member, or release with null.',
+      });
+    }
+    if (value.action === 'claim' && value.assigneeId !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['assigneeId'],
+        message: 'Claiming always assigns the lead to you.',
+      });
+    }
+    if (value.action === 'status' && value.status === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['status'],
+        message: 'Choose the status to apply.',
+      });
+    }
+  });
+
+export type BulkAgencyEnquiryInput = z.infer<typeof bulkAgencyEnquirySchema>;
 
 /** A consumer's own enquiry history; no status filter until D6. */
 export const myEnquiryQuerySchema = z

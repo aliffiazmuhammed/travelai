@@ -22,6 +22,7 @@ import { api } from '@/services/api';
 import type { PlatformOverview } from '@/types';
 import { usePlatformAuth } from '@/context/PlatformAuthContext';
 import { formatAdminDate } from './accountMeta';
+import { auditActionLabel, auditTargetLabel } from './adminLabels';
 
 /**
  * `/admin` overview (PA2).
@@ -77,6 +78,7 @@ const AdminOverview: React.FC = () => {
 
   const accounts = overview?.accounts;
   const agencies = overview?.agencies;
+  const pendingApplications = overview?.applications.pending ?? null;
 
   return (
     <div className="space-y-6">
@@ -107,7 +109,35 @@ const AdminOverview: React.FC = () => {
         </AdminNotice>
       ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
+        <AdminStatTile
+          icon={Inbox}
+          tone={pendingApplications ? 'amber' : 'emerald'}
+          label="Pending applications"
+          value={pendingApplications}
+          hint={
+            pendingApplications === null
+              ? 'Applications unavailable right now.'
+              : pendingApplications === 0
+                ? 'No agency is waiting to be reviewed.'
+                : 'Agencies waiting for a decision.'
+          }
+          to="/admin/applications"
+        />
+        <AdminStatTile
+          icon={Flag}
+          tone={openReports === 0 ? 'slate' : 'amber'}
+          label="Open reports"
+          value={openReports}
+          hint={
+            openReports === null
+              ? 'Queue unavailable right now.'
+              : openReports === 0
+                ? 'Nothing waiting for a decision.'
+                : 'Reported content awaiting triage.'
+          }
+          to="/admin/reports"
+        />
         <AdminStatTile
           icon={Users}
           tone="sky"
@@ -131,20 +161,6 @@ const AdminOverview: React.FC = () => {
               : 'Tenant records on the platform.'
           }
           to="/admin/agencies"
-        />
-        <AdminStatTile
-          icon={Flag}
-          tone={openReports === 0 ? 'slate' : 'amber'}
-          label="Open reports"
-          value={openReports}
-          hint={
-            openReports === null
-              ? 'Queue unavailable right now.'
-              : openReports === 0
-                ? 'Nothing waiting for a decision.'
-                : 'Reported content awaiting triage.'
-          }
-          to="/admin/reports"
         />
         <AdminStatTile
           icon={ShieldCheck}
@@ -197,10 +213,11 @@ const AdminOverview: React.FC = () => {
                   >
                     <div className="min-w-0">
                       <code className="text-xs font-medium text-admin-accent-ink">
-                        {event.action}
+                        {auditActionLabel(event.action)}
                       </code>
                       <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                        {event.actorEmail ?? 'system'} · {event.targetType}
+                        {event.actorEmail ?? 'system'} ·{' '}
+                        {auditTargetLabel(event.targetType)}
                         {event.targetId ? ` · ${event.targetId}` : ''}
                       </p>
                     </div>

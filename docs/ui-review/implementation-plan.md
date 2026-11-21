@@ -1430,8 +1430,8 @@ Ship only when:
 | C-19 Responsive table | 9 | P1–P2 | L | | Implemented — one `DataTable`; agency inbox + 7 admin tables migrated; 390/768 checks pending |
 | C-22 Bundle boundaries | 9 | P1–P2 | M–L | | Implemented — `PublicItinerary`, lazy map/expenses, Leaflet CSS in map chunk, paged PDF |
 | C-29 Request/perf budgets | 9 | P2 | M | | Implemented — hidden-tab polling, abortable Explore, debounced filters, CI bundle budget; LCP/CLS baseline pending |
-| C-26 Agency queues | 10 | P2 | M | | Not started |
-| C-27 Admin console | 10 | P2 | M | | Not started |
+| C-26 Agency queues | 10 | P2 | M | | Implemented — enquiry triage/bulk undo, roster batching, overview summary, layout groups |
+| C-27 Admin console | 10 | P2 | M | | Implemented — decision tiles first, reports pagination/undo, audit drawer, label humanisation |
 
 ## Low-priority findings
 

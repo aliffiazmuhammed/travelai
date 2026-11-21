@@ -28,7 +28,7 @@ export const AdminStatTile: React.FC<{
   className?: string;
 }> = ({ icon: Icon, label, value, hint, tone = 'slate', to, className }) => {
   const body = (
-    <CardContent className="flex items-start gap-3 p-4">
+    <CardContent className="flex flex-1 items-start gap-3 p-4">
       <span
         aria-hidden
         className={cn(
@@ -38,7 +38,7 @@ export const AdminStatTile: React.FC<{
       >
         <Icon className="h-5 w-5" />
       </span>
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <p className="text-2xl font-semibold leading-tight tabular-nums text-foreground">
           {value === undefined || value === null ? '—' : value}
         </p>
@@ -50,7 +50,7 @@ export const AdminStatTile: React.FC<{
     </CardContent>
   );
 
-  const shell = cn('rounded-2xl border-border bg-card shadow-sm', className);
+  const shell = cn('rounded-2xl border-border bg-card shadow-sm h-full flex flex-col', className);
 
   if (!to) {
     return <Card className={shell}>{body}</Card>;
@@ -65,7 +65,7 @@ export const AdminStatTile: React.FC<{
     >
       <Link
         to={to}
-        className="block rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-admin-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        className="flex h-full flex-col rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-admin-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
         {body}
       </Link>
